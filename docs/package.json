@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vp dev",
-    "build": "vp build && pnpx pagefind --site build && cp -r build/pagefind static/pagefind",
+    "build": "vp build && pnpx pagefind --site build",
     "preview": "vp preview",
     "prepare": "svelte-kit sync || echo ''",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",

@@ -11,5 +11,6 @@ const app = defineApp({
 app.use(auth);
 app.use(resend);
 app.use(staticHosting, { name: "staticHosting" });
+app.use(staticHosting, { name: "docsHosting" });
 
 export default app;

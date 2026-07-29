@@ -2,6 +2,31 @@ import adapter from "@sveltejs/adapter-static";
 import { mdsvex } from "mdsvex";
 import { createHighlighter } from "shiki";
 
+const docsBase = "/docs";
+
+function prefixInternalLinks() {
+  return (tree) => {
+    const visit = (node) => {
+      if (
+        node.type === "link" &&
+        typeof node.url === "string" &&
+        node.url.startsWith("/") &&
+        !node.url.startsWith("//") &&
+        node.url !== docsBase &&
+        !node.url.startsWith(`${docsBase}/`)
+      ) {
+        node.url = `${docsBase}${node.url}`;
+      }
+      if (Array.isArray(node.children)) {
+        for (const child of node.children) {
+          visit(child);
+        }
+      }
+    };
+    visit(tree);
+  };
+}
+
 const highlighter = await createHighlighter({
   themes: ["github-dark-dimmed", "github-light"],
   langs: [
@@ -24,7 +49,10 @@ const highlighter = await createHighlighter({
 
 /** @type {import('@sveltejs/kit').Config} */
 const config = {
-  kit: { adapter: adapter({ fallback: "404.html" }) },
+  kit: {
+    adapter: adapter({ fallback: "404.html" }),
+    paths: { base: docsBase },
+  },
   vitePlugin: {
     dynamicCompileOptions: ({ filename }) =>
       filename.includes("node_modules") ? undefined : { runes: true },
@@ -37,6 +65,7 @@ const config = {
   preprocess: [
     mdsvex({
       extensions: [".md"],
+      remarkPlugins: [prefixInternalLinks],
       highlight: {
         highlighter: (code, lang) => {
           const html = highlighter.codeToHtml(code, {
