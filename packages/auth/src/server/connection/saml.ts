@@ -330,8 +330,9 @@ export function parseSamlIdpMetadata(metadata: string): ParsedSamlMetadata {
       if (descriptorUse !== use) {
         continue;
       }
+      // IdPs such as Zitadel put the XMLDSIG namespace directly on this node.
       for (const certMatch of (match[2] ?? "").matchAll(
-        /<(?:[A-Za-z0-9_.-]+:)?X509Certificate>([\s\S]*?)<\/(?:[A-Za-z0-9_.-]+:)?X509Certificate>/gi,
+        /<(?:[A-Za-z0-9_.-]+:)?X509Certificate\b[^>]*>([\s\S]*?)<\/(?:[A-Za-z0-9_.-]+:)?X509Certificate>/gi,
       )) {
         const certificate = certMatch[1]?.replace(/\s+/g, "").trim();
         if (certificate) {
@@ -361,7 +362,7 @@ export function parseSamlIdpMetadata(metadata: string): ParsedSamlMetadata {
     signingCert: readCertificates("signing"),
     encryptionCert: readCertificates("encryption"),
     nameIdFormats,
-    wantsSignedAuthnRequests: /WantAuthnRequestsSigned="true"/i.test(source),
+    wantsSignedAuthnRequests: /WantAuthnRequestsSigned="(?:true|1)"/i.test(source),
   };
 }
 

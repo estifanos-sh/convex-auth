@@ -180,7 +180,9 @@ function baseEnv() {
     AUTH_GOOGLE_SECRET: "test-google-client-secret",
     RESEND_API_KEY: "test-resend-api-key",
     ZITADEL_BASE_URL: "http://127.0.0.1:8080",
-    ZITADEL_RUNTIME_BASE_URL: "http://zitadel:8080",
+    // A dotted Docker network alias keeps the interop endpoint compatible with
+    // the production SSRF policy, which intentionally rejects bare hostnames.
+    ZITADEL_RUNTIME_BASE_URL: "http://zitadel.test:8080",
   };
 }
 

@@ -261,6 +261,30 @@ test("saml metadata parser extracts core IdP details", () => {
   expect(parsed.nameIdFormats.length).toBeGreaterThan(0);
 });
 
+test("saml metadata parser accepts Zitadel namespace attributes on signing certificates", () => {
+  const metadata = [
+    '<EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata" entityID="https://idp.example.com/saml/v2/metadata">',
+    '  <IDPSSODescriptor WantAuthnRequestsSigned="1" protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">',
+    '    <KeyDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata" use="signing">',
+    '      <KeyInfo xmlns="http://www.w3.org/2000/09/xmldsig#">',
+    '        <X509Data xmlns="http://www.w3.org/2000/09/xmldsig#">',
+    '          <X509Certificate xmlns="http://www.w3.org/2000/09/xmldsig#">',
+    "            ZITADEL_SIGNING_CERT",
+    "          </X509Certificate>",
+    "        </X509Data>",
+    "      </KeyInfo>",
+    "    </KeyDescriptor>",
+    '    <SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://idp.example.com/saml/v2/SSO"/>',
+    "  </IDPSSODescriptor>",
+    "</EntityDescriptor>",
+  ].join("\n");
+
+  const parsed = parseSamlIdpMetadata(metadata);
+
+  expect(parsed.signingCert).toBe("ZITADEL_SIGNING_CERT");
+  expect(parsed.wantsSignedAuthnRequests).toBe(true);
+});
+
 test("service provider metadata generation produces group metadata", () => {
   const metadata = createServiceProviderMetadata({
     entityId: "https://app.example.com/connections/acme/saml/metadata",

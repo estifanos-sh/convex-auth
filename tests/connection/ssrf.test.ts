@@ -70,6 +70,9 @@ test("idp fetch guard allows http without disabling the host block", () => {
   expect(() =>
     assertSafeIdpFetchUrl("http://idp.example.com/.well-known/openid-configuration"),
   ).not.toThrow();
+  expect(() =>
+    assertSafeIdpFetchUrl("http://zitadel.test:8080/.well-known/openid-configuration"),
+  ).not.toThrow();
   // Single-label hosts (e.g. a Dockerized IdP referenced by bare service name)
   // are now rejected by default as an SSRF vector — see unsafeIdpFetchUrlReason.
   // Self-hosted deployments must use a resolvable dotted hostname.
