@@ -22,6 +22,7 @@ returned cookies and pass the token to page data via `event.locals`.
 // src/hooks.server.ts
 import { server } from "@robelest/convex-auth/server";
 import type { Handle } from "@sveltejs/kit";
+import { withServerConvexToken } from "convex-svelte/sveltekit/server";
 
 const auth = server({ url: import.meta.env.CONVEX_URL });
 
@@ -48,9 +49,13 @@ export const handle: Handle = async ({ event, resolve }) => {
   // Make the token available to load functions
   event.locals.token = token;
 
-  return resolve(event);
+  return withServerConvexToken(token ?? undefined, () => resolve(event));
 };
 ```
+
+`withServerConvexToken` makes the refreshed token available to
+`convexLoad()` and `createConvexHttpClient()` for the lifetime of this request.
+It uses request-local storage, so tokens never leak between SSR requests.
 
 ## Auth proxy route
 
@@ -81,20 +86,20 @@ and `location`, then bridge it into Svelte context:
 <!-- src/routes/+layout.svelte -->
 <script lang="ts">
   import { page } from "$app/state";
-  import { setupConvex, useConvexClient } from "convex-svelte";
-  import { onDestroy } from "svelte";
+  import { setupConvex } from "convex-svelte";
+  import { onDestroy, untrack } from "svelte";
   import { client as createAuthClient } from "@robelest/convex-auth/browser";
   import { setupConvexAuth } from "@robelest/convex-auth/svelte";
 
   let { data, children } = $props();
 
-  setupConvex(data.convexUrl);
-  const convexClient = useConvexClient();
+  // These seed the long-lived clients once; later auth updates are reactive.
+  const convex = setupConvex(untrack(() => data.convexUrl));
 
   const authClient = createAuthClient({
-    convex: convexClient,
+    convex,
     proxyPath: "/api/auth",
-    token: data.auth.token ?? null, // seeds the synchronous boot
+    token: untrack(() => data.auth.token) ?? null,
     location: () => page.url, // SSR-safe URL reading
   });
   const auth = setupConvexAuth(authClient);
@@ -109,6 +114,26 @@ the same state or gate with `<SignedIn>` / `<SignedOut>`. For SSR-safe URL
 parameters and invite handling use `auth.client.param()` and
 `auth.client.invite`. See [SSR Overview](/ssr/overview/) for the full client
 API.
+
+## Live SSR queries
+
+After adding the
+[`convex-svelte` transport hooks](https://github.com/get-convex/convex-svelte#ssr-with-convexload--convexloadpaginated-recommended),
+authenticated queries can load on the server and become live subscriptions
+after hydration:
+
+```ts
+// src/routes/+page.ts
+import { convexLoad } from "convex-svelte/sveltekit";
+import { api } from "$convex/_generated/api.js";
+
+export const load = async () => ({
+  viewer: await convexLoad(api.users.viewer, {}),
+});
+```
+
+The server hook above supplies the token automatically. On client navigation,
+the same query uses the already-authenticated Convex client directly.
 
 ## Accessing the token
 

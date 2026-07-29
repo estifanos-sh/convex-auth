@@ -11,7 +11,9 @@ description: Reactive auth state and gate components for Svelte 5 apps.
 # Svelte
 
 `@robelest/convex-auth/svelte` bridges an app-owned browser auth client into a
-Svelte 5 runes object, shared through context, plus gate components. Use it in
+Svelte 5 runes object, shared through context, plus gate components. It is
+designed to compose with the official
+[`convex-svelte`](https://github.com/get-convex/convex-svelte) client in
 SvelteKit and Vite Svelte apps running Svelte 5.
 
 `svelte` is an optional peer dependency — if your app uses this subpath, you
@@ -21,15 +23,15 @@ don't pay for Svelte.
 ## Setup
 
 Call `setupConvexAuth` once in your root layout, passing a browser auth client
-created with the same Convex client you give `setupConvex`. The Svelte binding
-subscribes to the client and shares the reactive auth through context; the app
-still owns the client's lifetime.
+created with the Convex client returned by `setupConvex`. The Svelte binding
+subscribes to the auth client and shares reactive auth through context; the app
+still owns the auth client's lifetime.
 
 ```svelte
 <!-- +layout.svelte -->
 <script lang="ts">
   import { page } from "$app/state";
-  import { setupConvex, useConvexClient } from "convex-svelte";
+  import { setupConvex } from "convex-svelte";
   import { onDestroy } from "svelte";
   import { client as createAuthClient } from "@robelest/convex-auth/browser";
   import { setupConvexAuth } from "@robelest/convex-auth/svelte";
@@ -37,9 +39,9 @@ still owns the client's lifetime.
 
   let { children } = $props();
 
-  setupConvex(import.meta.env.VITE_CONVEX_URL);
+  const convex = setupConvex(import.meta.env.VITE_CONVEX_URL);
   const authClient = createAuthClient({
-    convex: useConvexClient(),
+    convex,
     api: api.auth,
     location: () => page.url,
   });
@@ -53,6 +55,12 @@ still owns the client's lifetime.
   <Login />
 {/if}
 ```
+
+Use `useQuery`, `useMutation`, and `useAction` from `convex-svelte` as usual.
+Do not also call `setupAuth`: the convex-auth browser client already owns the
+Convex `setAuth` lifecycle, including forced token refresh. Read auth state
+through `useConvexAuth()` so there is one auth lifecycle and one source of
+truth.
 
 `auth` is reactive: read `auth.signedIn`, `auth.signedOut`, `auth.loading`,
 `auth.status`, and `auth.token` directly in markup — no `$state` or `subscribe`
