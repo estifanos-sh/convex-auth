@@ -107,7 +107,7 @@ jobs:
         working-directory: packages/auth
         env:
           NPM_DIST_TAG: ${{ steps.release.outputs.dist_tag }}
-        run: vp exec npm publish --provenance --tag "$NPM_DIST_TAG"
+        run: vp exec npm publish --ignore-scripts --provenance --tag "$NPM_DIST_TAG"
 
       - name: Tag merged release
         if: github.event_name == 'pull_request_target'
