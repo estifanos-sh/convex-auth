@@ -29,7 +29,6 @@
 			<a class="brand" href={`${base}/`} aria-label="convex-auth documentation home">
 				<span class="brand-mark" aria-hidden="true"><span></span></span>
 				<span>convex-auth</span>
-				<span class="brand-label">docs</span>
 			</a>
 		</div>
 
@@ -129,15 +128,6 @@
 		left: 5px;
 	}
 
-	.brand-label {
-		color: var(--muted);
-		font-family: var(--font-mono);
-		font-size: 0.55rem;
-		font-weight: 400;
-		letter-spacing: 0.08em;
-		text-transform: uppercase;
-	}
-
 	.menu-btn {
 		display: none;
 		width: 2rem;
@@ -209,7 +199,6 @@
 	}
 
 	@media (max-width: 34rem) {
-		.brand-label,
 		.search-label,
 		.search-btn kbd {
 			display: none;
