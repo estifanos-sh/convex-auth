@@ -81,6 +81,7 @@
 
 	.docs-layout {
 		min-height: calc(100dvh - 4rem);
+		background: var(--bg);
 	}
 
 	.sidebar-container {
@@ -94,8 +95,8 @@
 	}
 
 	.doc-content {
-		width: min(100%, 50rem);
-		margin: 0 auto;
+		width: min(100%, 48rem);
+		margin: 0;
 	}
 
 	@media (min-width: 56rem) {
@@ -105,28 +106,39 @@
 			top: 4rem;
 			bottom: 0;
 			left: 0;
-			width: 16.5rem;
+			width: 15rem;
 			border-right: 1px solid var(--line);
-			background: rgba(15, 16, 12, 0.78);
-			backdrop-filter: blur(14px);
+			background: var(--surface);
 			z-index: 10;
 		}
 
 		.docs-main {
-			margin-left: 16.5rem;
-			padding: 4rem clamp(2.5rem, 7vw, 7rem) 7rem;
+			margin-left: 15rem;
+			padding: 3.5rem clamp(2.5rem, 5vw, 5rem) 7rem;
 		}
 	}
 
 	.landing {
-		width: min(100%, 72rem);
-		margin: 0 auto;
-		padding: 4rem 1.25rem 6rem;
+		display: flex;
+		width: 100%;
+		height: calc(100dvh - 4rem);
+		align-items: center;
+		margin: 0;
+		padding: clamp(1.5rem, 5vw, 4rem);
+		overflow: hidden;
 	}
 
-	@media (min-width: 48rem) {
+	@media (min-width: 64rem) {
 		.landing {
-			padding: 6rem 2rem 8rem;
+			padding-left: max(4rem, calc((100vw - 72rem) / 2));
+		}
+	}
+
+	@media (max-height: 40rem) {
+		.landing {
+			align-items: flex-start;
+			padding-top: clamp(1rem, 4vh, 2rem);
+			padding-bottom: clamp(1rem, 4vh, 2rem);
 		}
 	}
 </style>

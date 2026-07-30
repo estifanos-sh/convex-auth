@@ -81,7 +81,7 @@
 		height: 100%;
 		overflow-y: auto;
 		scrollbar-width: none;
-		padding: 1.5rem 0 3rem;
+		padding: 1.1rem 0 3rem;
 	}
 
 	.sidebar::-webkit-scrollbar {
@@ -89,7 +89,7 @@
 	}
 
 	.group {
-		margin-bottom: 0.3rem;
+		margin-bottom: 0.15rem;
 	}
 
 	.group-label {
@@ -97,7 +97,7 @@
 		align-items: center;
 		justify-content: space-between;
 		width: 100%;
-		padding: 0.5rem 1.25rem;
+		padding: 0.48rem 1.1rem;
 		font-family: var(--font-label);
 		font-size: 0.61rem;
 		font-weight: 500;
@@ -132,7 +132,7 @@
 	li a {
 		position: relative;
 		display: block;
-		padding: 0.36rem 1.25rem;
+		padding: 0.34rem 1.1rem;
 		color: var(--muted);
 		font-size: 0.82rem;
 		line-height: 1.4;

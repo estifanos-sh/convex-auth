@@ -10,7 +10,7 @@ export interface SidebarGroup {
 
 export const sidebar: SidebarGroup[] = [
   {
-    label: "Start",
+    label: "Getting started",
     items: [
       { title: "Installation", slug: "/getting-started/installation" },
       { title: "Providers", slug: "/getting-started/providers" },
@@ -18,32 +18,42 @@ export const sidebar: SidebarGroup[] = [
     ],
   },
   {
-    label: "Build",
+    label: "Frameworks",
     items: [
       { title: "React", slug: "/client/react" },
       { title: "Svelte", slug: "/client/svelte" },
+      { title: "Native apps", slug: "/guides/native-apps" },
+    ],
+  },
+  {
+    label: "Guides",
+    items: [
       { title: "Authorization", slug: "/guides/authorization" },
-      { title: "Multi-Access", slug: "/guides/multi-access" },
-      { title: "Context Enrichment", slug: "/integration/context" },
-      { title: "Fluent Convex", slug: "/integration/fluent-convex" },
-      { title: "Device Flow", slug: "/guides/device-flow" },
-      { title: "MCP Server", slug: "/guides/mcp-server" },
-      { title: "Native Apps", slug: "/guides/native-apps" },
+      { title: "Multi-access", slug: "/guides/multi-access" },
+      { title: "Device flow", slug: "/guides/device-flow" },
       { title: "Production", slug: "/guides/production" },
+    ],
+  },
+  {
+    label: "Integrations",
+    items: [
+      { title: "Context enrichment", slug: "/integration/context" },
+      { title: "Fluent Convex", slug: "/integration/fluent-convex" },
+      { title: "MCP server", slug: "/guides/mcp-server" },
     ],
   },
   {
     label: "Enterprise",
     items: [
       { title: "Overview", slug: "/connection/overview" },
-      { title: "Client RPC", slug: "/connection/rpc" },
       { title: "Connections", slug: "/connection/connection" },
       { title: "Policies", slug: "/connection/policy" },
       { title: "OIDC", slug: "/connection/oidc" },
       { title: "SAML", slug: "/connection/saml" },
       { title: "SCIM", slug: "/connection/scim" },
-      { title: "Audit Log", slug: "/connection/audit" },
+      { title: "Audit log", slug: "/connection/audit" },
       { title: "Webhooks", slug: "/connection/webhook" },
+      { title: "Client RPC", slug: "/connection/rpc" },
     ],
   },
   {
@@ -56,20 +66,25 @@ export const sidebar: SidebarGroup[] = [
     ],
   },
   {
+    label: "API reference",
+    items: [
+      { title: "Users", slug: "/api/user" },
+      { title: "Sessions", slug: "/api/session" },
+      { title: "Accounts", slug: "/api/account" },
+      { title: "Groups", slug: "/api/group" },
+      { title: "Members", slug: "/api/member" },
+      { title: "Invites", slug: "/api/invite" },
+      { title: "Keys", slug: "/api/key" },
+    ],
+  },
+  {
     label: "Reference",
     items: [
-      { title: "auth.user", slug: "/api/user" },
-      { title: "auth.session", slug: "/api/session" },
-      { title: "auth.account", slug: "/api/account" },
-      { title: "auth.group", slug: "/api/group" },
-      { title: "auth.member", slug: "/api/member" },
-      { title: "auth.invite", slug: "/api/invite" },
-      { title: "auth.key", slug: "/api/key" },
       { title: "Configuration", slug: "/reference/config" },
-      { title: "Typed Returns (auth.v)", slug: "/reference/typed-returns" },
-      { title: "Error Codes", slug: "/reference/errors" },
-      { title: "CLI Reference", slug: "/reference/cli" },
-      { title: "Data Migrations", slug: "/reference/migrations" },
+      { title: "Typed returns", slug: "/reference/typed-returns" },
+      { title: "Error codes", slug: "/reference/errors" },
+      { title: "CLI", slug: "/reference/cli" },
+      { title: "Data migrations", slug: "/reference/migrations" },
       { title: "Architecture", slug: "/reference/architecture" },
       { title: ".well-known", slug: "/reference/well-known" },
     ],
