@@ -47,6 +47,36 @@ function oauthGrantConvexError(
   return new ConvexError(GRANT_ERROR[denial.reason]);
 }
 
+/**
+ * Harden the library boundary for {@link OAuthCodeDomain.authorize}: the minted
+ * authorization code is bound to `userId`, so that id MUST be the authenticated
+ * caller — never a value taken from request input, or a client could mint codes
+ * for arbitrary users. Resolve the caller from `ctx.auth.getUserIdentity()` and
+ * reject unless its subject matches the passed `userId`.
+ *
+ * `ComponentCtx` is typed only for `runQuery`/`runMutation`, but the documented
+ * caller is an authenticated app mutation whose ctx carries `auth`; so the
+ * identity is read defensively. A ctx that exposes no identity capability, an
+ * unauthenticated caller, or a subject mismatch all fail closed.
+ */
+async function assertAuthorizeCallerMatchesUser(ctx: ComponentCtx, userId: string): Promise<void> {
+  const auth = (
+    ctx as {
+      auth?: { getUserIdentity?: () => Promise<{ subject?: string | null } | null> };
+    }
+  ).auth;
+  const identity =
+    typeof auth?.getUserIdentity === "function" ? await auth.getUserIdentity() : undefined;
+  if (!identity || identity.subject !== userId) {
+    throw new ConvexError({
+      code: ErrorCode.NOT_AUTHORIZED,
+      message:
+        "oauth.authorize must be called by the authenticated user it authorizes; " +
+        "resolve `userId` from ctx.auth.getUserIdentity() rather than request input.",
+    });
+  }
+}
+
 /** Public API surface for the OAuth authorization-code sub-domain. */
 export interface OAuthCodeDomain {
   /**
@@ -79,10 +109,22 @@ export interface OAuthCodeDomain {
    * Returns the grant, or `null` if the hash is unknown or any binding fails (the
    * code is NOT burned). Throws `OAUTH_CODE_ALREADY_USED` on replay /
    * `OAUTH_CODE_EXPIRED` if stale.
+   *
+   * When `refresh` is supplied, its grant + token are minted in the SAME
+   * transaction that consumes the code, so a refresh-creation failure rolls back
+   * the code consumption too (the caller can retry) instead of burning the code
+   * and returning an access token with no refresh token. The caller generates the
+   * refresh secret (CSPRNG requires an action); only its `tokenHash` is passed.
    */
   accept(
     ctx: ComponentCtx,
-    args: { codeHash: string; clientId: string; redirectUri: string; codeChallenge: string },
+    args: {
+      codeHash: string;
+      clientId: string;
+      redirectUri: string;
+      codeChallenge: string;
+      refresh?: { tokenHash: string; expiresAt: number };
+    },
   ): Promise<OAuthCodeRecord | null>;
 }
 
@@ -94,6 +136,10 @@ export function createOAuthCodeDomain(deps: {
   const component = deps.component;
   return {
     async authorize(ctx, args) {
+      // Never trust the caller-supplied `userId`: it must equal the
+      // authenticated identity, or a client could mint codes for other users.
+      await assertAuthorizeCallerMatchesUser(ctx, args.userId);
+
       const client = (await cached(ctx, `oauth-client:${args.clientId}`, () =>
         ctx.runQuery(component.oauth.client.get, { clientId: args.clientId }),
       )) as OAuthClientDoc | null;
@@ -137,12 +183,13 @@ export function createOAuthCodeDomain(deps: {
       return { code: rawCode, redirectUri: args.redirectUri, state: args.state };
     },
 
-    async accept(ctx, { codeHash, clientId, redirectUri, codeChallenge }) {
+    async accept(ctx, { codeHash, clientId, redirectUri, codeChallenge, refresh }) {
       return (await ctx.runMutation(component.oauth.code.accept, {
         codeHash,
         clientId,
         redirectUri,
         codeChallenge,
+        ...(refresh === undefined ? {} : { refresh }),
       })) as OAuthCodeRecord | null;
     },
   };

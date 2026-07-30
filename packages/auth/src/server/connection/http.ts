@@ -7,9 +7,9 @@ import {
   getScimIdentity,
   getScimIdentityByConnectionAndUser,
   getScimIdentityByMappedGroup,
-  insertAccount,
   insertUser,
   listScimIdentitiesByConnection,
+  provisionScimUser,
   removeScimIdentity,
   updateUser,
   upsertScimIdentity,
@@ -398,6 +398,7 @@ export function addGroupHttpRuntime(deps: GroupHttpRuntimeDeps) {
       const accepted = (await ctx.runMutation(config.component.connection.saml.request.accept, {
         requestId: inResponseTo,
         now: nowMs,
+        connectionId: connection._id,
       })) as boolean;
       if (!accepted) {
         await rejectReplay("SAML response replays or references an unknown login request.");
@@ -1170,8 +1171,8 @@ export function addGroupHttpRuntime(deps: GroupHttpRuntimeDeps) {
           displayName: (item) => item.user.name,
           name: (item) => item.user.name,
           "name.formatted": (item) => item.user.name,
-          "name.givenName": (item) => item.user.name,
-          "name.familyName": (item) => item.user.name,
+          "name.givenName": (item) => item.user.firstName,
+          "name.familyName": (item) => item.user.lastName,
           "emails.value": (item) => item.user.email,
           "phoneNumbers.value": (item) => item.user.phone,
           active: (item) => item.identity?.active ?? item.member.status === "active",
@@ -1222,51 +1223,58 @@ export function addGroupHttpRuntime(deps: GroupHttpRuntimeDeps) {
             profile: extracted as Record<string, unknown>,
           })) as typeof extracted | undefined) ?? extracted;
         const externalId = provisionProfile.externalId;
-        const existingIdentity = externalId
-          ? await getScimIdentity(state.ctx, config.component.connection, {
-              connectionId: state.connection._id,
-              resourceType: "user",
-              externalId,
-            })
-          : null;
-        const existingUser = existingIdentity?.userId
-          ? await auth.user.get(state.ctx, { id: existingIdentity.userId })
-          : null;
-        const created = existingUser === null;
+        // Provider under which this connection links SSO accounts. The SCIM
+        // externalId is the providerAccountId, so (providerId, externalId) is
+        // the Account's natural key — used both to resolve an already-
+        // provisioned user below and to dedup the Account insert.
+        const providerId =
+          state.connection.protocol === "oidc"
+            ? groupOidcProviderId(state.connection._id)
+            : groupSamlProviderId(state.connection._id);
         const provisionedRoleIds = resolveProvisionedRoleIds({
           policy: state.policy,
           groups: provisionProfile.groups,
           roles: provisionProfile.roles,
         });
-        const userId = existingUser?._id
-          ? existingUser._id
-          : await insertUser(state.ctx, config.component.user, {
-              name: provisionProfile.name,
-              ...(typeof provisionProfile.firstName === "string"
-                ? { firstName: provisionProfile.firstName }
-                : {}),
-              ...(typeof provisionProfile.lastName === "string"
-                ? { lastName: provisionProfile.lastName }
-                : {}),
-              email: provisionProfile.email,
-              ...(typeof provisionProfile.email === "string"
-                ? { emailVerificationTime: Date.now() }
-                : {}),
-              phone: provisionProfile.phone,
-              ...(typeof provisionProfile.phone === "string"
-                ? { phoneVerificationTime: Date.now() }
-                : {}),
-              ...(provisionProfile.extend ? { extend: provisionProfile.extend } : {}),
-            });
-        if (created && externalId) {
-          const providerId =
-            state.connection.protocol === "oidc"
-              ? groupOidcProviderId(state.connection._id)
-              : groupSamlProviderId(state.connection._id);
-          await insertAccount(state.ctx, config.component.account, {
-            userId,
-            provider: providerId,
-            providerAccountId: externalId,
+        const userData = {
+          name: provisionProfile.name,
+          ...(typeof provisionProfile.firstName === "string"
+            ? { firstName: provisionProfile.firstName }
+            : {}),
+          ...(typeof provisionProfile.lastName === "string"
+            ? { lastName: provisionProfile.lastName }
+            : {}),
+          email: provisionProfile.email,
+          ...(typeof provisionProfile.email === "string"
+            ? { emailVerificationTime: Date.now() }
+            : {}),
+          phone: provisionProfile.phone,
+          ...(typeof provisionProfile.phone === "string"
+            ? { phoneVerificationTime: Date.now() }
+            : {}),
+          ...(provisionProfile.extend ? { extend: provisionProfile.extend } : {}),
+        };
+        const provisioned = externalId
+          ? await provisionScimUser(state.ctx, config.component.connection, {
+              connectionId: state.connection._id,
+              groupId: state.connection.groupId,
+              externalId,
+              provider: providerId,
+              userData,
+              active: provisionProfile.active !== false,
+              raw: body,
+              lastProvisionedAt: Date.now(),
+            })
+          : {
+              userId: await insertUser(state.ctx, config.component.user, userData),
+              created: true,
+            };
+        const { userId, created } = provisioned;
+        const existingUser = created ? null : await auth.user.get(state.ctx, { id: userId });
+        if (!created && existingUser === null) {
+          throw new ConvexError({
+            code: ErrorCode.ACCOUNT_NOT_FOUND,
+            message: "The SCIM identity references a user that no longer exists.",
           });
         }
         if (existingUser) {
@@ -1314,18 +1322,6 @@ export function addGroupHttpRuntime(deps: GroupHttpRuntimeDeps) {
               roleIds: provisionedRoleIds,
               status: provisionProfile.active === false ? "inactive" : "active",
             },
-          });
-        }
-        if (externalId) {
-          await upsertScimIdentity(state.ctx, config.component.connection, {
-            connectionId: state.connection._id,
-            groupId: state.connection.groupId,
-            resourceType: "user",
-            externalId,
-            userId,
-            active: provisionProfile.active !== false,
-            raw: body,
-            lastProvisionedAt: Date.now(),
           });
         }
         await state.recordScimEvent(

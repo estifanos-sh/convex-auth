@@ -4,13 +4,22 @@ on:
   push:
     tags:
       - "v*"
+  pull_request_target:
+    types:
+      - closed
 
 concurrency:
-  group: release-package-${{ github.ref }}
-  cancel-in-progress: true
+  group: release-package
+  cancel-in-progress: false
 
 jobs:
   publish:
+    if: >-
+      github.event_name == 'push' ||
+      (
+        github.event.pull_request.merged == true &&
+        contains(github.event.pull_request.labels.*.name, 'npm package')
+      )
     runs-on: ubuntu-latest
     environment: npm
     permissions:
@@ -19,6 +28,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.merge_commit_sha || github.ref }}
 
       - name: Setup Vite+
         uses: voidzero-dev/setup-vp@v1
@@ -27,6 +39,55 @@ jobs:
           cache: true
           run-install: |
             args: ['--frozen-lockfile']
+
+      - name: Resolve release metadata
+        id: release
+        working-directory: packages/auth
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PUSHED_TAG: ${{ github.ref_name }}
+        run: |
+          PACKAGE_NAME=$(node -p "require('./package.json').name")
+          VERSION=$(node -p "require('./package.json').version")
+          TAG="v$VERSION"
+
+          if [[ "$EVENT_NAME" == "push" && "$PUSHED_TAG" != "$TAG" ]]; then
+            echo "::error::Tag $PUSHED_TAG does not match package version $VERSION."
+            exit 1
+          fi
+
+          if [[ "$VERSION" == *-* ]]; then
+            DIST_TAG=${VERSION#*-}
+            DIST_TAG=${DIST_TAG%%.*}
+          else
+            DIST_TAG=latest
+          fi
+
+          if vp exec npm view "$PACKAGE_NAME@$VERSION" version --json >/dev/null 2>&1; then
+            PUBLISHED=true
+          else
+            PUBLISHED=false
+          fi
+
+          echo "package=$PACKAGE_NAME" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "dist_tag=$DIST_TAG" >> "$GITHUB_OUTPUT"
+          echo "published=$PUBLISHED" >> "$GITHUB_OUTPUT"
+
+      - name: Verify existing release tag
+        if: github.event_name == 'pull_request_target'
+        env:
+          TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          if git rev-parse --verify "refs/tags/$TAG" >/dev/null 2>&1; then
+            TAG_COMMIT=$(git rev-list -n 1 "$TAG")
+            HEAD_COMMIT=$(git rev-parse HEAD)
+            if [[ "$TAG_COMMIT" != "$HEAD_COMMIT" ]]; then
+              echo "::error::Tag $TAG already points to $TAG_COMMIT, not $HEAD_COMMIT."
+              exit 1
+            fi
+          fi
 
       - name: Build package prerequisites
         run: |
@@ -41,30 +102,26 @@ jobs:
           vp run '@robelest/convex-auth#typecheck:consumer:dist'
           vp run '@robelest/convex-auth#check:packaging'
 
-      - name: Resolve npm dist-tag
-        working-directory: packages/auth
-        run: |
-          VERSION=$(node -p "require('./package.json').version")
-          if [[ "$VERSION" == *-* ]]; then
-            DIST_TAG=${VERSION#*-}
-            DIST_TAG=${DIST_TAG%%.*}
-          else
-            DIST_TAG=latest
-          fi
-          echo "NPM_DIST_TAG=$DIST_TAG" >> "$GITHUB_ENV"
-
       - name: Publish package
+        if: steps.release.outputs.published != 'true'
         working-directory: packages/auth
-        run: vp exec npm publish --tag "$NPM_DIST_TAG"
+        env:
+          NPM_DIST_TAG: ${{ steps.release.outputs.dist_tag }}
+        run: vp exec npm publish --provenance --tag "$NPM_DIST_TAG"
 
-  github-release:
-    needs: publish
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
+      - name: Tag merged release
+        if: github.event_name == 'pull_request_target'
+        env:
+          TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          if ! git rev-parse --verify "refs/tags/$TAG" >/dev/null 2>&1; then
+            git tag "$TAG"
+            git push origin "$TAG"
+          fi
 
-    steps:
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
+          tag_name: ${{ steps.release.outputs.tag }}
+          name: ${{ steps.release.outputs.package }} ${{ steps.release.outputs.version }}

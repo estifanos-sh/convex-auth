@@ -2,6 +2,7 @@
   import { getConvexClient, useQuery } from "convex-svelte";
   import { getContext } from "svelte";
   import { goto } from "$app/navigation";
+  import { base } from "$app/paths";
   import { api } from "$convex/_generated/api.js";
   import type { AppContext } from "$lib/app";
   import AppLoading from "$lib/components/AppLoading.svelte";
@@ -17,7 +18,7 @@
     const data = dashboard.data;
     if (!data || data.groups.length === 0) return;
     const target = data.selectedGroup?.groupId ?? data.groups[0]?.groupId;
-    if (target) void goto(`/${target}`, { replaceState: true });
+    if (target) void goto(`${base}/${target}`, { replaceState: true });
   });
 </script>
 

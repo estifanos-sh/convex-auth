@@ -24,7 +24,9 @@ const highlighter = await createHighlighter({
 
 /** @type {import('@sveltejs/kit').Config} */
 const config = {
-  kit: { adapter: adapter({ fallback: "404.html" }) },
+  kit: {
+    adapter: adapter({ fallback: "404.html" }),
+  },
   vitePlugin: {
     dynamicCompileOptions: ({ filename }) =>
       filename.includes("node_modules") ? undefined : { runes: true },

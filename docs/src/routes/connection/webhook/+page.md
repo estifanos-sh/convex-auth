@@ -21,11 +21,12 @@ SSO-related events.
 
 ## Endpoint methods
 
-| Method             | Signature                                                               | Returns          | Description                                                                               |
-| ------------------ | ----------------------------------------------------------------------- | ---------------- | ----------------------------------------------------------------------------------------- |
-| `endpoint.create`  | `(ctx, { connectionId, url, secret, subscriptions, createdByUserId? })` | `{ endpointId }` | Creates a webhook endpoint that listens for specific events.                              |
-| `endpoint.list`    | `(ctx, { connectionId })`                                               | Endpoint[]       | Lists all webhook endpoints for a connection.                                             |
-| `endpoint.disable` | `(ctx, { id })`                                                         | `{ endpointId }` | Disables a webhook endpoint (stops delivery). Throws `ConvexError` if endpoint not found. |
+| Method            | Signature                                                               | Returns          | Description                                                                               |
+| ----------------- | ----------------------------------------------------------------------- | ---------------- | ----------------------------------------------------------------------------------------- |
+| `endpoint.create` | `(ctx, { connectionId, url, secret, subscriptions, createdByUserId? })` | `{ endpointId }` | Creates a webhook endpoint that listens for specific events.                              |
+| `endpoint.list`   | `(ctx, { connectionId })`                                               | Endpoint[]       | Lists all webhook endpoints for a connection.                                             |
+| `endpoint.update` | `(ctx, { id, patch: { url?, status?, secret?, subscriptions? } })`      | `{ endpointId }` | Updates an endpoint. A disabled legacy endpoint needs a new `secret` before activation.   |
+| `endpoint.revoke` | `(ctx, { id })`                                                         | `{ endpointId }` | Disables a webhook endpoint (stops delivery). Throws `ConvexError` if endpoint not found. |
 
 ## Example
 
@@ -43,8 +44,26 @@ const { endpointId } = await auth.connection.webhook.endpoint.create(ctx, {
 ### Disable an endpoint
 
 ```ts
-await auth.connection.webhook.endpoint.disable(ctx, { id: endpointId });
+await auth.connection.webhook.endpoint.revoke(ctx, { id: endpointId });
 ```
+
+### Rotate a secret or restore a legacy endpoint
+
+```ts
+await auth.connection.webhook.endpoint.update(ctx, {
+  id: endpointId,
+  patch: {
+    secret: "whsec_new_...",
+    status: "active",
+  },
+});
+```
+
+Endpoint reads never return `secretCiphertext` or the deprecated `secretHash`;
+they expose only `hasSecret`. During the 0.1 compatibility migration, a legacy
+hash-only endpoint is reported as disabled and cannot enqueue new deliveries.
+Run the webhook endpoint migration, then supply a new secret before explicitly
+re-enabling it.
 
 ## Delivery worker
 

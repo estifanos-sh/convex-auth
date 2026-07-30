@@ -181,7 +181,7 @@ export const setOidc = authMutation({
       groupId,
       roleIds: [roles.orgAdmin.id],
     });
-    return auth.connection.oidc.set(ctx, args);
+    return auth.connection.oidc.upsert(ctx, args);
   },
 });
 
@@ -194,7 +194,7 @@ export const setScim = authMutation({
       groupId,
       roleIds: [roles.orgAdmin.id],
     });
-    return auth.connection.scim.set(ctx, args);
+    return auth.connection.scim.upsert(ctx, args);
   },
 });
 ```
@@ -203,6 +203,34 @@ Expose only the helpers your app's UI calls. Use Convex-native args: `{ id }` fo
 the primary record, `{ connectionId }` for a foreign key, `{ data }` for create
 payloads, `{ patch }` for update payloads, and `paginationOpts` for unbounded
 lists.
+
+### Legacy webhook signing secrets
+
+Older preview rows may have a one-way `GroupWebhookEndpoint.secretHash` but no
+encrypted signing secret. A hash cannot be recovered or safely "re-encrypted."
+After upgrading, run the component's idempotent migration:
+
+```sh
+vp exec convex run auth/migrations:runDisableLegacyWebhookEndpoints '{}'
+```
+
+It disables hash-only endpoints and removes the obsolete hash. Supply a new
+secret through `auth.connection.webhook.endpoint.update` (or create a replacement
+endpoint) before setting the endpoint back to `active`.
+
+### Revoked OAuth client retention
+
+OAuth clients now record `revokedAt` and retain revoked registrations for 90
+days before the daily cleanup removes them. Legacy revoked rows deliberately
+fail closed (they are retained) until their retention clock is initialized:
+
+```sh
+vp exec convex run auth/migrations:runBackfillOAuthClientRevokedAt '{}'
+```
+
+The migration is idempotent and conservatively uses the migration time rather
+than guessing an earlier revocation date, so upgrading cannot immediately erase
+legacy audit history.
 
 ## HTTP and routing
 

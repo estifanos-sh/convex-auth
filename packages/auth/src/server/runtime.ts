@@ -27,6 +27,7 @@ import { createAuthorizeHandler } from "./oauth/authorize";
 import { createOAuthHttpHandlers } from "./oauth/handlers";
 import { createClientManagementHandler } from "./oauth/manage";
 import { createRegisterHandler } from "./oauth/register";
+import type { OAuthCodeRecord } from "./oauth/code";
 import { createTokenHandler } from "./oauth/token";
 import { verifyOAuthToken } from "./tokens";
 import { wellKnown } from "./wellknown";
@@ -308,7 +309,7 @@ export function Auth(config_: ConvexAuthConfig) {
      *
      * @param http your HTTP router
      */
-    add: (http: HttpRouter) => {
+    mount: (http: HttpRouter) => {
       const protocolRequireEnv = (name: string) =>
         name === "CONVEX_SITE_URL" ? authSiteUrl() : requireEnv(name);
 
@@ -354,11 +355,21 @@ export function Auth(config_: ConvexAuthConfig) {
           handleToken: createTokenHandler({
             issuer: authSiteUrl,
             getClient: (ctx, clientId) => authBase.oauth.client.get(ctx, { clientId }),
+            getCode: async (ctx, codeHash) =>
+              (await ctx.runQuery(config.component.oauth.code.get, {
+                codeHash,
+              })) as OAuthCodeRecord | null,
             verifyClientSecret: (ctx, clientId, clientSecret) =>
               authBase.oauth.client.verify(ctx, { clientId, clientSecret }),
-            acceptCode: (ctx, codeHash, clientId, redirectUri, codeChallenge) =>
-              authBase.oauth.code.accept(ctx, { codeHash, clientId, redirectUri, codeChallenge }),
-            createRefresh: (ctx, args) => authBase.oauth.refresh.create(ctx, args),
+            acceptCode: (ctx, codeHash, clientId, redirectUri, codeChallenge, refresh) =>
+              authBase.oauth.code.accept(ctx, {
+                codeHash,
+                clientId,
+                redirectUri,
+                codeChallenge,
+                refresh,
+              }),
+            mintRefresh: () => authBase.oauth.refresh.mint(),
             exchangeRefresh: (ctx, args) => authBase.oauth.refresh.exchange(ctx, args),
             emitEvent: async (ctx, event) => await emitAuthEvent(ctx, config, event),
           }),
@@ -390,7 +401,7 @@ export function Auth(config_: ConvexAuthConfig) {
     /**
      * Create a Convex HTTP router with auth protocol routes already mounted.
      *
-     * Defaults to the `/auth` prefix. Use {@link request.add add} instead when
+     * Defaults to the `/auth` prefix. Use {@link request.mount mount} instead when
      * you need to compose auth routes with app-specific HTTP routes in the same
      * router.
      *
@@ -402,7 +413,7 @@ export function Auth(config_: ConvexAuthConfig) {
      */
     router: () => {
       const http = httpRouter();
-      request.add(http);
+      request.mount(http);
       return http;
     },
 
@@ -496,7 +507,7 @@ export function Auth(config_: ConvexAuthConfig) {
 
     /**
      * Mount a remote MCP server (an OAuth-protected resource server) on `http`,
-     * next to the other HTTP registrars (`add`, `route`). Requires `oauth` to be
+     * next to the other HTTP registrars (`mount`, `route`). Requires `oauth` to be
      * configured in `defineAuth` — the MCP server shares the AS `scopes` and
      * bearer-token verification — and throws at registration time otherwise.
      * Tools are plain `{ description, scope, args, handler }` objects; each
@@ -544,7 +555,7 @@ export function Auth(config_: ConvexAuthConfig) {
 
   /**
    * App-owned HTTP router factory. `auth.http()` returns a Convex `httpRouter()`
-   * with every auth protocol route mounted via {@link request.add}, so there is
+   * with every auth protocol route mounted via {@link request.mount}, so there is
    * exactly one route table.
    */
   const http = () => request.router();

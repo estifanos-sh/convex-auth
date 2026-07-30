@@ -3,6 +3,7 @@
 	import favicon from "$lib/assets/favicon.svg";
 	import { page } from "$app/state";
 	import { onNavigate } from "$app/navigation";
+	import { base } from "$app/paths";
 	import { Toaster } from "svelte-sonner";
 	import { setupConvex, useQuery } from "convex-svelte";
 	import { onDestroy, setContext } from "svelte";
@@ -28,6 +29,7 @@
 		convex: convexClient,
 		api: api.auth,
 		location: () => page.url,
+		oauthRedirectTo: `${page.url.origin}${base}/`,
 	});
 	const auth = setupConvexAuth(authClient);
 	onDestroy(() => authClient.destroy());

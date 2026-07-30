@@ -2,6 +2,7 @@
   import type { ConvexClient } from "convex/browser";
   import { api } from "$convex/_generated/api.js";
   import { goto } from "$app/navigation";
+  import { base } from "$app/paths";
   import { toast } from "svelte-sonner";
   import { errorText } from "$lib/errors";
 
@@ -25,7 +26,7 @@
       if ("ok" in result && !result.ok && "message" in result) {
         toast.error(typeof result.message === "string" ? result.message : "Something went wrong.");
       } else if ("groupId" in result) {
-        void goto(`/${result.groupId}`);
+        void goto(`${base}/${result.groupId}`);
       }
     } catch (e) {
       toast.error(errorText(e));

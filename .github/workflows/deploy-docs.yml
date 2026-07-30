@@ -11,6 +11,7 @@ on:
     branches:
       - main
     paths:
+      - "convex/**"
       - "docs/**"
       - "packages/auth/src/**"
       - "packages/auth/package.json"
@@ -29,6 +30,10 @@ jobs:
     permissions:
       contents: read
 
+    env:
+      CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
+      PUBLIC_DEPLOYMENT_ENV: production
+
     steps:
       - uses: actions/checkout@v4
         with:
@@ -42,11 +47,5 @@ jobs:
           run-install: |
             args: ['--frozen-lockfile']
 
-      - name: Build docs site
-        run: vp run build:docs
-
-      - name: Deploy docs site to Cloudflare Pages
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+      - name: Deploy docs backend and site
         run: vp run deploy:docs

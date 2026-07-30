@@ -184,7 +184,7 @@ test("group connection domain validation reports onboarding diagnostics", async 
   expect(connectionId).toBeTruthy();
 
   await t.run(async (ctx) => {
-    await auth.connection.domain.set(ctx as any, {
+    await auth.connection.domain.upsert(ctx as any, {
       connectionId,
       domains: [{ domain: "acme.example", isPrimary: true }],
     });
@@ -259,6 +259,30 @@ test("saml metadata parser extracts core IdP details", () => {
   expect(parsed.slo.redirect).toBe("https://idp.example.org/sso/SingleLogoutService");
   expect(parsed.wantsSignedAuthnRequests).toBe(true);
   expect(parsed.nameIdFormats.length).toBeGreaterThan(0);
+});
+
+test("saml metadata parser accepts Zitadel namespace attributes on signing certificates", () => {
+  const metadata = [
+    '<EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata" entityID="https://idp.example.com/saml/v2/metadata">',
+    '  <IDPSSODescriptor WantAuthnRequestsSigned="1" protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">',
+    '    <KeyDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata" use="signing">',
+    '      <KeyInfo xmlns="http://www.w3.org/2000/09/xmldsig#">',
+    '        <X509Data xmlns="http://www.w3.org/2000/09/xmldsig#">',
+    '          <X509Certificate xmlns="http://www.w3.org/2000/09/xmldsig#">',
+    "            ZITADEL_SIGNING_CERT",
+    "          </X509Certificate>",
+    "        </X509Data>",
+    "      </KeyInfo>",
+    "    </KeyDescriptor>",
+    '    <SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://idp.example.com/saml/v2/SSO"/>',
+    "  </IDPSSODescriptor>",
+    "</EntityDescriptor>",
+  ].join("\n");
+
+  const parsed = parseSamlIdpMetadata(metadata);
+
+  expect(parsed.signingCert).toBe("ZITADEL_SIGNING_CERT");
+  expect(parsed.wantsSignedAuthnRequests).toBe(true);
 });
 
 test("service provider metadata generation produces group metadata", () => {
@@ -444,7 +468,7 @@ test("group connection component stores scim config, audit events, and webhook d
   });
 
   const configured = await t.run(async (ctx) => {
-    return await auth.connection.scim.set(ctx, {
+    return await auth.connection.scim.upsert(ctx, {
       connectionId,
       profile: {
         mapping: {
@@ -766,7 +790,7 @@ test("group saml.register persists config directly on group connection", async (
       "  </IDPSSODescriptor>",
       "</EntityDescriptor>",
     ].join("\n");
-    return await auth.connection.saml.set(ctx as any, {
+    return await auth.connection.saml.upsert(ctx as any, {
       connectionId,
       metadata: { xml: metadataXml },
       domains: ["register.example.com"],
@@ -906,7 +930,7 @@ test("group connection domain status exposes trust and next steps", async () => 
   });
 
   await t.run(async (ctx) => {
-    await auth.connection.domain.set(ctx as any, {
+    await auth.connection.domain.upsert(ctx as any, {
       connectionId,
       domains: [{ domain: "status.example.com", isPrimary: true }],
     });
@@ -970,7 +994,7 @@ test("group oidc.register merges config and client.signIn requires verified doma
   });
 
   const oidcConfig = await t.run(async (ctx) => {
-    return await auth.connection.oidc.set(ctx as any, {
+    return await auth.connection.oidc.upsert(ctx as any, {
       connectionId,
       discovery: {
         issuer: "https://issuer.example.com",
@@ -1277,7 +1301,7 @@ test("removing a connection cascades scim config, identities, webhook endpoints 
   });
 
   const configured = await t.run(async (ctx) => {
-    return await auth.connection.scim.set(ctx as any, {
+    return await auth.connection.scim.upsert(ctx as any, {
       connectionId,
       profile: { mapping: { email: "emails.primary" } },
     });
@@ -1560,7 +1584,7 @@ test("Connection hooks can transform normalized profiles", async () => {
   };
 
   await t.run(async (ctx) => {
-    await auth.connection.scim.set(ctx as any, {
+    await auth.connection.scim.upsert(ctx as any, {
       connectionId,
       profile: {
         mapping: {
@@ -1763,7 +1787,7 @@ test("group connection scim.configure stores hashed token and enqueues subscribe
   });
 
   const configured = await t.run(async (ctx) => {
-    return await auth.connection.scim.set(ctx as any, {
+    return await auth.connection.scim.upsert(ctx as any, {
       connectionId,
       security: { maxRequestSize: 200_000 },
       profile: {

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
+	import { base } from '$app/paths';
 	import { SvelteMap } from 'svelte/reactivity';
 	import { slide, fade } from 'svelte/transition';
 	import { sidebar } from '$lib/config/sidebar';
@@ -22,8 +23,17 @@
 	}
 
 	function getSectionLabel(url: string): string {
-		const clean = url.replace(/\/+$/, '');
+		const path = url.split(/[?#]/)[0];
+		const hasBase = base && (path === base || path.startsWith(`${base}/`));
+		const withoutBase = hasBase ? path.slice(base.length) : path;
+		const clean = withoutBase.replace(/\/+$/, '');
 		return sectionMap.get(clean) ?? '';
+	}
+
+	function appUrl(url: string): string {
+		const hasBase = base && (url === base || url.startsWith(`${base}/`));
+		if (/^https?:\/\//.test(url) || hasBase) return url;
+		return `${base}${url.startsWith('/') ? url : `/${url}`}`;
 	}
 
 	function excerptText(excerpt: string): string {
@@ -32,9 +42,10 @@
 
 	onMount(async () => {
 		try {
-			const resp = await fetch('/pagefind/pagefind.js');
+			const pagefindUrl = `${base}/pagefind/pagefind.js`;
+			const resp = await fetch(pagefindUrl);
 			if (!resp.ok) return;
-			pagefind = await new Function('return import("/pagefind/pagefind.js")')();
+			pagefind = await new Function('path', 'return import(path)')(pagefindUrl);
 			await pagefind.init();
 		} catch (e) {
 			console.warn('Pagefind not available:', e);
@@ -82,10 +93,6 @@
 	}
 
 	function handleKeydown(e: KeyboardEvent) {
-		if (e.key === 'Escape') {
-			closeDialog();
-			return;
-		}
 		if (e.key === 'ArrowDown') {
 			e.preventDefault();
 			activeIndex = Math.min(activeIndex + 1, results.length - 1);
@@ -104,47 +111,53 @@
 
 	function selectResult(url: string) {
 		closeDialog();
-		goto(url);
+		goto(appUrl(url));
 	}
 
-	function handleBackdropKeydown(e: KeyboardEvent) {
-		if (e.key === 'Escape' || e.key === 'Enter' || e.key === ' ') {
-			e.preventDefault();
+	function handleWindowKeydown(e: KeyboardEvent) {
+		if (open && e.key === 'Escape') {
 			closeDialog();
 		}
 	}
 </script>
 
+<svelte:window onkeydown={handleWindowKeydown} />
+
 {#if open}
-	<div
-		class="backdrop"
-		transition:fade={{ duration: 100 }}
-		onclick={closeDialog}
-		onkeydown={handleBackdropKeydown}
-		role="button"
-		tabindex="0"
-		aria-label="Close search"
-	>
-		<div
+	<div class="dialog-layer">
+		<button
+			class="scrim"
+			transition:fade={{ duration: 100 }}
+			onclick={closeDialog}
+			aria-label="Close search"
+		></button>
+		<dialog
+			open
 			class="panel"
 			transition:slide={{ duration: 150 }}
-			onclick={(e) => e.stopPropagation()}
 			onkeydown={handleKeydown}
-			role="dialog"
 			aria-modal="true"
-			tabindex="-1"
+			aria-labelledby="search-title"
 		>
+			<h2 id="search-title" class="sr-only">Search documentation</h2>
 			<div class="panel-inner">
 				<div class="input-row">
-					<svg class="search-icon" width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+					<svg
+						class="search-icon"
+						width="15"
+						height="15"
+						viewBox="0 0 24 24"
+						fill="currentColor"
+						aria-hidden="true"
+					>
 						<path d="M21.71 20.29 18 16.61A9 9 0 1 0 16.61 18l3.68 3.68a.999.999 0 0 0 1.42 0 1 1 0 0 0 0-1.39ZM11 18a7 7 0 1 1 0-14 7 7 0 0 1 0 14Z" />
 					</svg>
 					<input
 						bind:value={query}
 						{@attach open && autofocusWhenOpen()}
 						oninput={() => search(query)}
-						onkeydown={handleKeydown}
 						placeholder="Search documentation..."
+						aria-label="Search documentation"
 						type="text"
 						spellcheck="false"
 					/>
@@ -152,12 +165,11 @@
 				</div>
 
 				{#if results.length > 0}
-					<ul class="results">
-					{#each results as result, i (result.url)}
+					<ul class="results" aria-label="Search results">
+						{#each results as result, i (result.url)}
 							<li>
 								<button
-									class="result-row"
-									class:active={i === activeIndex}
+									class={['result-row', i === activeIndex && 'active']}
 									onclick={() => selectResult(result.url)}
 									onmouseenter={() => (activeIndex = i)}
 								>
@@ -171,54 +183,68 @@
 						{/each}
 					</ul>
 				{:else if query && pagefind}
-					<p class="no-results">No results for "{query}"</p>
+					<p class="no-results" aria-live="polite">No results for “{query}”</p>
 				{/if}
 			</div>
-		</div>
+		</dialog>
 	</div>
 {/if}
 
 <style>
-	.backdrop {
+	.dialog-layer {
 		position: fixed;
 		inset: 0;
 		z-index: 50;
-		background-color: rgba(21, 19, 16, 0.3);
 		display: flex;
 		justify-content: center;
-		padding-top: 3.5rem;
+		align-items: flex-start;
+		padding: clamp(4.75rem, 12vh, 8rem) 1rem 1rem;
+	}
+
+	.scrim {
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		height: 100%;
+		padding: 0;
+		border: 0;
+		background: rgba(3, 4, 3, 0.78);
+		backdrop-filter: blur(4px);
+		cursor: default;
 	}
 
 	.panel {
-		background-color: var(--color-gray-50);
-		border: 1px solid var(--color-gray-300);
-		width: 90%;
-		max-width: 36rem;
-		max-height: calc(100vh - 7rem);
+		position: relative;
+		inset: auto;
+		width: min(100%, 39rem);
+		max-height: calc(100dvh - 8rem);
 		height: fit-content;
+		margin: 0;
+		padding: 0;
+		border: 1px solid var(--line-strong);
+		background: var(--surface);
+		color: var(--ink-2);
+		box-shadow:
+			0 1px 0 rgba(231, 226, 214, 0.06) inset,
+			0 2rem 6rem rgba(0, 0, 0, 0.42);
 		overflow-y: auto;
 		scrollbar-width: thin;
 	}
 
-	:global([data-theme='dark']) .panel {
-		background-color: var(--color-gray-950);
-		border-color: var(--color-gray-800);
-	}
-
 	.panel-inner {
-		padding: 0 1rem;
+		padding: 0 1.1rem;
 	}
 
 	.input-row {
 		display: flex;
 		align-items: center;
-		gap: 0.625rem;
-		padding: 0.875rem 0;
+		gap: 0.75rem;
+		min-height: 3.75rem;
 	}
 
 	.search-icon {
 		flex-shrink: 0;
-		color: var(--color-gray-400);
+		color: var(--muted);
 	}
 
 	input {
@@ -227,97 +253,75 @@
 		outline: none;
 		background: transparent;
 		font-family: var(--font-sans);
-		font-size: 1.125rem;
-		color: var(--color-gray-900);
-	}
-
-	:global([data-theme='dark']) input {
-		color: #ede8e0;
+		font-size: 1rem;
+		color: var(--ink);
 	}
 
 	input::placeholder {
-		color: var(--color-gray-400);
+		color: var(--faint);
 	}
 
 	.esc-hint {
 		font-family: var(--font-mono);
-		font-size: 0.625rem;
+		font-size: 0.56rem;
 		letter-spacing: 0.05em;
-		color: var(--color-gray-400);
-		padding: 0.125rem 0.375rem;
-		border: 1px solid var(--color-gray-300);
-	}
-
-	:global([data-theme='dark']) .esc-hint {
-		border-color: var(--color-gray-700);
+		color: var(--faint);
+		padding: 0.15rem 0.35rem;
+		border: 1px solid var(--line);
 	}
 
 	.results {
 		list-style: none;
 		padding: 0;
 		margin: 0;
-		border-top: 1px solid var(--color-gray-200);
-		padding-bottom: 0.5rem;
-	}
-
-	:global([data-theme='dark']) .results {
-		border-top-color: var(--color-gray-800);
+		padding: 0.55rem 0;
+		border-top: 1px solid var(--line);
 	}
 
 	.result-row {
 		display: block;
 		width: 100%;
 		text-align: left;
-		padding: 0.5rem 0.5rem 0.5rem 0.75rem;
+		padding: 0.65rem 0.75rem;
 		border: none;
-		border-left: 2px solid transparent;
 		background: transparent;
 		cursor: pointer;
 		font-family: var(--font-sans);
-		transition: border-color 0.1s ease;
+		transition:
+			background-color 100ms ease,
+			color 100ms ease;
 	}
 
 	.result-row.active {
-		border-left-color: var(--color-accent-500);
-	}
-
-	:global([data-theme='dark']) .result-row.active {
-		border-left-color: var(--color-accent-400);
+		background: var(--accent-soft);
 	}
 
 	.result-section {
 		display: block;
 		font-family: var(--font-mono);
-		font-size: 0.5625rem;
+		font-size: 0.55rem;
 		font-weight: 500;
 		text-transform: uppercase;
-		letter-spacing: 0.1em;
-		color: var(--color-gray-400);
-		margin-bottom: 0.125rem;
+		letter-spacing: 0.12em;
+		color: var(--muted);
+		margin-bottom: 0.2rem;
 	}
 
 	.result-title {
 		display: block;
-		font-size: 0.875rem;
-		color: var(--color-gray-900);
-	}
-
-	:global([data-theme='dark']) .result-title {
-		color: #ede8e0;
+		font-size: 0.88rem;
+		font-weight: 500;
+		color: var(--ink);
 	}
 
 	.result-row.active .result-title {
-		color: var(--color-accent-500);
-	}
-
-	:global([data-theme='dark']) .result-row.active .result-title {
-		color: var(--color-accent-400);
+		color: var(--accent);
 	}
 
 	.result-excerpt {
 		display: block;
-		font-size: 0.6875rem;
-		color: var(--color-gray-500);
+		font-size: 0.72rem;
+		color: var(--muted);
 		line-height: 1.4;
 		overflow: hidden;
 		text-overflow: ellipsis;
@@ -326,13 +330,12 @@
 	}
 
 	.no-results {
-		padding: 1rem 0;
-		font-size: 0.75rem;
-		color: var(--color-gray-400);
-		border-top: 1px solid var(--color-gray-200);
-	}
-
-	:global([data-theme='dark']) .no-results {
-		border-top-color: var(--color-gray-800);
+		margin: 0;
+		padding: 1.25rem 0;
+		border-top: 1px solid var(--line);
+		color: var(--muted);
+		font-family: var(--font-mono);
+		font-size: 0.65rem;
+		line-height: 1.6;
 	}
 </style>

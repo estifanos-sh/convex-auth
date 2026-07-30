@@ -44,8 +44,12 @@
 			<p class="toc-label">On this page</p>
 			<ul>
 				{#each headings as heading (heading.id)}
-					<li class:nested={heading.level === 3}>
-						<a href="#{heading.id}" class:active={activeId === heading.id}>
+					<li class={heading.level === 3 ? 'nested' : undefined}>
+						<a
+							href={`#${heading.id}`}
+							class={activeId === heading.id ? 'active' : undefined}
+							aria-current={activeId === heading.id ? 'location' : undefined}
+						>
 							{heading.text}
 						</a>
 					</li>
@@ -57,14 +61,14 @@
 
 <style>
 	.toc {
-		width: 11rem;
+		width: 12rem;
 		flex-shrink: 0;
 		position: sticky;
-		top: 3.5rem;
-		height: calc(100vh - 3.5rem);
+		top: 5.5rem;
+		height: calc(100vh - 5.5rem);
 		overflow-y: auto;
 		scrollbar-width: none;
-		padding: 1rem 0;
+		padding: 0.75rem 0 2rem;
 	}
 
 	.toc::-webkit-scrollbar {
@@ -73,13 +77,14 @@
 
 	.toc-label {
 		font-family: var(--font-label);
-		font-size: 0.625rem;
+		font-size: 0.58rem;
 		font-weight: 500;
 		text-transform: uppercase;
-		letter-spacing: 0.1em;
-		color: var(--color-gray-500);
-		padding: 0 0.75rem;
-		margin-bottom: 0.5rem;
+		letter-spacing: 0.13em;
+		color: var(--muted);
+		padding: 0 0 0.75rem;
+		margin: 0 0 0.5rem;
+		border-bottom: 1px solid var(--line);
 	}
 
 	ul {
@@ -89,32 +94,35 @@
 	}
 
 	li a {
+		position: relative;
 		display: block;
-		padding: 0.1875rem 0.75rem;
-		font-size: 0.75rem;
-		color: var(--color-gray-500);
+		padding: 0.28rem 0;
+		color: var(--muted);
+		font-size: 0.72rem;
 		text-decoration: none;
-		line-height: 1.4;
-		transition: color 0.15s ease;
+		line-height: 1.45;
+		transition: color 130ms ease;
 	}
 
 	li.nested a {
-		padding-left: 1.25rem;
+		padding-left: 0.8rem;
 	}
 
 	li a:hover {
-		color: var(--color-gray-900);
-	}
-
-	:global([data-theme='dark'] li a:hover) {
-		color: #ede8e0;
+		color: var(--ink-2);
 	}
 
 	li a.active {
-		color: var(--color-accent-500);
+		color: var(--accent);
 	}
 
-	:global([data-theme='dark'] li a.active) {
-		color: var(--color-accent-400);
+	li a.active::before {
+		content: '';
+		position: absolute;
+		top: 0.58rem;
+		left: -0.75rem;
+		width: 3px;
+		height: 3px;
+		background: var(--accent);
 	}
 </style>

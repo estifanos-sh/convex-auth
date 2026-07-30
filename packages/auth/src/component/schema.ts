@@ -39,6 +39,8 @@ export default defineSchema({
    */
   User: defineTable({
     name: v.optional(v.string()),
+    firstName: v.optional(v.string()),
+    lastName: v.optional(v.string()),
     image: v.optional(v.string()),
     email: v.optional(v.string()),
     emailVerificationTime: v.optional(v.number()),
@@ -266,6 +268,14 @@ export default defineSchema({
     isRoot: v.optional(v.boolean()),
     policy: v.optional(vGroupConnectionPolicy),
     extend: v.optional(v.any()),
+    /**
+     * @deprecated Removed faceted classification tags (was
+     * `v.array(v.object({ key, value }))`). Retained as `v.any()` so
+     * pre-existing rows still validate on deploy — do NOT re-narrow it here.
+     * Clear existing data via the `dropGroupTags` migration, then drop this
+     * field in a later major release.
+     */
+    tags: v.optional(v.any()),
   })
     .index("name", ["name"])
     .index("slug", ["slug"])
@@ -277,6 +287,49 @@ export default defineSchema({
     .index("is_root", ["isRoot"])
     .index("type", ["type"])
     .index("type_parent_group_id", ["type", "parentGroupId"]),
+
+  /**
+   * Durable state for large group subtree removals and root-id re-stamps.
+   * These rows are component-internal implementation details; the public
+   * `Group` document stays free of workflow metadata.
+   */
+  GroupHierarchyOperation: defineTable({
+    groupId: v.id("Group"),
+    kind: v.union(v.literal("remove"), v.literal("restamp")),
+    phase: v.union(v.literal("planning"), v.literal("applying"), v.literal("cleaning")),
+    newRootGroupId: v.optional(v.id("Group")),
+    expectedParentGroupId: v.optional(v.id("Group")),
+  })
+    .index("group_id_kind", ["groupId", "kind"])
+    .index("group_id_kind_parent_root", [
+      "groupId",
+      "kind",
+      "expectedParentGroupId",
+      "newRootGroupId",
+    ]),
+
+  /**
+   * One durable queue row per group in a hierarchy operation. Keeping work as
+   * rows instead of a carried array avoids an unbounded scheduled-function
+   * argument/frontier and makes every continuation safe to retry.
+   */
+  GroupHierarchyWork: defineTable({
+    operationId: v.id("GroupHierarchyOperation"),
+    kind: v.union(v.literal("remove"), v.literal("restamp")),
+    groupId: v.id("Group"),
+    parentWorkId: v.optional(v.id("GroupHierarchyWork")),
+    expectedParentGroupId: v.optional(v.id("Group")),
+    depth: v.number(),
+    planned: v.boolean(),
+    applied: v.boolean(),
+    eligible: v.optional(v.boolean()),
+    scanCursor: v.optional(v.string()),
+  })
+    .index("operation_id_group_id", ["operationId", "groupId"])
+    .index("operation_id_planned", ["operationId", "planned"])
+    .index("operation_id_applied_depth", ["operationId", "applied", "depth"])
+    .index("group_id", ["groupId"])
+    .index("group_id_kind", ["groupId", "kind"]),
 
   /**
    * Group membership. Links a user to a group with an application-defined
@@ -294,7 +347,9 @@ export default defineSchema({
     .index("group_id", ["groupId"])
     .index("group_id_user_id", ["groupId", "userId"])
     .index("group_id_status", ["groupId", "status"])
-    .index("user_id", ["userId"]),
+    .index("user_id", ["userId"])
+    .index("user_id_status", ["userId", "status"])
+    .index("status", ["status"]),
 
   /**
    * Invitations. Tracks pending, accepted, revoked, and expired
@@ -415,7 +470,9 @@ export default defineSchema({
   })
     .index("connection_id", ["connectionId"])
     .index("domain_id", ["domainId"])
-    .index("token_hash", ["tokenHash"]),
+    .index("token_hash", ["tokenHash"])
+    // Retention: expired DNS challenges are pruned by `maintenance.pruneExpired`.
+    .index("expires_at", ["expiresAt"]),
 
   /**
    * Encrypted group connection secrets stored separately from protocol config.
@@ -479,6 +536,15 @@ export default defineSchema({
    * The durable stream owns the immutable event envelope. This table projects
    * the fields auth needs for native Convex reads without duplicating event
    * timelines into multiple tables.
+   *
+   * NOTE (0.1 upgrade): this table REPLACES the removed `GroupAuditEvent` table.
+   * Dropping a table is not deploy-blocking (Convex simply orphans its rows), so
+   * there is intentionally NO data-copy migration: the old audit rows used a
+   * different taxonomy (`eventType`/`actorType`/`status` vs the event
+   * `kind`/`actorType`/`outcome` here) and cannot be projected without lossy
+   * guesswork. Pre-0.1 `GroupAuditEvent` history is therefore not carried
+   * forward; consumers that need it must export it from the old deployment
+   * before upgrading. See `migrations.ts` for the runnable upgrade sequence.
    */
   AuthEventProjection: defineTable({
     eventId: v.string(),
@@ -511,7 +577,11 @@ export default defineSchema({
     .index("actor_time", ["actorType", "actorId", "occurredAt"])
     .index("subject_time", ["subjectType", "subjectId", "occurredAt"])
     .index("request_id_time", ["requestId", "occurredAt"])
-    .index("by_stream_index", ["streamIndex"]),
+    .index("by_stream_index", ["streamIndex"])
+    // Retention: `maintenance.pruneExpired` deletes DRAINED rows (streamIndex >= 0)
+    // older than the retention window via this index. Undrained rows
+    // (streamIndex === -1, not yet in the durable stream) are never pruned.
+    .index("occurred_at", ["occurredAt"]),
 
   /**
    * Webhook endpoints subscribed to group audit and lifecycle events.
@@ -526,9 +596,29 @@ export default defineSchema({
      * Decrypted at emit time to HMAC-SHA256 each outbound payload; the
      * dispatch action forwards the precomputed signature in
      * `X-Auth-Signature`.
+     *
+     * Optional for the 0.1 two-phase upgrade: pre-existing rows carry the
+     * one-way `secretHash` and have no `secretCiphertext` yet. The
+     * `disableLegacyWebhookEndpoints` migration disables those rows and erases
+     * the hash; an operator must provide a new secret before re-enabling them.
+     * Tighten back to required in a later release once every live row is
+     * encrypted.
      */
-    secretCiphertext: v.string(),
-    subscriptions: v.array(vAuthEventKind),
+    secretCiphertext: v.optional(v.string()),
+    /**
+     * @deprecated One-way SHA-256 hash from the pre-encryption signing scheme.
+     * Retained only so pre-existing rows validate on deploy; the endpoint
+     * migration disables hash-only rows and clears this field. It cannot be
+     * converted into the original secret. Removed in a later release.
+     */
+    secretHash: v.optional(v.string()),
+    /**
+     * Kept permissive (`v.array(v.string())`, not `v.array(vAuthEventKind)`) so
+     * rows holding pre-rename kind strings validate on deploy. The
+     * `renameWebhookEndpointSubscriptions` migration remaps them; re-narrow in a
+     * later release.
+     */
+    subscriptions: v.array(v.string()),
     createdByUserId: v.optional(v.id("User")),
     lastSuccessAt: v.optional(v.number()),
     lastFailureAt: v.optional(v.number()),
@@ -545,8 +635,16 @@ export default defineSchema({
   GroupWebhookDelivery: defineTable({
     connectionId: v.id("GroupConnection"),
     endpointId: v.id("GroupWebhookEndpoint"),
-    eventId: v.string(),
-    kind: vAuthEventKind,
+    /**
+     * `eventId`/`kind`/`signature`/`signedAt` became required after the
+     * audit→event migration. Relaxed to optional for the 0.1 two-phase upgrade
+     * so pre-existing rows (which instead carry `eventType`/`auditEventId`, and
+     * may predate `signature`/`signedAt`) validate on deploy. The
+     * `renameWebhookDeliveryKinds` migration backfills them from the legacy
+     * fields; tighten back to required in a later release.
+     */
+    eventId: v.optional(v.string()),
+    kind: v.optional(vAuthEventKind),
     status: vWebhookDeliveryStatus,
     attemptCount: v.number(),
     nextAttemptAt: v.number(),
@@ -555,9 +653,19 @@ export default defineSchema({
     lastError: v.optional(v.string()),
     payload: v.any(),
     /** HMAC-SHA256 hex of `${signedAt}.${body}` using the endpoint secret. */
-    signature: v.string(),
+    signature: v.optional(v.string()),
     /** Epoch ms used in the signature pre-image. */
-    signedAt: v.number(),
+    signedAt: v.optional(v.number()),
+    /**
+     * @deprecated Legacy pre-`event` audit fields. `eventType` held the old
+     * audit event-type string; `auditEventId` referenced the dropped
+     * `GroupAuditEvent` table (kept as `v.string()` since that table no longer
+     * exists). Retained so pre-existing rows validate on deploy; the
+     * `renameWebhookDeliveryKinds` migration reads them to backfill
+     * `kind`/`eventId`, then clears them. Removed in a later release.
+     */
+    eventType: v.optional(v.string()),
+    auditEventId: v.optional(v.string()),
   })
     .index("group_connection_id", ["connectionId"])
     .index("status_next_attempt_at", ["status", "nextAttemptAt"])
@@ -601,6 +709,12 @@ export default defineSchema({
     revoked: v.boolean(),
     /** Arbitrary app-specific metadata attached to the key. */
     extend: v.optional(v.any()),
+    /**
+     * @deprecated Renamed to `extend`. Retained so pre-existing rows validate on
+     * deploy; the `backfillApiKeyExtend` migration copies it into `extend` (when
+     * `extend` is unset) and clears this. Removed in a later release.
+     */
+    metadata: v.optional(v.any()),
   })
     .index("user_id", ["userId"])
     .index("hashed_key", ["hashedKey"]),
@@ -619,12 +733,15 @@ export default defineSchema({
     registrationAccessTokenHash: v.optional(v.string()),
     createdBy: v.optional(v.id("User")),
     revoked: v.boolean(),
+    /** Set when revoked; optional until the compatibility backfill runs. */
+    revokedAt: v.optional(v.number()),
     extend: v.optional(v.any()),
   })
     .index("client_id", ["clientId"])
     .index("created_by", ["createdBy"])
     .index("created_by_revoked", ["createdBy", "revoked"])
-    .index("revoked", ["revoked"]),
+    .index("revoked", ["revoked"])
+    .index("revoked_at", ["revoked", "revokedAt"]),
 
   OAuthCode: defineTable({
     codeHash: v.string(),
@@ -638,7 +755,9 @@ export default defineSchema({
     usedAt: v.optional(v.number()),
   })
     .index("code_hash", ["codeHash"])
-    .index("user_id", ["userId"]),
+    .index("user_id", ["userId"])
+    // Retention: single-use codes are pruned past expiry by `maintenance.pruneExpired`.
+    .index("expires_at", ["expiresAt"]),
 
   /**
    * Root record for a refresh-token rotation chain (one per code exchange).

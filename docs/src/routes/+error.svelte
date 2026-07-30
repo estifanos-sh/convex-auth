@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { base } from '$app/paths';
 	import { page } from '$app/state';
 
 	const message = $derived(
@@ -16,7 +17,7 @@
 <main class="error-page">
 	<p class="message">
 		{message}
-		<a href="/">Return to docs.</a>
+		<a href={`${base}/`}>Return to docs.</a>
 	</p>
 </main>
 
@@ -24,31 +25,23 @@
 	.error-page {
 		position: fixed;
 		inset: 0;
-		top: 3.5rem;
+		top: 4rem;
 		display: flex;
 		align-items: center;
 		justify-content: center;
 		padding: 1rem;
-		background-color: var(--color-gray-50);
+		background-color: var(--bg);
 		z-index: 10;
-	}
-
-	:global([data-theme='dark']) .error-page {
-		background-color: var(--color-gray-950);
 	}
 
 	.message {
 		font-size: 1.125rem;
-		color: var(--color-gray-900);
+		color: var(--ink);
 		text-align: center;
 	}
 
-	:global([data-theme='dark']) .message {
-		color: #ede8e0;
-	}
-
 	.message a {
-		color: var(--color-accent-500);
+		color: var(--accent);
 		text-decoration: none;
 		text-underline-offset: 0.15em;
 		transition: text-decoration 0.15s ease;

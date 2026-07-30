@@ -7,6 +7,7 @@
   import LockClosed from "svelte-radix/LockClosed.svelte";
   import Plus from "svelte-radix/Plus.svelte";
   import { page } from "$app/state";
+  import { base } from "$app/paths";
 
   const groupId = $derived(page.params.groupId!);
   const client = getConvexClient();
@@ -50,11 +51,11 @@
       </div>
     </div>
     <div class="flex items-center gap-2">
-      <a class="button button--secondary button--compact no-underline" href="/{groupId}">Back</a>
+      <a class="button button--secondary button--compact no-underline" href={`${base}/${groupId}`}>Back</a>
       {#if tab === "connections" && visibleConnections.length > 0}
         <a
           class="button button--accent button--compact no-underline inline-flex items-center gap-1.5"
-          href="/{groupId}/connection/new"
+          href={`${base}/${groupId}/connection/new`}
         >
           <Plus size="14" /> New
         </a>
@@ -84,7 +85,7 @@
             Add a SAML or OIDC provider to enable single sign-on.
           </p>
         </div>
-        <a class="button button--accent button--compact no-underline" href="/{groupId}/connection/new">
+        <a class="button button--accent button--compact no-underline" href={`${base}/${groupId}/connection/new`}>
           Create connection
         </a>
       </div>

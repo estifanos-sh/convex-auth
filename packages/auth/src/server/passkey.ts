@@ -52,18 +52,17 @@ import type { AuthErrorData } from "./errors";
 import { toConvexError } from "./errors";
 import { emitAuthEvent } from "./events";
 import { getAuthenticatedUserIdOrNull } from "./identity/claims";
-import { isSignInRateLimited, recordFailedSignIn, resetSignInRateLimit } from "./limits";
+import { reserveSignInAttempt, resetSignInRateLimit } from "./limits";
 import { LOG_LEVELS, log } from "./log";
 import { callSignIn, callVerifier } from "./mutations/calls";
 import {
+  consumeVerifierById,
   mutatePasskeyInsert,
   mutatePasskeyUpdateCounter,
-  mutateVerifierRemove,
   queryPasskeyByCredentialId,
   queryPasskeysByUserId,
   queryUserById,
   queryUserByVerifiedEmail,
-  queryVerifierById,
 } from "./component/factor/db";
 import {
   AuthDataModel,
@@ -210,20 +209,19 @@ async function verifyAndConsumeChallenge<T extends { challenge: Uint8Array }>(
   verifierValue: string,
 ): Promise<T> {
   const challengeHash = encodeBase64urlNoPadding(new Uint8Array(sha256(clientData.challenge)));
+  // Read-check-delete the challenge verifier in ONE component mutation: this runs
+  // in an action, so a separate `get` then `remove` let two concurrent
+  // assertions carrying the same challenge both pass before either delete landed,
+  // each minting its own session. `consume` matches the expected challenge hash
+  // and deletes atomically, so only the single winner gets the doc back.
   let doc;
   try {
-    doc = await queryVerifierById(ctx, verifierValue);
+    doc = await consumeVerifierById(ctx, verifierValue, challengeHash);
   } catch (err) {
     console.error("[auth] passkey error:", err);
     throw convexError(ErrorCode.PASSKEY_INVALID_CHALLENGE, "Invalid or expired passkey challenge.");
   }
-  if (!doc || doc.signature !== challengeHash) {
-    throw convexError(ErrorCode.PASSKEY_INVALID_CHALLENGE, "Invalid or expired passkey challenge.");
-  }
-  try {
-    await mutateVerifierRemove(ctx, verifierValue);
-  } catch (err) {
-    console.error("[auth] passkey error:", err);
+  if (!doc) {
     throw convexError(ErrorCode.PASSKEY_INVALID_CHALLENGE, "Invalid or expired passkey challenge.");
   }
   return clientData;
@@ -357,6 +355,40 @@ function verifyAssertionSignature(
 }
 
 /**
+ * Build a deterministic decoy `allowCredentials` list for a passkey `signIn`
+ * challenge when the given email has no real passkeys (unknown user, or a user
+ * without passkeys).
+ *
+ * A known email WITH passkeys returns a populated `allowCredentials`, so
+ * returning an absent/empty list for every other email would reveal, by the
+ * response shape, exactly which accounts exist — an account-enumeration oracle.
+ * The decoy ids are derived from a SHA-256 hash of the (trimmed, lowercased)
+ * email plus the relying-party id, so the same email always yields the same fake
+ * credentials and the response is indistinguishable from a real account.
+ *
+ * These ids reference no stored credential: the ceremony simply fails to produce
+ * an assertion (as it would for a real account whose authenticator is absent),
+ * and a forged assertion can never pass {@link verifyAssertionSignature} because
+ * no matching credential is ever looked up on `verify`.
+ */
+function deriveDecoyAllowCredentials(
+  email: string,
+  rpId: string,
+): Array<{ type: "public-key"; id: string; transports?: string[] }> {
+  const encoder = new TextEncoder();
+  const seed = `convex-auth:passkey-decoy:${rpId}:${email.trim().toLowerCase()}`;
+  const base = sha256(encoder.encode(seed));
+  // 1–2 decoys, chosen deterministically, mimicking a typical small credential set.
+  const count = (base[0] % 2) + 1;
+  const credentials: Array<{ type: "public-key"; id: string; transports?: string[] }> = [];
+  for (let i = 0; i < count; i++) {
+    const idBytes = sha256(encoder.encode(`${seed}:${i}`));
+    credentials.push({ type: "public-key" as const, id: encodeBase64urlNoPadding(idBytes) });
+  }
+  return credentials;
+}
+
+/**
  * Drive the passkey provider's `register` / `signIn` / `verify` flow.
  *
  * Dispatches on `args.params.flow`; for `verify` it auto-detects whether the
@@ -451,6 +483,12 @@ export async function handlePasskey(
       });
     } catch (err) {
       logPasskeyError(err);
+      // Preserve structured failures (e.g. the credentialId-uniqueness guard in
+      // `factor.passkey.create` firing when two registrations race the same
+      // credential) instead of masking them as a generic internal error.
+      if (err instanceof ConvexError) {
+        throw err;
+      }
       throw convexError(ErrorCode.INTERNAL_ERROR, "An unexpected error occurred.");
     }
 
@@ -498,7 +536,10 @@ export async function handlePasskey(
       throw convexError(ErrorCode.PASSKEY_UNKNOWN_CREDENTIAL, "Unknown credential");
     }
 
-    if (await isSignInRateLimited(ctx, passkey.userId, ctx.auth.config)) {
+    // Reserve (consume) a token up front so concurrent guesses cannot all clear
+    // a non-consuming check before any failure commits — this is an action, so
+    // each runQuery/runMutation is a separate transaction. Refunded on success.
+    if (await reserveSignInAttempt(ctx, passkey.userId, ctx.auth.config)) {
       throw convexError(ErrorCode.RATE_LIMITED, "Too many passkey attempts. Try again later.");
     }
 
@@ -518,36 +559,45 @@ export async function handlePasskey(
     verifyRpId(authenticatorData, rp.rpId);
     verifyUserFlags(authenticatorData, rp);
 
-    try {
-      verifyAssertionSignature(passkey, signatureBytes, messageHash);
+    // The reservation above already consumed this attempt's token, so a failed
+    // signature or counter check simply propagates. There is no separate
+    // failure-record step — running it as its own transaction is exactly what
+    // let concurrent guesses slip past the old check-then-record sequence.
+    verifyAssertionSignature(passkey, signatureBytes, messageHash);
 
-      if (
-        passkey.counter !== 0 &&
-        authenticatorData.signatureCounter !== 0 &&
-        authenticatorData.signatureCounter <= passkey.counter
-      ) {
+    if (
+      passkey.counter !== 0 &&
+      authenticatorData.signatureCounter !== 0 &&
+      authenticatorData.signatureCounter <= passkey.counter
+    ) {
+      throw convexError(
+        ErrorCode.PASSKEY_COUNTER_ERROR,
+        "Authenticator counter did not increase — possible credential cloning detected.",
+      );
+    }
+
+    try {
+      const counterAccepted = await mutatePasskeyUpdateCounter(
+        ctx,
+        passkey._id,
+        authenticatorData.signatureCounter,
+        Date.now(),
+      );
+      if (!counterAccepted) {
         throw convexError(
           ErrorCode.PASSKEY_COUNTER_ERROR,
           "Authenticator counter did not increase — possible credential cloning detected.",
         );
       }
     } catch (error) {
-      await recordFailedSignIn(ctx, passkey.userId, ctx.auth.config);
-      throw error;
-    }
-
-    await resetSignInRateLimit(ctx, passkey.userId, ctx.auth.config);
-
-    try {
-      await mutatePasskeyUpdateCounter(
-        ctx,
-        passkey._id,
-        authenticatorData.signatureCounter,
-        Date.now(),
-      );
-    } catch (error) {
+      if (error instanceof ConvexError) throw error;
       throw asConvexError(error, ErrorCode.INTERNAL_ERROR, "Failed to update passkey counter.");
     }
+
+    // Only the assertion that won the atomic counter transition may refund the
+    // reserved attempt. A concurrent stale assertion must not clear the shared
+    // rate-limit bucket before it is rejected above.
+    await resetSignInRateLimit(ctx, passkey.userId, ctx.auth.config);
 
     let signInResult;
     try {
@@ -678,6 +728,12 @@ export async function handlePasskey(
               transports: pk.transports,
             }));
           }
+        }
+        if (allowCredentials === undefined) {
+          // No real passkeys for this email (unknown user, or a user without
+          // passkeys). Return deterministic decoys instead of an absent list so
+          // the response cannot be used to enumerate which accounts exist.
+          allowCredentials = deriveDecoyAllowCredentials(email, rp.rpId);
         }
       }
 

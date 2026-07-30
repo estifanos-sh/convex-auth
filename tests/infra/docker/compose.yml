@@ -83,6 +83,12 @@ services:
       start_period: 20s
     volumes:
       - zitadel-bootstrap:/zitadel/bootstrap
+    networks:
+      default:
+        aliases:
+          # The IdP fetch guard intentionally rejects bare service names.
+          # Keep the interop target routable while exercising a dotted host.
+          - zitadel.test
 
 volumes:
   convex-data:

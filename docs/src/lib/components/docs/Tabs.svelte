@@ -1,7 +1,7 @@
 <script lang="ts">
-	import { setContext } from 'svelte';
+	import { setContext, type Snippet } from 'svelte';
 
-	let { syncKey, children }: { syncKey?: string; children: any } = $props();
+	let { syncKey, children }: { syncKey?: string; children: Snippet } = $props();
 	let activeTab = $state(0);
 
 	const tabs: string[] = $state([]);
@@ -25,11 +25,11 @@
 
 <div class="tabs">
 	<div class="tab-bar" role="tablist">
-		{#each tabs as label, i}
+		{#each tabs as label, i (label)}
 			<button
 				role="tab"
 				aria-selected={activeTab === i}
-				class:active={activeTab === i}
+				class={activeTab === i ? 'active' : undefined}
 				onclick={() => {
 					activeTab = i;
 				}}
@@ -45,27 +45,23 @@
 
 <style>
 	.tabs {
-		margin-bottom: 1rem;
+		margin: 1.25rem 0;
 	}
 
 	.tab-bar {
 		display: flex;
 		gap: 0;
-		border-bottom: 1px solid var(--color-gray-300);
 		margin-bottom: 1rem;
-	}
-
-	:global([data-theme='dark']) .tab-bar {
-		border-bottom-color: var(--color-gray-700);
+		border-bottom: 1px solid var(--line);
 	}
 
 	button {
-		padding: 0.375rem 0.75rem;
+		padding: 0.5rem 0.7rem;
 		font-family: var(--font-mono);
-		font-size: 0.75rem;
+		font-size: 0.62rem;
 		text-transform: uppercase;
-		letter-spacing: 0.05em;
-		color: var(--color-gray-500);
+		letter-spacing: 0.08em;
+		color: var(--muted);
 		background: none;
 		border: none;
 		border-bottom: 2px solid transparent;
@@ -77,20 +73,11 @@
 	}
 
 	button:hover {
-		color: var(--color-gray-900);
-	}
-
-	:global([data-theme='dark']) button:hover {
-		color: #ede8e0;
+		color: var(--ink);
 	}
 
 	button.active {
-		color: var(--color-accent-500);
-		border-bottom-color: var(--color-accent-500);
-	}
-
-	:global([data-theme='dark']) button.active {
-		color: var(--color-accent-400);
-		border-bottom-color: var(--color-accent-400);
+		color: var(--accent);
+		border-bottom-color: var(--accent);
 	}
 </style>

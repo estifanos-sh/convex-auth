@@ -1,12 +1,11 @@
 import { ConvexError } from "convex/values";
 
 import { ErrorCode } from "../../shared/codes";
-import { single } from "../component/api";
 import type { ComponentCtx, ComponentReadCtx } from "../component/context";
 import { configDefaults } from "../config";
 import { emitAuthEvent } from "../events";
-import { createScopeChecker, checkKeyRateLimit, generateApiKey, hashApiKey } from "../keys";
-import type { Doc, KeyDoc, KeyScope, ScopeChecker } from "../types";
+import { createScopeChecker, generateApiKey, hashApiKey } from "../keys";
+import type { KeyDoc, KeyRecord, KeyScope, ScopeChecker } from "../types";
 
 /** Convex-native `PaginationResult<T>` shape returned by the `*List` component queries. */
 type Paginated<T> = {
@@ -21,8 +20,50 @@ export type KeyDeps = {
   config: ReturnType<typeof configDefaults>;
 };
 
+/**
+ * Sampling window for the `lastUsedAt` touch in {@link createKeyDomain}'s
+ * `verify`. Bearer verification runs on every authenticated API-key request, so
+ * writing `lastUsedAt` unconditionally turns read-only traffic into a
+ * per-request write on a single, potentially very hot `ApiKey` document — a
+ * classic OCC contention point when one shared key drives high QPS. `lastUsedAt`
+ * only needs coarse ("used ~this minute") accuracy, so the touch is coarsened:
+ * skipped unless the stored value is unset or older than this window.
+ */
+const LAST_USED_COARSEN_MS = 60_000;
+
+/**
+ * Public projection of a stored `ApiKey` document. Strips the sensitive
+ * `hashedKey` (the SHA-256 lookup hash) and the mutable `rateLimitState`
+ * (internal token-bucket counters) so `auth.key.get` / `auth.key.list` never
+ * leak them to callers — the returned shape matches {@link KeyRecord}.
+ * `auth.key.verify` reads the full component document directly and is
+ * unaffected.
+ */
+function redactKeyRecord(doc: KeyDoc): KeyRecord {
+  const { hashedKey: _hashedKey, rateLimitState: _rateLimitState, ...rest } = doc;
+  return rest as KeyRecord;
+}
+
 export function createKeyDomain(deps: KeyDeps) {
   const { config } = deps;
+
+  // Creation/rotation commits before event append/handlers run. If an event
+  // sink fails, the secret cannot be read again; returning an error would hide
+  // a live credential from the caller. Preserve the credential response and
+  // surface the audit outage operationally instead.
+  const emitCommittedKeyEvent = async (
+    ctx: ComponentCtx,
+    event: Parameters<typeof emitAuthEvent>[2],
+  ): Promise<void> => {
+    try {
+      await emitAuthEvent(ctx, config, event);
+    } catch (err) {
+      console.error("[auth] API key committed but audit event emission failed", {
+        kind: event.kind,
+        err,
+      });
+    }
+  };
 
   const key = {
     /**
@@ -74,7 +115,7 @@ export function createKeyDomain(deps: KeyDeps) {
         expiresAt: data.expiresAt,
         extend: data.extend,
       })) as string;
-      await emitAuthEvent(ctx, config, {
+      await emitCommittedKeyEvent(ctx, {
         kind: "api_key.created",
         actor: { type: "user", id: data.userId },
         subject: { type: "user", id: data.userId },
@@ -121,38 +162,55 @@ export function createKeyDomain(deps: KeyDeps) {
           message: "Invalid API key.",
         });
       }
-      const k = doc;
-      if (k.revoked) {
-        throw new ConvexError({
-          code: ErrorCode.API_KEY_REVOKED,
-          message: "This API key has been revoked.",
-        });
-      }
-      if (k.expiresAt && k.expiresAt < Date.now()) {
-        throw new ConvexError({
-          code: ErrorCode.API_KEY_EXPIRED,
-          message: "This API key has expired.",
-        });
-      }
-      const patchData: Record<string, unknown> = { lastUsedAt: Date.now() };
-      if (k.rateLimit) {
-        const { limited, newState } = checkKeyRateLimit(k.rateLimit, k.rateLimitState ?? undefined);
-        if (limited) {
+      // Make the successful verification decision and update usage in ONE
+      // component mutation on the `ApiKey` row. The hash lookup above only
+      // locates the row: `recordUse` re-reads its current state transactionally
+      // and returns the current owner and scopes. This closes both the original
+      // rate-limit race and the query → mutation window where deletion,
+      // revocation, expiration, or a scope reduction could otherwise be missed.
+      //
+      // `coarsenMs` keeps the hot-path optimization: `recordUse` skips the
+      // `lastUsedAt` write when it is still within the window (and no rate-limit
+      // decrement forces a write), so read-only bearer traffic on a hot key does
+      // not turn into a per-request write.
+      const result = (await ctx.runMutation(config.component.user.key.recordUse, {
+        id: doc._id,
+        now: Date.now(),
+        coarsenMs: LAST_USED_COARSEN_MS,
+      })) as unknown as
+        | { status: "invalid" | "revoked" | "expired" | "limited" }
+        | {
+            status: "verified";
+            keyId: string;
+            userId: string;
+            scopes: KeyScope[];
+          };
+      switch (result.status) {
+        case "invalid":
+          throw new ConvexError({
+            code: ErrorCode.INVALID_API_KEY,
+            message: "Invalid API key.",
+          });
+        case "revoked":
+          throw new ConvexError({
+            code: ErrorCode.API_KEY_REVOKED,
+            message: "This API key has been revoked.",
+          });
+        case "expired":
+          throw new ConvexError({
+            code: ErrorCode.API_KEY_EXPIRED,
+            message: "This API key has expired.",
+          });
+        case "limited":
           throw new ConvexError({
             code: ErrorCode.API_KEY_RATE_LIMITED,
             message: "API key rate limit exceeded. Please try again later.",
           });
-        }
-        patchData.rateLimitState = newState;
       }
-      await ctx.runMutation(config.component.user.key.update, {
-        id: k._id,
-        patch: patchData,
-      });
       return {
-        userId: k.userId,
-        keyId: k._id,
-        scopes: createScopeChecker(k.scopes),
+        userId: result.userId,
+        keyId: result.keyId,
+        scopes: createScopeChecker(result.scopes),
       };
     },
     /**
@@ -190,12 +248,13 @@ export function createKeyDomain(deps: KeyDeps) {
         order?: "asc" | "desc";
       },
     ) => {
-      return (await ctx.runQuery(config.component.user.key.list, {
+      const result = (await ctx.runQuery(config.component.user.key.list, {
         where: opts?.where,
         paginationOpts: opts?.paginationOpts ?? { numItems: 50, cursor: null },
         orderBy: opts?.orderBy,
         order: opts?.order,
-      })) as Paginated<Doc<"ApiKey">>;
+      })) as Paginated<KeyDoc>;
+      return { ...result, page: result.page.map(redactKeyRecord) };
     },
     /**
      * Fetch an API key record by ID. Does not expose the raw key secret.
@@ -215,11 +274,11 @@ export function createKeyDomain(deps: KeyDeps) {
      * console.log(key.name, key.prefix);
      * ```
      */
-    get: async (ctx: ComponentReadCtx, opts: { id: string }): Promise<KeyDoc | null> => {
+    get: async (ctx: ComponentReadCtx, opts: { id: string }): Promise<KeyRecord | null> => {
       const doc = (await ctx.runQuery(config.component.user.key.get, {
         id: opts.id,
       })) as KeyDoc | null;
-      return doc ?? null;
+      return doc === null ? null : redactKeyRecord(doc);
     },
     /**
      * Update a key's name, scopes, or rate limit.
@@ -229,14 +288,14 @@ export function createKeyDomain(deps: KeyDeps) {
      *
      * @param ctx - Convex mutation context.
      * @param opts.id - The API key's document ID.
-     * @param opts.data - Fields to merge into the key document.
+     * @param opts.patch - Fields to merge into the key document.
      * @returns `null`.
      *
      * @example
      * ```ts
      * await auth.key.update(ctx, {
      *   id: keyId,
-     *   data: {
+     *   patch: {
      *     name: "CI Pipeline (updated)",
      *     scopes: [{ resource: "data", actions: ["read", "write"] }],
      *   },
@@ -345,44 +404,59 @@ export function createKeyDomain(deps: KeyDeps) {
       ctx: ComponentCtx,
       opts: { id: string; name?: string; expiresAt?: number },
     ): Promise<{ id: string; secret: string }> => {
-      const existing = single(await ctx.runQuery(config.component.user.key.get, { id: opts.id }));
-      if (!existing) {
+      const { raw, hashedKey, displayPrefix } = await generateApiKey("sk_");
+      const result = (await ctx.runMutation((config.component.user.key as any).rotate, {
+        id: opts.id,
+        prefix: displayPrefix,
+        hashedKey,
+        name: opts.name,
+        expiresAt: opts.expiresAt,
+      })) as
+        | { status: "invalid" }
+        | { status: "revoked" }
+        | { status: "invalid_rate_limit" }
+        | { status: "rotated"; id: string; userId: string; name: string };
+      if (result.status === "invalid") {
         throw new ConvexError({
           code: ErrorCode.INVALID_PARAMETERS,
           message: "The provided parameters are invalid.",
         });
       }
-      if (existing.revoked === true) {
+      if (result.status === "revoked") {
         throw new ConvexError({
           code: ErrorCode.API_KEY_REVOKED,
           message: "This API key has been revoked.",
         });
       }
-      await ctx.runMutation(config.component.user.key.update, {
-        id: opts.id,
-        patch: { revoked: true },
-      });
-      await emitAuthEvent(ctx, config, {
+      if (result.status === "invalid_rate_limit") {
+        throw new ConvexError({
+          code: ErrorCode.INVALID_PARAMETERS,
+          message: "The API key has an invalid rate limit configuration.",
+        });
+      }
+      await emitCommittedKeyEvent(ctx, {
         kind: "api_key.revoked",
-        actor: { type: "user", id: existing.userId },
-        subject: { type: "user", id: existing.userId },
+        actor: { type: "user", id: result.userId },
+        subject: { type: "user", id: result.userId },
         targets: [
-          { kind: "user", id: existing.userId },
+          { kind: "user", id: result.userId },
           { kind: "api_key", id: opts.id },
         ],
         outcome: "success",
         data: { keyId: opts.id },
       });
-      return await key.create(ctx, {
-        data: {
-          userId: existing.userId,
-          name: opts.name ?? existing.name ?? opts.id,
-          scopes: (existing.scopes ?? []) as KeyScope[],
-          rateLimit: existing.rateLimit,
-          expiresAt: opts.expiresAt,
-          extend: existing.extend,
-        },
+      await emitCommittedKeyEvent(ctx, {
+        kind: "api_key.created",
+        actor: { type: "user", id: result.userId },
+        subject: { type: "user", id: result.userId },
+        targets: [
+          { kind: "user", id: result.userId },
+          { kind: "api_key", id: result.id },
+        ],
+        outcome: "success",
+        data: { keyId: result.id, name: result.name, prefix: displayPrefix },
       });
+      return { id: result.id, secret: raw };
     },
   };
 

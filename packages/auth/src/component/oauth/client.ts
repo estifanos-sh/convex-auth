@@ -11,7 +11,8 @@ import { ConvexError, v } from "convex/values";
 import { paginator } from "convex-helpers/server/pagination";
 import { ErrorCode } from "../../shared/codes";
 
-import { mutation, query } from "../functions";
+import { internal } from "../_generated/api";
+import { internalMutation, mutation, query } from "../functions";
 import { vOAuthClientDoc, vPaginated, vTokenEndpointAuthMethod } from "../model";
 import schema from "../schema";
 
@@ -38,7 +39,17 @@ export const get = query({
   },
 });
 
-/** Register a new OAuth client (created un-revoked). Returns the new id. */
+/**
+ * Register a new OAuth client (created un-revoked). Returns the new id.
+ *
+ * When `allowedScopes` is supplied (RFC 7591 DCR self-registration), the
+ * requested `scopes` are clamped to that server ceiling before persistence, so a
+ * self-registering client can never grant itself a scope the authorization
+ * server does not offer. This is defense-in-depth at the persistence boundary;
+ * the DCR HTTP register handler also clamps up front. Omit it for trusted admin
+ * creation, which may set any scope. `allowedScopes` is a filter only — it is
+ * never stored on the client document.
+ */
 export const create = mutation({
   args: {
     clientId: v.string(),
@@ -51,10 +62,16 @@ export const create = mutation({
     registrationAccessTokenHash: v.optional(v.string()),
     createdBy: v.optional(v.id("User")),
     extend: v.optional(v.any()),
+    allowedScopes: v.optional(v.array(v.string())),
   },
   returns: v.id("OAuthClient"),
   handler: async (ctx, args) => {
-    return await ctx.db.insert("OAuthClient", { ...args, revoked: false });
+    const { allowedScopes, ...rest } = args;
+    const scopes =
+      allowedScopes === undefined
+        ? rest.scopes
+        : rest.scopes.filter((scope) => allowedScopes.includes(scope));
+    return await ctx.db.insert("OAuthClient", { ...rest, scopes, revoked: false });
   },
 });
 
@@ -136,7 +153,82 @@ export const revoke = mutation({
     if (doc === null) {
       throw new ConvexError({ code: ErrorCode.OAUTH_CLIENT_NOT_FOUND, clientId });
     }
-    await ctx.db.patch("OAuthClient", doc._id, { revoked: true });
+    await ctx.db.patch("OAuthClient", doc._id, {
+      revoked: true,
+      revokedAt: doc.revokedAt ?? Date.now(),
+    });
     return null;
+  },
+});
+
+/**
+ * Hard-delete a client by `clientId`. Unlike {@link revoke} (a reversible
+ * soft-delete that keeps the row for audit), this permanently removes the
+ * registration row. Throws `OAUTH_CLIENT_NOT_FOUND` if absent.
+ */
+const remove = mutation({
+  args: { clientId: v.string() },
+  returns: v.null(),
+  handler: async (ctx, { clientId }) => {
+    const doc = await ctx.db
+      .query("OAuthClient")
+      .withIndex("client_id", (q) => q.eq("clientId", clientId))
+      .first();
+    if (doc === null) {
+      throw new ConvexError({ code: ErrorCode.OAUTH_CLIENT_NOT_FOUND, clientId });
+    }
+    await ctx.db.delete("OAuthClient", doc._id);
+    return null;
+  },
+});
+
+export { remove };
+
+/** Default (and hard cap) batch size for {@link prune}. */
+const OAUTH_CLIENT_PRUNE_BATCH = 100;
+
+/** Keep revoked registrations for audit before hard deletion. */
+const OAUTH_CLIENT_RETENTION_MS = 90 * 24 * 60 * 60 * 1000;
+
+/**
+ * Retention GC for revoked OAuth clients: hard-deletes a bounded batch of
+ * revoked registrations whose `revokedAt` is before `before` (defaults to the
+ * 90-day audit-retention cutoff), oldest first. RFC 7591 dynamic client
+ * registration is self-service and otherwise
+ * unbounded, so a soft {@link revoke} alone lets dead rows accumulate forever;
+ * the mutation self-reschedules while eligible rows remain.
+ *
+ * Internal (cron-driven): kept off the public component surface so a mounting
+ * app cannot invoke a bulk delete, mirroring `maintenance.pruneExpired`.
+ *
+ * Legacy revoked rows without `revokedAt` fail closed (they are retained) until
+ * `backfillOAuthClientRevokedAt` stamps them, starting their retention clock.
+ */
+export const prune = internalMutation({
+  args: {
+    before: v.optional(v.number()),
+    limit: v.optional(v.number()),
+  },
+  returns: v.object({ deleted: v.number() }),
+  handler: async (ctx, args) => {
+    const before = args.before ?? Date.now() - OAUTH_CLIENT_RETENTION_MS;
+    const limit = Math.max(
+      1,
+      Math.min(args.limit ?? OAUTH_CLIENT_PRUNE_BATCH, OAUTH_CLIENT_PRUNE_BATCH),
+    );
+    const revokedClients = await ctx.db
+      .query("OAuthClient")
+      .withIndex("revoked_at", (q) =>
+        q.eq("revoked", true).gt("revokedAt", undefined).lt("revokedAt", before),
+      )
+      .take(limit + 1);
+    const toDelete = revokedClients.slice(0, limit);
+    for (const doc of toDelete) {
+      await ctx.db.delete("OAuthClient", doc._id);
+    }
+    if (revokedClients.length > limit) {
+      await ctx.scheduler.runAfter(0, internal.oauth.client.prune, { before, limit });
+    }
+    return { deleted: toDelete.length };
   },
 });

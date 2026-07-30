@@ -2,6 +2,7 @@
   import type { ConvexClient } from "convex/browser";
   import { api } from "$convex/_generated/api.js";
   import { goto } from "$app/navigation";
+  import { base } from "$app/paths";
   import { toast } from "svelte-sonner";
   import { errorText } from "$lib/errors";
   import { fly, fade } from "svelte/transition";
@@ -44,7 +45,7 @@
 
   function switchGroup(id: string) {
     mobileOpen = false;
-    void goto(`/${id}`);
+    void goto(`${base}/${id}`);
   }
 
   function selectProject(slug: string) {

@@ -278,6 +278,7 @@ export const vAuthEventData = v.union(
     keyId: v.optional(v.string()),
     name: v.optional(v.string()),
     prefix: v.optional(v.string()),
+    reason: v.optional(v.string()),
   }),
   v.object({
     email: v.optional(v.string()),
@@ -296,6 +297,8 @@ export const vAuthEventData = v.union(
   }),
   v.object({
     connectionId: v.optional(v.string()),
+    changed: v.optional(vAuthEventStringArray),
+    userId: v.optional(v.string()),
     protocol: v.optional(v.union(v.literal("oidc"), v.literal("saml"))),
     domain: v.optional(v.string()),
     recordName: v.optional(v.string()),
@@ -449,6 +452,8 @@ export const userFields = <F extends IdValidatorFn>(vId: F) => ({
   _id: vId(TABLES.User),
   _creationTime: v.number(),
   name: v.optional(v.string()),
+  firstName: v.optional(v.string()),
+  lastName: v.optional(v.string()),
   image: v.optional(v.string()),
   email: v.optional(v.string()),
   emailVerificationTime: v.optional(v.number()),
@@ -655,6 +660,7 @@ export const vOAuthClientDoc = v.object({
   registrationAccessTokenHash: v.optional(v.string()),
   createdBy: v.optional(v.id(TABLES.User)),
   revoked: v.boolean(),
+  revokedAt: v.optional(v.number()),
   extend: v.optional(v.any()),
 });
 
@@ -823,8 +829,14 @@ export const vGroupWebhookEndpointDoc = v.object({
   groupId: v.id(TABLES.Group),
   url: v.string(),
   status: vWebhookEndpointStatus,
-  secretCiphertext: v.string(),
-  subscriptions: v.array(vAuthEventKind),
+  // Two-phase (0.1): `secretCiphertext` optional and legacy `secretHash`
+  // retained until `disableLegacyWebhookEndpoints` disables hash-only rows and
+  // clears the one-way hash; `subscriptions` is widened to `string[]` so legacy
+  // subscription strings validate. Mirrors `schema.ts` GroupWebhookEndpoint;
+  // tighten in a later release.
+  secretCiphertext: v.optional(v.string()),
+  secretHash: v.optional(v.string()),
+  subscriptions: v.array(v.string()),
   createdByUserId: v.optional(v.id(TABLES.User)),
   lastSuccessAt: v.optional(v.number()),
   lastFailureAt: v.optional(v.number()),
@@ -837,8 +849,11 @@ export const vGroupWebhookDeliveryDoc = v.object({
   ...vDocMeta(TABLES.GroupWebhookDelivery),
   connectionId: v.id(TABLES.GroupConnection),
   endpointId: v.id(TABLES.GroupWebhookEndpoint),
-  eventId: v.string(),
-  kind: vAuthEventKind,
+  // Two-phase (0.1): `eventId`/`kind`/`signature`/`signedAt` optional and legacy
+  // `eventType`/`auditEventId` retained until `renameWebhookDeliveryKinds`
+  // backfills them. Mirrors `schema.ts` GroupWebhookDelivery; tighten later.
+  eventId: v.optional(v.string()),
+  kind: v.optional(vAuthEventKind),
   status: vWebhookDeliveryStatus,
   attemptCount: v.number(),
   nextAttemptAt: v.number(),
@@ -846,8 +861,10 @@ export const vGroupWebhookDeliveryDoc = v.object({
   lastResponseStatus: v.optional(v.number()),
   lastError: v.optional(v.string()),
   payload: v.any(),
-  signature: v.string(),
-  signedAt: v.number(),
+  signature: v.optional(v.string()),
+  signedAt: v.optional(v.number()),
+  eventType: v.optional(v.string()),
+  auditEventId: v.optional(v.string()),
 });
 
 /** Validator for the public (redacted) projection of a `GroupWebhookDelivery` document. */
@@ -855,15 +872,17 @@ export const vGroupWebhookDeliveryPublicDoc = v.object({
   ...vDocMeta(TABLES.GroupWebhookDelivery),
   connectionId: v.id(TABLES.GroupConnection),
   endpointId: v.id(TABLES.GroupWebhookEndpoint),
-  eventId: v.string(),
-  kind: vAuthEventKind,
+  // Two-phase (0.1): mirror the relaxed source doc so the public projection of a
+  // pre-backfill delivery row still validates.
+  eventId: v.optional(v.string()),
+  kind: v.optional(vAuthEventKind),
   status: vWebhookDeliveryStatus,
   attemptCount: v.number(),
   nextAttemptAt: v.number(),
   lastAttemptAt: v.optional(v.number()),
   lastResponseStatus: v.optional(v.number()),
   lastError: v.optional(v.string()),
-  signedAt: v.number(),
+  signedAt: v.optional(v.number()),
 });
 
 /** Summary returned after accepting an invite token: the invite plus resulting group/membership state. */

@@ -77,5 +77,6 @@ export const convexTest = ((
   authTest.register(t as any, "auth");
   resendTest.register(t as any, "resend");
   staticHostingTest.register(t as any, "staticHosting");
+  staticHostingTest.register(t as any, "docsHosting");
   return t;
 }) as typeof baseConvexTest;

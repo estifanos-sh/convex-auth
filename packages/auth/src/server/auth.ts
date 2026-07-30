@@ -33,6 +33,7 @@ import type {
   AuthMemberInspectResult,
   AuthProviderConfig,
   ConvexAuthConfig,
+  Doc,
   Grant,
   HasDeviceProvider,
   HasPasskeyProvider,
@@ -72,20 +73,37 @@ type MemberApiWithPermissions<TPermissions extends PermissionsConfig | undefined
       };
     },
   ) => Promise<string>;
-  list: (
+  list: <
+    O extends
+      | {
+          where?: {
+            groupId?: string;
+            userId?: string;
+            status?: string;
+          };
+          paginationOpts?: { numItems: number; cursor: string | null };
+          orderBy?: "_creationTime" | "status";
+          order?: "asc" | "desc";
+          /** Join each item's `group` document. */
+          withGroup?: true;
+          /** Resolve each item's `roleIds` + `grants`, capped to the caller's scope. */
+          withGrants?: true;
+        }
+      | undefined = undefined,
+  >(
     ctx: Parameters<ReturnType<typeof AuthFactory>["auth"]["member"]["list"]>[0],
-    opts?: {
-      where?: {
-        groupId?: string;
-        userId?: string;
-        roleId?: RoleId<TPermissions>;
-        status?: string;
-      };
-      paginationOpts: { numItems: number; cursor: string | null };
-      orderBy?: "_creationTime" | "status";
-      order?: "asc" | "desc";
-    },
-  ) => ReturnType<ReturnType<typeof AuthFactory>["auth"]["member"]["list"]>;
+    opts?: O,
+  ) => Promise<{
+    page: Array<
+      Doc<"GroupMember"> &
+        (O extends { withGroup: true } ? { group: Doc<"Group"> | null } : unknown) &
+        (O extends { withGrants: true }
+          ? { roleIds: RoleId<TPermissions>[]; grants: Grant<TPermissions>[] }
+          : unknown)
+    >;
+    isDone: boolean;
+    continueCursor: string;
+  }>;
   update: (
     ctx: Parameters<ReturnType<typeof AuthFactory>["auth"]["member"]["update"]>[0],
     args: {
@@ -209,7 +227,7 @@ export type AuthApiBase<
   provider: ReturnType<typeof AuthFactory>["auth"]["provider"];
   account: ReturnType<typeof AuthFactory>["auth"]["account"];
   group: ReturnType<typeof AuthFactory>["auth"]["group"] & {
-    /** Current user's active-group selection (`get` / `set` / `clear`). */
+    /** Current user's active-group selection (`get` / `update` / `remove`). */
     active: ReturnType<typeof AuthFactory>["auth"]["active"];
   };
   member: MemberApiWithPermissions<TPermissions>;
@@ -332,7 +350,7 @@ type PublicGroupConnectionApi = InternalConnectionApi["connection"] & {
     list: InternalConnectionApi["domain"]["list"];
     validate: InternalConnectionApi["domain"]["validate"];
     status: InternalConnectionApi["domain"]["status"];
-    set: (
+    upsert: (
       ctx: Parameters<InternalConnectionApi["connection"]["create"]>[0],
       args: {
         connectionId: string;
@@ -507,12 +525,12 @@ export function defineAuth<
     ...restConnection
   } = authResult.auth.connection as InternalConnectionApi;
 
-  type SetGroupConnectionDomains = PublicGroupConnectionApi["domain"]["set"];
+  type SetGroupConnectionDomains = PublicGroupConnectionApi["domain"]["upsert"];
   type GroupConnectionDomainInput = Array<{
     domain: string;
     isPrimary?: boolean;
   }>;
-  const setGroupConnectionDomains: PublicGroupConnectionApi["domain"]["set"] = async (
+  const setGroupConnectionDomains: PublicGroupConnectionApi["domain"]["upsert"] = async (
     ctx: Parameters<SetGroupConnectionDomains>[0],
     args: Parameters<SetGroupConnectionDomains>[1],
   ) => {
@@ -627,7 +645,7 @@ export function defineAuth<
       list: domainApi.list,
       validate: domainApi.validate,
       status: domainApi.status,
-      set: setGroupConnectionDomains,
+      upsert: setGroupConnectionDomains,
       verification: {
         request: domainApi.verification.request,
         confirm: domainApi.verification.confirm,
@@ -644,7 +662,7 @@ export function defineAuth<
       },
     },
     scim: {
-      set: scimApi.set,
+      upsert: scimApi.upsert,
       get: scimApi.get,
       status: scimApi.status,
       validate: scimApi.validate,

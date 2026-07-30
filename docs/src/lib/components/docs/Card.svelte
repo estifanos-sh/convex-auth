@@ -1,5 +1,7 @@
 <script lang="ts">
-	let { title, children }: { title: string; children: any } = $props();
+	import type { Snippet } from 'svelte';
+
+	let { title, children }: { title: string; children: Snippet } = $props();
 </script>
 
 <article class="card">
@@ -11,26 +13,21 @@
 
 <style>
 	.card {
-		border: 1px solid var(--color-gray-300);
-		padding: 1.25rem;
-	}
-
-	:global([data-theme='dark']) .card {
-		border-color: var(--color-gray-700);
+		padding: 1.15rem 1.25rem;
+		border: 1px solid var(--line);
+		background: rgba(231, 226, 214, 0.018);
 	}
 
 	.card-title {
-		font-weight: 600;
-		margin-bottom: 0.375rem;
+		margin: 0 0 0.4rem;
+		color: var(--ink);
+		font-size: 0.9rem;
+		font-weight: 500;
 	}
 
 	.card-body {
-		font-size: 0.875rem;
-		color: var(--color-gray-600);
-	}
-
-	:global([data-theme='dark']) .card-body {
-		color: var(--color-gray-400);
+		color: var(--muted);
+		font-size: 0.86rem;
 	}
 
 	.card-body :global(p) {

@@ -167,7 +167,7 @@ export type ConvexAuthConfig<TExtend = {}> = {
    * HTTP path where Convex Auth mounts its protocol routes.
    *
    * Defaults to `/auth`. Provider callbacks, the JWT issuer, OAuth discovery,
-   * and `auth.request.add(http)` all use this same path.
+   * and `auth.request.mount(http)` all use this same path.
    */
   path?: string;
   connection?: {
@@ -1202,7 +1202,14 @@ export interface ScopeChecker {
 
 /**
  * An API key record as returned by `auth.key.list()` and `auth.key.get()`.
- * Never includes the raw key material — only the display prefix.
+ *
+ * This is the PUBLIC projection of the stored `ApiKey` document
+ * (`Infer<vApiKeyDoc>`). The `auth.key.get` / `auth.key.list` facades
+ * (`server/domains/key.ts`) strip the sensitive SHA-256 `hashedKey` (the
+ * bearer-lookup hash) and the mutable `rateLimitState` (internal token-bucket
+ * counters) before returning, so neither is ever exposed to callers. This type
+ * reflects that redacted shape. `auth.key.verify` reads the full component
+ * document directly and is unaffected.
  */
 export interface KeyRecord {
   /** Document ID. */
@@ -1225,8 +1232,8 @@ export interface KeyRecord {
   createdAt: number;
   /** `true` when the key has been revoked (soft-deleted). */
   revoked: boolean;
-  /** Arbitrary app-specific metadata attached to the key. */
-  metadata?: Record<string, unknown>;
+  /** Arbitrary app-specific extension blob attached to the key. */
+  extend?: Record<string, unknown>;
 }
 
 /** Filter fields for `auth.user.list()`. All optional. */
@@ -1237,8 +1244,14 @@ export type UserWhere = {
   name?: string;
 };
 
-/** Sortable fields for `auth.user.list()`. */
-export type UserOrderBy = "_creationTime" | "name" | "email" | "phone";
+/**
+ * Sortable fields for `auth.user.list()`.
+ *
+ * Only index-backed fields are sortable: `_creationTime` (default index),
+ * `email`, and `phone`. `name` is a filter-only field (see {@link UserWhere}) —
+ * it has no index, so it is not a valid sort key.
+ */
+export type UserOrderBy = "_creationTime" | "email" | "phone";
 
 /**
  * Context injected into `auth.request.action()` and `auth.request.route()` handlers.

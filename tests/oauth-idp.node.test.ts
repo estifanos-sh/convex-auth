@@ -57,7 +57,11 @@ const publicClient = { ...confidentialClient, clientSecretHash: undefined };
 const ctxWithUser = { auth: { getUserIdentity: async () => ({ subject: "user1" }) } } as never;
 
 const refreshStubs = {
-  createRefresh: async () => ({ refreshToken: "rt_test" }),
+  mintRefresh: async () => ({
+    refreshToken: "rt_test",
+    tokenHash: "th_rt_test",
+    expiresAt: Date.now() + 3_600_000,
+  }),
   exchangeRefresh: async () => null,
 };
 
@@ -192,7 +196,11 @@ test("authorization_code: valid PKCE issues a signed at+jwt for the user", async
         codeChallenge: challengeFor(verifier),
         expiresAt: Date.now() + 60_000,
       }) as never,
-    createRefresh: async () => ({ refreshToken: "rt_test" }),
+    mintRefresh: async () => ({
+      refreshToken: "rt_test",
+      tokenHash: "th_rt_test",
+      expiresAt: Date.now() + 3_600_000,
+    }),
     exchangeRefresh: async () => null,
   });
   const res = await handler(
@@ -214,6 +222,86 @@ test("authorization_code: valid PKCE issues a signed at+jwt for the user", async
   expect(claims.aud).toBe("convex");
   expect(claims.scope).toBe("workspace:read");
   expect((claims as { client_id?: string }).client_id).toBe("oc_test");
+});
+
+test("authorization_code signs before atomically consuming the one-time code", async () => {
+  const verifier = "preflight-verifier-1234567890";
+  let accepted = false;
+  const handler = createTokenHandler({
+    ...tokenDeps,
+    getClient: async () => publicClient as never,
+    getCode: async (_ctx, _codeHash) =>
+      ({
+        userId: "user1",
+        clientId: "oc_test",
+        redirectUri: REDIRECT_URI,
+        scopes: ["workspace:read"],
+        codeChallenge: challengeFor(verifier),
+        expiresAt: Date.now() + 60_000,
+      }) as never,
+    generateAccessToken: async () => {
+      throw new Error("signing unavailable");
+    },
+    verifyClientSecret: async () => null,
+    acceptCode: async () => {
+      accepted = true;
+      return null;
+    },
+    ...refreshStubs,
+  });
+  await expect(
+    handler(
+      {} as never,
+      tokenRequest({
+        grant_type: "authorization_code",
+        code: "rawcode",
+        redirect_uri: REDIRECT_URI,
+        client_id: "oc_test",
+        code_verifier: verifier,
+      }),
+    ),
+  ).rejects.toThrow("signing unavailable");
+  expect(accepted).toBe(false);
+});
+
+test("authorization_code still returns committed tokens when audit emission fails", async () => {
+  const verifier = "audit-failure-verifier-1234567890";
+  const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+  try {
+    const handler = createTokenHandler({
+      ...tokenDeps,
+      getClient: async () => publicClient as never,
+      verifyClientSecret: async () => null,
+      acceptCode: async (_ctx, _codeHash, clientId) =>
+        ({
+          userId: "user1",
+          clientId,
+          redirectUri: REDIRECT_URI,
+          scopes: ["workspace:read"],
+          codeChallenge: challengeFor(verifier),
+          expiresAt: Date.now() + 60_000,
+        }) as never,
+      emitEvent: async () => {
+        throw new Error("audit unavailable");
+      },
+      ...refreshStubs,
+    });
+    const response = await handler(
+      {} as never,
+      tokenRequest({
+        grant_type: "authorization_code",
+        code: "rawcode",
+        redirect_uri: REDIRECT_URI,
+        client_id: "oc_test",
+        code_verifier: verifier,
+      }),
+    );
+    expect(response.status).toBe(200);
+    expect((await response.json()).access_token).toBeTruthy();
+    expect(consoleError).toHaveBeenCalled();
+  } finally {
+    consoleError.mockRestore();
+  }
 });
 
 test("authorization_code: a public (none) client presenting a secret is rejected", async () => {
@@ -397,7 +485,11 @@ test("authorization_code binds the access token to the requested resource", asyn
         resource: MCP_RESOURCE,
         expiresAt: Date.now() + 60_000,
       }) as never,
-    createRefresh: async () => ({ refreshToken: "rt_test" }),
+    mintRefresh: async () => ({
+      refreshToken: "rt_test",
+      tokenHash: "th_rt_test",
+      expiresAt: Date.now() + 3_600_000,
+    }),
     exchangeRefresh: async () => null,
   });
   const res = await handler(
@@ -423,7 +515,11 @@ test("refresh_token rotation preserves the resource binding", async () => {
       ({ ...publicClient, grantTypes: ["authorization_code", "refresh_token"] }) as never,
     verifyClientSecret: async () => null,
     acceptCode: async () => null,
-    createRefresh: async () => ({ refreshToken: "rt_new" }),
+    mintRefresh: async () => ({
+      refreshToken: "rt_new",
+      tokenHash: "th_rt_new",
+      expiresAt: Date.now() + 3_600_000,
+    }),
     exchangeRefresh: async () => ({
       refreshToken: "rt_new",
       expiresAt: Date.now() + 60_000,
@@ -449,7 +545,11 @@ test("refresh_token with broader scope is rejected without rotating", async () =
       ({ ...publicClient, grantTypes: ["authorization_code", "refresh_token"] }) as never,
     verifyClientSecret: async () => null,
     acceptCode: async () => null,
-    createRefresh: async () => ({ refreshToken: "rt_new" }),
+    mintRefresh: async () => ({
+      refreshToken: "rt_new",
+      tokenHash: "th_rt_new",
+      expiresAt: Date.now() + 3_600_000,
+    }),
     exchangeRefresh: async (_ctx, args) => {
       exchangeCalledWith = args;
       return { scopeExceeded: true };
@@ -532,7 +632,11 @@ function codeExchangeHandler(client: typeof publicClient, verifier: string) {
         codeChallenge: challengeFor(verifier),
         expiresAt: Date.now() + 60_000,
       }) as never,
-    createRefresh: async () => ({ refreshToken: "rt_issued" }),
+    mintRefresh: async () => ({
+      refreshToken: "rt_issued",
+      tokenHash: "th_rt_issued",
+      expiresAt: Date.now() + 3_600_000,
+    }),
     exchangeRefresh: async () => null,
   });
 }
@@ -579,7 +683,11 @@ test("refresh_token exchange is refused for a client without the refresh_token g
     getClient: async () => publicClient as never,
     verifyClientSecret: async () => null,
     acceptCode: async () => null,
-    createRefresh: async () => ({ refreshToken: "rt" }),
+    mintRefresh: async () => ({
+      refreshToken: "rt",
+      tokenHash: "th_rt",
+      expiresAt: Date.now() + 3_600_000,
+    }),
     exchangeRefresh,
   })(
     {} as never,
@@ -593,7 +701,11 @@ test("refresh_token exchange is refused for a client without the refresh_token g
     getClient: async () => refreshGrantClient as never,
     verifyClientSecret: async () => null,
     acceptCode: async () => null,
-    createRefresh: async () => ({ refreshToken: "rt" }),
+    mintRefresh: async () => ({
+      refreshToken: "rt",
+      tokenHash: "th_rt",
+      expiresAt: Date.now() + 3_600_000,
+    }),
     exchangeRefresh,
   })(
     {} as never,
@@ -601,4 +713,55 @@ test("refresh_token exchange is refused for a client without the refresh_token g
   );
   expect(allowed.status).toBe(200);
   expect((await allowed.json()).access_token).toBeTruthy();
+});
+
+test("authorization_code mints the refresh token atomically with code consumption", async () => {
+  // The refresh grant + token are now minted in the SAME component transaction
+  // that consumes the code (`oauth.code.accept`'s `refresh` param), so a refresh
+  // token is returned only when the code is actually accepted. There is no
+  // separate post-accept mint step that could fail and leave the code burned
+  // without a refresh token — so the old access-token-only degradation is gone.
+  const verifier = "atomic-verifier-123456";
+  const base = {
+    ...tokenDeps,
+    ...refreshStubs,
+    getClient: async () => refreshGrantClient as never,
+    verifyClientSecret: async () => null,
+    exchangeRefresh: async () => null,
+  };
+  const req = () =>
+    tokenRequest({
+      grant_type: "authorization_code",
+      code: "rawcode",
+      redirect_uri: REDIRECT_URI,
+      client_id: "oc_test",
+      code_verifier: verifier,
+    });
+
+  // Code accepted → both tokens returned (the refresh came from the atomic mint).
+  const ok = await createTokenHandler({
+    ...base,
+    acceptCode: async (_ctx, _codeHash, clientId) =>
+      ({
+        userId: "user1",
+        clientId,
+        redirectUri: REDIRECT_URI,
+        scopes: ["workspace:read"],
+        codeChallenge: challengeFor(verifier),
+        expiresAt: Date.now() + 60_000,
+      }) as never,
+  })({} as never, req());
+  expect(ok.status).toBe(200);
+  const okBody = await ok.json();
+  expect(okBody.access_token).toBeTruthy();
+  expect(okBody.refresh_token).toBeTruthy();
+
+  // Code rejected (any binding fails) → no partial success: invalid_grant, and
+  // no refresh token is issued because the pre-minted secret was never persisted.
+  const bad = await createTokenHandler({ ...base, acceptCode: async () => null })(
+    {} as never,
+    req(),
+  );
+  expect(bad.status).toBe(400);
+  expect((await bad.json()).error).toBe("invalid_grant");
 });

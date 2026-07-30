@@ -8,6 +8,7 @@
 
 import {
   createContext,
+  useCallback,
   useContext,
   useSyncExternalStore,
   type ReactElement,
@@ -32,16 +33,39 @@ export function ConvexAuthProvider({
   return <AuthClientContext.Provider value={auth}>{children}</AuthClientContext.Provider>;
 }
 
-const LOADING: AuthState = { status: "loading", token: null };
+const NO_PROVIDER_MESSAGE =
+  "No auth client found. Wrap the component tree in <ConvexAuthProvider auth={...}> " +
+  "before using the auth hooks.";
 
-/** Read the current auth state. */
-export function useAuth(): AuthState {
+/**
+ * Read the app-owned auth client from context, throwing a clear error when no
+ * {@link ConvexAuthProvider} is above. Failing fast on a missing provider — the
+ * same contract as Svelte's `useConvexAuth()` — is far easier to debug than a
+ * silent, perpetual `loading` state, and lets the hooks return non-nullable
+ * values so callers never have to guard against an absent client.
+ */
+function useAuthClientOrThrow(): AnyAuthClient {
   const client = useContext(AuthClientContext);
-  return useSyncExternalStore(
-    (cb: () => void) => (client ? client.subscribe(cb) : () => {}),
-    () => (client ? client.getSnapshot() : LOADING),
-    () => LOADING,
+  if (client === null) {
+    throw new Error(NO_PROVIDER_MESSAGE);
+  }
+  return client;
+}
+
+/** Read the current auth state. Throws if no {@link ConvexAuthProvider} is above. */
+export function useAuth(): AuthState {
+  const client = useAuthClientOrThrow();
+  // Memoize so `useSyncExternalStore` does not tear down and re-create the
+  // subscription on every render — it only re-subscribes when `client` changes.
+  const subscribe = useCallback(
+    (onStoreChange: () => void) => client.subscribe(onStoreChange),
+    [client],
   );
+  // Server snapshot honors the SSR token seed carried by `client.getSnapshot()`
+  // (via the `token` option) instead of always reporting `loading`, so a
+  // server-seeded signed-in/out state hydrates without a loading flash.
+  const getSnapshot = useCallback(() => client.getSnapshot(), [client]);
+  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 }
 
 /** Render children only when signed in; supports a render prop receiving the JWT. */
@@ -71,22 +95,23 @@ export function AuthLoading({ children }: { children: ReactNode }): ReactElement
 }
 
 /**
- * The auth actions. Returns `undefined` members when no auth client is
- * available from {@link ConvexAuthProvider}.
+ * The auth actions (`signIn`, `signOut`), always callable. Throws if no
+ * {@link ConvexAuthProvider} is above — matching Svelte's non-nullable
+ * `signIn`/`signOut`, so callers never have to null-check the actions.
  */
 export function useAuthActions(): {
-  signIn: SignInOverloads | undefined;
-  signOut: (() => Promise<void>) | undefined;
+  signIn: SignInOverloads;
+  signOut: () => Promise<void>;
 } {
-  const client = useContext(AuthClientContext);
-  return { signIn: client?.signIn, signOut: client?.signOut };
+  const client = useAuthClientOrThrow();
+  return { signIn: client.signIn, signOut: client.signOut };
 }
 
 /**
  * The underlying imperative client, for factor flows (`client.totp.*`,
  * `client.passkey.*`, `client.device.*`) and low-level methods (`completeOAuth`,
- * `param`, `initialize`). Returns `null` when no auth client is available.
+ * `param`, `initialize`). Throws if no {@link ConvexAuthProvider} is above.
  */
-export function useConvexAuthClient(): AnyAuthClient | null {
-  return useContext(AuthClientContext);
+export function useConvexAuthClient(): AnyAuthClient {
+  return useAuthClientOrThrow();
 }
