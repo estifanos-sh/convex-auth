@@ -113,6 +113,33 @@ test("registering an existing credential for a different user is rejected", asyn
   expect((found as { userId: string }).userId).toBe(alice);
 });
 
+test("registering an existing credential under a different policy is rejected", async () => {
+  const t = convexTest(schema);
+  const userId = await t.run(async (ctx) => {
+    return (await ctx.runMutation(components.auth.user.create, {
+      data: { email: "policy@example.com" },
+    })) as string;
+  });
+
+  await t.run(async (ctx) => {
+    await ctx.runMutation(components.auth.factor.passkey.create, passkeyArgs(userId));
+  });
+
+  const error = await t
+    .run(async (ctx) => {
+      return await ctx.runMutation(components.auth.factor.passkey.create, {
+        ...passkeyArgs(userId),
+        credentialPolicy: "security_key",
+      });
+    })
+    .then(
+      () => null,
+      (e) => e,
+    );
+  expect(error).toBeInstanceOf(ConvexError);
+  expect((error as ConvexError<{ code: string }>).data.code).toBe("ACCOUNT_ALREADY_LINKED");
+});
+
 test("passkey assertion counter acceptance rejects a stale concurrent counter", async () => {
   const t = convexTest(schema);
   const { userId, passkeyId } = await t.run(async (ctx) => {

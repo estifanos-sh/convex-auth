@@ -82,6 +82,7 @@ interface RpOptions {
   userVerification: string;
   residentKey: string;
   authenticatorAttachment?: string;
+  credentialPolicy: "passkey" | "security_key";
   algorithms: number[];
   challengeExpirationMs: number;
 }
@@ -166,6 +167,7 @@ function resolveRpOptions(provider: PasskeyProviderConfig): RpOptions {
       userVerification: provider.options.userVerification ?? "required",
       residentKey: provider.options.residentKey ?? "preferred",
       authenticatorAttachment: provider.options.authenticatorAttachment,
+      credentialPolicy: provider.options.credentialPolicy ?? "passkey",
       algorithms: provider.options.algorithms ?? [coseAlgorithmES256, coseAlgorithmRS256],
       challengeExpirationMs: provider.options.challengeExpirationMs ?? 300_000,
     };
@@ -468,6 +470,7 @@ export async function handlePasskey(
         algorithm,
         counter: authData.signatureCounter,
         transports: params.transports,
+        credentialPolicy: rp.credentialPolicy,
         deviceType,
         backedUp,
         name: params.passkeyName,
@@ -533,6 +536,9 @@ export async function handlePasskey(
       throw convexError(ErrorCode.PASSKEY_UNKNOWN_CREDENTIAL, "Unknown passkey credential.");
     }
     if (passkey === null) {
+      throw convexError(ErrorCode.PASSKEY_UNKNOWN_CREDENTIAL, "Unknown credential");
+    }
+    if ((passkey.credentialPolicy ?? "passkey") !== rp.credentialPolicy) {
       throw convexError(ErrorCode.PASSKEY_UNKNOWN_CREDENTIAL, "Unknown credential");
     }
 
@@ -668,6 +674,7 @@ export async function handlePasskey(
             alg,
           })),
           timeout: rp.challengeExpirationMs,
+          ...(rp.credentialPolicy === "security_key" ? { hints: ["security-key"] } : {}),
           attestation: rp.attestation,
           authenticatorSelection: {
             residentKey: rp.residentKey,
@@ -687,6 +694,12 @@ export async function handlePasskey(
 
     signIn: async () => {
       const rp = resolveRpOptions(provider);
+      if (rp.credentialPolicy === "security_key" && !params.email) {
+        throw convexError(
+          ErrorCode.INVALID_PARAMETERS,
+          "Security-key sign-in requires an email hint.",
+        );
+      }
 
       const challenge = new Uint8Array(32);
       crypto.getRandomValues(challenge);
@@ -721,8 +734,11 @@ export async function handlePasskey(
             logPasskeyError(err);
             throw convexError(ErrorCode.INTERNAL_ERROR, "An unexpected error occurred.");
           }
-          if (passkeys.length > 0) {
-            allowCredentials = passkeys.map((pk) => ({
+          const eligible = passkeys.filter(
+            (pk) => (pk.credentialPolicy ?? "passkey") === rp.credentialPolicy,
+          );
+          if (eligible.length > 0) {
+            allowCredentials = eligible.map((pk) => ({
               type: "public-key" as const,
               id: pk.credentialId,
               transports: pk.transports,
@@ -742,6 +758,7 @@ export async function handlePasskey(
         timeout: number;
         rpId: string;
         userVerification: string;
+        hints?: string[];
         allowCredentials?: Array<{
           type: "public-key";
           id: string;
@@ -752,6 +769,7 @@ export async function handlePasskey(
         timeout: rp.challengeExpirationMs,
         rpId: rp.rpId,
         userVerification: rp.userVerification,
+        ...(rp.credentialPolicy === "security_key" ? { hints: ["security-key"] } : {}),
       };
 
       if (allowCredentials) {

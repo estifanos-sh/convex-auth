@@ -201,6 +201,7 @@ export async function mutatePasskeyInsert(
     algorithm: number;
     counter: number;
     transports?: string[];
+    credentialPolicy?: "passkey" | "security_key";
     deviceType: string;
     backedUp: boolean;
     name?: string;

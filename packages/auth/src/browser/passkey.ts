@@ -27,6 +27,7 @@ type PasskeyRegistrationOptions = {
   challenge: string;
   pubKeyCredParams: PublicKeyCredentialParameters[];
   timeout?: number;
+  hints?: string[];
   attestation?: AttestationConveyancePreference;
   authenticatorSelection?: AuthenticatorSelectionCriteria;
   excludeCredentials?: PasskeyCredentialDescriptor[];
@@ -36,6 +37,7 @@ type PasskeyAuthenticationOptions = {
   challenge: string;
   timeout?: number;
   rpId?: string;
+  hints?: string[];
   userVerification?: UserVerificationRequirement;
   allowCredentials?: PasskeyCredentialDescriptor[];
 };
@@ -67,6 +69,7 @@ const browserPasskeyCeremony: PasskeyCeremony = {
         challenge: base64urlDecode(options.challenge).buffer as ArrayBuffer,
         pubKeyCredParams: options.pubKeyCredParams,
         timeout: options.timeout,
+        hints: options.hints,
         attestation: options.attestation,
         authenticatorSelection: options.authenticatorSelection,
         excludeCredentials: (options.excludeCredentials ?? []).map(
@@ -76,7 +79,7 @@ const browserPasskeyCeremony: PasskeyCeremony = {
             transports: cred.transports,
           }),
         ),
-      },
+      } as PublicKeyCredentialCreationOptions & { hints?: string[] },
     };
 
     const createAbort = new AbortController();
@@ -118,6 +121,7 @@ const browserPasskeyCeremony: PasskeyCeremony = {
         challenge: base64urlDecode(options.challenge).buffer as ArrayBuffer,
         timeout: options.timeout,
         rpId: options.rpId,
+        hints: options.hints,
         userVerification: options.userVerification,
         allowCredentials: (options.allowCredentials ?? []).map(
           (cred: PasskeyCredentialDescriptor) => ({
@@ -126,7 +130,7 @@ const browserPasskeyCeremony: PasskeyCeremony = {
             transports: cred.transports,
           }),
         ),
-      },
+      } as PublicKeyCredentialRequestOptions & { hints?: string[] },
       ...(opts?.autofill
         ? ({
             mediation: "conditional" as CredentialMediationRequirement,

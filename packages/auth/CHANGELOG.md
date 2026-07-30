@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### New
+
+- **Security-key mode for `passkey()`** — `passkey({ mode: "security-key" })`
+  requires a cross-platform authenticator with user verification, discourages
+  discoverable credentials, and sends the `security-key` WebAuthn hint to
+  supporting browsers. Credentials registered in ordinary passkey mode are
+  intentionally not accepted in security-key mode; existing users must enroll a
+  hardware key before switching modes.
+
 ## 0.0.4-preview.40
 
 ### New — upstream feature parity (in our conventions)
