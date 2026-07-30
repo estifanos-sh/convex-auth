@@ -17,7 +17,7 @@
     "url": "git+https://github.com/robelest/convex-auth.git"
   },
   "bin": {
-    "convex-auth": "./dist/bin.js"
+    "convex-auth": "dist/bin.js"
   },
   "files": [
     "dist",
