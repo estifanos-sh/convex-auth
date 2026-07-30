@@ -23,7 +23,7 @@
     "fmt:check": "vp fmt --check .",
     "check:docs": "vp run --filter docs check",
     "check:demo": "vp run --filter svelte check",
-    "deploy:docs": "vp exec convex deploy --cmd 'vp run build:docs' --cmd-url-env-var-name VITE_CONVEX_URL && vp exec static-hosting upload --prod --dist docs/build --component docs",
+    "deploy:docs": "vp exec convex deploy --cmd 'vp run @robelest/convex-auth#build && vp run build:docs' --cmd-url-env-var-name VITE_CONVEX_URL && vp exec static-hosting upload --prod --dist docs/build --component docs",
     "deploy:docs:dev": "vp run build:docs && vp exec static-hosting upload --dist docs/build --component docs",
     "deploy:demo": "vp exec convex deploy --cmd 'vp run build:demo' --cmd-url-env-var-name VITE_CONVEX_URL && vp exec static-hosting upload --prod --dist demos/svelte/build",
     "deploy:demo:dev": "vp run build:demo && vp exec static-hosting upload --dev --dist demos/svelte/build",
