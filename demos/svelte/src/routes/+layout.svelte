@@ -66,7 +66,7 @@
 </script>
 
 <svelte:head>
-	<link rel="icon" href={favicon} />
+	<link rel="icon" href={favicon} type="image/svg+xml" />
 	<title>convex-auth demo</title>
 </svelte:head>
 
