@@ -167,27 +167,27 @@ a:hover {
 }
 
 .doc-content h1 {
-  max-width: 20ch;
-  margin: 0 0 1.25rem;
-  font-size: clamp(2.2rem, 7vw, 3.5rem);
+  max-width: 24ch;
+  margin: 0 0 1rem;
+  font-size: clamp(2.1rem, 5vw, 3rem);
   font-weight: 500;
-  line-height: 1.02;
-  letter-spacing: -0.045em;
+  line-height: 1.08;
+  letter-spacing: -0.04em;
 }
 
 .doc-content h1 + p {
-  max-width: 60ch;
-  margin-bottom: 2.75rem;
+  max-width: 64ch;
+  margin-bottom: 2.5rem;
   color: var(--ink-2);
-  font-size: clamp(1.05rem, 2vw, 1.2rem);
-  line-height: 1.65;
+  font-size: clamp(1rem, 1.7vw, 1.125rem);
+  line-height: 1.6;
 }
 
 .doc-content h2 {
-  margin: 3.5rem 0 1rem;
-  padding-top: 1.25rem;
+  margin: 3.25rem 0 1rem;
+  padding-top: 1rem;
   border-top: 1px solid var(--line);
-  font-size: clamp(1.45rem, 3vw, 1.85rem);
+  font-size: clamp(1.4rem, 2.5vw, 1.75rem);
   font-weight: 500;
   line-height: 1.2;
   letter-spacing: -0.025em;
