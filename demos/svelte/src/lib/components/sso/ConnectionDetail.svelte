@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { ConvexClient } from "convex/browser";
   import { useQuery } from "convex-svelte";
+  import { base } from "$app/paths";
   import { toast } from "svelte-sonner";
   import { errorText } from "$lib/errors";
   import { api } from "$convex/_generated/api.js";
@@ -316,7 +317,7 @@
     isDeleting = true;
     try {
       await client.mutation(api.auth.group.removeConnection, { id: connectionId });
-      window.location.href = `/${groupId}/connection`;
+      window.location.href = `${base}/${groupId}/connection`;
     } catch (error) {
       setMessage("error", errorText(error, "Delete failed."));
       isDeleting = false;
@@ -368,7 +369,7 @@
     <div class="flex items-start justify-between gap-4 flex-wrap mb-8">
       <div class="flex flex-col gap-2">
         <div class="flex items-center gap-2 font-label text-[0.75rem] text-content-tertiary">
-          <a class="text-brand-red hover:text-brand-red no-underline font-semibold" href="/{groupId}/connection">Connections</a>
+          <a class="text-brand-red hover:text-brand-red no-underline font-semibold" href={`${base}/${groupId}/connection`}>Connections</a>
           <span>/</span>
           <span class="text-content-primary">{connectionName}</span>
         </div>

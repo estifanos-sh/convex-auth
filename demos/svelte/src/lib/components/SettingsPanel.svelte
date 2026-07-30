@@ -3,6 +3,7 @@
   import { api } from "$convex/_generated/api.js";
   import { useQuery } from "convex-svelte";
   import { getContext } from "svelte";
+  import { base } from "$app/paths";
   import { toast } from "svelte-sonner";
   import { errorText } from "$lib/errors";
   import ChangePasswordForm from "./ChangePasswordForm.svelte";
@@ -374,7 +375,7 @@
               >{showInviteForm ? "Cancel" : "Invite member"}</button>
             {/if}
             {#if permissions.canManageSso}
-              <a class="button button--secondary button--compact no-underline" href="/{groupId}/connection">
+              <a class="button button--secondary button--compact no-underline" href={`${base}/${groupId}/connection`}>
                 Connections
               </a>
             {/if}

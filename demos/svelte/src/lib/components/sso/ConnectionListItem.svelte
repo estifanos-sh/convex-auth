@@ -1,5 +1,6 @@
 <script lang="ts">
   import { useQuery } from "convex-svelte";
+  import { base } from "$app/paths";
   import { api } from "$convex/_generated/api.js";
   import ChevronRight from "svelte-radix/ChevronRight.svelte";
 
@@ -32,7 +33,7 @@
 
 <a
   class="panel group relative flex items-center gap-5 px-6 py-5 no-underline transition-colors hover:bg-background-tertiary max-md:flex-col max-md:items-start max-md:gap-3 max-md:px-4 max-md:py-4"
-  href="/{groupId}/connection/{connection._id}"
+  href={`${base}/${groupId}/connection/${connection._id}`}
 >
   <!-- Status border -->
   <div class="absolute top-0 left-0 w-[3px] h-full {isActive ? 'bg-content-success' : 'bg-content-tertiary'}"></div>

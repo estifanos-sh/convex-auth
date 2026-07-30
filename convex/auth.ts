@@ -100,13 +100,15 @@ const auth = defineAuth(components.auth, {
     totp({ issuer: "ConvexAuth Example" }),
     anonymous(),
     device({
-      verificationUri: env.APP_URL ? `${env.APP_URL}/device` : "http://localhost:3001/device",
+      verificationUri: env.APP_URL
+        ? `${env.APP_URL.replace(/\/$/, "")}/demo/device`
+        : "http://localhost:3001/demo/device",
     }),
     emailProvider,
   ],
   permissions,
   oauth: {
-    pages: { login: "/sign-in", consent: "/oauth/authorize" },
+    pages: { login: "/demo/sign-in", consent: "/demo/oauth/authorize" },
   },
 });
 

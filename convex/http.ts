@@ -279,12 +279,12 @@ http.route({
   }),
 });
 
-registerStaticRoutes(http, components.docsHosting, {
-  pathPrefix: "/docs",
+registerStaticRoutes(http, components.staticHosting, {
+  pathPrefix: "/demo",
   spaFallback: true,
 });
 
-registerStaticRoutes(http, components.staticHosting, {
+registerStaticRoutes(http, components.docsHosting, {
   pathPrefix: "/",
   spaFallback: true,
 });

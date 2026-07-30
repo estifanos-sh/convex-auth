@@ -3,6 +3,7 @@
   import { getContext } from "svelte";
   import { page } from "$app/state";
   import { goto } from "$app/navigation";
+  import { base } from "$app/paths";
   import { useConvexAuth } from "@robelest/convex-auth/svelte";
   import { api } from "$convex/_generated/api.js";
   import type { AppContext } from "$lib/app";
@@ -22,11 +23,11 @@
   $effect(() => {
     if (auth.loading) return;
     if (!auth.signedIn) {
-      void goto("/");
+      void goto(`${base}/`);
       return;
     }
     if (canManage === false) {
-      void goto(`/${groupId}`);
+      void goto(`${base}/${groupId}`);
     }
   });
 </script>

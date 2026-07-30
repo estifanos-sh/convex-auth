@@ -1,5 +1,6 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
+  import { base } from "$app/paths";
   import { page } from "$app/state";
   import { getContext } from "svelte";
   import { getConvexClient } from "convex-svelte";
@@ -17,7 +18,7 @@
       <h1 class="heading text-xl m-0">New connection</h1>
       <p class="m-0 mt-1 font-label text-[0.8125rem] text-content-secondary">Create a group SSO connection.</p>
     </div>
-    <a class="button button--secondary button--compact no-underline" href="/{groupId}/connection">Back</a>
+    <a class="button button--secondary button--compact no-underline" href={`${base}/${groupId}/connection`}>Back</a>
   </div>
 
   <NewConnectionForm
@@ -26,10 +27,10 @@
     {siteUrl}
     ondone={(connectionId) => {
       if (connectionId) {
-        goto(`/${groupId}/connection/${connectionId}`);
+        goto(`${base}/${groupId}/connection/${connectionId}`);
         return;
       }
-      goto(`/${groupId}/connection`);
+      goto(`${base}/${groupId}/connection`);
     }}
   />
 </div>
