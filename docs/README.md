@@ -1,45 +1,38 @@
-# sv
+# convex-auth documentation
 
-Everything you need to build a Svelte project, powered by
-[`sv`](https://github.com/sveltejs/cli).
+The technical documentation for
+[`@robelest/convex-auth`](https://www.npmjs.com/package/@robelest/convex-auth).
+Production is served by Convex static hosting at
+[convex-auth.estifanos.com](https://convex-auth.estifanos.com/).
 
-## Creating a project
+## Work locally
 
-If you're seeing this, you've probably already done this step. Congrats!
+Run commands from the repository root:
 
-```sh
-# create a new project
-npx sv create my-app
+```bash
+vp install
+vp run --filter docs dev
 ```
 
-To recreate this project with the same configuration:
+The development server is only for the documentation frontend. The Convex
+development process is managed separately.
 
-```sh
-# recreate this project
-pnpm dlx sv@0.12.8 create --template minimal --types ts --add mdsvex sveltekit-adapter="adapter:static" tailwindcss="plugins:none" mcp="ide:claude-code,opencode+setup:remote" --install pnpm docs-sv
+## Validate
+
+```bash
+vp run --filter docs check
+vp run build:docs
 ```
 
-## Developing
+`build:docs` produces `docs/build`, generates the Pagefind search index, and
+checks that the local fonts and static routes are present.
 
-Once you've created a project and installed dependencies with `npm install` (or
-`pnpm install` or `yarn`), start a development server:
+## Deploy
 
-```sh
-npm run dev
-
-# or start the server and open the app in a new browser tab
-npm run dev -- --open
+```bash
+vp run deploy:docs
 ```
 
-## Building
-
-To create a production version of your app:
-
-```sh
-npm run build
-```
-
-You can preview the production build with `npm run preview`.
-
-> To deploy your app, you may need to install an
-> [adapter](https://svelte.dev/docs/kit/adapters) for your target environment.
+The root deployment task builds the package and docs, deploys the production
+Convex backend, and uploads `docs/build` to the `docs` static-hosting component.
+The demo is deployed separately at `/demo/`.

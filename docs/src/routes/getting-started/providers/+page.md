@@ -30,7 +30,7 @@ import {
   github,
   google,
   microsoft,
-  passkey,
+  webauthn,
   password,
   phone,
   connection,
@@ -314,42 +314,61 @@ defineAuth(components.auth, {
 });
 ```
 
-## Passkeys / WebAuthn
+## WebAuthn
 
 ```ts
 defineAuth(components.auth, {
-  providers: [passkey()],
+  providers: [webauthn()],
 });
 ```
 
-## Hardware Security Keys
-
-Set `mode: "security-key"` when an app must require a roaming FIDO2
-authenticator instead of allowing a platform or synced passkey:
+Configure registration and authentication ceremonies independently. For
+example, this profile guides supporting browsers toward roaming security keys
+without treating that hint as proof of hardware provenance:
 
 ```ts
-import { passkey } from "@robelest/convex-auth/providers";
+import { webauthn } from "@robelest/convex-auth/providers";
 
 defineAuth(components.auth, {
-  providers: [passkey({ mode: "security-key", rpName: "My App staff access" })],
+  providers: [
+    webauthn({
+      rpName: "Staff access",
+      registration: {
+        authenticatorAttachment: "cross-platform",
+        residentKey: "discouraged",
+        userVerification: "required",
+        hints: ["security-key"],
+      },
+      authentication: {
+        userVerification: "required",
+        hints: ["security-key"],
+      },
+    }),
+  ],
 });
 ```
 
-The provider enforces `authenticatorAttachment: "cross-platform"` and
-`userVerification: "required"`, and sets `residentKey: "discouraged"` to prefer
-a non-discoverable credential. It also sends the WebAuthn `security-key` hint so
-supporting browsers prioritize external security keys in their picker. The
-browser handles the authenticator's PIN and touch prompts. The application
-should never collect a hardware-key PIN itself.
+Use `client.webauthn.register()` and `client.webauthn.signIn()` to run the
+ceremonies. For this security-key-oriented profile, pass the account email so
+the server can select that account's credentials:
 
-The imperative browser client continues to use `client.passkey.register()` and
-`client.passkey.signIn()` because security keys and passkeys share the WebAuthn
-protocol and verification path.
+```ts
+await client.webauthn.signIn({ email });
+```
 
-Credentials registered in the default passkey mode cannot authenticate through
-security-key mode. Existing users must enroll a new hardware-key credential
-before an application switches modes. Legacy credential records without a
-policy tag remain ordinary passkeys.
+Each user can register up to 16 WebAuthn credentials. Email-first sign-in pads
+the credential list with secret-derived decoys, but credential IDs are
+authenticator-generated and variable-length. Treat that padding as defense in
+depth, not a guarantee against account enumeration. If identifier privacy is a
+hard requirement, use discoverable credentials and argumentless
+`client.webauthn.signIn()`.
+
+Argumentless sign-in and conditional UI (`{ autofill: true }`) require
+discoverable credentials. Existing passkey credentials remain valid when
+ceremony preferences change.
+
+WebAuthn hints are non-binding browser guidance. This provider requests no
+attestation and does not establish authenticator provenance.
 
 ## TOTP (Authenticator Apps)
 

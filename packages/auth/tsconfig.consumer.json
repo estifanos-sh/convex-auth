@@ -6,6 +6,7 @@
     "types": ["node"],
     "strict": true,
     "skipLibCheck": true,
+    "jsx": "react-jsx",
     "moduleResolution": "bundler",
     "noEmit": true,
     "paths": {

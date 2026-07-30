@@ -201,7 +201,6 @@ export async function mutatePasskeyInsert(
     algorithm: number;
     counter: number;
     transports?: string[];
-    credentialPolicy?: "passkey" | "security_key";
     deviceType: string;
     backedUp: boolean;
     name?: string;
@@ -220,11 +219,13 @@ export async function mutatePasskeyUpdateCounter(
   passkeyId: string,
   counter: number,
   lastUsedAt: number,
+  backedUp: boolean,
 ): Promise<boolean> {
   return (await ctx.runMutation(ctx.auth.config.component.factor.passkey.acceptAssertion, {
     id: passkeyId,
     counter,
     lastUsedAt,
+    backedUp,
   })) as boolean;
 }
 

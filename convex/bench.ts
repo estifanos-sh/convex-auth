@@ -43,7 +43,7 @@ const vSignInResult = v.union(
   }),
   v.object({ kind: v.literal("started") }),
   v.object({
-    kind: v.literal("passkeyOptions"),
+    kind: v.literal("webauthnOptions"),
     options: v.record(v.string(), v.any()),
     verifier: v.string(),
   }),

@@ -26,7 +26,7 @@ import {
   type PlatformAuthClient,
 } from "../client/index";
 import { client as createBrowserClient } from "../browser/index";
-import { createExpoPasskeyClient } from "./passkey";
+import { createExpoWebAuthnClient } from "./webauthn";
 
 /**
  * Options for the Expo {@link client}.
@@ -116,7 +116,7 @@ export function client<Api extends AuthApiRefs<boolean, boolean, boolean> = Auth
     }),
     adapterFactories: {
       ...options.adapterFactories,
-      passkey: options.adapterFactories?.passkey ?? ((deps) => createExpoPasskeyClient(deps)),
+      webauthn: options.adapterFactories?.webauthn ?? ((deps) => createExpoWebAuthnClient(deps)),
     },
     httpClient: proxyMode ? null : (options.httpClient ?? (url ? new ConvexHttpClient(url) : null)),
   }) as PlatformAuthClient<Api>;

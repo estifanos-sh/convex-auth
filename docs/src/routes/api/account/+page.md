@@ -25,7 +25,7 @@ passkey credentials, and TOTP enrollments.
 
 ## Passkey methods
 
-Manage WebAuthn passkey credentials. Requires `passkey()` in providers.
+Manage WebAuthn passkey credentials. Requires `webauthn()` in providers.
 
 | Method           | Signature              | Returns             | Description                               |
 | ---------------- | ---------------------- | ------------------- | ----------------------------------------- |

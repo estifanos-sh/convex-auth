@@ -1,4 +1,10 @@
 import { definePermissions } from "@robelest/convex-auth/permissions";
+import type {
+  AuthApiRefs,
+  ParamsForProvider,
+  PlatformAuthClient,
+} from "@robelest/convex-auth/client";
+import { webauthn } from "@robelest/convex-auth/providers/webauthn";
 // @ts-expect-error createAuth was hard-cut from the vNext public server API.
 import { createAuth } from "@robelest/convex-auth/server";
 import { authEnv, authEvents, defineAuth, type AuthEnv } from "@robelest/convex-auth/server";
@@ -23,6 +29,43 @@ declare const authEnvironment: AuthEnv;
 declare const authComponent: Parameters<typeof defineAuth>[0];
 declare const authUserId: GenericId<"User">;
 declare const authGroupId: GenericId<"Group">;
+declare const webauthnClient: PlatformAuthClient<AuthApiRefs<true, false, false>>;
+
+void webauthnClient.webauthn.register({ name: "Security key" });
+void webauthnClient.webauthn.signIn();
+
+type Assert<T extends true> = T;
+type IsNever<T> = [T] extends [never] ? true : false;
+type _DirectWebAuthnSignInIsDisabled = Assert<IsNever<ParamsForProvider<"webauthn">>>;
+type _PasskeyClientWasRemoved = Assert<
+  "passkey" extends keyof typeof webauthnClient ? false : true
+>;
+type UnknownFactorClient = Pick<
+  PlatformAuthClient<AuthApiRefs<boolean, boolean, boolean>>,
+  "webauthn" | "totp" | "device"
+>;
+const optionalFactors: UnknownFactorClient = {};
+void optionalFactors.webauthn?.signIn();
+void optionalFactors.totp?.setup();
+void optionalFactors.device?.verify({ code: "ABCD-EFGH" });
+
+const readonlyOrigins = ["https://app.example.com"] as const;
+const readonlyWebAuthnHints = ["security-key"] as const;
+const readonlyWebAuthnAlgorithms = [-7, -257] as const;
+void webauthn({
+  origin: readonlyOrigins,
+  registration: {
+    hints: readonlyWebAuthnHints,
+    algorithms: readonlyWebAuthnAlgorithms,
+  },
+  authentication: { hints: readonlyWebAuthnHints },
+});
+webauthn({
+  registration: {
+    // @ts-expect-error The verifier supports only ES256 (-7) and RS256 (-257).
+    algorithms: [-8],
+  },
+});
 
 const permissions = definePermissions({
   grants: ["issues.read", "issues.write"],

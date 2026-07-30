@@ -13,7 +13,7 @@
 	type AuthContext = {
 		invite?: { email?: string } | null;
 		signIn: (provider: string, args?: Record<string, unknown>) => Promise<SignInResult>;
-		passkey?: {
+		webauthn?: {
 			isSupported: () => boolean;
 			signIn: (opts?: Record<string, unknown>) => Promise<SignInResult>;
 		};
@@ -45,7 +45,7 @@
 		| 'resetVerify'
 		| 'verifyEmail';
 	let step: Step = $state('email');
-	const passkeySupported = $derived(auth.passkey?.isSupported() ?? false);
+	const passkeySupported = $derived(auth.webauthn?.isSupported() ?? false);
 
 	function getErrorMessage(error: unknown) {
 		if (error instanceof Error) {
@@ -237,11 +237,11 @@
 	}
 
 	async function handlePasskeySignIn() {
-		if (!auth.passkey) return;
+		if (!auth.webauthn) return;
 		isSubmitting = true;
 
 		try {
-			const result = await auth.passkey.signIn();
+			const result = await auth.webauthn.signIn();
 			if (result.kind === 'redirect' && result.redirect) {
 				window.location.href = result.redirect.toString();
 			} else if (result.kind === 'signedIn') {

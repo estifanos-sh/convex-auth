@@ -67,10 +67,10 @@ export type {
   EmailInitiateParams,
   OAuthCompletionResult,
   OAuthSignInParams,
-  PasskeyClient,
-  PasskeyRegisterOptions,
-  PasskeySignInOptions,
-  PasskeySignInParams,
+  ParamsForProvider,
+  WebAuthnClient,
+  WebAuthnRegisterOptions,
+  WebAuthnSignInOptions,
   PasswordParams,
   PendingInvite,
   PlatformAuthClient,
@@ -211,7 +211,7 @@ function decodeJwtSubject(jwt: string): string | null {
  *
  * Returns an object with `signIn`, `signOut`, `subscribe`, `getSnapshot`, and any
  * factor helpers enabled by your configured providers. Platform-specific
- * passkey support is added by higher-level entrypoints such as
+ * WebAuthn support is added by higher-level entrypoints such as
  * `@robelest/convex-auth/browser`.
  *
  * ### SPA mode (default)
@@ -819,7 +819,7 @@ export function client<Api extends AuthApiRefs<boolean, boolean, boolean> = Auth
     proxyFetch,
     setTokenAndMaybeWait,
   };
-  const passkeyAdapter = adapters.passkey ?? adapterFactories.passkey?.(adapterDeps);
+  const webauthnAdapter = adapters.webauthn ?? adapterFactories.webauthn?.(adapterDeps);
 
   const verifyCode = async (
     args: { code: string; verifier?: string } | { refreshToken: string },
@@ -1525,6 +1525,6 @@ export function client<Api extends AuthApiRefs<boolean, boolean, boolean> = Auth
       disposeStorageListener?.();
       subscribers.clear();
     },
-    ...(passkeyAdapter ? { passkey: passkeyAdapter } : {}),
+    ...(webauthnAdapter ? { webauthn: webauthnAdapter } : {}),
   } as AuthClient<Api>;
 }

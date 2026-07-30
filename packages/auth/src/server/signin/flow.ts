@@ -21,7 +21,7 @@ import {
   callVerifier,
   callVerifyCodeAndSignIn,
 } from "../mutations/calls";
-import { handlePasskey } from "../passkey";
+import { handleWebAuthn } from "../webauthn";
 import type { SignInParams } from "../payloads";
 import { generateRandomString } from "../random";
 import { redirectAbsoluteUrl, setURLSearchParam } from "../redirects";
@@ -195,8 +195,8 @@ export async function signInImpl(
           return handleCredentials(ctx, resolvedProvider, args, options);
         case "oauth":
           return handleOAuthProvider(ctx, resolvedProvider, args, options);
-        case "passkey":
-          return handlePasskey(ctx, resolvedProvider, args);
+        case "webauthn":
+          return handleWebAuthn(ctx, resolvedProvider, args);
         case "totp":
           return handleTotp(ctx, resolvedProvider, args);
         case "device":

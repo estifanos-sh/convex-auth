@@ -186,8 +186,6 @@ export default defineSchema({
     counter: v.number(),
     /** Authenticator transport hints (e.g. "internal", "hybrid", "usb", "ble", "nfc"). */
     transports: v.optional(v.array(v.string())),
-    /** Registration policy; absent legacy rows use the ordinary passkey policy. */
-    credentialPolicy: v.optional(v.union(v.literal("passkey"), v.literal("security_key"))),
     /** Whether this is a single-device or multi-device (synced) credential. */
     deviceType: v.string(),
     /** Whether the credential is backed up (synced passkey). */

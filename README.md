@@ -1,3 +1,14 @@
+# convex-auth
+
+Authentication, authorization, and enterprise identity for Convex applications.
+
+```bash
+pnpm add @robelest/convex-auth
+```
+
+[Read the documentation](https://convex-auth.estifanos.com/) or
+[open the live demo](https://convex-auth.estifanos.com/demo/).
+
 ## Features
 
 - **Every auth method** — Password, Google/GitHub/Apple/Microsoft OAuth, magic
@@ -65,30 +76,30 @@ shape contract.
 
 ## Package exports
 
-| Import path                                          | Use                                                                                                                        |
-| ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `@robelest/convex-auth/server`                       | Backend: `defineAuth`, the `auth.*` facade, `authEnv`, `authEvents`, and HTTP route helpers                                |
-| `@robelest/convex-auth/convex.config`                | The component definition for `app.use(auth)` in `convex.config.ts`                                                         |
-| `@robelest/convex-auth/permissions`                  | `definePermissions` and the grant/role types                                                                               |
-| `@robelest/convex-auth/providers` (+ `/providers/*`) | Auth providers: `password`, `google`, `github`, `apple`, `microsoft`, `passkey`, `totp`, `anonymous`, `email`, `device`, … |
-| `@robelest/convex-auth/client`                       | Framework-agnostic browser client factory (`client()` — sign-in/out, token store)                                          |
-| `@robelest/convex-auth/react`                        | React bindings: `ConvexAuthProvider`, `useAuth`, `useConvexAuthClient`                                                     |
-| `@robelest/convex-auth/expo`                         | React Native / Expo client                                                                                                 |
-| `@robelest/convex-auth/browser`                      | Low-level browser primitives (navigation, passkey, web locks)                                                              |
-| `@robelest/convex-auth/core`                         | `createAuthContext` and low-level building blocks for custom integrations                                                  |
+| Import path                                          | Use                                                                                                                         |
+| ---------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `@robelest/convex-auth/server`                       | Backend: `defineAuth`, the `auth.*` facade, `authEnv`, `authEvents`, and HTTP route helpers                                 |
+| `@robelest/convex-auth/convex.config`                | The component definition for `app.use(auth)` in `convex.config.ts`                                                          |
+| `@robelest/convex-auth/permissions`                  | `definePermissions` and the grant/role types                                                                                |
+| `@robelest/convex-auth/providers` (+ `/providers/*`) | Auth providers: `password`, `google`, `github`, `apple`, `microsoft`, `webauthn`, `totp`, `anonymous`, `email`, `device`, … |
+| `@robelest/convex-auth/client`                       | Framework-agnostic browser client factory (`client()` — sign-in/out, token store)                                           |
+| `@robelest/convex-auth/react`                        | React bindings: `ConvexAuthProvider`, `useAuth`, `useConvexAuthClient`                                                      |
+| `@robelest/convex-auth/expo`                         | React Native / Expo client                                                                                                  |
+| `@robelest/convex-auth/browser`                      | Low-level browser primitives (navigation, WebAuthn, web locks)                                                              |
+| `@robelest/convex-auth/core`                         | `createAuthContext` and low-level building blocks for custom integrations                                                   |
 
 ## Documentation
 
-**[convex-auth.pages.dev](https://convex-auth.pages.dev)**
+**[convex-auth.estifanos.com](https://convex-auth.estifanos.com/)**
 
-| Section                                                                        | Description                                                     |
-| ------------------------------------------------------------------------------ | --------------------------------------------------------------- |
-| [Getting Started](https://convex-auth.pages.dev/getting-started/installation/) | Installation, providers, environment variables                  |
-| [API Reference](https://convex-auth.pages.dev/api/user/)                       | `auth.user`, `auth.session`, `auth.group`, `auth.key`, and more |
-| [Group SSO](https://convex-auth.pages.dev/connection/overview/)                | OIDC, SAML, SCIM, audit, webhooks                               |
-| [SSR Integration](https://convex-auth.pages.dev/ssr/overview/)                 | SvelteKit, TanStack Start, Next.js                              |
-| [Guides](https://convex-auth.pages.dev/guides/multi-access/)                   | Multi-access, device flow, authorization, production            |
-| [Reference](https://convex-auth.pages.dev/reference/config/)                   | Config options, error codes, CLI, architecture                  |
+| Section                                                                            | Description                                                     |
+| ---------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| [Getting Started](https://convex-auth.estifanos.com/getting-started/installation/) | Installation, providers, environment variables                  |
+| [API Reference](https://convex-auth.estifanos.com/api/user/)                       | `auth.user`, `auth.session`, `auth.group`, `auth.key`, and more |
+| [Group SSO](https://convex-auth.estifanos.com/connection/overview/)                | OIDC, SAML, SCIM, audit, webhooks                               |
+| [SSR Integration](https://convex-auth.estifanos.com/ssr/overview/)                 | SvelteKit, TanStack Start, Next.js                              |
+| [Guides](https://convex-auth.estifanos.com/guides/multi-access/)                   | Multi-access, device flow, authorization, production            |
+| [Reference](https://convex-auth.estifanos.com/reference/config/)                   | Config options, error codes, CLI, architecture                  |
 
 ## Contributing
 

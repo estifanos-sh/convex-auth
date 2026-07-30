@@ -106,10 +106,11 @@ export function authDb(ctx: ComponentRunContext, config: AuthComponentBoundaryCo
         runQuery(ctx, component.session.list, { userId }) as Promise<Doc<"Session">[]>,
     },
     verifiers: {
-      create: (sessionId?: string, signature?: string) =>
+      create: (sessionId?: string, signature?: string, expirationTime?: number) =>
         runMutation(ctx, component.token.pkce.create, {
           sessionId,
           signature,
+          expirationTime,
         }),
       get: (args: { id: string } | { signature: string }) =>
         runQuery(ctx, component.token.pkce.get, args) as Promise<Doc<"AuthVerifier"> | null>,

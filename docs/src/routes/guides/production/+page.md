@@ -18,19 +18,19 @@ description: Deploy convex-auth to production.
 ## Setup production keys
 
 <Tabs syncKey="pkg">
-  <TabItem label="npm">
-
-`npx @robelest/convex-auth --prod --app-url "https://myapp.com"`
-
-  </TabItem>
   <TabItem label="pnpm">
 
-`pnpx @robelest/convex-auth --prod --app-url "https://myapp.com"`
+`pnpm exec convex-auth --prod --app-url "https://myapp.com"`
+
+  </TabItem>
+  <TabItem label="npm">
+
+`npx convex-auth --prod --app-url "https://myapp.com"`
 
   </TabItem>
   <TabItem label="yarn">
 
-`yarn dlx @robelest/convex-auth --prod --app-url "https://myapp.com"`
+`yarn convex-auth --prod --app-url "https://myapp.com"`
 
   </TabItem>
 </Tabs>
@@ -38,22 +38,22 @@ description: Deploy convex-auth to production.
 ## Set provider secrets
 
 <Tabs syncKey="pkg">
+  <TabItem label="pnpm">
+
+`pnpm exec convex env set --prod AUTH_GITHUB_ID "..."` then
+`pnpm exec convex env set --prod AUTH_GITHUB_SECRET "..."`
+
+  </TabItem>
   <TabItem label="npm">
 
 `npx convex env set --prod AUTH_GITHUB_ID "..."` then
 `npx convex env set --prod AUTH_GITHUB_SECRET "..."`
 
   </TabItem>
-  <TabItem label="pnpm">
-
-`pnpx convex env set --prod AUTH_GITHUB_ID "..."` then
-`pnpx convex env set --prod AUTH_GITHUB_SECRET "..."`
-
-  </TabItem>
   <TabItem label="yarn">
 
-`yarn dlx convex env set --prod AUTH_GITHUB_ID "..."` then
-`yarn dlx convex env set --prod AUTH_GITHUB_SECRET "..."`
+`yarn convex env set --prod AUTH_GITHUB_ID "..."` then
+`yarn convex env set --prod AUTH_GITHUB_SECRET "..."`
 
   </TabItem>
 </Tabs>
@@ -61,6 +61,13 @@ description: Deploy convex-auth to production.
 ## Deploy
 
 <Tabs syncKey="pkg">
+  <TabItem label="pnpm">
+
+```bash
+pnpm exec convex deploy --cmd 'pnpm run build'
+```
+
+  </TabItem>
   <TabItem label="npm">
 
 ```bash
@@ -68,17 +75,10 @@ npx convex deploy --cmd 'npm run build'
 ```
 
   </TabItem>
-  <TabItem label="pnpm">
-
-```bash
-pnpx convex deploy --cmd 'pnpm run build'
-```
-
-  </TabItem>
   <TabItem label="yarn">
 
 ```bash
-yarn dlx convex deploy --cmd 'yarn build'
+yarn convex deploy --cmd 'yarn build'
 ```
 
   </TabItem>

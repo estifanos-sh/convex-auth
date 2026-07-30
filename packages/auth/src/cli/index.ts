@@ -160,7 +160,7 @@ const flagDefs = new Map<string, { type: "string" | "boolean"; description: stri
 function printHelp() {
   printBanner();
   console.log("  Add code and set environment variables for @robelest/convex-auth.\n");
-  console.log("  Full docs: https://auth.estifanos.com\n");
+  console.log("  Full docs: https://convex-auth.estifanos.com\n");
   console.log("  Commands:\n");
   console.log("    setup                         Scaffold files and set env vars");
   console.log("    doctor                        Verify env, files, and mounted auth endpoints");
@@ -1239,19 +1239,19 @@ function printFinalSuccessMessage(config: ProjectConfig) {
 
   if (isProd) {
     p.log.success(`Production setup complete for ${deploymentName}.`);
-    p.note("Full docs: https://auth.estifanos.com");
+    p.note("Full docs: https://convex-auth.estifanos.com");
   } else {
     p.log.success(`Setup complete for ${deploymentName}.`);
     p.note(
       [
         "To set up production, run:",
-        '  npx @robelest/convex-auth --prod --app-url "https://myapp.com"',
+        '  npx convex-auth --prod --app-url "https://myapp.com"',
         "",
         "Don't forget to set provider secrets on production too:",
         '  npx convex env set --prod AUTH_GITHUB_ID "..."',
         '  npx convex env set --prod AUTH_GITHUB_SECRET "..."',
         "",
-        "Full docs: https://auth.estifanos.com",
+        "Full docs: https://convex-auth.estifanos.com",
       ].join("\n"),
       "Next steps",
     );

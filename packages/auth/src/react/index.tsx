@@ -109,7 +109,7 @@ export function useAuthActions(): {
 
 /**
  * The underlying imperative client, for factor flows (`client.totp.*`,
- * `client.passkey.*`, `client.device.*`) and low-level methods (`completeOAuth`,
+ * `client.webauthn.*`, `client.device.*`) and low-level methods (`completeOAuth`,
  * `param`, `initialize`). Throws if no {@link ConvexAuthProvider} is above.
  */
 export function useConvexAuthClient(): AnyAuthClient {

@@ -4,12 +4,11 @@
 
 ### New
 
-- **Security-key mode for `passkey()`** — `passkey({ mode: "security-key" })`
-  requires a cross-platform authenticator with user verification, discourages
-  discoverable credentials, and sends the `security-key` WebAuthn hint to
-  supporting browsers. Credentials registered in ordinary passkey mode are
-  intentionally not accepted in security-key mode; existing users must enroll a
-  hardware key before switching modes.
+- **Canonical WebAuthn provider** — `webauthn()` replaces `passkey()` and groups
+  ceremony preferences under `registration` and `authentication`. The browser
+  and Expo client surface is now `client.webauthn`, and supporting browsers
+  receive typed, non-binding WebAuthn hints without credential-policy tagging
+  or stored-credential migration.
 
 ## 0.0.4-preview.40
 

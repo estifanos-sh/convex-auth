@@ -194,7 +194,7 @@ should appear.
 ## Choosing the RP ID
 
 Your WebAuthn RP ID must match the AASA / `assetlinks.json` host. The
-convex-auth `passkey()` provider derives the RP ID from `APP_URL` by
+The convex-auth `webauthn()` provider derives the RP ID from `APP_URL` by
 default:
 
 | `APP_URL`                 | RP ID             |
@@ -202,7 +202,7 @@ default:
 | `https://app.example.com` | `app.example.com` |
 | `http://localhost:5173`   | `localhost`       |
 
-You can override with `passkey({ rpId: "example.com" })` if you want passkeys
+You can override with `webauthn({ rpId: "example.com" })` if you want passkeys
 to work across subdomains (the AASA / `assetlinks.json` must then live at
 `example.com`).
 

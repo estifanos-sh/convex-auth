@@ -120,7 +120,7 @@ authorization model.
   [Typed Returns](/reference/typed-returns).
 - `auth.connection.*` — group connection (SSO) admin facade when `connection()` is in providers
 - `InferClientApi<typeof auth>` — Type-level utility; use as the generic for
-  `client()` on the frontend to get conditional passkey/totp/device helpers
+  `client()` on the frontend to get conditional WebAuthn/TOTP/device helpers
 - `Doc`, `Viewer`, `Group`, `Membership` — exported document types
   (extend-aware), importable from `@robelest/convex-auth/server`
 

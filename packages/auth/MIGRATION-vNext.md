@@ -6,6 +6,26 @@ typed app env, and permissions-first group authorization.
 
 This is a hard breaking cut: removed names are not kept as compatibility aliases.
 
+## WebAuthn provider and client
+
+The protocol-level provider and client surface is now named `webauthn`.
+Credential resources remain passkeys under `auth.account.passkey`, and the
+Account credential-resource identifier remains `passkey`.
+
+```ts
+// Before
+providers: [passkey()];
+await client.passkey.signIn();
+
+// After
+providers: [webauthn()];
+await client.webauthn.signIn();
+```
+
+Provider preferences are grouped by ceremony under `registration` and
+`authentication`. Existing Passkey and Account credential storage is preserved;
+no data migration is required.
+
 ## Setup: `defineAuth` and `definePermissions`
 
 The preferred vNext setup surface is `defineAuth`. It keeps providers,

@@ -1,84 +1,43 @@
-# Welcome to your Expo app 👋
+# convex-auth Expo demo
 
-This is an [Expo](https://expo.dev) project created with
-[`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+The native companion to the
+[convex-auth web demo](https://convex-auth.estifanos.com/demo/). It exercises
+the Expo client, OAuth redirects, secure token storage, and native WebAuthn
+ceremonies against the repository's root Convex deployment.
 
-## Get started
+## Work locally
 
-1. Install dependencies
-
-   ```bash
-   pnpm install
-   ```
-
-2. Start the app
-
-   ```bash
-   pnpm expo start
-   ```
-
-## Native passkeys (iOS + Android)
-
-Native passkeys require a paired host that serves Apple's AASA file and
-Google's `assetlinks.json`. The companion `demos/svelte` app does this when
-the following env vars are set on its host:
+Run commands from the repository root:
 
 ```bash
-# matches your Apple Team ID + iOS bundle identifier
+vp install
+vp run dev:expo
+```
+
+The Convex development process is managed separately. You need a development
+build for native WebAuthn; Expo Go does not include the required native module.
+
+## Native WebAuthn
+
+The relying-party host must serve Apple's AASA file and Android's
+`assetlinks.json`. Set these variables on that host:
+
+```bash
 IOS_APP_IDS="ABC123DEF.com.example.app"
-
-# Android package name and SHA-256 cert fingerprint (from `gradlew signingReport`)
 ANDROID_APP_LINKS="com.example.app:AA:BB:CC:DD:..."
-
-# Same as the WebAuthn RP ID — drives Associated Domains in app.config.js
 SITE_URL="https://your-domain.example"
 ```
 
-The Expo config in `app.config.js` reads `SITE_URL` and wires it into both
-iOS Associated Domains (`webcredentials:<host>`) and Android intent filters.
-After changing env, run `pnpm expo prebuild --clean` and rebuild the native app.
-
-For local testing without hosting AASA, append `?mode=developer` to the
-Associated Domain entry (iOS 17.4+ developer mode).
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app
-  development with Expo
-
-You can start developing by editing the files inside the **app** directory. This
-project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+`SITE_URL` must use the same host as the WebAuthn RP ID. The Expo config uses it
+for iOS Associated Domains and Android intent filters. After changing these
+values, rebuild the native app:
 
 ```bash
-npm run reset-project
+pnpm --filter expo exec expo prebuild --clean
+pnpm --filter expo exec expo run:ios
+# or
+pnpm --filter expo exec expo run:android
 ```
 
-This command will move the starter code to the **app-example** directory and
-create a blank **app** directory where you can start developing.
-
-## Learn more
-
-To learn more about developing your project with Expo, look at the following
-resources:
-
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into
-  advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a
-  step-by-step tutorial where you'll create a project that runs on Android, iOS,
-  and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform
-  and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask
-  questions.
+For iOS 17.4+ local testing without hosted AASA, append `?mode=developer` to the
+Associated Domain entry.

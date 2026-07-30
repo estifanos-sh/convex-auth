@@ -8,7 +8,7 @@
     "authorization",
     "convex"
   ],
-  "homepage": "https://auth.estifanos.com/",
+  "homepage": "https://convex-auth.estifanos.com/",
   "bugs": "https://github.com/robelest/convex-auth/issues",
   "license": "Apache-2.0",
   "author": "robelest",
@@ -136,6 +136,7 @@
     "@convex-dev/stream": "https://pkg.pr.new/get-convex/stream/@convex-dev/stream@96acc6d",
     "@convex-dev/workpool": "^0.4.7",
     "@noble/hashes": "^2.0.1",
+    "@oslojs/cbor": "^1.0.0",
     "@oslojs/crypto": "^1.0.1",
     "@oslojs/encoding": "^1.1.0",
     "@oslojs/otp": "^1.1.0",

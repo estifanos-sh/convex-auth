@@ -6,7 +6,7 @@ import {
   device,
   email,
   google,
-  passkey,
+  webauthn,
   password,
   connection,
   totp,
@@ -96,7 +96,7 @@ const auth = defineAuth(components.auth, {
     connection(),
     ...(googleProvider ? [googleProvider] : []),
     passwordProvider,
-    passkey(),
+    webauthn(),
     totp({ issuer: "ConvexAuth Example" }),
     anonymous(),
     device({
