@@ -1,15 +1,29 @@
-name: Preview package
+name: Package Preview
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  group: package-preview-${{ github.event.pull_request.number || inputs.ref || github.ref }}
   cancel-in-progress: true
 
 on:
-  push:
-    branches: ["**"]
-    tags-ignore: ["**"]
   pull_request:
-    branches: ["**"]
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - "convex/**"
+      - "packages/auth/**"
+      - "tests/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "vite.config.ts"
+      - ".github/workflows/preview.yml"
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Git ref to publish as an ephemeral package preview."
+        required: false
+        default: main
+        type: string
 
 permissions:
   contents: read
@@ -18,46 +32,45 @@ permissions:
 
 jobs:
   preview:
-    name: Test and publish preview
+    name: Build and publish ephemeral package
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
     steps:
       - name: Checkout
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
-
-      - name: Enable pnpm
-        run: |
-          corepack enable
-          corepack prepare pnpm@10.32.1 --activate
-
-      - name: Node setup
-        uses: actions/setup-node@v6
+        uses: actions/checkout@v7
         with:
-          node-version: 24
-          cache: "pnpm"
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.event.pull_request.head.sha }}
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      - name: Setup Vite+
+        uses: voidzero-dev/setup-vp@v1
+        with:
+          node-version: 24.15.0
+          cache: true
+          run-install: |
+            args: ['--frozen-lockfile']
 
-      - name: Expose local binaries
-        run: echo "$PWD/node_modules/.bin" >> "$GITHUB_PATH"
+      - name: Build and validate package
+        run: |
+          vp run typecheck
+          vp test --run --project convex --project node
+          vp run '@robelest/convex-auth#build'
 
-      - name: Typecheck
-        run: vp run typecheck
-
-      - name: Test auth
-        run: vp test --run --project convex --project node
-
-      - name: Build auth
-        run: vp run '@robelest/convex-auth#build'
-
-      - name: Publish preview package
-        continue-on-error: true
+      - name: Publish PR package preview
+        if: github.event_name == 'pull_request'
         run: >
           vp exec pkg-pr-new publish ./packages/auth
           --pnpm
           --no-compact
           --comment=update
           --commentWithSha
+          --packageManager=npm
+
+      - name: Publish manual package preview
+        if: github.event_name == 'workflow_dispatch'
+        run: >
+          vp exec pkg-pr-new publish ./packages/auth
+          --pnpm
+          --no-compact
           --packageManager=npm

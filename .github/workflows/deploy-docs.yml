@@ -15,6 +15,7 @@ on:
       - "docs/**"
       - "packages/auth/src/**"
       - "packages/auth/package.json"
+      - "scripts/docsstatic.mjs"
       - "package.json"
       - "pnpm-lock.yaml"
       - ".github/workflows/deploy-docs.yml"
@@ -35,7 +36,7 @@ jobs:
       PUBLIC_DEPLOYMENT_ENV: production
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref }}
 
