@@ -20,33 +20,33 @@ description: Set up convex-auth in your project.
 ## Install
 
 <Tabs syncKey="pkg">
+  <TabItem label="pnpm">
+
+```bash
+pnpm add @robelest/convex-auth
+pnpm exec convex dev
+pnpm exec convex-auth
+```
+
+To skip the interactive prompt:
+
+```bash
+pnpm exec convex-auth --app-url "http://localhost:5173"
+```
+
+  </TabItem>
   <TabItem label="npm">
 
 ```bash
 npm install @robelest/convex-auth
 npx convex dev
-npx @robelest/convex-auth
+npx convex-auth
 ```
 
 To skip the interactive prompt:
 
 ```bash
-npx @robelest/convex-auth --app-url "http://localhost:5173"
-```
-
-  </TabItem>
-  <TabItem label="pnpm">
-
-```bash
-pnpm add @robelest/convex-auth
-pnpx convex dev
-pnpx @robelest/convex-auth
-```
-
-To skip the interactive prompt:
-
-```bash
-pnpx @robelest/convex-auth --app-url "http://localhost:5173"
+npx convex-auth --app-url "http://localhost:5173"
 ```
 
   </TabItem>
@@ -54,14 +54,14 @@ pnpx @robelest/convex-auth --app-url "http://localhost:5173"
 
 ```bash
 yarn add @robelest/convex-auth
-yarn dlx convex dev
-yarn dlx @robelest/convex-auth
+yarn convex dev
+yarn convex-auth
 ```
 
 To skip the interactive prompt:
 
 ```bash
-yarn dlx @robelest/convex-auth --app-url "http://localhost:5173"
+yarn convex-auth --app-url "http://localhost:5173"
 ```
 
   </TabItem>
@@ -69,13 +69,14 @@ yarn dlx @robelest/convex-auth --app-url "http://localhost:5173"
 
 ## Quick Setup (CLI)
 
-The setup flow is:
+Keep `convex dev` running while you launch the setup command in a second
+terminal. The setup flow is:
 
 1. install `@robelest/convex-auth`
 2. start a Convex deployment with `convex dev`
 3. run the auth setup wizard
 
-The wizard handles everything:
+The wizard creates:
 
 - key generation
 - `convex.config.ts`

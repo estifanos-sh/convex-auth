@@ -26,7 +26,7 @@
 			<span>Get started</span>
 			<span aria-hidden="true">→</span>
 		</a>
-		<a href="https://tangible-snake-149.convex.site/demo/">
+		<a href="https://convex-auth.estifanos.com/demo/">
 			<span>View demo</span>
 			<span aria-hidden="true">→</span>
 		</a>

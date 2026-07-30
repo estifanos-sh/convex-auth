@@ -25,7 +25,7 @@ import {
   connection,
   device,
   email,
-  passkey,
+  webauthn,
   phone,
   totp,
 } from "@robelest/convex-auth/providers/index";
@@ -327,7 +327,7 @@ test("phone() defaults id/type and a 20-minute maxAge", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Factor / flow providers (totp / passkey / device / connection)
+// Factor / flow providers (totp / WebAuthn / device / connection)
 // ---------------------------------------------------------------------------
 
 test("totp() emits documented defaults (ConvexAuth issuer, 6 digits, 30s)", () => {
@@ -342,61 +342,52 @@ test("totp() forwards issuer/digits/period overrides", () => {
   expect(provider.options).toEqual({ issuer: "My App", digits: 8, period: 60 });
 });
 
-test("passkey() emits secure WebAuthn defaults", () => {
-  const provider = passkey();
-  expect(provider.id).toBe("passkey");
-  expect(provider.type).toBe("passkey");
-  expect(provider.options).toMatchObject({
-    credentialPolicy: "passkey",
-    attestation: "none",
-    userVerification: "required",
-    residentKey: "preferred",
-    algorithms: [-7, -257],
+test("webauthn() emits secure ceremony defaults", () => {
+  const provider = webauthn();
+  expect(provider.id).toBe("webauthn");
+  expect(provider.type).toBe("webauthn");
+  expect(provider.options).toEqual({
+    rpName: undefined,
+    rpId: undefined,
+    origin: undefined,
     challengeExpirationMs: 300_000,
+    registration: {
+      residentKey: "preferred",
+      userVerification: "required",
+      algorithms: [-7, -257],
+    },
+    authentication: {
+      userVerification: "required",
+    },
   });
 });
 
-test("passkey() merges caller options over the defaults", () => {
-  const provider = passkey({
-    rpName: "My App",
-    rpId: "app.example",
-    userVerification: "preferred",
-  });
-  expect(provider.options).toMatchObject({
-    rpName: "My App",
-    rpId: "app.example",
-    userVerification: "preferred",
-    // Untouched defaults still present.
-    attestation: "none",
-    algorithms: [-7, -257],
-  });
-});
-
-test("passkey() security-key mode enforces roaming credentials and discourages discovery", () => {
-  const provider = passkey({
-    mode: "security-key",
+test("webauthn() keeps registration and authentication overrides independent", () => {
+  const provider = webauthn({
     rpName: "Staff access",
     rpId: "staff.example",
     origin: "https://staff.example",
-    // Verify the policy is enforced at runtime even when an untyped caller
-    // supplies contradictory WebAuthn options.
-    authenticatorAttachment: "platform",
-    residentKey: "required",
-    userVerification: "discouraged",
+    registration: {
+      authenticatorAttachment: "cross-platform",
+      residentKey: "discouraged",
+      userVerification: "required",
+      hints: ["security-key"],
+    },
+    authentication: {
+      userVerification: "preferred",
+      hints: ["security-key"],
+    },
   });
-  expect(provider.id).toBe("passkey");
-  expect(provider.type).toBe("passkey");
-  expect(provider.options).toMatchObject({
-    rpName: "Staff access",
-    rpId: "staff.example",
-    origin: "https://staff.example",
-    credentialPolicy: "security_key",
-    attestation: "none",
+  expect(provider.options.registration).toEqual({
     authenticatorAttachment: "cross-platform",
     residentKey: "discouraged",
     userVerification: "required",
+    hints: ["security-key"],
     algorithms: [-7, -257],
-    challengeExpirationMs: 300_000,
+  });
+  expect(provider.options.authentication).toEqual({
+    userVerification: "preferred",
+    hints: ["security-key"],
   });
 });
 

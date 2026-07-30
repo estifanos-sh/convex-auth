@@ -3,7 +3,7 @@
  *
  * Covers:
  *  - Finding 1: passkey `signIn` returns deterministic decoy `allowCredentials`
- *    for an unknown email, closing the account-enumeration oracle.
+ *    for an unknown email, avoiding an immediate response-shape oracle.
  *  - Finding 2: device-flow poll is rate-limited, and the authorized session is
  *    bound to the identity that approved it.
  *  - Finding 4: `auth.oauth.authorize` rejects a `userId` that is not the
@@ -31,11 +31,40 @@ async function createVerifiedUser(t: ReturnType<typeof convexTest>, email: strin
 
 /** Pull the `allowCredentials` id list out of a passkey `signIn` result. */
 function allowCredentialIds(result: { kind: string; options?: unknown }): string[] | undefined {
-  if (result.kind !== "passkeyOptions") throw new Error("expected passkeyOptions");
+  if (result.kind !== "webauthnOptions") throw new Error("expected webauthnOptions");
   const options = result.options as {
     allowCredentials?: Array<{ id: string }>;
   };
   return options.allowCredentials?.map((c) => c.id);
+}
+
+function allowCredentials(result: {
+  kind: string;
+  options?: unknown;
+}): Array<{ id: string; transports?: string[] }> | undefined {
+  if (result.kind !== "webauthnOptions") throw new Error("expected webauthnOptions");
+  return (
+    result.options as {
+      allowCredentials?: Array<{ id: string; transports?: string[] }>;
+    }
+  ).allowCredentials;
+}
+
+function encodeBase64url(bytes: Uint8Array): string {
+  return Buffer.from(bytes).toString("base64url");
+}
+
+function decodeBase64url(value: string): Uint8Array {
+  return new Uint8Array(Buffer.from(value, "base64url"));
+}
+
+function credentialLengthCounts(ids: readonly string[]): Map<number, number> {
+  const counts = new Map<number, number>();
+  for (const id of ids) {
+    const byteLength = decodeBase64url(id).byteLength;
+    counts.set(byteLength, (counts.get(byteLength) ?? 0) + 1);
+  }
+  return counts;
 }
 
 // ── Finding 1: passkey account-enumeration decoys ────────────────────────────
@@ -45,19 +74,20 @@ test("passkey signIn returns deterministic decoy allowCredentials for an unknown
 
   const first = allowCredentialIds(
     await t.action(api.auth.signIn, {
-      provider: "passkey",
+      provider: "webauthn",
       params: { flow: "signIn", email: "ghost@example.com" },
     }),
   );
-  // Unknown email still yields a non-empty allowCredentials list (decoys), so it
-  // is indistinguishable from an account that owns passkeys.
+  // Unknown email still yields a non-empty, paired allowCredentials list. This
+  // removes the immediate empty/non-empty response-shape oracle.
   expect(first).toBeDefined();
-  expect(first!.length).toBeGreaterThan(0);
+  expect(first).toHaveLength(32);
+  expect([...credentialLengthCounts(first!).values()].every((count) => count % 2 === 0)).toBe(true);
 
   // Same email → same decoys (derived from a hash of the email).
   const second = allowCredentialIds(
     await t.action(api.auth.signIn, {
-      provider: "passkey",
+      provider: "webauthn",
       params: { flow: "signIn", email: "ghost@example.com" },
     }),
   );
@@ -66,20 +96,32 @@ test("passkey signIn returns deterministic decoy allowCredentials for an unknown
   // A different unknown email → different decoys.
   const other = allowCredentialIds(
     await t.action(api.auth.signIn, {
-      provider: "passkey",
+      provider: "webauthn",
       params: { flow: "signIn", email: "someone-else@example.com" },
     }),
   );
   expect(other).not.toEqual(first);
 });
 
+test("WebAuthn signIn without an email starts a discoverable-credential ceremony", async () => {
+  const t = convexTest(schema);
+  const result = await t.action(api.auth.signIn, {
+    provider: "webauthn",
+    params: { flow: "signIn" },
+  });
+  expect(result.kind).toBe("webauthnOptions");
+  if (result.kind !== "webauthnOptions") throw new Error("expected webauthnOptions");
+  expect(result.options).not.toHaveProperty("allowCredentials");
+});
+
 test("passkey signIn returns the real credential for a known email (not a decoy)", async () => {
   const t = convexTest(schema);
   const userId = await createVerifiedUser(t, "known-passkey@example.com");
+  const credentialId = encodeBase64url(new Uint8Array(21).fill(7));
   await t.run(async (ctx) => {
     await ctx.runMutation(components.auth.factor.passkey.create, {
       userId: userId as never,
-      credentialId: "real-credential-xyz",
+      credentialId,
       publicKey: new ArrayBuffer(32),
       algorithm: -7,
       counter: 0,
@@ -89,13 +131,139 @@ test("passkey signIn returns the real credential for a known email (not a decoy)
     });
   });
 
+  const result = await t.action(api.auth.signIn, {
+    provider: "webauthn",
+    params: { flow: "signIn", email: "known-passkey@example.com" },
+  });
+  const descriptors = allowCredentials(result);
+  expect(descriptors).toHaveLength(32);
+  expect(descriptors?.map(({ id }) => id)).toContain(credentialId);
+  expect(descriptors?.every((descriptor) => descriptor.transports === undefined)).toBe(true);
+  const matchingLength = descriptors?.filter(
+    ({ id }) => decodeBase64url(id).byteLength === 21,
+  ).length;
+  expect(matchingLength).toBeGreaterThanOrEqual(2);
+  expect(matchingLength! % 2).toBe(0);
+  expect(
+    [...credentialLengthCounts(descriptors!.map(({ id }) => id)).values()].every(
+      (count) => count % 2 === 0,
+    ),
+  ).toBe(true);
+});
+
+test("WebAuthn email signIn includes stored credentials without policy filtering", async () => {
+  const t = convexTest(schema);
+  const userId = await createVerifiedUser(t, "mixed-passkeys@example.com");
+  const credentialIds = [
+    encodeBase64url(new Uint8Array(18).fill(1)),
+    encodeBase64url(new Uint8Array(27).fill(2)),
+  ];
+  await t.run(async (ctx) => {
+    for (const credentialId of credentialIds) {
+      await ctx.runMutation(components.auth.factor.passkey.create, {
+        userId: userId as never,
+        credentialId,
+        publicKey: new ArrayBuffer(32),
+        algorithm: -7,
+        counter: 0,
+        deviceType: "singleDevice",
+        backedUp: false,
+        createdAt: Date.now(),
+      });
+    }
+  });
+
   const ids = allowCredentialIds(
     await t.action(api.auth.signIn, {
-      provider: "passkey",
-      params: { flow: "signIn", email: "known-passkey@example.com" },
+      provider: "webauthn",
+      params: { flow: "signIn", email: "mixed-passkeys@example.com" },
     }),
   );
-  expect(ids).toEqual(["real-credential-xyz"]);
+  expect(ids).toHaveLength(32);
+  expect(ids).toEqual(expect.arrayContaining(credentialIds));
+});
+
+test("WebAuthn email signIn normalizes email before lookup and decoy derivation", async () => {
+  const t = convexTest(schema);
+  const userId = await createVerifiedUser(t, "normalized@example.com");
+  const credentialId = encodeBase64url(new Uint8Array(23).fill(9));
+  await t.run((ctx) =>
+    ctx.runMutation(components.auth.factor.passkey.create, {
+      userId: userId as never,
+      credentialId,
+      publicKey: new ArrayBuffer(32),
+      algorithm: -7,
+      counter: 0,
+      deviceType: "singleDevice",
+      backedUp: false,
+      createdAt: Date.now(),
+    }),
+  );
+
+  const normalized = allowCredentialIds(
+    await t.action(api.auth.signIn, {
+      provider: "webauthn",
+      params: { flow: "signIn", email: "normalized@example.com" },
+    }),
+  );
+  const nonCanonical = allowCredentialIds(
+    await t.action(api.auth.signIn, {
+      provider: "webauthn",
+      params: { flow: "signIn", email: "  NORMALIZED@EXAMPLE.COM " },
+    }),
+  );
+  expect(nonCanonical).toEqual(normalized);
+  expect(nonCanonical).toContain(credentialId);
+});
+
+test("WebAuthn email signIn rejects unbounded email input", async () => {
+  const t = convexTest(schema);
+  await expect(
+    t.action(api.auth.signIn, {
+      provider: "webauthn",
+      params: { flow: "signIn", email: `${"a".repeat(255)}@example.com` },
+    }),
+  ).rejects.toMatchObject({
+    data: { code: "INVALID_PARAMETERS" },
+  });
+});
+
+test("WebAuthn decoys cannot be predicted from the former public SHA-256 inputs", async () => {
+  const t = convexTest(schema);
+  const email = "public-hash@example.com";
+  const ids = allowCredentialIds(
+    await t.action(api.auth.signIn, {
+      provider: "webauthn",
+      params: { flow: "signIn", email },
+    }),
+  );
+  const oldSeed = `convex-auth:passkey-decoy:localhost:${email}`;
+  const oldPredictions = await Promise.all(
+    [0, 1].map(async (index) => {
+      const digest = await crypto.subtle.digest(
+        "SHA-256",
+        new TextEncoder().encode(`${oldSeed}:${index}`),
+      );
+      return encodeBase64url(new Uint8Array(digest));
+    }),
+  );
+  expect(ids).toHaveLength(32);
+  expect(ids).not.toEqual(expect.arrayContaining(oldPredictions));
+});
+
+test("WebAuthn challenge expiration follows challengeExpirationMs at the server boundary", async () => {
+  const t = convexTest(schema);
+  const before = Date.now();
+  const result = await t.action(api.auth.signIn, {
+    provider: "webauthn",
+    params: { flow: "signIn" },
+  });
+  if (result.kind !== "webauthnOptions") throw new Error("expected webauthnOptions");
+  const verifier = await t.run((ctx) =>
+    ctx.runQuery(components.auth.token.pkce.get, { id: result.verifier as never }),
+  );
+  expect(verifier?.expirationTime).toBeGreaterThanOrEqual(before + 299_000);
+  expect(verifier?.expirationTime).toBeLessThanOrEqual(Date.now() + 301_000);
 });
 
 // ── Finding 2: device flow rate limit + identity binding ─────────────────────

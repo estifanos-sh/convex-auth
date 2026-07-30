@@ -1,9 +1,9 @@
 /**
- * Platform-neutral passkey (WebAuthn) client core.
+ * Platform-neutral WebAuthn client core.
  *
  * Owns the two-phase server handshake shared by every platform: request the
  * ceremony options, run the platform's WebAuthn ceremony via the injected
- * {@link PasskeyCeremony} hook, then submit the ceremony result. Platform
+ * {@link WebAuthnCeremony} hook, then submit the ceremony result. Platform
  * entrypoints (`browser`, `expo`) supply only the ceremony.
  *
  * @module
@@ -11,9 +11,9 @@
 
 import type {
   FactorDeps,
-  PasskeyClient,
-  PasskeyRegisterOptions,
-  PasskeySignInOptions,
+  WebAuthnClient,
+  WebAuthnRegisterOptions,
+  WebAuthnSignInOptions,
   SignInActionResult,
   SignInResult,
 } from "../core/types";
@@ -24,8 +24,8 @@ import type {
  *
  * @internal
  */
-export interface PasskeyCeremony {
-  /** Runtime capability probes surfaced on the {@link PasskeyClient}. */
+export interface WebAuthnCeremony {
+  /** Runtime capability probes surfaced on the {@link WebAuthnClient}. */
   isSupported(): boolean;
   isAutofillSupported(): Promise<boolean>;
   /**
@@ -34,7 +34,7 @@ export interface PasskeyCeremony {
    */
   register(
     options: Record<string, unknown>,
-    opts: PasskeyRegisterOptions | undefined,
+    opts: WebAuthnRegisterOptions | undefined,
   ): Promise<Record<string, unknown>>;
   /**
    * Run the credential-assertion ceremony for the given server options and
@@ -42,7 +42,7 @@ export interface PasskeyCeremony {
    */
   signIn(
     options: Record<string, unknown>,
-    opts: PasskeySignInOptions | undefined,
+    opts: WebAuthnSignInOptions | undefined,
   ): Promise<Record<string, unknown>>;
 }
 
@@ -51,10 +51,10 @@ export interface PasskeyCeremony {
  *
  * @internal
  */
-export function createPasskeyClientCore(
+export function createWebAuthnClientCore(
   deps: FactorDeps,
-  ceremony: PasskeyCeremony,
-): PasskeyClient {
+  ceremony: WebAuthnCeremony,
+): WebAuthnClient {
   const { proxy, convex, requireApiRefs, proxyFetch, setTokenAndMaybeWait } = deps;
 
   const requestSignIn = async (
@@ -64,11 +64,11 @@ export function createPasskeyClientCore(
     if (proxy) {
       return (await proxyFetch({
         action: "auth:signIn",
-        args: { provider: "passkey", params, ...(verifier ? { verifier } : {}) },
+        args: { provider: "webauthn", params, ...(verifier ? { verifier } : {}) },
       })) as SignInActionResult;
     }
     return (await convex.action(requireApiRefs().signIn, {
-      provider: "passkey",
+      provider: "webauthn",
       params,
       ...(verifier ? { verifier } : {}),
     })) as SignInActionResult;
@@ -88,13 +88,13 @@ export function createPasskeyClientCore(
             shouldStore: false as const,
             tokens: result.session === null ? null : { token: result.session.token },
             waitForHandshake: true,
-            context: { provider: "passkey", flow },
+            context: { provider: "webauthn", flow },
           }
         : {
             shouldStore: true as const,
             tokens: result.session,
             waitForHandshake: true,
-            context: { provider: "passkey", flow },
+            context: { provider: "webauthn", flow },
           },
     );
 
@@ -107,25 +107,24 @@ export function createPasskeyClientCore(
     isSupported: () => ceremony.isSupported(),
     isAutofillSupported: () => ceremony.isAutofillSupported(),
 
-    register: async (opts?: PasskeyRegisterOptions): Promise<SignInResult> => {
+    register: async (opts?: WebAuthnRegisterOptions): Promise<SignInResult> => {
       const phase1 = await requestSignIn({
         flow: "register",
-        email: opts?.email,
         userName: opts?.userName,
         userDisplayName: opts?.userDisplayName,
       });
-      if (phase1.kind !== "passkeyOptions") {
-        throw new Error("Server did not return passkey registration options");
+      if (phase1.kind !== "webauthnOptions") {
+        throw new Error("Server did not return WebAuthn registration options");
       }
       const phase2Params = await ceremony.register(phase1.options, opts);
       const phase2 = await requestSignIn(phase2Params, phase1.verifier);
       return handleSignedInResult(phase2, "verify");
     },
 
-    signIn: async (opts?: PasskeySignInOptions): Promise<SignInResult> => {
+    signIn: async (opts?: WebAuthnSignInOptions): Promise<SignInResult> => {
       const phase1 = await requestSignIn({ flow: "signIn", email: opts?.email });
-      if (phase1.kind !== "passkeyOptions") {
-        throw new Error("Server did not return passkey authentication options");
+      if (phase1.kind !== "webauthnOptions") {
+        throw new Error("Server did not return WebAuthn authentication options");
       }
       const phase2Params = await ceremony.signIn(phase1.options, opts);
       const phase2 = await requestSignIn(phase2Params, phase1.verifier);

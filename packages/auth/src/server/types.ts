@@ -325,8 +325,8 @@ export type AuthProviderConfig =
   | (() => EmailConfig)
   | PhoneConfig
   | (() => PhoneConfig)
-  | PasskeyProviderConfig
-  | (() => PasskeyProviderConfig)
+  | WebAuthnProviderConfig
+  | (() => WebAuthnProviderConfig)
   | TotpProviderConfig
   | (() => TotpProviderConfig)
   | DeviceProviderConfig
@@ -649,18 +649,12 @@ export type ConvexCredentialsConfig<DataModel extends GenericDataModel = Generic
   };
 
 /**
- * Configuration for the passkey (WebAuthn) provider.
+ * Normalized configuration for the WebAuthn provider.
  */
-export interface PasskeyProviderConfig {
+export interface WebAuthnProviderConfig {
   id: string;
-  type: "passkey";
+  type: "webauthn";
   options: {
-    /**
-     * Credential policy used to keep ordinary passkey registrations separate
-     * from hardware-security-key registrations. Defaults to "passkey" for
-     * older configs.
-     */
-    credentialPolicy?: "passkey" | "security_key";
     /** Relying Party display name. Defaults to APP_URL hostname. */
     rpName?: string;
     /** Relying Party ID (hostname). Defaults to APP_URL hostname. */
@@ -668,37 +662,22 @@ export interface PasskeyProviderConfig {
     /** Allowed origins for credential verification. Defaults to APP_URL. */
     origin?: string | string[];
     /**
-     * Attestation conveyance preference. Defaults to "none".
-     *
-     * @defaultValue "none"
-     */
-    attestation?: "none" | "direct";
-    /**
-     * User verification requirement. Defaults to "required".
-     *
-     * @defaultValue "required"
-     */
-    userVerification?: "required" | "preferred" | "discouraged";
-    /**
-     * Resident key (discoverable credential) preference. Defaults to "preferred".
-     *
-     * @defaultValue "preferred"
-     */
-    residentKey?: "required" | "preferred" | "discouraged";
-    /** Restrict to platform or cross-platform authenticators. */
-    authenticatorAttachment?: "platform" | "cross-platform";
-    /**
-     * Supported COSE algorithms. Defaults to [-7 (ES256), -257 (RS256)].
-     *
-     * @defaultValue [-7, -257]
-     */
-    algorithms?: number[];
-    /**
      * Challenge expiration in ms. Defaults to 300_000 (5 minutes).
      *
      * @defaultValue 300_000
      */
     challengeExpirationMs?: number;
+    registration: {
+      userVerification: "required" | "preferred" | "discouraged";
+      residentKey: "required" | "preferred" | "discouraged";
+      authenticatorAttachment?: "platform" | "cross-platform";
+      hints?: Array<"security-key" | "client-device" | "hybrid">;
+      algorithms: Array<-7 | -257>;
+    };
+    authentication: {
+      userVerification: "required" | "preferred" | "discouraged";
+      hints?: Array<"security-key" | "client-device" | "hybrid">;
+    };
   };
 }
 
@@ -833,7 +812,7 @@ type AuthUnlinkAccountArgs = {
   accountId: GenericId<"Account">;
 };
 
-/** Arguments for `auth.passkey.remove()`. */
+/** Arguments for `auth.account.passkey.remove()`. */
 type AuthDeletePasskeyArgs = {
   passkeyId: GenericId<"Passkey">;
 };
@@ -1161,13 +1140,13 @@ export type AuthProviderMaterializedConfig =
   | EmailConfig
   | PhoneConfig
   | ConvexCredentialsConfig
-  | PasskeyProviderConfig
+  | WebAuthnProviderConfig
   | TotpProviderConfig
   | DeviceProviderConfig
   | ConnectionProviderConfig;
 
-export type HasPasskeyProvider<P extends AuthProviderConfig[]> =
-  Extract<P[number], { type: "passkey" }> extends never ? false : true;
+export type HasWebAuthnProvider<P extends AuthProviderConfig[]> =
+  Extract<P[number], { type: "webauthn" }> extends never ? false : true;
 
 export type HasTotpProvider<P extends AuthProviderConfig[]> =
   Extract<P[number], { type: "totp" }> extends never ? false : true;

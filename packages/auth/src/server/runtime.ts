@@ -625,7 +625,7 @@ export function Auth(config_: ConvexAuthConfig) {
             };
           case "redirect":
           case "started":
-          case "passkeyOptions":
+          case "webauthnOptions":
           case "totpRequired":
           case "totpSetup":
           case "deviceCode":

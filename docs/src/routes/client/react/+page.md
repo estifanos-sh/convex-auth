@@ -90,20 +90,20 @@ function SignOutButton() {
 
 ## `useConvexAuthClient()`
 
-The underlying imperative client, for factor flows (`totp`, `passkey`,
+The underlying imperative client, for factor flows (`totp`, `webauthn`,
 `device`) and low-level methods (`completeOAuth`, `param`, `initialize`).
-Returns `null` when no auth client has been provided.
+Throws when no auth client has been provided.
 
 ```tsx
 import { useConvexAuthClient } from "@robelest/convex-auth/react";
 
 function TotpSetup() {
   const client = useConvexAuthClient();
-  return <button onClick={() => client?.totp?.setup()}>Enable TOTP</button>;
+  return <button onClick={() => client.totp?.setup()}>Enable TOTP</button>;
 }
 ```
 
-`client.totp`, `client.passkey`, `client.device` are present only when the
+`client.totp`, `client.webauthn`, `client.device` are present only when the
 underlying providers are configured server-side.
 
 ## SSR

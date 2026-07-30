@@ -114,7 +114,7 @@ synchronous-storage SPA effectively never hits it.
 
 ## `auth.client`
 
-The underlying imperative client, for factor flows (`totp`, `passkey`, `device`)
+The underlying imperative client, for factor flows (`totp`, `webauthn`, `device`)
 and low-level methods (`completeOAuth`, `param`, `initialize`).
 
 ```svelte
@@ -127,7 +127,7 @@ and low-level methods (`completeOAuth`, `param`, `initialize`).
 <button onclick={() => auth.client.totp?.setup()}>Enable TOTP</button>
 ```
 
-`client.totp`, `client.passkey`, `client.device` are present only when the
+`client.totp`, `client.webauthn`, `client.device` are present only when the
 underlying providers are configured server-side.
 
 ## SSR

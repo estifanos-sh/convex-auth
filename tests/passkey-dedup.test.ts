@@ -16,6 +16,8 @@ import schema from "@convex/schema";
 import { ConvexError } from "convex/values";
 import { expect, test } from "vite-plus/test";
 
+import { ErrorCode } from "../packages/auth/src/shared/codes";
+import { MAX_WEBAUTHN_CREDENTIALS_PER_USER } from "../packages/auth/src/shared/webauthn";
 import { convexTest } from "./convex/setup";
 
 const CREDENTIAL_ID = "dedup-credential";
@@ -73,6 +75,14 @@ test("duplicate passkey registration for the same user is idempotent", async () 
     });
   });
   expect(all.length).toBe(1);
+  const accounts = await t.run((ctx) =>
+    ctx.runQuery(components.auth.account.list, { userId: userId as never }),
+  );
+  expect(
+    accounts.filter(
+      (account) => account.provider === "passkey" && account.providerAccountId === CREDENTIAL_ID,
+    ),
+  ).toHaveLength(1);
 });
 
 test("registering an existing credential for a different user is rejected", async () => {
@@ -111,33 +121,50 @@ test("registering an existing credential for a different user is rejected", asyn
     });
   });
   expect((found as { userId: string }).userId).toBe(alice);
+  const bobAccounts = await t.run((ctx) =>
+    ctx.runQuery(components.auth.account.list, { userId: bob as never }),
+  );
+  expect(bobAccounts).toHaveLength(0);
 });
 
-test("registering an existing credential under a different policy is rejected", async () => {
+test("a user cannot register more credentials than email sign-in can offer", async () => {
   const t = convexTest(schema);
-  const userId = await t.run(async (ctx) => {
-    return (await ctx.runMutation(components.auth.user.create, {
-      data: { email: "policy@example.com" },
-    })) as string;
-  });
+  const userId = await t.run((ctx) =>
+    ctx.runMutation(components.auth.user.create, {
+      data: { email: "credential-limit@example.com" },
+    }),
+  );
 
-  await t.run(async (ctx) => {
-    await ctx.runMutation(components.auth.factor.passkey.create, passkeyArgs(userId));
-  });
-
-  const error = await t
-    .run(async (ctx) => {
-      return await ctx.runMutation(components.auth.factor.passkey.create, {
+  const firstId = await t.run(async (ctx) => {
+    let firstId: string | null = null;
+    for (let index = 0; index < MAX_WEBAUTHN_CREDENTIALS_PER_USER; index++) {
+      const id = (await ctx.runMutation(components.auth.factor.passkey.create, {
         ...passkeyArgs(userId),
-        credentialPolicy: "security_key",
-      });
-    })
-    .then(
-      () => null,
-      (e) => e,
-    );
-  expect(error).toBeInstanceOf(ConvexError);
-  expect((error as ConvexError<{ code: string }>).data.code).toBe("ACCOUNT_ALREADY_LINKED");
+        credentialId: `credential-limit-${index}`,
+      })) as string;
+      if (index === 0) firstId = id;
+    }
+    return firstId;
+  });
+
+  await expect(
+    t.run((ctx) =>
+      ctx.runMutation(components.auth.factor.passkey.create, {
+        ...passkeyArgs(userId),
+        credentialId: "credential-limit-overflow",
+      }),
+    ),
+  ).rejects.toMatchObject({
+    data: { code: ErrorCode.INVALID_PARAMETERS },
+  });
+
+  const duplicate = await t.run((ctx) =>
+    ctx.runMutation(components.auth.factor.passkey.create, {
+      ...passkeyArgs(userId),
+      credentialId: "credential-limit-0",
+    }),
+  );
+  expect(duplicate).toBe(firstId);
 });
 
 test("passkey assertion counter acceptance rejects a stale concurrent counter", async () => {
@@ -159,6 +186,7 @@ test("passkey assertion counter acceptance rejects a stale concurrent counter", 
       id: passkeyId as never,
       counter: 11,
       lastUsedAt: Date.now(),
+      backedUp: true,
     }),
   );
   const stale = await t.run((ctx) =>
@@ -166,6 +194,7 @@ test("passkey assertion counter acceptance rejects a stale concurrent counter", 
       id: passkeyId as never,
       counter: 11,
       lastUsedAt: Date.now() + 1,
+      backedUp: false,
     }),
   );
 
@@ -175,5 +204,101 @@ test("passkey assertion counter acceptance rejects a stale concurrent counter", 
     ctx.runQuery(components.auth.factor.passkey.get, { id: passkeyId as never }),
   );
   expect(stored?.counter).toBe(11);
+  expect(stored?.backedUp).toBe(true);
   expect(stored?.userId).toBe(userId);
+});
+
+test("positive passkey counter cannot regress to zero", async () => {
+  const t = convexTest(schema);
+  const passkeyId = await t.run(async (ctx) => {
+    const userId = (await ctx.runMutation(components.auth.user.create, {
+      data: { email: "counter-zero@example.com" },
+    })) as string;
+    return (await ctx.runMutation(components.auth.factor.passkey.create, {
+      ...passkeyArgs(userId),
+      credentialId: "counter-zero-credential",
+      counter: 4,
+      backedUp: false,
+    })) as string;
+  });
+
+  const accepted = await t.run((ctx) =>
+    ctx.runMutation(components.auth.factor.passkey.acceptAssertion, {
+      id: passkeyId as never,
+      counter: 0,
+      lastUsedAt: Date.now(),
+      backedUp: true,
+    }),
+  );
+  expect(accepted).toBe(false);
+  const stored = await t.run((ctx) =>
+    ctx.runQuery(components.auth.factor.passkey.get, { id: passkeyId as never }),
+  );
+  expect(stored?.counter).toBe(4);
+  expect(stored?.backedUp).toBe(false);
+});
+
+test("phantom Account blocks registration before a Passkey is created", async () => {
+  const t = convexTest(schema);
+  const { owner, registrant } = await t.run(async (ctx) => {
+    const owner = (await ctx.runMutation(components.auth.user.create, {
+      data: { email: "phantom-owner@example.com" },
+    })) as string;
+    const registrant = (await ctx.runMutation(components.auth.user.create, {
+      data: { email: "phantom-registrant@example.com" },
+    })) as string;
+    await ctx.runMutation(components.auth.account.create, {
+      userId: owner as never,
+      provider: "passkey",
+      providerAccountId: "phantom-credential",
+    });
+    return { owner, registrant };
+  });
+
+  await expect(
+    t.run((ctx) =>
+      ctx.runMutation(components.auth.factor.passkey.create, {
+        ...passkeyArgs(registrant),
+        credentialId: "phantom-credential",
+      }),
+    ),
+  ).rejects.toMatchObject({
+    data: { code: ErrorCode.ACCOUNT_ALREADY_LINKED },
+  });
+  const passkey = await t.run((ctx) =>
+    ctx.runQuery(components.auth.factor.passkey.get, {
+      credentialId: "phantom-credential",
+    }),
+  );
+  expect(passkey).toBeNull();
+  expect(owner).not.toBe(registrant);
+});
+
+test("removing a Passkey also removes legacy and stray canonical Account rows", async () => {
+  const t = convexTest(schema);
+  const { userId, passkeyId } = await t.run(async (ctx) => {
+    const userId = (await ctx.runMutation(components.auth.user.create, {
+      data: { email: "remove-passkey@example.com" },
+    })) as string;
+    const passkeyId = (await ctx.runMutation(components.auth.factor.passkey.create, {
+      ...passkeyArgs(userId),
+      credentialId: "remove-credential",
+    })) as string;
+    await ctx.runMutation(components.auth.account.create, {
+      userId: userId as never,
+      provider: "webauthn",
+      providerAccountId: "remove-credential",
+    });
+    return { userId, passkeyId };
+  });
+
+  await t.run((ctx) =>
+    ctx.runMutation(components.auth.factor.passkey.remove, { id: passkeyId as never }),
+  );
+  const accounts = await t.run((ctx) =>
+    ctx.runQuery(components.auth.account.list, { userId: userId as never }),
+  );
+  expect(
+    accounts.filter((account) => account.providerAccountId === "remove-credential"),
+  ).toHaveLength(0);
 });

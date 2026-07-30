@@ -11,6 +11,7 @@ import { getOneFrom } from "convex-helpers/server/relationships";
 import { ConvexError, v } from "convex/values";
 
 import { ErrorCode } from "../../shared/codes";
+import { MAX_WEBAUTHN_CREDENTIALS_PER_USER } from "../../shared/webauthn";
 import { mutation, query } from "../functions";
 import { vPasskeyDoc } from "../model";
 
@@ -69,7 +70,6 @@ export const create = mutation({
     algorithm: v.number(),
     counter: v.number(),
     transports: v.optional(v.array(v.string())),
-    credentialPolicy: v.optional(v.union(v.literal("passkey"), v.literal("security_key"))),
     deviceType: v.string(),
     backedUp: v.boolean(),
     name: v.optional(v.string()),
@@ -77,6 +77,26 @@ export const create = mutation({
   },
   returns: v.id("Passkey"),
   handler: async (ctx, args) => {
+    const linkedAccounts = await Promise.all(
+      ["passkey", "webauthn"].map((provider) =>
+        ctx.db
+          .query("Account")
+          .withIndex("provider_account_id", (q) =>
+            q.eq("provider", provider).eq("providerAccountId", args.credentialId),
+          )
+          .first(),
+      ),
+    );
+    for (const account of linkedAccounts) {
+      if (account !== null && account.userId !== args.userId) {
+        throw new ConvexError({
+          code: ErrorCode.ACCOUNT_ALREADY_LINKED,
+          message: "This passkey credential is already registered to another account.",
+          credentialId: args.credentialId,
+        });
+      }
+    }
+
     const existing = await ctx.db
       .query("Passkey")
       .withIndex("credential_id", (q) => q.eq("credentialId", args.credentialId))
@@ -89,11 +109,11 @@ export const create = mutation({
           credentialId: args.credentialId,
         });
       }
-      if ((existing.credentialPolicy ?? "passkey") !== (args.credentialPolicy ?? "passkey")) {
-        throw new ConvexError({
-          code: ErrorCode.ACCOUNT_ALREADY_LINKED,
-          message: "This WebAuthn credential is registered under a different credential policy.",
-          credentialId: args.credentialId,
+      if (linkedAccounts[0] === null) {
+        await ctx.db.insert("Account", {
+          userId: args.userId,
+          provider: "passkey",
+          providerAccountId: args.credentialId,
         });
       }
       // Same user re-submitting the same credential (a double-clicked or raced
@@ -101,7 +121,25 @@ export const create = mutation({
       // than inserting a duplicate.
       return existing._id;
     }
-    return await ctx.db.insert("Passkey", args);
+    const userPasskeys = await ctx.db
+      .query("Passkey")
+      .withIndex("user_id", (q) => q.eq("userId", args.userId))
+      .take(MAX_WEBAUTHN_CREDENTIALS_PER_USER);
+    if (userPasskeys.length >= MAX_WEBAUTHN_CREDENTIALS_PER_USER) {
+      throw new ConvexError({
+        code: ErrorCode.INVALID_PARAMETERS,
+        message: `A user can register at most ${MAX_WEBAUTHN_CREDENTIALS_PER_USER} WebAuthn credentials.`,
+      });
+    }
+    const passkeyId = await ctx.db.insert("Passkey", args);
+    if (linkedAccounts[0] === null) {
+      await ctx.db.insert("Account", {
+        userId: args.userId,
+        provider: "passkey",
+        providerAccountId: args.credentialId,
+      });
+    }
+    return passkeyId;
   },
 });
 
@@ -136,15 +174,16 @@ export const acceptAssertion = mutation({
     id: v.id("Passkey"),
     counter: v.number(),
     lastUsedAt: v.number(),
+    backedUp: v.boolean(),
   },
   returns: v.boolean(),
-  handler: async (ctx, { id: passkeyId, counter, lastUsedAt }) => {
+  handler: async (ctx, { id: passkeyId, counter, lastUsedAt, backedUp }) => {
     const current = await ctx.db.get("Passkey", passkeyId);
     if (current === null) return false;
-    if (current.counter !== 0 && counter !== 0 && counter <= current.counter) {
+    if ((current.counter !== 0 || counter !== 0) && counter <= current.counter) {
       return false;
     }
-    await ctx.db.patch("Passkey", passkeyId, { counter, lastUsedAt });
+    await ctx.db.patch("Passkey", passkeyId, { counter, lastUsedAt, backedUp });
     return true;
   },
 });
@@ -154,6 +193,21 @@ const remove = mutation({
   args: { id: v.id("Passkey") },
   returns: v.null(),
   handler: async (ctx, { id: passkeyId }) => {
+    const passkey = await ctx.db.get("Passkey", passkeyId);
+    if (passkey === null) return null;
+    for (const provider of ["passkey", "webauthn"]) {
+      const accounts = await ctx.db
+        .query("Account")
+        .withIndex("provider_account_id", (q) =>
+          q.eq("provider", provider).eq("providerAccountId", passkey.credentialId),
+        )
+        .take(PASSKEY_LIST_BATCH);
+      for (const account of accounts) {
+        if (account.userId === passkey.userId) {
+          await ctx.db.delete("Account", account._id);
+        }
+      }
+    }
     await ctx.db.delete("Passkey", passkeyId);
     return null;
   },

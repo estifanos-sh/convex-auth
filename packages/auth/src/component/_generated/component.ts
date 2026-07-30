@@ -2492,7 +2492,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       acceptAssertion: FunctionReference<
         "mutation",
         "internal",
-        { counter: number; id: string; lastUsedAt: number },
+        { backedUp: boolean; counter: number; id: string; lastUsedAt: number },
         boolean,
         Name
       >;
@@ -2505,7 +2505,6 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           counter: number;
           createdAt: number;
           credentialId: string;
-          credentialPolicy?: "passkey" | "security_key";
           deviceType: string;
           name?: string;
           publicKey: ArrayBuffer;
@@ -2527,7 +2526,6 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           counter: number;
           createdAt: number;
           credentialId: string;
-          credentialPolicy?: "passkey" | "security_key";
           deviceType: string;
           lastUsedAt?: number;
           name?: string;
@@ -2549,7 +2547,6 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           counter: number;
           createdAt: number;
           credentialId: string;
-          credentialPolicy?: "passkey" | "security_key";
           deviceType: string;
           lastUsedAt?: number;
           name?: string;

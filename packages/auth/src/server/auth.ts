@@ -36,7 +36,7 @@ import type {
   Doc,
   Grant,
   HasDeviceProvider,
-  HasPasskeyProvider,
+  HasWebAuthnProvider,
   HasTotpProvider,
   PermissionsConfig,
   RoleId,
@@ -456,7 +456,7 @@ export type ConvexAuthResult<
  */
 export type InferClientApi<T> =
   T extends ConvexAuthResult<infer P>
-    ? AuthApiRefs<HasPasskeyProvider<P>, HasTotpProvider<P>, HasDeviceProvider<P>>
+    ? AuthApiRefs<HasWebAuthnProvider<P>, HasTotpProvider<P>, HasDeviceProvider<P>>
     : AuthApiRefs;
 
 /**

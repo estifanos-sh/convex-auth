@@ -6,8 +6,14 @@
 
 export { password } from "./password";
 export type { PasswordConfig } from "./password";
-export { passkey } from "./passkey";
-export type { PasskeyConfig } from "./passkey";
+export { webauthn } from "./webauthn";
+export type {
+  WebAuthnAlgorithm,
+  WebAuthnAuthenticationConfig,
+  WebAuthnConfig,
+  WebAuthnHint,
+  WebAuthnRegistrationConfig,
+} from "./webauthn";
 export { totp } from "./totp";
 export type { TotpConfig } from "./totp";
 export { google } from "./google";

@@ -14,7 +14,7 @@
       provider: string,
       args?: Record<string, unknown>,
     ) => Promise<{ kind: "signedIn" | "redirect"; redirect?: URL | string }>;
-    passkey?: {
+    webauthn?: {
       isSupported: () => boolean;
       register: (opts?: Record<string, unknown>) => Promise<{
         kind: "signedIn" | "redirect";
@@ -74,7 +74,7 @@
   const adminCount = $derived(
     members.filter((m: { roleIds: string[] }) => m.roleIds.includes("orgAdmin")).length,
   );
-  const passkeySupported = $derived(auth.passkey?.isSupported() ?? false);
+  const passkeySupported = $derived(auth.webauthn?.isSupported() ?? false);
   const origin = $derived(typeof window === "undefined" ? "" : window.location.origin);
 
   const roleOptions = [
@@ -164,13 +164,13 @@
   }
 
   async function handleRegisterPasskey() {
-    if (!auth.passkey) {
+    if (!auth.webauthn) {
       toast.error("Passkeys are not available in this browser.");
       return;
     }
     isRegisteringPasskey = true;
     try {
-      const result = await auth.passkey.register({
+      const result = await auth.webauthn.register({
         name: typeof navigator === "undefined" ? "This device" : navigator.platform,
       });
       if (result.kind === "redirect" && result.redirect) {

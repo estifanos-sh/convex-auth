@@ -95,7 +95,7 @@ function mockConvex(
 const API_REFS: AuthApiRefs<false, true, true> = {
   signIn: "auth:signIn" as never,
   signOut: "auth:signOut" as never,
-  _capabilities: { passkey: false, totp: true, device: true },
+  _capabilities: { webauthn: false, totp: true, device: true },
 };
 
 /** Collect every state a subscriber sees, in order. */

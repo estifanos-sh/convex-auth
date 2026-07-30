@@ -1,10 +1,10 @@
 import type {
   FactorDeps,
-  PasskeyClient,
-  PasskeyRegisterOptions,
-  PasskeySignInOptions,
+  WebAuthnClient,
+  WebAuthnRegisterOptions,
+  WebAuthnSignInOptions,
 } from "../client/core/types";
-import { createPasskeyClientCore, type PasskeyCeremony } from "../client/factors/passkey";
+import { createWebAuthnClientCore, type WebAuthnCeremony } from "../client/factors/webauthn";
 import { base64urlDecode, base64urlEncode } from "./runtime";
 
 type ConditionalMediationCredential = typeof PublicKeyCredential & {
@@ -42,7 +42,7 @@ type PasskeyAuthenticationOptions = {
   allowCredentials?: PasskeyCredentialDescriptor[];
 };
 
-const browserPasskeyCeremony: PasskeyCeremony = {
+const browserWebAuthnCeremony: WebAuthnCeremony = {
   isSupported: (): boolean =>
     typeof window !== "undefined" && typeof window.PublicKeyCredential !== "undefined",
 
@@ -56,7 +56,7 @@ const browserPasskeyCeremony: PasskeyCeremony = {
     return credential.isConditionalMediationAvailable();
   },
 
-  register: async (rawOptions, opts?: PasskeyRegisterOptions) => {
+  register: async (rawOptions, opts?: WebAuthnRegisterOptions) => {
     const options = rawOptions as PasskeyRegistrationOptions;
     const createOptions: CredentialCreationOptions = {
       publicKey: {
@@ -110,11 +110,10 @@ const browserPasskeyCeremony: PasskeyCeremony = {
       attestationObject: base64urlEncode(response.attestationObject),
       transports,
       passkeyName: opts?.name,
-      email: opts?.email,
     };
   },
 
-  signIn: async (rawOptions, opts?: PasskeySignInOptions) => {
+  signIn: async (rawOptions, opts?: WebAuthnSignInOptions) => {
     const options = rawOptions as PasskeyAuthenticationOptions;
     const getOptions: CredentialRequestOptions = {
       publicKey: {
@@ -169,6 +168,6 @@ const browserPasskeyCeremony: PasskeyCeremony = {
 };
 
 /** @internal */
-export function createPasskeyClient(deps: FactorDeps): PasskeyClient {
-  return createPasskeyClientCore(deps, browserPasskeyCeremony);
+export function createWebAuthnClient(deps: FactorDeps): WebAuthnClient {
+  return createWebAuthnClientCore(deps, browserWebAuthnCeremony);
 }

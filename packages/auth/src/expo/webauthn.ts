@@ -1,7 +1,7 @@
 import { Passkey, type PasskeyCreateRequest, type PasskeyGetRequest } from "react-native-passkey";
 
-import type { FactorDeps, PasskeyClient, PasskeyRegisterOptions } from "../client/core/types";
-import { createPasskeyClientCore, type PasskeyCeremony } from "../client/factors/passkey";
+import type { FactorDeps, WebAuthnClient, WebAuthnRegisterOptions } from "../client/core/types";
+import { createWebAuthnClientCore, type WebAuthnCeremony } from "../client/factors/webauthn";
 
 type PasskeyCredentialDescriptor = {
   type?: string;
@@ -83,11 +83,11 @@ function wrapNativePasskeyError(e: unknown, cancelMessage: string): Error {
   return new Error(message);
 }
 
-const expoPasskeyCeremony: PasskeyCeremony = {
+const expoWebAuthnCeremony: WebAuthnCeremony = {
   isSupported: () => Passkey.isSupported(),
   isAutofillSupported: async () => false,
 
-  register: async (rawOptions, opts?: PasskeyRegisterOptions) => {
+  register: async (rawOptions, opts?: WebAuthnRegisterOptions) => {
     const options = rawOptions as PasskeyRegistrationOptions;
     const createRequest: PasskeyCreateRequest = {
       challenge: options.challenge,
@@ -113,7 +113,6 @@ const expoPasskeyCeremony: PasskeyCeremony = {
       attestationObject: credential.response.attestationObject,
       transports: credential.response.transports,
       passkeyName: opts?.name,
-      email: opts?.email,
     };
   },
 
@@ -145,6 +144,6 @@ const expoPasskeyCeremony: PasskeyCeremony = {
 };
 
 /** @internal */
-export function createExpoPasskeyClient(deps: FactorDeps): PasskeyClient {
-  return createPasskeyClientCore(deps, expoPasskeyCeremony);
+export function createExpoWebAuthnClient(deps: FactorDeps): WebAuthnClient {
+  return createWebAuthnClientCore(deps, expoWebAuthnCeremony);
 }
