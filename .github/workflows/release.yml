@@ -61,11 +61,23 @@ jobs:
             exit 1
           fi
 
-          if [[ "$VERSION" == *-* ]]; then
-            DIST_TAG=${VERSION#*-}
-            DIST_TAG=${DIST_TAG%%.*}
-          else
-            DIST_TAG=latest
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::npm releases require a stable x.y.z version. Use the pkg.pr.new package preview instead."
+            exit 1
+          fi
+
+          if ! node -e '
+            const [base, next] = process.argv.slice(1).map((version) =>
+              version.split(".").map(Number),
+            );
+            for (let i = 0; i < 3; i += 1) {
+              if (next[i] > base[i]) process.exit(0);
+              if (next[i] < base[i]) process.exit(1);
+            }
+            process.exit(1);
+          ' "$BASE_VERSION" "$VERSION"; then
+            echo "::error::Version $VERSION must be newer than $BASE_VERSION."
+            exit 1
           fi
 
           if npm view "$PACKAGE_NAME@$VERSION" version --json >/dev/null 2>&1; then
@@ -83,7 +95,7 @@ jobs:
             echo
             echo "| Package | Version | Dist-tag |"
             echo "| --- | --- | --- |"
-            echo "| \`$PACKAGE_NAME\` | \`$VERSION\` | \`$DIST_TAG\` |"
+            echo "| \`$PACKAGE_NAME\` | \`$VERSION\` | \`latest\` |"
             echo
             echo "Merging this labeled PR will publish the package."
           } >> "$GITHUB_STEP_SUMMARY"
@@ -121,6 +133,11 @@ jobs:
           PACKAGE_NAME=$(node -p "require('./package.json').name")
           VERSION=$(node -p "require('./package.json').version")
           TAG="v$VERSION"
+
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::npm releases require a stable x.y.z version. Use the pkg.pr.new package preview instead."
+            exit 1
+          fi
 
           if npm view "$PACKAGE_NAME@$VERSION" version --json >/dev/null 2>&1; then
             echo "::error::$PACKAGE_NAME@$VERSION is already published."
@@ -193,11 +210,9 @@ jobs:
             exit 1
           fi
 
-          if [[ "$VERSION" == *-* ]]; then
-            DIST_TAG=${VERSION#*-}
-            DIST_TAG=${DIST_TAG%%.*}
-          else
-            DIST_TAG=latest
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::npm releases require a stable x.y.z version. Use the pkg.pr.new package preview instead."
+            exit 1
           fi
 
           if vp exec npm view "$PACKAGE_NAME@$VERSION" version --json >/dev/null 2>&1; then
@@ -209,7 +224,6 @@ jobs:
           echo "package=$PACKAGE_NAME" >> "$GITHUB_OUTPUT"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          echo "dist_tag=$DIST_TAG" >> "$GITHUB_OUTPUT"
           echo "published=$PUBLISHED" >> "$GITHUB_OUTPUT"
 
       - name: Build package prerequisites
@@ -228,9 +242,7 @@ jobs:
       - name: Publish package
         if: steps.release.outputs.published != 'true'
         working-directory: packages/auth
-        env:
-          NPM_DIST_TAG: ${{ steps.release.outputs.dist_tag }}
-        run: vp exec npm publish --ignore-scripts --provenance --tag "$NPM_DIST_TAG"
+        run: vp exec npm publish --ignore-scripts --provenance --tag latest
 
       - name: Create GitHub release
         uses: softprops/action-gh-release@v3
