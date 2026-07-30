@@ -40,6 +40,13 @@ jobs:
           run-install: |
             args: ['--frozen-lockfile']
 
+      - name: Configure npm trusted publishing
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24.15.0
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+
       - name: Resolve release metadata
         id: release
         working-directory: packages/auth
