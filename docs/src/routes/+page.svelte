@@ -12,7 +12,6 @@
 
 <section class="cover" aria-labelledby="cover-title">
 	<div class="cover-copy">
-		<p class="label">Documentation</p>
 		<h1 id="cover-title">convex-auth</h1>
 		<p class="summary">Authentication and authorization for Convex applications.</p>
 	</div>
@@ -27,16 +26,8 @@
 			<span>Get started</span>
 			<span aria-hidden="true">→</span>
 		</a>
-		<a href={`${base}/reference/config/`}>
-			<span>Configuration</span>
-			<span aria-hidden="true">→</span>
-		</a>
-		<a href={`${base}/api/user/`}>
-			<span>API reference</span>
-			<span aria-hidden="true">→</span>
-		</a>
-		<a href={`${base}/reference/architecture/`}>
-			<span>Architecture</span>
+		<a href="https://tangible-snake-149.convex.site/demo/">
+			<span>View demo</span>
 			<span aria-hidden="true">→</span>
 		</a>
 	</nav>
@@ -47,17 +38,6 @@
 		display: grid;
 		width: min(100%, 52rem);
 		gap: clamp(1.5rem, 4vh, 2.5rem);
-	}
-
-	.label {
-		margin: 0 0 clamp(0.8rem, 2vh, 1.25rem);
-		color: var(--accent);
-		font-family: var(--font-label);
-		font-size: 0.625rem;
-		font-weight: 500;
-		letter-spacing: 0.14em;
-		line-height: 1;
-		text-transform: uppercase;
 	}
 
 	h1 {
@@ -173,17 +153,13 @@
 
 		.entry-points {
 			grid-column: 1 / -1;
-			grid-template-columns: repeat(4, minmax(0, 1fr));
+			grid-template-columns: repeat(2, minmax(0, 1fr));
 		}
 	}
 
 	@media (max-height: 38rem) and (max-width: 34rem) {
 		.cover {
 			gap: 0.75rem;
-		}
-
-		.label {
-			margin-bottom: 0.5rem;
 		}
 
 		h1 {
