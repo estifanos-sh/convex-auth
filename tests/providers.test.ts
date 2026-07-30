@@ -347,6 +347,7 @@ test("passkey() emits secure WebAuthn defaults", () => {
   expect(provider.id).toBe("passkey");
   expect(provider.type).toBe("passkey");
   expect(provider.options).toMatchObject({
+    credentialPolicy: "passkey",
     attestation: "none",
     userVerification: "required",
     residentKey: "preferred",
@@ -368,6 +369,34 @@ test("passkey() merges caller options over the defaults", () => {
     // Untouched defaults still present.
     attestation: "none",
     algorithms: [-7, -257],
+  });
+});
+
+test("passkey() security-key mode enforces roaming credentials and discourages discovery", () => {
+  const provider = passkey({
+    mode: "security-key",
+    rpName: "Staff access",
+    rpId: "staff.example",
+    origin: "https://staff.example",
+    // Verify the policy is enforced at runtime even when an untyped caller
+    // supplies contradictory WebAuthn options.
+    authenticatorAttachment: "platform",
+    residentKey: "required",
+    userVerification: "discouraged",
+  });
+  expect(provider.id).toBe("passkey");
+  expect(provider.type).toBe("passkey");
+  expect(provider.options).toMatchObject({
+    rpName: "Staff access",
+    rpId: "staff.example",
+    origin: "https://staff.example",
+    credentialPolicy: "security_key",
+    attestation: "none",
+    authenticatorAttachment: "cross-platform",
+    residentKey: "discouraged",
+    userVerification: "required",
+    algorithms: [-7, -257],
+    challengeExpirationMs: 300_000,
   });
 });
 

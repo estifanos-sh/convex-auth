@@ -655,6 +655,12 @@ export interface PasskeyProviderConfig {
   id: string;
   type: "passkey";
   options: {
+    /**
+     * Credential policy used to keep ordinary passkey registrations separate
+     * from hardware-security-key registrations. Defaults to "passkey" for
+     * older configs.
+     */
+    credentialPolicy?: "passkey" | "security_key";
     /** Relying Party display name. Defaults to APP_URL hostname. */
     rpName?: string;
     /** Relying Party ID (hostname). Defaults to APP_URL hostname. */

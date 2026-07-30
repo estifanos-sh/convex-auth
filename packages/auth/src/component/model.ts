@@ -601,6 +601,7 @@ export const vPasskeyDoc = v.object({
   algorithm: v.number(),
   counter: v.number(),
   transports: v.optional(v.array(v.string())),
+  credentialPolicy: v.optional(v.union(v.literal("passkey"), v.literal("security_key"))),
   deviceType: v.string(),
   backedUp: v.boolean(),
   name: v.optional(v.string()),

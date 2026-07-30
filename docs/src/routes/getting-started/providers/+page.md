@@ -322,6 +322,35 @@ defineAuth(components.auth, {
 });
 ```
 
+## Hardware Security Keys
+
+Set `mode: "security-key"` when an app must require a roaming FIDO2
+authenticator instead of allowing a platform or synced passkey:
+
+```ts
+import { passkey } from "@robelest/convex-auth/providers";
+
+defineAuth(components.auth, {
+  providers: [passkey({ mode: "security-key", rpName: "My App staff access" })],
+});
+```
+
+The provider enforces `authenticatorAttachment: "cross-platform"` and
+`userVerification: "required"`, and sets `residentKey: "discouraged"` to prefer
+a non-discoverable credential. It also sends the WebAuthn `security-key` hint so
+supporting browsers prioritize external security keys in their picker. The
+browser handles the authenticator's PIN and touch prompts. The application
+should never collect a hardware-key PIN itself.
+
+The imperative browser client continues to use `client.passkey.register()` and
+`client.passkey.signIn()` because security keys and passkeys share the WebAuthn
+protocol and verification path.
+
+Credentials registered in the default passkey mode cannot authenticate through
+security-key mode. Existing users must enroll a new hardware-key credential
+before an application switches modes. Legacy credential records without a
+policy tag remain ordinary passkeys.
+
 ## TOTP (Authenticator Apps)
 
 ```ts

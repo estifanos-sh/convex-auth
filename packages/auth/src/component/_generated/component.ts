@@ -2505,6 +2505,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           counter: number;
           createdAt: number;
           credentialId: string;
+          credentialPolicy?: "passkey" | "security_key";
           deviceType: string;
           name?: string;
           publicKey: ArrayBuffer;
@@ -2526,6 +2527,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           counter: number;
           createdAt: number;
           credentialId: string;
+          credentialPolicy?: "passkey" | "security_key";
           deviceType: string;
           lastUsedAt?: number;
           name?: string;
@@ -2547,6 +2549,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           counter: number;
           createdAt: number;
           credentialId: string;
+          credentialPolicy?: "passkey" | "security_key";
           deviceType: string;
           lastUsedAt?: number;
           name?: string;

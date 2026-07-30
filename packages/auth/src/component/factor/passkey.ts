@@ -69,6 +69,7 @@ export const create = mutation({
     algorithm: v.number(),
     counter: v.number(),
     transports: v.optional(v.array(v.string())),
+    credentialPolicy: v.optional(v.union(v.literal("passkey"), v.literal("security_key"))),
     deviceType: v.string(),
     backedUp: v.boolean(),
     name: v.optional(v.string()),
@@ -85,6 +86,13 @@ export const create = mutation({
         throw new ConvexError({
           code: ErrorCode.ACCOUNT_ALREADY_LINKED,
           message: "This passkey credential is already registered to another account.",
+          credentialId: args.credentialId,
+        });
+      }
+      if ((existing.credentialPolicy ?? "passkey") !== (args.credentialPolicy ?? "passkey")) {
+        throw new ConvexError({
+          code: ErrorCode.ACCOUNT_ALREADY_LINKED,
+          message: "This WebAuthn credential is registered under a different credential policy.",
           credentialId: args.credentialId,
         });
       }

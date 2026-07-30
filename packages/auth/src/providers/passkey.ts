@@ -14,6 +14,14 @@ import type { PasskeyProviderConfig } from "../server/types";
 
 /** Configuration for the {@link passkey} provider. */
 export interface PasskeyConfig {
+  /**
+   * WebAuthn credential policy. Defaults to `"passkey"`.
+   *
+   * `"security-key"` enforces a roaming authenticator with user verification,
+   * discourages discoverable credentials, and asks supporting browsers to
+   * prioritize security keys in their picker.
+   */
+  mode?: "passkey" | "security-key";
   /** Human-readable relying party name shown in authenticator prompts. */
   rpName?: string;
   /** Relying party ID, typically your app's hostname. */
@@ -48,16 +56,28 @@ export interface PasskeyConfig {
  * ```
  */
 export function passkey(config: PasskeyConfig = {}): PasskeyProviderConfig {
+  const { mode = "passkey", ...options } = config;
+  const securityKeyPolicy =
+    mode === "security-key"
+      ? ({
+          authenticatorAttachment: "cross-platform",
+          residentKey: "discouraged",
+          userVerification: "required",
+        } as const)
+      : {};
+
   return {
     id: "passkey",
     type: "passkey",
     options: {
+      credentialPolicy: mode === "security-key" ? "security_key" : "passkey",
       attestation: "none",
       userVerification: "required",
       residentKey: "preferred",
       algorithms: [-7, -257],
       challengeExpirationMs: 300_000,
-      ...config,
+      ...options,
+      ...securityKeyPolicy,
     },
   };
 }
