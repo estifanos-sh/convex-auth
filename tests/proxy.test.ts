@@ -638,6 +638,33 @@ test("headless client completes OAuth manually and returns cleanup URL", async (
   auth.destroy();
 });
 
+test("client initialization ignores host application code parameters without OAuth state", async () => {
+  const storage = createMemoryStorage();
+  const convex = createConvexMock();
+  const location = new URL("https://app.example/invite?code=8031");
+  const replace = vi.fn();
+  const auth = client({
+    convex,
+    api: { signIn: {} as never, signOut: {} as never },
+    url: "https://example.convex.cloud",
+    storage,
+    runtime: {
+      location: {
+        get: () => location,
+        replace,
+      },
+    },
+  });
+
+  await auth.initialize();
+
+  expect(convex.action).not.toHaveBeenCalled();
+  expect(replace).not.toHaveBeenCalled();
+  expect(location.searchParams.get("code")).toBe("8031");
+
+  auth.destroy();
+});
+
 test("browser client opens OAuth redirects via runtime oauth launcher", async () => {
   vi.stubGlobal("window", {
     location: { origin: "https://example.com", href: "https://example.com" },

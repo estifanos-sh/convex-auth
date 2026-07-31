@@ -1345,7 +1345,11 @@ export function client<Api extends AuthApiRefs<boolean, boolean, boolean> = Auth
 
       try {
         const loc = runtime.location?.get() ?? null;
-        if (loc && loc.searchParams.has("code")) {
+        // A generic `code` query parameter can belong to the host app (for
+        // example, an invitation code). OAuth callbacks include `state`, so
+        // require both before consuming the URL during automatic startup.
+        // Explicit `completeOAuth(...)` calls still accept a bare code.
+        if (loc && loc.searchParams.has("code") && loc.searchParams.has("state")) {
           await completeOAuth(loc);
         }
       } catch (error) {
