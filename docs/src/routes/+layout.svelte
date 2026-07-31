@@ -71,7 +71,7 @@
 {:else}
 	<div class="docs-layout">
 		<div class="sidebar-container" aria-label="Documentation navigation">
-			<Sidebar onSearch={openSearch} />
+			<Sidebar />
 		</div>
 		<main id="main-content" class="docs-main">
 			<div class="doc-content" data-pagefind-body {@attach tableOverflow} tabindex="-1">
