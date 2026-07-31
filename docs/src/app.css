@@ -62,7 +62,16 @@
   --accent: #7da39b;
   --accent-soft: rgba(125, 163, 155, 0.12);
   --danger: #e89a8c;
-  --grid-size: clamp(1.75rem, 2.4vw, 2.25rem);
+  /* Shared with robelest: 7px minimum, otherwise 2.23% of the short viewport edge. */
+  --grid-size: max(7px, 2.23vmin);
+  --brand-edge: 3.25rem;
+  --brand-edge-mobile: 1.375rem;
+  --brand-copy-width: 22.5rem;
+  --brand-body-size: 1.0625rem;
+  --brand-body-leading: 1.7;
+  --brand-meta-size: 0.8125rem;
+  --shell-header-height: 3.25rem;
+  --shell-sidebar-width: 15rem;
 
   color-scheme: dark;
   font: 400 16px/1.65 var(--font-sans);
@@ -146,6 +155,8 @@ a:hover {
 .doc-content {
   min-width: 0;
   color: var(--ink-2);
+  font-size: var(--brand-body-size);
+  line-height: var(--brand-body-leading);
   overflow-wrap: break-word;
 }
 
@@ -170,7 +181,7 @@ a:hover {
 .doc-content h1 {
   max-width: 24ch;
   margin: 0 0 1rem;
-  font-size: clamp(2.1rem, 5vw, 3rem);
+  font-size: clamp(2.1rem, 5vw, 2.75rem);
   font-weight: 500;
   line-height: 1.08;
   letter-spacing: -0.04em;
@@ -180,15 +191,15 @@ a:hover {
   max-width: 64ch;
   margin-bottom: 2.5rem;
   color: var(--ink-2);
-  font-size: clamp(1rem, 1.7vw, 1.125rem);
-  line-height: 1.6;
+  font-size: var(--brand-body-size);
+  line-height: var(--brand-body-leading);
 }
 
 .doc-content h2 {
   margin: 3.25rem 0 1rem;
   padding-top: 1rem;
   border-top: 1px solid var(--line);
-  font-size: clamp(1.4rem, 2.5vw, 1.75rem);
+  font-size: clamp(1.4rem, 2.5vw, 1.625rem);
   font-weight: 500;
   line-height: 1.2;
   letter-spacing: -0.025em;
@@ -196,7 +207,7 @@ a:hover {
 
 .doc-content h3 {
   margin: 2.25rem 0 0.75rem;
-  font-size: 1.14rem;
+  font-size: 1.125rem;
   font-weight: 600;
   line-height: 1.35;
 }
@@ -389,6 +400,10 @@ a:hover {
 }
 
 @media (max-width: 47.999rem) {
+  :root {
+    --brand-edge: var(--brand-edge-mobile);
+  }
+
   .doc-content h1 + p {
     margin-bottom: 2rem;
   }

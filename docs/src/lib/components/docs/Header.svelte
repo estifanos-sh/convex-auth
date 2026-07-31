@@ -59,7 +59,7 @@
 		left: 0;
 		right: 0;
 		z-index: 20;
-		height: 4rem;
+		height: var(--shell-header-height);
 		border-bottom: 1px solid var(--line);
 		background: rgba(15, 16, 12, 0.86);
 		backdrop-filter: blur(16px);
@@ -71,7 +71,7 @@
 		justify-content: space-between;
 		width: 100%;
 		height: 100%;
-		padding: 0 clamp(1rem, 2vw, 1.5rem);
+		padding: 0 var(--brand-edge);
 	}
 
 	.left,
@@ -86,7 +86,7 @@
 		align-items: center;
 		gap: 0.6rem;
 		color: var(--ink);
-		font-size: 0.95rem;
+		font-size: 0.875rem;
 		font-weight: 500;
 		letter-spacing: -0.015em;
 		text-decoration: none;

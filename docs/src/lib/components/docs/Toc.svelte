@@ -64,8 +64,8 @@
 		width: 12rem;
 		flex-shrink: 0;
 		position: sticky;
-		top: 5.5rem;
-		height: calc(100vh - 5.5rem);
+		top: calc(var(--shell-header-height) + 1.5rem);
+		height: calc(100vh - var(--shell-header-height) - 1.5rem);
 		overflow-y: auto;
 		scrollbar-width: none;
 		padding: 0.75rem 0 2rem;

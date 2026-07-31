@@ -102,7 +102,7 @@
 		left: 0;
 		bottom: 0;
 		width: 100%;
-		max-width: 20.5rem;
+		max-width: min(var(--brand-copy-width), calc(100vw - var(--brand-edge-mobile)));
 		margin: 0;
 		padding: 0;
 		border-right: 1px solid var(--line-strong);
@@ -124,14 +124,14 @@
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		height: 4rem;
-		padding: 0 1.25rem;
+		height: var(--shell-header-height);
+		padding: 0 var(--brand-edge-mobile);
 		border-bottom: 1px solid var(--line);
 	}
 
 	.sheet-title {
 		color: var(--ink);
-		font-size: 0.9rem;
+		font-size: 0.875rem;
 		font-weight: 500;
 	}
 
@@ -153,7 +153,7 @@
 	}
 
 	.sheet-content {
-		padding: 1.5rem 0 3rem;
+		padding: var(--brand-edge-mobile) 0 3rem;
 	}
 
 	.group {
@@ -167,7 +167,7 @@
 		text-transform: uppercase;
 		letter-spacing: 0.13em;
 		color: var(--muted);
-		padding: 0.35rem 1.25rem;
+		padding: 0.35rem var(--brand-edge-mobile);
 	}
 
 	ul {
@@ -179,9 +179,9 @@
 	li a {
 		position: relative;
 		display: block;
-		padding: 0.48rem 1.25rem;
+		padding: 0.48rem var(--brand-edge-mobile);
 		color: var(--ink-2);
-		font-size: 0.9rem;
+		font-size: var(--brand-meta-size);
 		text-decoration: none;
 	}
 
