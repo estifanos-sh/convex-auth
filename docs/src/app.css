@@ -17,17 +17,18 @@
 }
 
 @theme {
-  --color-accent-50: #f1f6ed;
-  --color-accent-100: #e2eed9;
-  --color-accent-200: #cee1c1;
-  --color-accent-300: #b8d7a3;
-  --color-accent-400: #9fc783;
-  --color-accent-500: #83ac68;
-  --color-accent-600: #668d4f;
-  --color-accent-700: #506f3f;
-  --color-accent-800: #405834;
-  --color-accent-900: #35492c;
-  --color-accent-950: #192416;
+  /* Robelest teal, anchored to the square brand mark at 400. */
+  --color-accent-50: #f1f5f4;
+  --color-accent-100: #dce9e6;
+  --color-accent-200: #bfd6d1;
+  --color-accent-300: #9bbdb6;
+  --color-accent-400: #7da39b;
+  --color-accent-500: #5f8880;
+  --color-accent-600: #4a6d67;
+  --color-accent-700: #3c5752;
+  --color-accent-800: #334744;
+  --color-accent-900: #2b3c39;
+  --color-accent-950: #152220;
 
   --color-gray-50: #e7e2d6;
   --color-gray-100: #d8d3c7;
@@ -58,8 +59,8 @@
   --faint: #56534a;
   --line: rgba(231, 226, 214, 0.11);
   --line-strong: rgba(231, 226, 214, 0.19);
-  --accent: #b8d7a3;
-  --accent-soft: rgba(184, 215, 163, 0.12);
+  --accent: #7da39b;
+  --accent-soft: rgba(125, 163, 155, 0.12);
   --danger: #e89a8c;
   --grid-size: clamp(1.75rem, 2.4vw, 2.25rem);
 
@@ -125,7 +126,7 @@ a:hover {
 
 ::selection {
   color: var(--ink);
-  background: rgba(184, 215, 163, 0.24);
+  background: rgba(125, 163, 155, 0.24);
 }
 
 .sr-only {
@@ -231,7 +232,7 @@ a:hover {
 .doc-content a {
   color: var(--accent);
   text-decoration: underline;
-  text-decoration-color: rgba(184, 215, 163, 0.38);
+  text-decoration-color: rgba(125, 163, 155, 0.38);
   text-decoration-thickness: 1px;
   text-underline-offset: 0.22em;
   overflow-wrap: anywhere;
