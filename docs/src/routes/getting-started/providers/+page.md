@@ -322,9 +322,9 @@ defineAuth(components.auth, {
 });
 ```
 
-Configure registration and authentication ceremonies independently. For
-example, this profile guides supporting browsers toward roaming security keys
-without treating that hint as proof of hardware provenance:
+Configure registration and authentication ceremonies independently. This
+profile guides supporting browsers toward roaming security keys, but does not
+enforce a hardware manufacturer:
 
 ```ts
 import { webauthn } from "@robelest/convex-auth/providers";
@@ -367,8 +367,44 @@ Sign-in without an identifier and conditional UI (`{ autofill: true }`) require
 discoverable credentials. Existing passkey credentials remain valid when ceremony
 preferences change.
 
-WebAuthn hints are non-binding browser guidance. This provider requests no
-attestation and does not establish authenticator provenance.
+WebAuthn hints are non-binding browser guidance. To reject password managers,
+synced passkeys, and other credentials without trusted manufacturer evidence,
+add the FIDO Metadata Service policy inside `registration`:
+
+```ts
+import { fidoMds, webauthn } from "@robelest/convex-auth/providers";
+
+defineAuth(components.auth, {
+  providers: [
+    webauthn({
+      registration: {
+        authenticatorAttachment: "cross-platform",
+        residentKey: "discouraged",
+        userVerification: "required",
+        hints: ["security-key"],
+        attestation: fidoMds({
+          allowedAaguids: ["2fc0579f-8113-47ea-b116-bb5a8db9202a"],
+        }),
+      },
+      authentication: {
+        userVerification: "required",
+        hints: ["security-key"],
+      },
+    }),
+  ],
+});
+```
+
+Omit `allowedAaguids` to accept any authenticator with full manufacturer
+attestation that is currently trusted by FIDO MDS. Provide it to restrict
+registration to specific models. The AAGUID allow list is applied only after
+the attestation signature and manufacturer certificate chain are verified.
+
+Strict attestation is fail-closed. Registration requests direct attestation and
+rejects missing, self, anonymous, unknown, revoked, compromised, or disallowed
+authenticators. Each sign-in re-checks the current MDS status and allow list.
+Credentials registered before the policy was enabled have no trusted evidence
+and must be registered again.
 
 ## TOTP (Authenticator Apps)
 

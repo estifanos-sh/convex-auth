@@ -21,7 +21,11 @@ import {
   vTotpFactorDoc,
 } from "../../../component/model";
 import type { AuthComponentApi } from "../api";
-import type { AuthDataModel, CrossComponentUserDoc } from "../../types";
+import type {
+  AuthDataModel,
+  CrossComponentUserDoc,
+  WebAuthnAttestationEvidence,
+} from "../../types";
 
 type TotpDoc = Infer<typeof vTotpFactorDoc>;
 
@@ -204,6 +208,7 @@ export async function mutatePasskeyInsert(
     deviceType: string;
     backedUp: boolean;
     name?: string;
+    attestation?: WebAuthnAttestationEvidence;
     createdAt: number;
   },
 ): Promise<string> {

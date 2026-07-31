@@ -141,6 +141,7 @@
     "@oslojs/encoding": "^1.1.0",
     "@oslojs/otp": "^1.1.0",
     "@oslojs/webauthn": "^1.0.0",
+    "@simplewebauthn/server": "^13.3.2",
     "@xmldom/xmldom": "^0.8.11",
     "arctic": "^3.7.0",
     "camelcase": "^6.3.0",

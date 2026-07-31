@@ -192,6 +192,17 @@ export default defineSchema({
     backedUp: v.boolean(),
     /** User-assigned friendly name (e.g. "MacBook Touch ID"). */
     name: v.optional(v.string()),
+    /** Trusted authenticator-attestation evidence, absent on legacy/unattested credentials. */
+    attestation: v.optional(
+      v.object({
+        verifier: v.string(),
+        aaguid: v.string(),
+        format: v.string(),
+        metadataDescription: v.optional(v.string()),
+        verifiedAt: v.number(),
+        status: v.literal("trusted"),
+      }),
+    ),
     createdAt: v.number(),
     lastUsedAt: v.optional(v.number()),
   })

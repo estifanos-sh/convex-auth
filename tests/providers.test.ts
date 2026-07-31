@@ -25,6 +25,7 @@ import {
   connection,
   device,
   email,
+  fidoMds,
   webauthn,
   phone,
   totp,
@@ -389,6 +390,22 @@ test("webauthn() keeps registration and authentication overrides independent", (
     userVerification: "preferred",
     hints: ["security-key"],
   });
+});
+
+test("webauthn() carries a strict FIDO MDS policy inside registration", () => {
+  const attestation = fidoMds({
+    allowedAaguids: ["2FC0579F-8113-47EA-B116-BB5A8DB9202A"],
+  });
+  const provider = webauthn({ registration: { attestation } });
+
+  expect(provider.options.registration.attestation).toBe(attestation);
+  expect(provider.options.registration.attestation?.conveyance).toBe("direct");
+  expect(provider.options.registration.attestation?.verifier.id).toBe("fido-mds-v3");
+});
+
+test("fidoMds() rejects an explicitly empty or malformed AAGUID allow list", () => {
+  expect(() => fidoMds({ allowedAaguids: [] })).toThrow("at least one AAGUID");
+  expect(() => fidoMds({ allowedAaguids: ["not-an-aaguid"] })).toThrow("Invalid AAGUID");
 });
 
 test("device() emits RFC 8628 defaults (charset/length/expiry/interval)", () => {

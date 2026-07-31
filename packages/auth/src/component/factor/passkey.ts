@@ -73,6 +73,16 @@ export const create = mutation({
     deviceType: v.string(),
     backedUp: v.boolean(),
     name: v.optional(v.string()),
+    attestation: v.optional(
+      v.object({
+        verifier: v.string(),
+        aaguid: v.string(),
+        format: v.string(),
+        metadataDescription: v.optional(v.string()),
+        verifiedAt: v.number(),
+        status: v.literal("trusted"),
+      }),
+    ),
     createdAt: v.number(),
   },
   returns: v.id("Passkey"),
@@ -119,6 +129,9 @@ export const create = mutation({
       // Same user re-submitting the same credential (a double-clicked or raced
       // registration): idempotent — return the credential already stored rather
       // than inserting a duplicate.
+      if (args.attestation !== undefined) {
+        await ctx.db.patch("Passkey", existing._id, { attestation: args.attestation });
+      }
       return existing._id;
     }
     const userPasskeys = await ctx.db

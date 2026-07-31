@@ -72,6 +72,8 @@ import {
 import {
   AuthDataModel,
   GenericActionCtxWithAuthConfig,
+  WebAuthnAttestationEvidence,
+  WebAuthnAttestationPolicy,
   WebAuthnProviderConfig,
   SessionInfo,
 } from "./types";
@@ -177,6 +179,9 @@ function resolveRpOptions(provider: WebAuthnProviderConfig): RpOptions {
           : {}),
         ...(provider.options.registration.hints
           ? { hints: provider.options.registration.hints }
+          : {}),
+        ...(provider.options.registration.attestation
+          ? { attestation: provider.options.registration.attestation }
           : {}),
       },
       authentication: {
@@ -522,6 +527,28 @@ export function validateBackupEligibility(
   }
 }
 
+/** @internal */
+export async function assertStoredAttestationTrusted(
+  policy: WebAuthnAttestationPolicy,
+  evidence: WebAuthnAttestationEvidence | undefined,
+): Promise<void> {
+  if (!evidence) {
+    throw convexError(
+      ErrorCode.PASSKEY_UNTRUSTED_ATTESTATION,
+      "This credential predates the current attestation policy and must be registered again.",
+    );
+  }
+  try {
+    await policy.verifier.assertTrusted(evidence);
+  } catch (error) {
+    throw asConvexError(
+      error,
+      ErrorCode.PASSKEY_UNTRUSTED_ATTESTATION,
+      "Authenticator attestation is no longer trusted.",
+    );
+  }
+}
+
 /**
  * Build a constant-size, secret-keyed `allowCredentials` list for an email-first
  * sign-in. Real credential IDs are mixed with deterministic decoys, all without
@@ -677,18 +704,19 @@ export async function handleWebAuthn(
     const rp = resolveRpOptions(provider);
     const verifier = requirePasskeyVerifier(args.verifier);
 
-    const clientDataJSON = decodeBase64urlIgnorePadding(
-      requireStringParam(params.clientDataJSON, "clientDataJSON"),
-    );
+    const encodedClientDataJSON = requireStringParam(params.clientDataJSON, "clientDataJSON");
+    const clientDataJSON = decodeBase64urlIgnorePadding(encodedClientDataJSON);
     const clientData = parseClientDataJSON(clientDataJSON);
     verifyClientDataType(clientData, ClientDataType.Create, "webauthn.create");
     verifySameOrigin(clientData);
     verifyOrigin(clientData, rp);
     await verifyAndConsumeChallenge(clientData, ctx, verifier);
 
-    const attestationObjectBytes = decodeBase64urlIgnorePadding(
-      requireStringParam(params.attestationObject, "attestationObject"),
+    const encodedAttestationObject = requireStringParam(
+      params.attestationObject,
+      "attestationObject",
     );
+    const attestationObjectBytes = decodeBase64urlIgnorePadding(encodedAttestationObject);
     const rawAuthenticatorData = extractAttestationAuthenticatorData(attestationObjectBytes);
     const attestation = parseAttestationObject(attestationObjectBytes);
     const authData = attestation.authenticatorData;
@@ -721,6 +749,35 @@ export async function handleWebAuthn(
     validateCredentialAlgorithm(algorithm, rp.registration.algorithms);
     const publicKeyBytes = resolveRegistrationPublicKeyBytes(publicKey, algorithm);
     const backupState = parseBackupState(rawAuthenticatorData);
+    let attestationEvidence: WebAuthnAttestationEvidence | undefined;
+    if (rp.registration.attestation) {
+      const { verifier: attestationVerifier } = rp.registration.attestation;
+      try {
+        const evidence = await attestationVerifier.verify({
+          clientDataJSON: encodedClientDataJSON,
+          attestationObject: encodedAttestationObject,
+          credentialId,
+          transports: params.transports,
+          expectedChallenge: encodeBase64urlNoPadding(clientData.challenge),
+          expectedOrigin: rp.origin,
+          expectedRpId: rp.rpId,
+          requireUserVerification: rp.registration.userVerification === "required",
+          supportedAlgorithms: rp.registration.algorithms,
+        });
+        attestationEvidence = {
+          ...evidence,
+          verifier: attestationVerifier.id,
+          verifiedAt: Date.now(),
+          status: "trusted" as const,
+        };
+      } catch (error) {
+        throw asConvexError(
+          error,
+          ErrorCode.PASSKEY_UNTRUSTED_ATTESTATION,
+          "Authenticator attestation is not trusted.",
+        );
+      }
+    }
 
     try {
       const passkeyId = await mutatePasskeyInsert(ctx, {
@@ -736,6 +793,7 @@ export async function handleWebAuthn(
         deviceType: backupState.deviceType,
         backedUp: backupState.backedUp,
         name: params.passkeyName,
+        ...(attestationEvidence ? { attestation: attestationEvidence } : {}),
         createdAt: Date.now(),
       });
       await emitAuthEvent(ctx, ctx.auth.config, {
@@ -824,6 +882,10 @@ export async function handleWebAuthn(
 
     verifyAssertionSignatureUniformly(passkey, signatureBytes, messageHash);
     validateBackupEligibility(passkey.deviceType, backupState.deviceType);
+
+    if (rp.registration.attestation) {
+      await assertStoredAttestationTrusted(rp.registration.attestation, passkey.attestation);
+    }
 
     if (
       (passkey.counter !== 0 || authenticatorData.signatureCounter !== 0) &&
@@ -935,7 +997,7 @@ export async function handleWebAuthn(
           })),
           timeout: rp.challengeExpirationMs,
           ...(rp.registration.hints ? { hints: rp.registration.hints } : {}),
-          attestation: "none",
+          attestation: rp.registration.attestation?.conveyance ?? "none",
           authenticatorSelection: {
             residentKey: rp.registration.residentKey,
             requireResidentKey: rp.registration.residentKey === "required",

@@ -648,6 +648,52 @@ export type ConvexCredentialsConfig<DataModel extends GenericDataModel = Generic
     id: string;
   };
 
+/** Persisted proof that a WebAuthn credential passed a trusted attestation policy. */
+export interface WebAuthnAttestationEvidence {
+  /** Stable verifier identifier used to create this evidence. */
+  verifier: string;
+  /** Authenticator Attestation GUID from the verified authenticator data. */
+  aaguid: string;
+  /** WebAuthn attestation statement format. */
+  format: string;
+  /** Human-readable authenticator description from trusted metadata, when available. */
+  metadataDescription?: string;
+  /** Unix timestamp in milliseconds when attestation was verified. */
+  verifiedAt: number;
+  /** A literal trust result so stored evidence cannot be mistaken for an unchecked claim. */
+  status: "trusted";
+}
+
+/** @internal Input passed from the WebAuthn ceremony to an attestation verifier. */
+export interface WebAuthnAttestationVerificationInput {
+  clientDataJSON: string;
+  attestationObject: string;
+  credentialId: string;
+  transports?: string[];
+  expectedChallenge: string;
+  expectedOrigin: string | string[];
+  expectedRpId: string;
+  requireUserVerification: boolean;
+  supportedAlgorithms: Array<-7 | -257>;
+}
+
+/** @internal Runtime verifier carried by a strict WebAuthn attestation policy. */
+export interface WebAuthnAttestationVerifier {
+  readonly id: string;
+  verify(
+    input: WebAuthnAttestationVerificationInput,
+  ): Promise<Omit<WebAuthnAttestationEvidence, "status" | "verifiedAt" | "verifier">>;
+  assertTrusted(evidence: WebAuthnAttestationEvidence): Promise<void>;
+}
+
+/** Strict registration policy returned by an attestation helper such as `fidoMds()`. */
+export interface WebAuthnAttestationPolicy {
+  /** Attestation conveyance sent to the browser. */
+  conveyance: "direct";
+  /** @internal Server-side verifier for registration and later trust re-checks. */
+  verifier: WebAuthnAttestationVerifier;
+}
+
 /**
  * Normalized configuration for the WebAuthn provider.
  */
@@ -673,6 +719,7 @@ export interface WebAuthnProviderConfig {
       authenticatorAttachment?: "platform" | "cross-platform";
       hints?: Array<"security-key" | "client-device" | "hybrid">;
       algorithms: Array<-7 | -257>;
+      attestation?: WebAuthnAttestationPolicy;
     };
     authentication: {
       userVerification: "required" | "preferred" | "discouraged";
