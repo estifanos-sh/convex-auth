@@ -148,10 +148,6 @@
 			z-index: 10;
 		}
 
-		.docs-controls {
-			display: none;
-		}
-
 		.docs-main {
 			margin-left: var(--shell-sidebar-width);
 			padding: var(--brand-edge) var(--brand-edge) 7rem;
@@ -185,6 +181,12 @@
 		right: var(--brand-edge-mobile);
 		left: var(--brand-edge-mobile);
 		justify-content: space-between;
+	}
+
+	@media (min-width: 56rem) {
+		.floating-controls.docs-controls {
+			display: none;
+		}
 	}
 
 	.utility-button {
