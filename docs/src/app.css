@@ -70,7 +70,6 @@
   --brand-body-size: 1.0625rem;
   --brand-body-leading: 1.7;
   --brand-meta-size: 0.8125rem;
-  --shell-header-height: 3.25rem;
   --shell-sidebar-width: 15rem;
 
   color-scheme: dark;
@@ -92,7 +91,7 @@ html {
   min-height: 100%;
   scroll-behavior: smooth;
   overflow-x: hidden;
-  scroll-padding-top: 6rem;
+  scroll-padding-top: var(--brand-edge);
 }
 
 body {

@@ -2,17 +2,32 @@
 	import { page } from '$app/state';
 	import { base } from '$app/paths';
 	import '../app.css';
-	import Header from '$lib/components/docs/Header.svelte';
 	import Sidebar from '$lib/components/docs/Sidebar.svelte';
 	import MobileNav from '$lib/components/docs/MobileNav.svelte';
+	import SearchDialog from '$lib/components/docs/SearchDialog.svelte';
 	import { tableOverflow } from '$lib/utils/tableOverflow';
 
 	let { children } = $props();
 	let mobileNavOpen = $state(false);
+	let searchOpen = $state(false);
 
 	const routePath = $derived(page.url.pathname.slice(base.length) || '/');
 	const isLanding = $derived(routePath === '/');
+
+	function openSearch() {
+		mobileNavOpen = false;
+		searchOpen = true;
+	}
+
+	function handleWindowKeydown(e: KeyboardEvent) {
+		if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+			e.preventDefault();
+			searchOpen = !searchOpen;
+		}
+	}
 </script>
+
+<svelte:window onkeydown={handleWindowKeydown} />
 
 <svelte:head>
 	<title>convex-auth</title>
@@ -23,8 +38,29 @@
 </svelte:head>
 
 <a class="skip-link" href="#main-content">Skip to documentation</a>
-<Header onMenuToggle={() => (mobileNavOpen = !mobileNavOpen)} />
-<MobileNav bind:open={mobileNavOpen} />
+
+<div class={['floating-controls', isLanding ? 'landing-controls' : 'docs-controls']}>
+	{#if !isLanding}
+		<button
+			class="utility-button"
+			onclick={() => (mobileNavOpen = true)}
+			aria-label="Open documentation menu"
+		>
+			<svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+				<path d="M4 7h16M4 12h16M4 17h10" stroke="currentColor" stroke-width="1.5" />
+			</svg>
+		</button>
+	{/if}
+
+	<button class="utility-button" onclick={openSearch} aria-label="Search documentation">
+		<svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+			<path d="M21.71 20.29 18 16.61A9 9 0 1 0 16.61 18l3.68 3.68a.999.999 0 0 0 1.42 0 1 1 0 0 0 0-1.39ZM11 18a7 7 0 1 1 0-14 7 7 0 0 1 0 14Z" />
+		</svg>
+	</button>
+</div>
+
+<MobileNav bind:open={mobileNavOpen} onSearch={openSearch} />
+<SearchDialog bind:open={searchOpen} />
 
 {#if isLanding}
 	<main id="main-content" class="landing" data-pagefind-body>
@@ -35,7 +71,7 @@
 {:else}
 	<div class="docs-layout">
 		<div class="sidebar-container" aria-label="Documentation navigation">
-			<Sidebar />
+			<Sidebar onSearch={openSearch} />
 		</div>
 		<main id="main-content" class="docs-main">
 			<div class="doc-content" data-pagefind-body {@attach tableOverflow} tabindex="-1">
@@ -56,7 +92,7 @@
 	}
 
 	:global(body) {
-		padding-top: var(--shell-header-height);
+		padding-top: 0;
 	}
 
 	.skip-link {
@@ -80,7 +116,7 @@
 	}
 
 	.docs-layout {
-		min-height: calc(100dvh - var(--shell-header-height));
+		min-height: 100dvh;
 		background: var(--bg);
 	}
 
@@ -103,13 +139,17 @@
 		.sidebar-container {
 			display: block;
 			position: fixed;
-			top: var(--shell-header-height);
+			top: 0;
 			bottom: 0;
 			left: 0;
 			width: var(--shell-sidebar-width);
 			border-right: 1px solid var(--line);
 			background: var(--surface);
 			z-index: 10;
+		}
+
+		.docs-controls {
+			display: none;
 		}
 
 		.docs-main {
@@ -121,11 +161,54 @@
 	.landing {
 		display: flex;
 		width: 100%;
-		height: calc(100dvh - var(--shell-header-height));
+		height: 100dvh;
 		align-items: flex-end;
 		margin: 0;
 		padding: var(--brand-edge);
 		overflow: hidden;
+	}
+
+	.floating-controls {
+		position: fixed;
+		z-index: 20;
+		display: flex;
+		gap: 0.5rem;
+	}
+
+	.landing-controls {
+		top: var(--brand-edge);
+		right: var(--brand-edge);
+	}
+
+	.docs-controls {
+		top: var(--brand-edge-mobile);
+		right: var(--brand-edge-mobile);
+		left: var(--brand-edge-mobile);
+		justify-content: space-between;
+	}
+
+	.utility-button {
+		display: grid;
+		width: 2.75rem;
+		height: 2.75rem;
+		padding: 0;
+		place-items: center;
+		border: 1px solid var(--line);
+		background: rgba(15, 16, 12, 0.86);
+		color: var(--muted);
+		backdrop-filter: blur(12px);
+		cursor: pointer;
+	}
+
+	.utility-button:hover {
+		border-color: var(--line-strong);
+		color: var(--ink);
+	}
+
+	@media (max-width: 55.999rem) {
+		.docs-main {
+			padding-top: calc(var(--brand-edge-mobile) + 4.25rem);
+		}
 	}
 
 	@media (max-width: 47.999rem) {

@@ -4,7 +4,13 @@
 	import { sidebar } from '$lib/config/sidebar';
 	import { fade, fly } from 'svelte/transition';
 
-	let { open = $bindable(false) }: { open: boolean } = $props();
+	let {
+		open = $bindable(false),
+		onSearch
+	}: {
+		open: boolean;
+		onSearch: () => void;
+	} = $props();
 	const currentPath = $derived((page.url.pathname.slice(base.length) || '/').replace(/\/$/, ''));
 
 	function isActive(slug: string): boolean {
@@ -17,6 +23,11 @@
 
 	function navigate() {
 		open = false;
+	}
+
+	function openSearch() {
+		open = false;
+		onSearch();
 	}
 
 	function handleWindowKeydown(e: KeyboardEvent) {
@@ -43,8 +54,14 @@
 			aria-modal="true"
 			aria-label="Documentation navigation"
 		>
-			<div class="sheet-header">
-				<span class="sheet-title">Documentation</span>
+			<div class="sheet-tools">
+				<button class="search-button" onclick={openSearch}>
+					<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+						<path d="M21.71 20.29 18 16.61A9 9 0 1 0 16.61 18l3.68 3.68a.999.999 0 0 0 1.42 0 1 1 0 0 0 0-1.39ZM11 18a7 7 0 1 1 0-14 7 7 0 0 1 0 14Z" />
+					</svg>
+					<span>Search</span>
+					<kbd>⌘ K</kbd>
+				</button>
 				<button class="close-btn" onclick={() => (open = false)} aria-label="Close menu">
 					<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
 						<path d="m13.41 12 6.3-6.29a1 1 0 1 0-1.42-1.42L12 10.59l-6.29-6.3a1 1 0 0 0-1.42 1.42l6.3 6.29-6.3 6.29a1 1 0 0 0 1.42 1.42l6.29-6.3 6.29 6.3a1 1 0 0 0 1.42-1.42L13.41 12Z" />
@@ -120,25 +137,49 @@
 		display: none;
 	}
 
-	.sheet-header {
+	.sheet-tools {
 		display: flex;
 		align-items: center;
-		justify-content: space-between;
-		height: var(--shell-header-height);
-		padding: 0 var(--brand-edge-mobile);
-		border-bottom: 1px solid var(--line);
+		gap: 0.5rem;
+		padding: var(--brand-edge-mobile);
 	}
 
-	.sheet-title {
+	.search-button {
+		display: flex;
+		height: 2.75rem;
+		flex: 1;
+		align-items: center;
+		gap: 0.55rem;
+		padding: 0 0.75rem;
+		border: 1px solid var(--line);
+		background: rgba(231, 226, 214, 0.025);
+		color: var(--muted);
+		font-size: 0.75rem;
+		cursor: pointer;
+	}
+
+	.search-button:hover {
+		border-color: var(--line-strong);
 		color: var(--ink);
-		font-size: 0.875rem;
-		font-weight: 500;
+	}
+
+	.search-button span {
+		flex: 1;
+		text-align: left;
+	}
+
+	.search-button kbd {
+		color: var(--faint);
+		font-family: var(--font-mono);
+		font-size: 0.55rem;
+		letter-spacing: 0.02em;
 	}
 
 	.close-btn {
 		display: grid;
-		width: 2rem;
-		height: 2rem;
+		width: 2.75rem;
+		height: 2.75rem;
+		flex: 0 0 2.75rem;
 		padding: 0;
 		place-items: center;
 		border: 1px solid var(--line);
@@ -153,7 +194,7 @@
 	}
 
 	.sheet-content {
-		padding: var(--brand-edge-mobile) 0 3rem;
+		padding: 0 0 3rem;
 	}
 
 	.group {
