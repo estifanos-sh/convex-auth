@@ -4,7 +4,6 @@
 	import { sidebar } from '$lib/config/sidebar';
 	import { slide } from 'svelte/transition';
 
-	let { onSearch }: { onSearch: () => void } = $props();
 	let toggledGroups = $state<Record<string, boolean>>({});
 	const currentPath = $derived((page.url.pathname.slice(base.length) || '/').replace(/\/$/, ''));
 	const activeGroupLabels = $derived(
@@ -33,16 +32,6 @@
 </script>
 
 <aside class="sidebar">
-	<div class="sidebar-tools">
-		<button class="search-button" onclick={onSearch}>
-			<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-				<path d="M21.71 20.29 18 16.61A9 9 0 1 0 16.61 18l3.68 3.68a.999.999 0 0 0 1.42 0 1 1 0 0 0 0-1.39ZM11 18a7 7 0 1 1 0-14 7 7 0 0 1 0 14Z" />
-			</svg>
-			<span>Search</span>
-			<kbd>⌘ K</kbd>
-		</button>
-	</div>
-
 	<nav aria-label="Documentation">
 		{#each sidebar as group (group.label)}
 			{@const groupId = `sidebar-${group.label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`}
@@ -97,41 +86,6 @@
 
 	.sidebar::-webkit-scrollbar {
 		display: none;
-	}
-
-	.sidebar-tools {
-		padding: 0 1.1rem 1.25rem;
-	}
-
-	.search-button {
-		display: flex;
-		width: 100%;
-		height: 2.75rem;
-		align-items: center;
-		gap: 0.55rem;
-		padding: 0 0.75rem;
-		border: 1px solid var(--line);
-		background: rgba(231, 226, 214, 0.025);
-		color: var(--muted);
-		font-size: 0.75rem;
-		cursor: pointer;
-	}
-
-	.search-button:hover {
-		border-color: var(--line-strong);
-		color: var(--ink);
-	}
-
-	.search-button span {
-		flex: 1;
-		text-align: left;
-	}
-
-	.search-button kbd {
-		color: var(--faint);
-		font-family: var(--font-mono);
-		font-size: 0.55rem;
-		letter-spacing: 0.02em;
 	}
 
 	.group {
