@@ -56,7 +56,7 @@
 	}
 
 	:global(body) {
-		padding-top: 4rem;
+		padding-top: var(--shell-header-height);
 	}
 
 	.skip-link {
@@ -80,7 +80,7 @@
 	}
 
 	.docs-layout {
-		min-height: calc(100dvh - 4rem);
+		min-height: calc(100dvh - var(--shell-header-height));
 		background: var(--bg);
 	}
 
@@ -91,7 +91,7 @@
 	.docs-main {
 		width: 100%;
 		min-width: 0;
-		padding: 2.5rem 1.25rem 5rem;
+		padding: var(--brand-edge) var(--brand-edge) 5rem;
 	}
 
 	.doc-content {
@@ -103,42 +103,34 @@
 		.sidebar-container {
 			display: block;
 			position: fixed;
-			top: 4rem;
+			top: var(--shell-header-height);
 			bottom: 0;
 			left: 0;
-			width: 15rem;
+			width: var(--shell-sidebar-width);
 			border-right: 1px solid var(--line);
 			background: var(--surface);
 			z-index: 10;
 		}
 
 		.docs-main {
-			margin-left: 15rem;
-			padding: 3.5rem clamp(2.5rem, 5vw, 5rem) 7rem;
+			margin-left: var(--shell-sidebar-width);
+			padding: var(--brand-edge) var(--brand-edge) 7rem;
 		}
 	}
 
 	.landing {
 		display: flex;
 		width: 100%;
-		height: calc(100dvh - 4rem);
-		align-items: center;
+		height: calc(100dvh - var(--shell-header-height));
+		align-items: flex-end;
 		margin: 0;
-		padding: clamp(1.5rem, 5vw, 4rem);
+		padding: var(--brand-edge);
 		overflow: hidden;
 	}
 
-	@media (min-width: 64rem) {
+	@media (max-width: 47.999rem) {
 		.landing {
-			padding-left: max(4rem, calc((100vw - 72rem) / 2));
-		}
-	}
-
-	@media (max-height: 40rem) {
-		.landing {
-			align-items: flex-start;
-			padding-top: clamp(1rem, 4vh, 2rem);
-			padding-bottom: clamp(1rem, 4vh, 2rem);
+			padding-bottom: 6rem;
 		}
 	}
 </style>
