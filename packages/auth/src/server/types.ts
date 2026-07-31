@@ -686,7 +686,7 @@ export interface WebAuthnAttestationVerifier {
   assertTrusted(evidence: WebAuthnAttestationEvidence): Promise<void>;
 }
 
-/** Strict registration policy returned by an attestation helper such as `fidoMds()`. */
+/** Strict registration policy returned by `webauthn.attestation.fidoMds()`. */
 export interface WebAuthnAttestationPolicy {
   /** Attestation conveyance sent to the browser. */
   conveyance: "direct";

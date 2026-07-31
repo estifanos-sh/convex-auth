@@ -7,8 +7,6 @@
 export { password } from "./password";
 export type { PasswordConfig } from "./password";
 export { webauthn } from "./webauthn";
-export { fidoMds } from "./attestation";
-export type { FidoMdsOptions } from "./attestation";
 export type {
   WebAuthnAttestationEvidence,
   WebAuthnAttestationPolicy,

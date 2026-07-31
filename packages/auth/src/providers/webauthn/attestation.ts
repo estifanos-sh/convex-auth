@@ -20,7 +20,7 @@ import type {
   WebAuthnAttestationEvidence,
   WebAuthnAttestationPolicy,
   WebAuthnAttestationVerificationInput,
-} from "../server/types";
+} from "../../server/types";
 
 const FIDO_MDS_URL = "https://mds.fidoalliance.org/";
 const FIDO_MDS_VERIFIER = "fido-mds-v3";
@@ -209,13 +209,13 @@ export interface FidoMdsOptions {
  *
  * @example
  * ```ts
- * import { fidoMds, webauthn } from "@robelest/convex-auth/providers";
+ * import { webauthn } from "@robelest/convex-auth/providers";
  *
  * webauthn({
  *   registration: {
  *     authenticatorAttachment: "cross-platform",
  *     hints: ["security-key"],
- *     attestation: fidoMds({
+ *     attestation: webauthn.attestation.fidoMds({
  *       allowedAaguids: ["2fc0579f-8113-47ea-b116-bb5a8db9202a"],
  *     }),
  *   },

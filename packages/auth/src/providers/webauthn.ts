@@ -5,6 +5,7 @@
  */
 
 import type { WebAuthnAttestationPolicy, WebAuthnProviderConfig } from "../server/types";
+import { fidoMds } from "./webauthn/attestation";
 
 /** WebAuthn Level 3 hints that browsers may use to guide authenticator selection. */
 export type WebAuthnHint = "security-key" | "client-device" | "hybrid";
@@ -64,7 +65,7 @@ export interface WebAuthnConfig {
  *
  * @example
  * ```ts
- * import { fidoMds, webauthn } from "@robelest/convex-auth/providers";
+ * import { webauthn } from "@robelest/convex-auth/providers";
  *
  * webauthn({
  *   rpName: "Staff access",
@@ -73,7 +74,7 @@ export interface WebAuthnConfig {
  *     residentKey: "discouraged",
  *     userVerification: "required",
  *     hints: ["security-key"],
- *     attestation: fidoMds(),
+ *     attestation: webauthn.attestation.fidoMds(),
  *   },
  *   authentication: {
  *     userVerification: "required",
@@ -82,38 +83,44 @@ export interface WebAuthnConfig {
  * })
  * ```
  */
-export function webauthn(config: WebAuthnConfig = {}): WebAuthnProviderConfig {
-  return {
-    id: "webauthn",
-    type: "webauthn",
-    options: {
-      rpName: config.rpName,
-      rpId: config.rpId,
-      origin:
-        typeof config.origin === "string"
-          ? config.origin
-          : config.origin
-            ? [...config.origin]
-            : undefined,
-      challengeExpirationMs: config.challengeExpirationMs ?? 300_000,
-      registration: {
-        residentKey: config.registration?.residentKey ?? "preferred",
-        userVerification: config.registration?.userVerification ?? "required",
-        algorithms: [...(config.registration?.algorithms ?? [-7, -257])],
-        ...(config.registration?.authenticatorAttachment
-          ? { authenticatorAttachment: config.registration.authenticatorAttachment }
-          : {}),
-        ...(config.registration?.hints ? { hints: [...config.registration.hints] } : {}),
-        ...(config.registration?.attestation
-          ? { attestation: config.registration.attestation }
-          : {}),
+export const webauthn = Object.assign(
+  function webauthn(config: WebAuthnConfig = {}): WebAuthnProviderConfig {
+    return {
+      id: "webauthn",
+      type: "webauthn",
+      options: {
+        rpName: config.rpName,
+        rpId: config.rpId,
+        origin:
+          typeof config.origin === "string"
+            ? config.origin
+            : config.origin
+              ? [...config.origin]
+              : undefined,
+        challengeExpirationMs: config.challengeExpirationMs ?? 300_000,
+        registration: {
+          residentKey: config.registration?.residentKey ?? "preferred",
+          userVerification: config.registration?.userVerification ?? "required",
+          algorithms: [...(config.registration?.algorithms ?? [-7, -257])],
+          ...(config.registration?.authenticatorAttachment
+            ? { authenticatorAttachment: config.registration.authenticatorAttachment }
+            : {}),
+          ...(config.registration?.hints ? { hints: [...config.registration.hints] } : {}),
+          ...(config.registration?.attestation
+            ? { attestation: config.registration.attestation }
+            : {}),
+        },
+        authentication: {
+          userVerification: config.authentication?.userVerification ?? "required",
+          ...(config.authentication?.hints ? { hints: [...config.authentication.hints] } : {}),
+        },
       },
-      authentication: {
-        userVerification: config.authentication?.userVerification ?? "required",
-        ...(config.authentication?.hints ? { hints: [...config.authentication.hints] } : {}),
-      },
-    },
-  };
-}
+    };
+  },
+  {
+    /** WebAuthn attestation policies. */
+    attestation: Object.freeze({ fidoMds }),
+  },
+);
 
 export type { WebAuthnAttestationEvidence, WebAuthnAttestationPolicy } from "../server/types";

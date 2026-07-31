@@ -6,7 +6,7 @@ import { expect, test } from "vite-plus/test";
 import {
   assertFullAttestation,
   assertTrustedMetadataEntry,
-} from "../packages/auth/src/providers/attestation";
+} from "../packages/auth/src/providers/webauthn/attestation";
 import { ErrorCode } from "../packages/auth/src/shared/codes";
 import { assertStoredAttestationTrusted } from "../packages/auth/src/server/webauthn";
 import type {
