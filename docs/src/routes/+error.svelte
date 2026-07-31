@@ -25,7 +25,7 @@
 	.error-page {
 		position: fixed;
 		inset: 0;
-		top: var(--shell-header-height);
+		top: 0;
 		display: flex;
 		align-items: center;
 		justify-content: center;
