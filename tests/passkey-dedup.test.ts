@@ -91,6 +91,39 @@ test("duplicate passkey registration for the same user is idempotent", async () 
   ).toHaveLength(1);
 });
 
+test("trusted re-registration upgrades an existing legacy passkey row", async () => {
+  const t = convexTest(schema);
+  const userId = await t.run((ctx) =>
+    ctx.runMutation(components.auth.user.create, {
+      data: { email: "attestation-upgrade@example.com" },
+    }),
+  );
+  const first = await t.run((ctx) =>
+    ctx.runMutation(components.auth.factor.passkey.create, passkeyArgs(userId)),
+  );
+  const attestation = {
+    verifier: "fido-mds-v3",
+    aaguid: "2fc0579f-8113-47ea-b116-bb5a8db9202a",
+    format: "packed",
+    metadataDescription: "YubiKey 5 NFC",
+    verifiedAt: Date.now(),
+    status: "trusted" as const,
+  };
+
+  const second = await t.run((ctx) =>
+    ctx.runMutation(components.auth.factor.passkey.create, {
+      ...passkeyArgs(userId),
+      attestation,
+    }),
+  );
+  const stored = await t.run((ctx) =>
+    ctx.runQuery(components.auth.factor.passkey.get, { id: first }),
+  );
+
+  expect(second).toBe(first);
+  expect(stored?.attestation).toEqual(attestation);
+});
+
 test("registering an existing credential for a different user is rejected", async () => {
   const t = convexTest(schema);
 

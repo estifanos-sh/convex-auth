@@ -2492,7 +2492,12 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       acceptAssertion: FunctionReference<
         "mutation",
         "internal",
-        { backedUp: boolean; counter: number; id: string; lastUsedAt: number },
+        {
+          backedUp: boolean;
+          counter: number;
+          id: string;
+          lastUsedAt: number;
+        },
         boolean,
         Name
       >;
@@ -2501,6 +2506,14 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         "internal",
         {
           algorithm: number;
+          attestation?: {
+            aaguid: string;
+            format: string;
+            metadataDescription?: string;
+            status: "trusted";
+            verifiedAt: number;
+            verifier: string;
+          };
           backedUp: boolean;
           counter: number;
           createdAt: number;
@@ -2522,6 +2535,14 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           _creationTime: number;
           _id: string;
           algorithm: number;
+          attestation?: {
+            aaguid: string;
+            format: string;
+            metadataDescription?: string;
+            status: "trusted";
+            verifiedAt: number;
+            verifier: string;
+          };
           backedUp: boolean;
           counter: number;
           createdAt: number;
@@ -2543,6 +2564,14 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           _creationTime: number;
           _id: string;
           algorithm: number;
+          attestation?: {
+            aaguid: string;
+            format: string;
+            metadataDescription?: string;
+            status: "trusted";
+            verifiedAt: number;
+            verifier: string;
+          };
           backedUp: boolean;
           counter: number;
           createdAt: number;

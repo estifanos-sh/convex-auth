@@ -4,7 +4,7 @@
  * @module
  */
 
-import type { WebAuthnProviderConfig } from "../server/types";
+import type { WebAuthnAttestationPolicy, WebAuthnProviderConfig } from "../server/types";
 
 /** WebAuthn Level 3 hints that browsers may use to guide authenticator selection. */
 export type WebAuthnHint = "security-key" | "client-device" | "hybrid";
@@ -24,6 +24,12 @@ export interface WebAuthnRegistrationConfig {
   hints?: readonly WebAuthnHint[];
   /** Supported COSE algorithms in authenticator preference order. */
   algorithms?: readonly WebAuthnAlgorithm[];
+  /**
+   * Strict authenticator-attestation policy. When present, registration and
+   * every later sign-in fail unless the credential has current trusted
+   * evidence from this policy.
+   */
+  attestation?: WebAuthnAttestationPolicy;
 }
 
 /** Authentication-ceremony options for the {@link webauthn} provider. */
@@ -58,7 +64,7 @@ export interface WebAuthnConfig {
  *
  * @example
  * ```ts
- * import { webauthn } from "@robelest/convex-auth/providers";
+ * import { fidoMds, webauthn } from "@robelest/convex-auth/providers";
  *
  * webauthn({
  *   rpName: "Staff access",
@@ -67,6 +73,7 @@ export interface WebAuthnConfig {
  *     residentKey: "discouraged",
  *     userVerification: "required",
  *     hints: ["security-key"],
+ *     attestation: fidoMds(),
  *   },
  *   authentication: {
  *     userVerification: "required",
@@ -97,6 +104,9 @@ export function webauthn(config: WebAuthnConfig = {}): WebAuthnProviderConfig {
           ? { authenticatorAttachment: config.registration.authenticatorAttachment }
           : {}),
         ...(config.registration?.hints ? { hints: [...config.registration.hints] } : {}),
+        ...(config.registration?.attestation
+          ? { attestation: config.registration.attestation }
+          : {}),
       },
       authentication: {
         userVerification: config.authentication?.userVerification ?? "required",
@@ -105,3 +115,5 @@ export function webauthn(config: WebAuthnConfig = {}): WebAuthnProviderConfig {
     },
   };
 }
+
+export type { WebAuthnAttestationEvidence, WebAuthnAttestationPolicy } from "../server/types";
