@@ -372,7 +372,7 @@ synced passkeys, and other credentials without trusted manufacturer evidence,
 add the FIDO Metadata Service policy inside `registration`:
 
 ```ts
-import { fidoMds, webauthn } from "@robelest/convex-auth/providers";
+import { webauthn } from "@robelest/convex-auth/providers";
 
 defineAuth(components.auth, {
   providers: [
@@ -382,7 +382,7 @@ defineAuth(components.auth, {
         residentKey: "discouraged",
         userVerification: "required",
         hints: ["security-key"],
-        attestation: fidoMds({
+        attestation: webauthn.attestation.fidoMds({
           allowedAaguids: ["2fc0579f-8113-47ea-b116-bb5a8db9202a"],
         }),
       },
