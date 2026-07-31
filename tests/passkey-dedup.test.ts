@@ -22,6 +22,11 @@ import { convexTest } from "./convex/setup";
 
 const CREDENTIAL_ID = "dedup-credential";
 
+type AccountRecord = {
+  provider: string;
+  providerAccountId: string;
+};
+
 function passkeyArgs(userId: string) {
   return {
     userId: userId as never,
@@ -80,7 +85,8 @@ test("duplicate passkey registration for the same user is idempotent", async () 
   );
   expect(
     accounts.filter(
-      (account) => account.provider === "passkey" && account.providerAccountId === CREDENTIAL_ID,
+      (account: AccountRecord) =>
+        account.provider === "passkey" && account.providerAccountId === CREDENTIAL_ID,
     ),
   ).toHaveLength(1);
 });
@@ -299,6 +305,6 @@ test("removing a Passkey also removes legacy and stray canonical Account rows", 
     ctx.runQuery(components.auth.account.list, { userId: userId as never }),
   );
   expect(
-    accounts.filter((account) => account.providerAccountId === "remove-credential"),
+    accounts.filter((account: AccountRecord) => account.providerAccountId === "remove-credential"),
   ).toHaveLength(0);
 });

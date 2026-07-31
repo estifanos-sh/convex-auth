@@ -360,12 +360,12 @@ Each user can register up to 16 WebAuthn credentials. Email-first sign-in pads
 the credential list with secret-derived decoys, but credential IDs are
 authenticator-generated and variable-length. Treat that padding as defense in
 depth, not a guarantee against account enumeration. If identifier privacy is a
-hard requirement, use discoverable credentials and argumentless
-`client.webauthn.signIn()`.
+hard requirement, use discoverable credentials and call
+`client.webauthn.signIn()` without an identifier.
 
-Argumentless sign-in and conditional UI (`{ autofill: true }`) require
-discoverable credentials. Existing passkey credentials remain valid when
-ceremony preferences change.
+Sign-in without an identifier and conditional UI (`{ autofill: true }`) require
+discoverable credentials. Existing passkey credentials remain valid when ceremony
+preferences change.
 
 WebAuthn hints are non-binding browser guidance. This provider requests no
 attestation and does not establish authenticator provenance.
