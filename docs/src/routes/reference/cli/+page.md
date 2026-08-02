@@ -114,3 +114,16 @@ const setScim = useAction(api.auth.group.setScim);
 ```
 
 Pass a concrete `groupId` when calling `createConnection(...)`.
+
+## Agent Skills
+
+Install the portable setup and review workflows with the standard Agent Skills
+installer:
+
+```bash
+npx skills add robelest/convex-auth --all
+```
+
+The package CLI prints this command after setup but does not install or update
+agent-specific files implicitly. See [Agent Skills](/ai/agent-skills/) for the
+available workflows.

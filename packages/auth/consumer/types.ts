@@ -20,6 +20,8 @@ declare const memberId: string;
 declare const keyId: string;
 declare const secret: string;
 declare const authEnvironment: AuthEnv;
+
+const optionalProviderEnvironment: string | undefined = authEnvironment.AUTH_GITHUB_ID;
 declare const authComponent: Parameters<typeof defineAuth>[0];
 declare const authUserId: GenericId<"User">;
 declare const authGroupId: GenericId<"Group">;
@@ -33,6 +35,7 @@ const permissions = definePermissions({
 
 void defineApp({ env: authEnv });
 void authEnvironment;
+void optionalProviderEnvironment;
 void permissions.roles.admin.id;
 void createAuth;
 void defineAuth(authComponent, {

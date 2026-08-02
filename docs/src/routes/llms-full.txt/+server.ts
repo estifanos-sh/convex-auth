@@ -7,12 +7,9 @@ import type { RequestHandler } from "./$types";
 export const prerender = true;
 
 export const GET: RequestHandler = () => {
-  let output = `# convex-auth documentation
+  let output = `# convex-auth complete documentation
 
-> Authentication and authorization for Convex applications using @robelest/convex-auth.
-
-- [Complete documentation corpus](/llms-full.txt): Every documentation page in one file.
-- [Agent Skills](/ai/agent-skills.md): Install focused setup and review workflows for coding agents.
+> Generated from the canonical Markdown source for @robelest/convex-auth.
 
 `;
 
@@ -20,10 +17,10 @@ export const GET: RequestHandler = () => {
     output += `## ${group.label}\n\n`;
     for (const item of group.items) {
       const page = documentationPage(item.slug);
-      const description = page?.description ? `: ${page.description}` : "";
-      output += `- [${item.title}](${item.slug}.md)${description}\n`;
+      if (page) {
+        output += `${page.markdown}\n\n`;
+      }
     }
-    output += "\n";
   }
 
   return new Response(output, {

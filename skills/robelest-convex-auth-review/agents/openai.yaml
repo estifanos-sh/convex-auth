@@ -1,0 +1,4 @@
+interface:
+  display_name: "Review Robelest Convex Auth"
+  short_description: "Audit Convex Auth security and correctness"
+  default_prompt: "Use $robelest-convex-auth-review to audit this @robelest/convex-auth integration and report evidence-backed fixes."

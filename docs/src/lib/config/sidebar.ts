@@ -18,6 +18,10 @@ export const sidebar: SidebarGroup[] = [
     ],
   },
   {
+    label: "AI coding",
+    items: [{ title: "Agent Skills", slug: "/ai/agent-skills" }],
+  },
+  {
     label: "Frameworks",
     items: [
       { title: "React", slug: "/client/react" },
