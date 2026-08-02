@@ -8,7 +8,7 @@
     "authorization",
     "convex"
   ],
-  "homepage": "https://auth.estifanos.com/",
+  "homepage": "https://convex-auth.estifanos.com/",
   "bugs": "https://github.com/robelest/convex-auth/issues",
   "license": "Apache-2.0",
   "author": "robelest",
@@ -119,7 +119,7 @@
     "check:component-paginate": "node ../../scripts/check-component-paginate.mjs",
     "docs": "vp run --cwd ../../docs dev",
     "lint": "vp run typecheck",
-    "spellcheck": "cspell \"../../docs/src/routes/**/*.md*\"",
+    "spellcheck": "cspell \"../../docs/src/routes/**/*.md*\" \"../../skills/**/*.md\"",
     "prepublishOnly": "vp run build && vp run typecheck:consumer && vp run typecheck:consumer:dist && vp run check:packaging",
     "test": "vp test --config ../../vite.config.ts --project convex --project node --project interop",
     "test:once": "vp test --config ../../vite.config.ts --run --project convex --project node --project interop",

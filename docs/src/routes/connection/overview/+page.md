@@ -14,7 +14,7 @@ Group SSO is gated behind the `connection()` provider. The `auth.connection.*` n
 is **only available** when `SSO` is included in your providers list:
 
 ```ts
-import { defineAuth } from "@robelest/convex-auth/component";
+import { defineAuth } from "@robelest/convex-auth/server";
 import { connection } from "@robelest/convex-auth/providers";
 import { components } from "./_generated/api";
 

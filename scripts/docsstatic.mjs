@@ -18,6 +18,24 @@ function collectHtml(directory) {
 }
 
 const pages = collectHtml(build);
+const machineReadableDocs = [
+  "llms.txt",
+  "llms-full.txt",
+  "ai/agent-skills.md",
+  "getting-started/installation.md",
+];
+
+for (const relative of machineReadableDocs) {
+  const file = path.join(build, relative);
+  if (!statSync(file).isFile() || statSync(file).size === 0) {
+    throw new Error(`Missing machine-readable documentation: ${relative}`);
+  }
+}
+
+const llmsIndex = readFileSync(path.join(build, "llms.txt"), "utf8");
+if (!llmsIndex.includes("/ai/agent-skills.md") || !llmsIndex.includes("/llms-full.txt")) {
+  throw new Error("llms.txt does not link the Agent Skills page and full corpus");
+}
 
 for (const font of fonts) {
   const href = `fonts/${font}`;
@@ -54,4 +72,6 @@ for (const font of fonts) {
   }
 }
 
-console.log(`Verified ${fonts.length} preloaded local fonts across ${pages.length} pages.`);
+console.log(
+  `Verified ${fonts.length} preloaded local fonts across ${pages.length} pages and ${machineReadableDocs.length} machine-readable documentation files.`,
+);

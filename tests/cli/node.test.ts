@@ -51,9 +51,9 @@ test("doesAlreadyMatchTemplate matches exact template", () => {
 
 test("doesAlreadyMatchTemplate matches template with wildcard content", () => {
   const template =
-    'import { defineAuth } from "@robelest/convex-auth/component";\n\nconst auth = defineAuth(components.auth, {$$\n  providers: [$$],$$\n});\n';
+    'import { defineAuth } from "@robelest/convex-auth/server";\n\nconst auth = defineAuth(components.auth, {$$\n  providers: [$$],$$\n});\n';
   const existing =
-    'import { defineAuth } from "@robelest/convex-auth/component";\n\nconst auth = defineAuth(components.auth, {\n  providers: [password()],\n});\n';
+    'import { defineAuth } from "@robelest/convex-auth/server";\n\nconst auth = defineAuth(components.auth, {\n  providers: [password()],\n});\n';
   expect(doesAlreadyMatchTemplate(existing, template)).toBe(true);
 });
 

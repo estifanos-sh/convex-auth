@@ -160,7 +160,8 @@ const flagDefs = new Map<string, { type: "string" | "boolean"; description: stri
 function printHelp() {
   printBanner();
   console.log("  Add code and set environment variables for @robelest/convex-auth.\n");
-  console.log("  Full docs: https://auth.estifanos.com\n");
+  console.log("  Full docs: https://convex-auth.estifanos.com");
+  console.log("  Agent skills: npx skills add robelest/convex-auth --all\n");
   console.log("  Commands:\n");
   console.log("    setup                         Scaffold files and set env vars");
   console.log("    doctor                        Verify env, files, and mounted auth endpoints");
@@ -695,8 +696,9 @@ async function configureConvexConfig(config: ProjectConfig) {
   const sourceTemplate = `\
 import { defineApp } from "convex/server";
 import auth from "@robelest/convex-auth/convex.config";
+import { authEnv } from "@robelest/convex-auth/server";
 
-const app = defineApp();
+const app = defineApp({ env: authEnv });
 
 app.use(auth);
 
@@ -733,7 +735,7 @@ export default app;
 async function initializeAuth(config: ProjectConfig) {
   logStep(config, "Initialize auth file");
   const sourceTemplate = `\
-import { defineAuth } from "@robelest/convex-auth/component";
+import { defineAuth } from "@robelest/convex-auth/server";
 import { components } from "./_generated/api";
 
 const auth = defineAuth(components.auth, {$$
@@ -1239,7 +1241,12 @@ function printFinalSuccessMessage(config: ProjectConfig) {
 
   if (isProd) {
     p.log.success(`Production setup complete for ${deploymentName}.`);
-    p.note("Full docs: https://auth.estifanos.com");
+    p.note(
+      [
+        "Full docs: https://convex-auth.estifanos.com",
+        "Agent skills: npx skills add robelest/convex-auth --all",
+      ].join("\n"),
+    );
   } else {
     p.log.success(`Setup complete for ${deploymentName}.`);
     p.note(
@@ -1251,7 +1258,8 @@ function printFinalSuccessMessage(config: ProjectConfig) {
         '  npx convex env set --prod AUTH_GITHUB_ID "..."',
         '  npx convex env set --prod AUTH_GITHUB_SECRET "..."',
         "",
-        "Full docs: https://auth.estifanos.com",
+        "Full docs: https://convex-auth.estifanos.com",
+        "Agent skills: npx skills add robelest/convex-auth --all",
       ].join("\n"),
       "Next steps",
     );

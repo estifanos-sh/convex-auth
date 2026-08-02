@@ -98,6 +98,7 @@ export default defineConfig({
           "packages/**",
           "tests/**",
           "scripts/**",
+          "skills/**",
           "docs/**",
           "package.json",
           "pnpm-lock.yaml",

@@ -79,16 +79,29 @@ shape contract.
 
 ## Documentation
 
-**[convex-auth.pages.dev](https://convex-auth.pages.dev)**
+**[convex-auth.estifanos.com](https://convex-auth.estifanos.com)**
 
-| Section                                                                        | Description                                                     |
-| ------------------------------------------------------------------------------ | --------------------------------------------------------------- |
-| [Getting Started](https://convex-auth.pages.dev/getting-started/installation/) | Installation, providers, environment variables                  |
-| [API Reference](https://convex-auth.pages.dev/api/user/)                       | `auth.user`, `auth.session`, `auth.group`, `auth.key`, and more |
-| [Group SSO](https://convex-auth.pages.dev/connection/overview/)                | OIDC, SAML, SCIM, audit, webhooks                               |
-| [SSR Integration](https://convex-auth.pages.dev/ssr/overview/)                 | SvelteKit, TanStack Start, Next.js                              |
-| [Guides](https://convex-auth.pages.dev/guides/multi-access/)                   | Multi-access, device flow, authorization, production            |
-| [Reference](https://convex-auth.pages.dev/reference/config/)                   | Config options, error codes, CLI, architecture                  |
+| Section                                                                            | Description                                                     |
+| ---------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| [Getting Started](https://convex-auth.estifanos.com/getting-started/installation/) | Installation, providers, environment variables                  |
+| [API Reference](https://convex-auth.estifanos.com/api/user/)                       | `auth.user`, `auth.session`, `auth.group`, `auth.key`, and more |
+| [Group SSO](https://convex-auth.estifanos.com/connection/overview/)                | OIDC, SAML, SCIM, audit, webhooks                               |
+| [SSR Integration](https://convex-auth.estifanos.com/ssr/overview/)                 | SvelteKit, TanStack Start, Next.js                              |
+| [Guides](https://convex-auth.estifanos.com/guides/multi-access/)                   | Multi-access, device flow, authorization, production            |
+| [Reference](https://convex-auth.estifanos.com/reference/config/)                   | Config options, error codes, CLI, architecture                  |
+
+## Agent Skills
+
+Install focused setup and review workflows for Codex, Claude Code, Cursor, and
+other Agent Skills-compatible coding agents:
+
+```bash
+npx skills add robelest/convex-auth --all
+```
+
+See the [Agent Skills documentation](https://convex-auth.estifanos.com/ai/agent-skills/)
+or use the compact [`llms.txt`](https://convex-auth.estifanos.com/llms.txt)
+documentation index.
 
 ## Contributing
 

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Robelest Convex Auth"
+  short_description: "Route Convex Auth integration work"
+  default_prompt: "Use $robelest-convex-auth to choose the right workflow for this Convex authentication task."
