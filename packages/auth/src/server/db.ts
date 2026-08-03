@@ -98,6 +98,8 @@ export function authDb(ctx: ComponentRunContext, config: AuthComponentBoundaryCo
           userId: string;
           sessionId: string;
           refreshTokenId?: string;
+          replacedSessionId?: string;
+          user: Doc<"User">;
         }>,
       get: (sessionId: string) =>
         runQuery(ctx, component.session.get, { id: sessionId }) as Promise<Doc<"Session"> | null>,
@@ -157,7 +159,13 @@ export function authDb(ctx: ComponentRunContext, config: AuthComponentBoundaryCo
         reuseWindowMs: number;
       }) =>
         runMutation(ctx, component.token.refresh.exchange!, args) as Promise<
-          | { status: "rotated"; userId: string; sessionId: string; refreshTokenId: string }
+          | {
+              status: "rotated";
+              userId: string;
+              user: Doc<"User">;
+              sessionId: string;
+              refreshTokenId: string;
+            }
           | { status: "reuse_detected"; userId: string; refreshTokenId: string }
           | { status: "invalid" }
         >,

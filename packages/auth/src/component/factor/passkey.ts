@@ -12,10 +12,77 @@ import { ConvexError, v } from "convex/values";
 
 import { ErrorCode } from "../../shared/codes";
 import { MAX_WEBAUTHN_CREDENTIALS_PER_USER } from "../../shared/webauthn";
+import type { Id } from "../_generated/dataModel";
+import type { MutationCtx } from "../_generated/server";
 import { mutation, query } from "../functions";
-import { vPasskeyDoc } from "../model";
+import { vPasskeyDoc, vUserDoc } from "../model";
+import { createSessionRows } from "../session";
 
 const PASSKEY_LIST_BATCH = 128;
+
+/**
+ * Consume a WebAuthn challenge and load its credential in one transaction.
+ *
+ * A corrupt duplicate credential is deliberately projected as unknown instead
+ * of throwing: the challenge still burns, and callers retain the same external
+ * failure shape for real and unknown credential ids.
+ */
+export const beginAssertion = mutation({
+  args: {
+    verifierId: v.id("AuthVerifier"),
+    expectedChallenge: v.string(),
+    credentialId: v.string(),
+  },
+  returns: v.object({
+    verifierAccepted: v.boolean(),
+    passkey: v.union(vPasskeyDoc, v.null()),
+  }),
+  handler: async (ctx, { verifierId, expectedChallenge, credentialId }) => {
+    const [verifier, passkeys] = await Promise.all([
+      ctx.db.get("AuthVerifier", verifierId),
+      ctx.db
+        .query("Passkey")
+        .withIndex("credential_id", (q) => q.eq("credentialId", credentialId))
+        .take(2),
+    ]);
+
+    const expired = verifier?.expirationTime !== undefined && verifier.expirationTime < Date.now();
+    const verifierAccepted =
+      verifier !== null && !expired && verifier.signature === expectedChallenge;
+    if (expired) {
+      await ctx.db.delete("AuthVerifier", verifierId);
+    } else if (verifierAccepted) {
+      await ctx.db.delete("AuthVerifier", verifierId);
+    }
+
+    return {
+      verifierAccepted,
+      passkey: passkeys.length === 1 ? passkeys[0] : null,
+    };
+  },
+});
+
+async function acceptPasskeyCounter(
+  ctx: MutationCtx,
+  args: {
+    id: Id<"Passkey">;
+    counter: number;
+    lastUsedAt: number;
+    backedUp: boolean;
+  },
+) {
+  const current = await ctx.db.get("Passkey", args.id);
+  if (current === null) return null;
+  if ((current.counter !== 0 || args.counter !== 0) && args.counter <= current.counter) {
+    return null;
+  }
+  await ctx.db.patch("Passkey", args.id, {
+    counter: args.counter,
+    lastUsedAt: args.lastUsedAt,
+    backedUp: args.backedUp,
+  });
+  return current;
+}
 
 /** Read a passkey by `id`, or by its WebAuthn `credentialId`. */
 export const get = query({
@@ -190,14 +257,60 @@ export const acceptAssertion = mutation({
     backedUp: v.boolean(),
   },
   returns: v.boolean(),
-  handler: async (ctx, { id: passkeyId, counter, lastUsedAt, backedUp }) => {
-    const current = await ctx.db.get("Passkey", passkeyId);
-    if (current === null) return false;
-    if ((current.counter !== 0 || counter !== 0) && counter <= current.counter) {
-      return false;
+  handler: async (ctx, args) => {
+    return (await acceptPasskeyCounter(ctx, args)) !== null;
+  },
+});
+
+/**
+ * Accept a verified assertion and create its session in one transaction.
+ *
+ * The signature is checked by the calling action before this mutation. The
+ * stored counter is re-read here so a concurrent assertion can never mint a
+ * session from stale anti-cloning state.
+ */
+export const completeAssertion = mutation({
+  args: {
+    id: v.id("Passkey"),
+    counter: v.number(),
+    lastUsedAt: v.number(),
+    backedUp: v.boolean(),
+    replaceSessionId: v.optional(v.id("Session")),
+    sessionExpirationTime: v.number(),
+    refreshTokenExpirationTime: v.number(),
+  },
+  returns: v.union(
+    v.object({ status: v.literal("rejected") }),
+    v.object({
+      status: v.literal("accepted"),
+      user: vUserDoc,
+      sessionId: v.id("Session"),
+      refreshTokenId: v.id("RefreshToken"),
+      replacedSessionId: v.optional(v.id("Session")),
+    }),
+  ),
+  handler: async (ctx, args) => {
+    const passkey = await acceptPasskeyCounter(ctx, args);
+    if (passkey === null) return { status: "rejected" as const };
+
+    const created = await createSessionRows(ctx, {
+      userId: passkey.userId,
+      replaceSessionId: args.replaceSessionId,
+      sessionExpirationTime: args.sessionExpirationTime,
+      refreshTokenExpirationTime: args.refreshTokenExpirationTime,
+    });
+    if (created === null || created.refreshTokenId === undefined) {
+      throw new Error("Cannot create a session for the asserted passkey");
     }
-    await ctx.db.patch("Passkey", passkeyId, { counter, lastUsedAt, backedUp });
-    return true;
+    return {
+      status: "accepted" as const,
+      user: created.user,
+      sessionId: created.sessionId,
+      refreshTokenId: created.refreshTokenId,
+      ...(created.replacedSessionId === undefined
+        ? {}
+        : { replacedSessionId: created.replacedSessionId }),
+    };
   },
 });
 

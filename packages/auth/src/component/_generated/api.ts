@@ -118,8 +118,6 @@ export const internal: FilterApi<
 
 export const components = componentsGeneric() as unknown as {
   migrations: import("@convex-dev/migrations/_generated/component.js").ComponentApi<"migrations">;
-  rateLimiter: import("@convex-dev/rate-limiter/_generated/component.js").ComponentApi<"rateLimiter">;
-  stream: import("@convex-dev/stream/_generated/component.js").ComponentApi<"stream">;
   webhookWorkpool: import("@convex-dev/workpool/_generated/component.js").ComponentApi<"webhookWorkpool">;
   connectionFetchCache: import("@convex-dev/action-cache/_generated/component.js").ComponentApi<"connectionFetchCache">;
 };

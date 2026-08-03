@@ -44,7 +44,7 @@ import type {
   SignInWebAuthnOptionsResult,
   SignInSessionResult,
 } from "../shared/results";
-import { ConvexError } from "convex/values";
+import { ConvexError, type GenericId } from "convex/values";
 
 import { ErrorCode } from "../shared/codes";
 import {
@@ -55,20 +55,27 @@ import { authFlowError } from "../shared/errors";
 import { requireEnv } from "./env";
 import type { AuthErrorData } from "./errors";
 import { toConvexError } from "./errors";
-import { emitAuthEvent } from "./events";
+import { queueAuthEvent } from "./events";
 import { getAuthenticatedUserIdOrNull } from "./identity/claims";
-import { reserveSignInAttempt, resetSignInRateLimit } from "./limits";
 import { LOG_LEVELS, log } from "./log";
 import { callSignIn, callVerifier } from "./mutations/calls";
 import {
   consumeVerifierById,
+  mutatePasskeyBeginAssertion,
+  mutatePasskeyCompleteAssertion,
   mutatePasskeyInsert,
-  mutatePasskeyUpdateCounter,
-  queryPasskeyByCredentialId,
   queryPasskeysByUserId,
   queryUserById,
   queryUserByVerifiedEmail,
 } from "./component/factor/db";
+import {
+  buildSessionIdentity,
+  finalizeSessionIssuance,
+  getAuthSessionId,
+  sessionExpirationTime,
+} from "./session/lifecycle";
+import { encodeRefreshToken, refreshTokenExpirationTime } from "./token/refresh";
+import { buildKnownSignInIdentityAttributes } from "./telemetry";
 import {
   AuthDataModel,
   GenericActionCtxWithAuthConfig,
@@ -78,6 +85,7 @@ import {
   SessionInfo,
 } from "./types";
 import { appUrlFromEnv } from "./url";
+import { setActiveSpanAttributes } from "./utils/span";
 
 type EnrichedActionCtx = GenericActionCtxWithAuthConfig<AuthDataModel>;
 
@@ -796,7 +804,7 @@ export async function handleWebAuthn(
         ...(attestationEvidence ? { attestation: attestationEvidence } : {}),
         createdAt: Date.now(),
       });
-      await emitAuthEvent(ctx, ctx.auth.config, {
+      await queueAuthEvent(ctx, ctx.auth.config, {
         kind: "passkey.added",
         actor: { type: "user", id: userId },
         subject: { type: "passkey", id: passkeyId },
@@ -842,9 +850,29 @@ export async function handleWebAuthn(
     verifyClientDataType(clientData, ClientDataType.Get, "webauthn.get");
     verifySameOrigin(clientData);
     verifyOrigin(clientData, rp);
-    await verifyAndConsumeChallenge(clientData, ctx, verifier);
-
     const credentialId = requireStringParam(params.credentialId, "credentialId");
+    const challengeHash = encodeBase64urlNoPadding(new Uint8Array(sha256(clientData.challenge)));
+    let assertion;
+    try {
+      assertion = await mutatePasskeyBeginAssertion(ctx, {
+        verifierId: verifier,
+        expectedChallenge: challengeHash,
+        credentialId,
+      });
+    } catch (error) {
+      logPasskeyError(error);
+      throw convexError(
+        ErrorCode.PASSKEY_INVALID_CHALLENGE,
+        "Invalid or expired passkey challenge.",
+      );
+    }
+    if (!assertion.verifierAccepted) {
+      throw convexError(
+        ErrorCode.PASSKEY_INVALID_CHALLENGE,
+        "Invalid or expired passkey challenge.",
+      );
+    }
+
     const authenticatorDataBytes = decodeBase64urlIgnorePadding(
       requireStringParam(params.authenticatorData, "authenticatorData"),
     );
@@ -862,23 +890,7 @@ export async function handleWebAuthn(
     verifyRpId(authenticatorData, rp.rpId);
     verifyUserFlags(authenticatorData, rp.authentication.userVerification);
 
-    let passkey = null;
-    try {
-      passkey = await queryPasskeyByCredentialId(ctx, credentialId);
-    } catch (err) {
-      // Corrupt duplicate rows must not turn the credential lookup into an
-      // externally distinguishable account-existence signal.
-      logPasskeyError(err);
-    }
-
-    const rateLimitIdentifier = `webauthn:credential:${encodeBase64urlNoPadding(
-      new Uint8Array(sha256(new TextEncoder().encode(credentialId))),
-    )}`;
-    // Real and unknown credentials use the same stable, non-PII bucket shape.
-    // A successful assertion refunds only its own credential bucket below.
-    if (await reserveSignInAttempt(ctx, rateLimitIdentifier, ctx.auth.config)) {
-      throw convexError(ErrorCode.RATE_LIMITED, "Too many passkey attempts. Try again later.");
-    }
+    const passkey = assertion.passkey;
 
     verifyAssertionSignatureUniformly(passkey, signatureBytes, messageHash);
     validateBackupEligibility(passkey.deviceType, backupState.deviceType);
@@ -897,39 +909,72 @@ export async function handleWebAuthn(
       );
     }
 
+    const replaceSessionId = (await getAuthSessionId(ctx)) ?? undefined;
+    let completed;
     try {
-      const counterAccepted = await mutatePasskeyUpdateCounter(
-        ctx,
-        passkey._id,
-        authenticatorData.signatureCounter,
-        Date.now(),
-        backupState.backedUp,
-      );
-      if (!counterAccepted) {
-        throw convexError(
-          ErrorCode.PASSKEY_COUNTER_ERROR,
-          "Authenticator counter did not increase — possible credential cloning detected.",
-        );
-      }
-    } catch (error) {
-      if (error instanceof ConvexError) throw error;
-      throw asConvexError(error, ErrorCode.INTERNAL_ERROR, "Failed to update passkey counter.");
-    }
-
-    // Only the assertion that won the atomic counter transition may refund the
-    // reserved attempt. A concurrent stale assertion must not clear the shared
-    // rate-limit bucket before it is rejected above.
-    await resetSignInRateLimit(ctx, rateLimitIdentifier, ctx.auth.config);
-
-    let signInResult;
-    try {
-      signInResult = await callSignIn(ctx, {
-        userId: passkey.userId,
-        generateTokens: true,
+      completed = await mutatePasskeyCompleteAssertion(ctx, {
+        id: passkey._id,
+        counter: authenticatorData.signatureCounter,
+        lastUsedAt: Date.now(),
+        backedUp: backupState.backedUp,
+        replaceSessionId,
+        sessionExpirationTime: sessionExpirationTime(ctx.auth.config),
+        refreshTokenExpirationTime: refreshTokenExpirationTime(ctx.auth.config),
       });
     } catch (error) {
       throw asConvexError(error, ErrorCode.INTERNAL_ERROR, "Failed to finalize passkey sign-in.");
     }
+    if (completed.status === "rejected") {
+      throw convexError(
+        ErrorCode.PASSKEY_COUNTER_ERROR,
+        "Authenticator counter did not increase — possible credential cloning detected.",
+      );
+    }
+
+    const userId = completed.user._id as GenericId<"User">;
+    const sessionId = completed.sessionId as GenericId<"Session">;
+    setActiveSpanAttributes({
+      "auth.signin.result": "success",
+      ...buildKnownSignInIdentityAttributes(
+        ctx.auth.config,
+        { userId, sessionId },
+        completed.user.email,
+      ),
+    });
+    if (completed.replacedSessionId !== undefined) {
+      const replacedSessionId = completed.replacedSessionId as GenericId<"Session">;
+      await queueAuthEvent(ctx, ctx.auth.config, {
+        kind: "session.invalidated",
+        actor: { type: "system" },
+        subject: { type: "session", id: replacedSessionId },
+        targets: [
+          { kind: "user", id: userId },
+          { kind: "session", id: replacedSessionId },
+        ],
+        outcome: "success",
+        data: { userId, reason: "replaced" },
+      });
+    }
+    await queueAuthEvent(ctx, ctx.auth.config, {
+      kind: "session.signed_in",
+      actor: { type: "user", id: userId },
+      subject: { type: "session", id: sessionId },
+      targets: [
+        { kind: "user", id: userId },
+        { kind: "session", id: sessionId },
+      ],
+      outcome: "success",
+      data: { provider: "session" },
+    });
+    const signInResult = await finalizeSessionIssuance(ctx.auth.config, {
+      userId,
+      sessionId,
+      identity: buildSessionIdentity(userId, sessionId, completed.user),
+      refreshToken: encodeRefreshToken(
+        completed.refreshTokenId as GenericId<"RefreshToken">,
+        sessionId,
+      ),
+    });
 
     return { kind: "signedIn" as const, session: signInResult };
   };

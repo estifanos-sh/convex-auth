@@ -195,6 +195,22 @@ export async function queryPasskeyByCredentialId(
   })) as PasskeyDoc | null;
 }
 
+/** Consume a WebAuthn challenge and load its credential in one component transaction. */
+export async function mutatePasskeyBeginAssertion(
+  ctx: ComponentCallCtx,
+  args: {
+    verifierId: string;
+    expectedChallenge: string;
+    credentialId: string;
+  },
+): Promise<{ verifierAccepted: boolean; passkey: PasskeyDoc | null }> {
+  return (await ctx.runMutation(ctx.auth.config.component.factor.passkey.beginAssertion, {
+    verifierId: args.verifierId,
+    expectedChallenge: args.expectedChallenge,
+    credentialId: args.credentialId,
+  })) as { verifierAccepted: boolean; passkey: PasskeyDoc | null };
+}
+
 /** Insert a passkey across the component boundary; returns its ID. */
 export async function mutatePasskeyInsert(
   ctx: ComponentCallCtx,
@@ -232,6 +248,42 @@ export async function mutatePasskeyUpdateCounter(
     lastUsedAt,
     backedUp,
   })) as boolean;
+}
+
+/** Atomically accept a verified assertion and create its session. */
+export async function mutatePasskeyCompleteAssertion(
+  ctx: ComponentCallCtx,
+  args: {
+    id: string;
+    counter: number;
+    lastUsedAt: number;
+    backedUp: boolean;
+    replaceSessionId?: string;
+    sessionExpirationTime: number;
+    refreshTokenExpirationTime: number;
+  },
+): Promise<
+  | { status: "rejected" }
+  | {
+      status: "accepted";
+      user: CrossComponentUserDoc;
+      sessionId: string;
+      refreshTokenId: string;
+      replacedSessionId?: string;
+    }
+> {
+  return (await ctx.runMutation(
+    ctx.auth.config.component.factor.passkey.completeAssertion,
+    args,
+  )) as
+    | { status: "rejected" }
+    | {
+        status: "accepted";
+        user: CrossComponentUserDoc;
+        sessionId: string;
+        refreshTokenId: string;
+        replacedSessionId?: string;
+      };
 }
 
 /** Insert a device-authorization record across the component boundary; returns its ID. */

@@ -2,7 +2,7 @@ import { ConvexError, GenericId } from "convex/values";
 
 import { ErrorCode } from "../../shared/codes";
 import { authDb } from "../db";
-import { emitAuthEvent } from "../events";
+import { queueAuthEvent } from "../events";
 import { LOG_LEVELS } from "../log";
 import { log } from "../log";
 import type { AuthAccountExtend, AuthProfile } from "../payloads";
@@ -410,7 +410,7 @@ async function defaultCreateOrUpdateUser(
 
   log(LOG_LEVELS.DEBUG, "Emitting auth event for user lifecycle change");
   if (existingOrLinkedUserId === null) {
-    await emitAuthEvent(ctx, config, {
+    await queueAuthEvent(ctx, config, {
       kind: "user.created",
       actor: { type: "system" },
       subject: { type: "user", id: userId },
@@ -423,7 +423,7 @@ async function defaultCreateOrUpdateUser(
       },
     });
   } else {
-    await emitAuthEvent(ctx, config, {
+    await queueAuthEvent(ctx, config, {
       kind: "user.updated",
       actor: { type: "system" },
       subject: { type: "user", id: userId },
@@ -438,7 +438,7 @@ async function defaultCreateOrUpdateUser(
     });
   }
   if (emailVerified && typeof args.profile.email === "string") {
-    await emitAuthEvent(ctx, config, {
+    await queueAuthEvent(ctx, config, {
       kind: "email.verified",
       actor: { type: "system" },
       subject: { type: "email", id: args.profile.email },
@@ -448,7 +448,7 @@ async function defaultCreateOrUpdateUser(
     });
   }
   if (phoneVerified && typeof args.profile.phone === "string") {
-    await emitAuthEvent(ctx, config, {
+    await queueAuthEvent(ctx, config, {
       kind: "phone.verified",
       actor: { type: "system" },
       subject: { type: "phone", id: args.profile.phone },
@@ -507,7 +507,7 @@ async function createOrUpdateAccount(
           extend: mergedExtend,
         })) as GenericId<"Account">);
   if (isNewAccount) {
-    await emitAuthEvent(ctx, config, {
+    await queueAuthEvent(ctx, config, {
       kind: "account.linked",
       actor: { type: "user", id: userId },
       subject: { type: "account", id: accountId },

@@ -10,10 +10,114 @@
 import { ConvexError, v } from "convex/values";
 import { ErrorCode } from "../shared/codes";
 
+import { recordSignInLimit, resetSignInLimit } from "./limits";
 import { mutation, query } from "./functions";
-import { vAccountDoc } from "./model";
+import { vAccountDoc, vUserDoc } from "./model";
+import { createSessionRows } from "./session";
 
 const ACCOUNT_LIST_BATCH = 128;
+
+/** Reserve a password attempt and load all sign-in state in one transaction. */
+export const beginCredentialsSignIn = mutation({
+  args: {
+    provider: v.string(),
+    providerAccountId: v.string(),
+    maxAttemptsPerHour: v.number(),
+    reserveAttempt: v.boolean(),
+    includeTotp: v.boolean(),
+  },
+  returns: v.union(
+    v.object({ status: v.literal("invalid") }),
+    v.object({ status: v.literal("limited") }),
+    v.object({
+      status: v.literal("ready"),
+      account: vAccountDoc,
+      user: vUserDoc,
+      hasTotp: v.boolean(),
+    }),
+  ),
+  handler: async (ctx, args) => {
+    const account = await ctx.db
+      .query("Account")
+      .withIndex("provider_account_id", (q) =>
+        q.eq("provider", args.provider).eq("providerAccountId", args.providerAccountId),
+      )
+      .unique();
+    if (account === null) return { status: "invalid" as const };
+
+    const [user, totp, limit] = await Promise.all([
+      ctx.db.get("User", account.userId),
+      args.includeTotp
+        ? ctx.db
+            .query("TotpFactor")
+            .withIndex("user_id_verified", (q) =>
+              q.eq("userId", account.userId).eq("verified", true),
+            )
+            .first()
+        : Promise.resolve(null),
+      args.reserveAttempt
+        ? recordSignInLimit(ctx, {
+            identifier: account._id,
+            maxAttemptsPerHour: args.maxAttemptsPerHour,
+          })
+        : Promise.resolve({ ok: true as const, retryAfter: undefined }),
+    ]);
+    if (!limit.ok) return { status: "limited" as const };
+    if (user === null) return { status: "invalid" as const };
+    return {
+      status: "ready" as const,
+      account,
+      user,
+      hasTotp: totp !== null,
+    };
+  },
+});
+
+/** Refund a verified password attempt and optionally issue its session atomically. */
+export const completeCredentialsSignIn = mutation({
+  args: {
+    accountId: v.id("Account"),
+    issueSession: v.boolean(),
+    generateTokens: v.boolean(),
+    replaceSessionId: v.optional(v.id("Session")),
+    sessionExpirationTime: v.number(),
+    refreshTokenExpirationTime: v.number(),
+  },
+  returns: v.union(
+    v.object({ status: v.literal("rejected") }),
+    v.object({ status: v.literal("reset") }),
+    v.object({
+      status: v.literal("accepted"),
+      user: vUserDoc,
+      sessionId: v.id("Session"),
+      refreshTokenId: v.optional(v.id("RefreshToken")),
+      replacedSessionId: v.optional(v.id("Session")),
+    }),
+  ),
+  handler: async (ctx, args) => {
+    const account = await ctx.db.get("Account", args.accountId);
+    if (account === null) return { status: "rejected" as const };
+    await resetSignInLimit(ctx, account._id);
+    if (!args.issueSession) return { status: "reset" as const };
+
+    const created = await createSessionRows(ctx, {
+      userId: account.userId,
+      replaceSessionId: args.replaceSessionId,
+      sessionExpirationTime: args.sessionExpirationTime,
+      refreshTokenExpirationTime: args.generateTokens ? args.refreshTokenExpirationTime : undefined,
+    });
+    if (created === null) return { status: "rejected" as const };
+    return {
+      status: "accepted" as const,
+      user: created.user,
+      sessionId: created.sessionId,
+      ...(created.refreshTokenId === undefined ? {} : { refreshTokenId: created.refreshTokenId }),
+      ...(created.replacedSessionId === undefined
+        ? {}
+        : { replacedSessionId: created.replacedSessionId }),
+    };
+  },
+});
 
 /**
  * Read an account by id, or by `{ provider, providerAccountId }` when both

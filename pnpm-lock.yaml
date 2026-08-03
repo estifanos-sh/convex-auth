@@ -359,12 +359,6 @@ importers:
       '@convex-dev/migrations':
         specifier: ^0.3.5
         version: 0.3.5(convex-helpers@0.1.118(@standard-schema/spec@1.1.0)(convex@1.42.0(react@19.2.5))(react@19.2.5)(typescript@6.0.2)(zod@4.4.3))(convex@1.42.0(react@19.2.5))
-      '@convex-dev/rate-limiter':
-        specifier: ^0.3.2
-        version: 0.3.2(convex@1.42.0(react@19.2.5))(react@19.2.5)
-      '@convex-dev/stream':
-        specifier: https://pkg.pr.new/get-convex/stream/@convex-dev/stream@96acc6d
-        version: https://pkg.pr.new/get-convex/stream/@convex-dev/stream@96acc6d(@standard-schema/spec@1.1.0)(convex@1.42.0(react@19.2.5))(react@19.2.5)(typescript@6.0.2)(zod@4.4.3)
       '@convex-dev/workpool':
         specifier: ^0.4.7
         version: 0.4.7(convex-helpers@0.1.118(@standard-schema/spec@1.1.0)(convex@1.42.0(react@19.2.5))(react@19.2.5)(typescript@6.0.2)(zod@4.4.3))(convex@1.42.0(react@19.2.5))
@@ -1425,16 +1419,6 @@ packages:
     peerDependencies:
       convex: ^1.35.0
       react: ^18.3.1 || ^19.0.0
-
-  '@convex-dev/stream@https://pkg.pr.new/get-convex/stream/@convex-dev/stream@96acc6d':
-    resolution: {integrity: sha512-DVD8+dlDxVpVe6TBNy5Ra7nkLzIWpHvf1s2WX6hEXAhK+pduJDqJJ3hQsZju/4cJqvR2t/7L3wRcIf+zbf98aQ==, tarball: https://pkg.pr.new/get-convex/stream/@convex-dev/stream@96acc6d}
-    version: 0.0.1
-    peerDependencies:
-      convex: ^1.39.0
-      typescript: '>=5.0.0'
-    peerDependenciesMeta:
-      typescript:
-        optional: true
 
   '@convex-dev/workpool@0.4.6':
     resolution: {integrity: sha512-e+cIgQePx5rrGizvzaYocWQCsDFbFlYqR1ZbtFPLa909izwc5GvoasPJPANeFhHRWaA5NBipNVqNtfHySi7Ldw==}
@@ -5243,28 +5227,6 @@ packages:
 
   convex-helpers@0.1.118:
     resolution: {integrity: sha512-07t10n8CZG/YCDzOy5/WDdNNQYL+mP7VU76BLJCZrB2dvJTH7UZJxPqNrhPH+pZbW52joQ91eQHSksdcgOXebQ==}
-    hasBin: true
-    peerDependencies:
-      '@standard-schema/spec': ^1.0.0
-      convex: ^1.32.0
-      hono: ^4.0.5
-      react: ^17.0.2 || ^18.0.0 || ^19.0.0
-      typescript: ^5.5 || ^6.0.0
-      zod: ^3.25.0 || ^4.0.0
-    peerDependenciesMeta:
-      '@standard-schema/spec':
-        optional: true
-      hono:
-        optional: true
-      react:
-        optional: true
-      typescript:
-        optional: true
-      zod:
-        optional: true
-
-  convex-helpers@0.1.119:
-    resolution: {integrity: sha512-fGNK9KAlBLk8Un729ZXBqD9S5jy910nxSrH6PloIL/Gl6TalFJvjN8+xCCwahlox8Ft+bb54SSg9MbcrsQb98w==}
     hasBin: true
     peerDependencies:
       '@standard-schema/spec': ^1.0.0
@@ -10107,18 +10069,6 @@ snapshots:
       convex: 1.42.0(react@19.2.5)
       react: 19.2.5
 
-  '@convex-dev/stream@https://pkg.pr.new/get-convex/stream/@convex-dev/stream@96acc6d(@standard-schema/spec@1.1.0)(convex@1.42.0(react@19.2.5))(react@19.2.5)(typescript@6.0.2)(zod@4.4.3)':
-    dependencies:
-      convex: 1.42.0(react@19.2.5)
-      convex-helpers: 0.1.119(@standard-schema/spec@1.1.0)(convex@1.42.0(react@19.2.5))(react@19.2.5)(typescript@6.0.2)(zod@4.4.3)
-    optionalDependencies:
-      typescript: 6.0.2
-    transitivePeerDependencies:
-      - '@standard-schema/spec'
-      - hono
-      - react
-      - zod
-
   '@convex-dev/workpool@0.4.6(convex-helpers@0.1.118(@standard-schema/spec@1.1.0)(convex@1.42.0(react@19.2.5))(react@19.2.5)(typescript@6.0.2)(zod@4.4.3))(convex@1.42.0(react@19.2.5))':
     dependencies:
       convex: 1.42.0(react@19.2.5)
@@ -14459,15 +14409,6 @@ snapshots:
   convert-source-map@2.0.0: {}
 
   convex-helpers@0.1.118(@standard-schema/spec@1.1.0)(convex@1.42.0(react@19.2.5))(react@19.2.5)(typescript@6.0.2)(zod@4.4.3):
-    dependencies:
-      convex: 1.42.0(react@19.2.5)
-    optionalDependencies:
-      '@standard-schema/spec': 1.1.0
-      react: 19.2.5
-      typescript: 6.0.2
-      zod: 4.4.3
-
-  convex-helpers@0.1.119(@standard-schema/spec@1.1.0)(convex@1.42.0(react@19.2.5))(react@19.2.5)(typescript@6.0.2)(zod@4.4.3):
     dependencies:
       convex: 1.42.0(react@19.2.5)
     optionalDependencies:

@@ -3,7 +3,7 @@ import { auth } from "@convex/auth";
 import { roles } from "@convex/roles";
 import schema from "@convex/schema";
 import { ConvexError } from "convex/values";
-import { expect, test } from "vite-plus/test";
+import { expect, test, vi } from "vite-plus/test";
 
 import { vAuthEventCategory, vAuthEventKind } from "../packages/auth/src/component/model";
 import {
@@ -307,6 +307,36 @@ test("refresh token exchange mismatch does not delete supplied session", async (
   expect(stillExists?._id).toBe(sessionB.sessionId);
 });
 
+test("refresh token exchange returns the session user in the rotation transaction", async () => {
+  const t = convexTest(schema);
+  const userId = await t.run((ctx) =>
+    ctx.runMutation(components.auth.user.create, {
+      data: { email: "refresh-user@example.com" },
+    }),
+  );
+  const issued = await t.run((ctx) =>
+    ctx.runMutation(components.auth.session.create, {
+      userId,
+      sessionExpirationTime: Date.now() + 60_000,
+      refreshTokenExpirationTime: Date.now() + 60_000,
+    }),
+  );
+  const exchanged = await t.run((ctx) =>
+    ctx.runMutation(components.auth.token.refresh.exchange, {
+      refreshTokenId: issued.refreshTokenId!,
+      sessionId: issued.sessionId,
+      now: Date.now(),
+      refreshTokenExpirationTime: Date.now() + 60_000,
+      reuseWindowMs: 10_000,
+    }),
+  );
+
+  expect(exchanged.status).toBe("rotated");
+  if (exchanged.status !== "rotated") throw new Error("expected rotated refresh token");
+  expect(exchanged.user._id).toBe(userId);
+  expect(exchanged.user.email).toBe("refresh-user@example.com");
+});
+
 test("auth verifier lookups ignore expired verifiers", async () => {
   const t = convexTest(schema);
 
@@ -407,6 +437,36 @@ test("pruneExpired skips never-expire verifiers and prunes expired ones", async 
   expect(survivor).not.toBeNull();
 });
 
+test("sign-in limiter reservations are atomic and fully-refilled buckets are pruned", async () => {
+  vi.useFakeTimers();
+  try {
+    const t = convexTest(schema);
+    const identifier = "prune-limit@example.com";
+    const first = await t.run((ctx) =>
+      ctx.runMutation(components.auth.limits.signInRecord, {
+        identifier,
+        maxAttemptsPerHour: 1,
+      }),
+    );
+    const second = await t.run((ctx) =>
+      ctx.runMutation(components.auth.limits.signInRecord, {
+        identifier,
+        maxAttemptsPerHour: 1,
+      }),
+    );
+    expect(first.ok).toBe(true);
+    expect(second.ok).toBe(false);
+
+    vi.advanceTimersByTime(60 * 60 * 1000 + 1);
+    const pruned = await t.run((ctx) =>
+      ctx.runMutation(pruneExpiredForTest(components.auth), { batchSize: 10 }),
+    );
+    expect(pruned.signInLimits).toBe(1);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
 test("auth.member.get returns membership, roleIds, and grants", async () => {
   const t = convexTest(schema);
 
@@ -445,7 +505,7 @@ test("auth.member.get returns membership, roleIds, and grants", async () => {
   expect(result.grants).toContain("projects.manage");
 });
 
-test("event.append projects per target, enqueues the stream appender, and dedupes by eventId", async () => {
+test("event.append persists target projections and dedupes by eventId", async () => {
   const t = convexTest(schema);
 
   const groupId = await t.run(async (ctx) => {

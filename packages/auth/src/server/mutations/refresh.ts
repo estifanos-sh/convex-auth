@@ -4,7 +4,7 @@ import { GenericId, Infer, v } from "convex/values";
 import type { AuthTokens } from "../../shared/results";
 import type * as Provider from "../crypto";
 import { authDb } from "../db";
-import { emitAuthEvent } from "../events";
+import { emitAuthEvent, queueAuthEvent } from "../events";
 import { log, maybeRedact } from "../log";
 import {
   encodeRefreshToken,
@@ -14,13 +14,8 @@ import {
 } from "../token/refresh";
 import { buildSessionIdentity, finalizeSessionIssuance } from "../session/lifecycle";
 import type { SessionIssuance } from "../session/lifecycle";
-import { buildRefreshIdentityAttributes } from "../telemetry";
-import {
-  GenericActionCtxWithAuthConfig,
-  type Doc,
-  type MutationCtx,
-  type SessionInfo,
-} from "../types";
+import { buildKnownRefreshIdentityAttributes } from "../telemetry";
+import { GenericActionCtxWithAuthConfig, type MutationCtx, type SessionInfo } from "../types";
 import { setActiveSpanAttributes, withSpan } from "../utils/span";
 import { AUTH_STORE_REF } from "./store/refs";
 
@@ -98,14 +93,18 @@ export async function refreshSessionImpl(
 
         setActiveSpanAttributes({
           "auth.refresh.result": "success",
-          ...(await buildRefreshIdentityAttributes(ctx, config, {
-            userId: exchanged.userId,
-            sessionId: exchanged.sessionId,
-            refreshTokenId: exchanged.refreshTokenId,
-          })),
+          ...buildKnownRefreshIdentityAttributes(
+            config,
+            {
+              userId: exchanged.userId,
+              sessionId: exchanged.sessionId,
+              refreshTokenId: exchanged.refreshTokenId,
+            },
+            exchanged.user.email,
+          ),
         });
 
-        await emitAuthEvent(ctx, config, {
+        await queueAuthEvent(ctx, config, {
           kind: "session.refresh_exchanged",
           actor: { type: "system" },
           subject: { type: "session", id: exchanged.sessionId },
@@ -117,15 +116,13 @@ export async function refreshSessionImpl(
           data: { sessionId: exchanged.sessionId },
         });
 
-        const user = (await db.users.get({ id: exchanged.userId })) as Doc<"User"> | null;
-
         return {
           userId: exchanged.userId as GenericId<"User">,
           sessionId: exchanged.sessionId as GenericId<"Session">,
           identity: buildSessionIdentity(
             exchanged.userId as GenericId<"User">,
             exchanged.sessionId as GenericId<"Session">,
-            user,
+            exchanged.user,
           ),
           refreshToken: encodeRefreshToken(
             exchanged.refreshTokenId as GenericId<"RefreshToken">,

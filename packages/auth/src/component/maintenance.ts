@@ -3,8 +3,8 @@
  *
  * Wire `pruneExpired` to a daily cron in the consumer app to keep tables
  * with expiring or unbounded-growth rows (sessions, refresh tokens,
- * verification codes, PKCE verifiers, invites, device codes, OAuth codes,
- * connection domain verifications, webhook deliveries, and drained auth-event
+ * verification codes, PKCE verifiers, sign-in limits, invites, device codes, OAuth codes,
+ * connection domain verifications, webhook deliveries, and auth-event
  * projections) bounded.
  *
  * @module
@@ -21,8 +21,11 @@ const MAX_BATCH_SIZE = 1000;
 /** Terminal webhook deliveries are pruned once they are older than this. */
 const WEBHOOK_DELIVERY_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 
-/** Drained auth-event projections are pruned once they are older than this. */
+/** Auth-event projections are pruned once they are older than this. */
 const AUTH_EVENT_PROJECTION_RETENTION_MS = 90 * 24 * 60 * 60 * 1000;
+
+/** A token bucket is fully refilled after at most one hour and can be discarded. */
+const SIGN_IN_LIMIT_RETENTION_MS = 60 * 60 * 1000;
 
 /**
  * Terminal (expired/revoked) invites whose `expiresTime` was cleared on
@@ -44,10 +47,9 @@ const TERMINAL_INVITE_STATUSES = ["expired", "revoked"] as const;
  *   seen-assertion replay cache. Rows with no expiry set (never-expire
  *   verifiers) are skipped by the index lower bound, so they cannot stall the
  *   scan.
- * - Retention-window-driven: terminal webhook deliveries (older than
- *   {@link WEBHOOK_DELIVERY_RETENTION_MS}) and DRAINED auth-event projections
- *   (older than {@link AUTH_EVENT_PROJECTION_RETENTION_MS}; undrained rows are
- *   preserved).
+ * - Retention-window-driven: fully-refilled sign-in limits, terminal webhook deliveries (older than
+ *   {@link WEBHOOK_DELIVERY_RETENTION_MS}) and auth-event projections (older
+ *   than {@link AUTH_EVENT_PROJECTION_RETENTION_MS}).
  * - Invites: every past-`expiresTime` invite is reclaimed (so the index front
  *   always advances — no terminal-invite starvation), plus terminal invites
  *   whose `expiresTime` was cleared on transition are reclaimed by creation age.
@@ -65,6 +67,7 @@ export const pruneExpired = internalMutation({
     refreshTokens: v.number(),
     verificationCodes: v.number(),
     authVerifiers: v.number(),
+    signInLimits: v.number(),
     invites: v.number(),
     deviceCodes: v.number(),
     oauthCodes: v.number(),
@@ -84,6 +87,7 @@ export const pruneExpired = internalMutation({
     let refreshTokens = 0;
     let verificationCodes = 0;
     let authVerifiers = 0;
+    let signInLimits = 0;
     let invites = 0;
     let deviceCodes = 0;
     let oauthCodes = 0;
@@ -129,6 +133,15 @@ export const pruneExpired = internalMutation({
     for (const doc of verifierDocs) {
       await ctx.db.delete("AuthVerifier", doc._id);
       authVerifiers += 1;
+    }
+
+    const signInLimitDocs = await ctx.db
+      .query("SignInLimit")
+      .withIndex("updated_at", (q) => q.lt("updatedAt", now - SIGN_IN_LIMIT_RETENTION_MS))
+      .take(batchSize);
+    for (const doc of signInLimitDocs) {
+      await ctx.db.delete("SignInLimit", doc._id);
+      signInLimits += 1;
     }
 
     // (A) Reclaim every invite that has passed its `expiresTime`. This deletes
@@ -251,25 +264,16 @@ export const pruneExpired = internalMutation({
       samlSeenAssertions += 1;
     }
 
-    // Retention for the queryable auth-event log. Only DRAINED rows
-    // (`streamIndex >= 0`, already durable in the stream) are deleted; undrained
-    // rows (`streamIndex === -1`) are skipped so a stuck drainer never loses
-    // events. The `occurred_at` index orders by event time; undrained rows are
-    // rare and pruned drained rows correlate with the oldest occurredAt, so the
-    // scan front advances. We reschedule only when a full batch was scanned AND
-    // something was deleted, so a front made entirely of (rare) old undrained
-    // rows cannot spin the self-reschedule.
+    // AuthEventProjection is both the durable event log and the query source.
+    // Prune old projections directly without coordinating a second stream copy.
     const authEventCutoff = now - AUTH_EVENT_PROJECTION_RETENTION_MS;
     const authEventDocs = await ctx.db
       .query("AuthEventProjection")
       .withIndex("occurred_at", (q) => q.lt("occurredAt", authEventCutoff))
       .take(batchSize);
-    const authEventsScanned = authEventDocs.length;
     for (const doc of authEventDocs) {
-      if (doc.streamIndex >= 0) {
-        await ctx.db.delete("AuthEventProjection", doc._id);
-        authEventProjections += 1;
-      }
+      await ctx.db.delete("AuthEventProjection", doc._id);
+      authEventProjections += 1;
     }
 
     if (
@@ -277,6 +281,7 @@ export const pruneExpired = internalMutation({
       refreshTokens === batchSize ||
       verificationCodes === batchSize ||
       authVerifiers === batchSize ||
+      signInLimits === batchSize ||
       invitesScanned === batchSize ||
       invites >= batchSize ||
       deviceCodes === batchSize ||
@@ -285,7 +290,7 @@ export const pruneExpired = internalMutation({
       oauthRefreshGrants === batchSize ||
       webhookDeliveries === batchSize ||
       connectionDomainVerifications === batchSize ||
-      (authEventsScanned === batchSize && authEventProjections > 0) ||
+      authEventDocs.length === batchSize ||
       samlLoginRequests === batchSize ||
       samlSeenAssertions === batchSize
     ) {
@@ -297,6 +302,7 @@ export const pruneExpired = internalMutation({
       refreshTokens,
       verificationCodes,
       authVerifiers,
+      signInLimits,
       invites,
       deviceCodes,
       oauthCodes,

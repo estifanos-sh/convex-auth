@@ -206,7 +206,7 @@ export function password<DataModel extends GenericDataModel = GenericDataModel>(
           return {
             userId: result.user._id as GenericDoc<DataModel, "User">["_id"],
             hasTotp,
-            issuance: result.issuance,
+            ...(result.kind === "signedIn" ? { issuance: result.issuance } : {}),
           };
         },
 

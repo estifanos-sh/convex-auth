@@ -34,7 +34,8 @@ export type SignInLimitCtx = {
  */
 export type SignInLimitConfig = Pick<ConvexAuthConfig, "component" | "signIn">;
 
-function maxAttempts(config: SignInLimitConfig) {
+/** Resolve the configured guessable-secret attempt capacity. @internal */
+export function maxSignInAttempts(config: SignInLimitConfig) {
   return config.signIn?.maxFailedAttemptsPerHour ?? DEFAULT_MAX_SIGN_IN_ATTEMPTS_PER_HOUR;
 }
 
@@ -50,7 +51,7 @@ export async function isSignInRateLimited(
 ): Promise<boolean> {
   const { ok } = await ctx.runQuery(config.component.limits.signInCheck, {
     identifier,
-    maxAttemptsPerHour: maxAttempts(config),
+    maxAttemptsPerHour: maxSignInAttempts(config),
   });
   return !ok;
 }
@@ -67,7 +68,7 @@ export async function recordFailedSignIn(
 ): Promise<void> {
   await ctx.runMutation(config.component.limits.signInRecord, {
     identifier,
-    maxAttemptsPerHour: maxAttempts(config),
+    maxAttemptsPerHour: maxSignInAttempts(config),
   });
 }
 
@@ -97,7 +98,7 @@ export async function reserveSignInAttempt(
 ): Promise<boolean> {
   const { ok } = await ctx.runMutation(config.component.limits.signInRecord, {
     identifier,
-    maxAttemptsPerHour: maxAttempts(config),
+    maxAttemptsPerHour: maxSignInAttempts(config),
   });
   return !ok;
 }

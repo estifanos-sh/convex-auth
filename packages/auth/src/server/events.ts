@@ -4,7 +4,7 @@
  * @module
  */
 
-import type { PaginationOptions } from "convex/server";
+import type { GenericActionCtx, GenericDataModel, PaginationOptions } from "convex/server";
 import type { GenericId } from "convex/values";
 
 import {
@@ -32,6 +32,7 @@ export type OidcClaims = AuthEventObject;
 export type SamlClaims = AuthEventObject;
 export type ScimRawAttributes = AuthEventObject;
 type AuthEventCtx = ComponentCtx;
+type QueuedAuthEventCtx = AuthEventCtx & Pick<GenericActionCtx<GenericDataModel>, "scheduler">;
 
 export type AuthEventOutcome = "success" | "failure";
 export type AuthEventTargetKind =
@@ -481,9 +482,8 @@ function categoryForKind(kind: AuthEventKind): AuthEventCategory {
 /**
  * Generate a unique event id.
  *
- * Every emit is a distinct audit record, so the id is unique by construction —
- * the durable stream is fed asynchronously by a single drainer keyed on this
- * id, and the request-path projection dedup only collapses identical
+ * Every emit is a distinct audit record, so the id is unique by construction.
+ * The projection dedup only collapses identical
  * caller-supplied keys (e.g. webhook delivery attempts), never distinct emits.
  */
 function eventId(event: { kind: AuthEventKind; subject: AuthEventSubject }): string {
@@ -528,6 +528,23 @@ type AuthEventComputed<K extends AuthEventKind> = EmitAuthEventInput<K> & {
  */
 function finalizeAuthEvent<K extends AuthEventKind>(computed: AuthEventComputed<K>): AuthEvent<K> {
   return computed as AuthEvent<K>;
+}
+
+function computeAuthEvent<K extends AuthEventKind>(input: EmitAuthEventInput<K>): AuthEvent<K> {
+  return finalizeAuthEvent<K>({
+    ...input,
+    eventId: input.eventId ?? eventId(input),
+    category: input.category ?? categoryForKind(input.kind),
+    occurredAt: input.occurredAt ?? Date.now(),
+  });
+}
+
+function appendArgs(event: AuthEvent) {
+  return {
+    event,
+    targets: event.targets,
+    idempotencyKey: event.eventId,
+  };
 }
 
 type AuthEventHandlerSelector<K extends AuthEventKind> = (
@@ -622,7 +639,7 @@ async function runEventHandler(
 }
 
 /**
- * Append an auth event to the durable stream and run any matching handler.
+ * Append an auth event to the durable projection log and run any matching handler.
  *
  * Fills in `eventId`, `category`, and `occurredAt` when omitted, then writes
  * via the component `event.append` mutation. The configured handler for the
@@ -638,21 +655,37 @@ export async function emitAuthEvent<K extends AuthEventKind>(
   config: EventConfig,
   input: EmitAuthEventInput<K>,
 ) {
-  const event = finalizeAuthEvent<K>({
-    ...input,
-    eventId: input.eventId ?? eventId(input),
-    category: input.category ?? categoryForKind(input.kind),
-    occurredAt: input.occurredAt ?? Date.now(),
-  });
-  const result = await ctx.runMutation(config.component.event.append, {
-    event,
-    targets: event.targets,
-    idempotencyKey: event.eventId,
-  });
+  const event = computeAuthEvent(input);
+  const result = await ctx.runMutation(config.component.event.append, appendArgs(event));
   if (result.created) {
     await runEventHandler(ctx, config.events, event);
   }
   return result;
+}
+
+/**
+ * Persist an internal auth event after the request completes when no matching
+ * application handler needs the idempotency result synchronously.
+ *
+ * Scheduled writes are recorded by the caller's mutation commit but execute in
+ * a separate function, keeping projection fan-out off the
+ * authentication critical path. Configured handlers preserve their existing
+ * synchronous, exactly-once behavior by falling back to {@link emitAuthEvent}.
+ *
+ * @internal
+ */
+export async function queueAuthEvent<K extends AuthEventKind>(
+  ctx: QueuedAuthEventCtx,
+  config: EventConfig,
+  input: EmitAuthEventInput<K>,
+): Promise<void> {
+  const handler = config.events ? selectEventHandler(config.events, input.kind) : undefined;
+  if (handler !== undefined) {
+    await emitAuthEvent(ctx, config, input);
+    return;
+  }
+  const event = computeAuthEvent(input);
+  await ctx.scheduler.runAfter(0, config.component.event.append, appendArgs(event));
 }
 
 /**

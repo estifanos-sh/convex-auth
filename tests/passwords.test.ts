@@ -241,11 +241,18 @@ test("change password works for authenticated TOTP users", async () => {
     });
   }).rejects.toThrow(/Invalid credentials/);
 
+  const sessionsBeforeChallenge = await t.run((ctx) =>
+    ctx.runQuery(components.auth.session.list, { userId: userId as never }),
+  );
   const result = await t.action(api.auth.signIn, {
     provider: "password",
     params: { email: TEST_EMAIL, password: NEW_PASSWORD, flow: "signIn" },
   });
   expect(result.kind).toBe("totpRequired");
+  const sessionsAfterChallenge = await t.run((ctx) =>
+    ctx.runQuery(components.auth.session.list, { userId: userId as never }),
+  );
+  expect(sessionsAfterChallenge).toHaveLength(sessionsBeforeChallenge.length);
 });
 
 test("change password rejects wrong current password", async () => {

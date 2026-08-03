@@ -15,34 +15,33 @@ import {
   encodeBase64urlNoPadding,
 } from "@oslojs/encoding";
 import { createTOTPKeyURI, verifyTOTPWithGracePeriod } from "@oslojs/otp";
-import { ConvexError } from "convex/values";
+import { ConvexError, GenericId } from "convex/values";
 
 import { ErrorCode } from "../shared/codes";
 import { authFlowError } from "../shared/errors";
 import type { AuthTokens, SignInSessionResult, SignInTotpSetupResult } from "../shared/results";
 import type { AuthErrorData } from "./errors";
 import { toConvexError } from "./errors";
-import { emitAuthEvent } from "./events";
+import { queueAuthEvent } from "./events";
 import { getAuthenticatedUserIdOrNull } from "./identity/claims";
-import { reserveSignInAttempt, resetSignInRateLimit } from "./limits";
-import { callSignIn, callVerifier } from "./mutations/calls";
+import { maxSignInAttempts } from "./limits";
 import { decryptSecret, encryptSecret } from "./secret";
 import {
-  consumeVerifierById,
-  mutateTotpInsert,
-  mutateTotpMarkVerified,
-  mutateTotpUpdateLastUsed,
-  queryTotpById,
-  queryTotpVerifiedByUserId,
-  queryUserById,
-  queryVerifierById,
-} from "./component/factor/db";
+  buildSessionIdentity,
+  finalizeSessionIssuance,
+  getAuthSessionId,
+  sessionExpirationTime,
+} from "./session/lifecycle";
+import { encodeRefreshToken, refreshTokenExpirationTime } from "./token/refresh";
+import { buildKnownSignInIdentityAttributes } from "./telemetry";
 import {
   AuthDataModel,
+  type CrossComponentUserDoc,
   GenericActionCtxWithAuthConfig,
   SessionInfo,
   TotpProviderConfig,
 } from "./types";
+import { setActiveSpanAttributes } from "./utils/span";
 
 type EnrichedActionCtx = GenericActionCtxWithAuthConfig<AuthDataModel>;
 
@@ -99,29 +98,6 @@ async function decryptTotpSecret(stored: ArrayBuffer): Promise<Uint8Array> {
   const ciphertext = new TextDecoder().decode(stored);
   const secretB64 = await decryptSecret(ciphertext);
   return decodeBase64urlIgnorePadding(secretB64);
-}
-
-/**
- * Parse a verifier's stored signature into the TOTP ceremony payload.
- *
- * A verifier with a missing or non-JSON signature (e.g. one minted for a
- * different flow) is rejected with a clean `TOTP_INVALID_VERIFIER` rather than
- * surfacing a raw `JSON.parse`/null-deref error.
- */
-function parseTotpVerifierData(signature: string | undefined): Record<string, unknown> {
-  if (typeof signature !== "string") {
-    throw convexError(ErrorCode.TOTP_INVALID_VERIFIER, "Invalid or expired TOTP verifier.");
-  }
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(signature);
-  } catch {
-    throw convexError(ErrorCode.TOTP_INVALID_VERIFIER, "Invalid or expired TOTP verifier.");
-  }
-  if (typeof parsed !== "object" || parsed === null) {
-    throw convexError(ErrorCode.TOTP_INVALID_VERIFIER, "Invalid or expired TOTP verifier.");
-  }
-  return parsed as Record<string, unknown>;
 }
 
 function resolveTotpFlow(params: Record<string, unknown>): TotpFlow {
@@ -217,22 +193,27 @@ export const handleTotp = async (
       const userId = await requireAuthenticatedUserId(ctx);
       const secret = new Uint8Array(20);
       crypto.getRandomValues(secret);
-
-      let accountName: string = setupParams.accountName as string;
-      if (!accountName) {
-        let user;
-        try {
-          user = await queryUserById(ctx, userId);
-        } catch (error) {
-          throw asConvexError(
-            error,
-            ErrorCode.INTERNAL_ERROR,
-            `TOTP setup failed: ${String(error)}`,
-          );
-        }
-        accountName = user?.email ?? "user";
+      const base32Secret = encodeBase32LowerCaseNoPadding(secret);
+      let enrollment: { user: CrossComponentUserDoc; totpId: string; verifierId: string };
+      try {
+        enrollment = (await ctx.runMutation(
+          ctx.auth.config.component.factor.totp.createEnrollment,
+          {
+            userId,
+            secret: await encryptTotpSecret(secret),
+            digits: provider.options.digits,
+            period: provider.options.period,
+            name: typeof setupParams.name === "string" ? setupParams.name : undefined,
+            createdAt: Date.now(),
+          },
+        )) as typeof enrollment;
+      } catch (error) {
+        throw asConvexError(error, ErrorCode.INTERNAL_ERROR, `TOTP setup failed: ${String(error)}`);
       }
-
+      const accountName =
+        typeof setupParams.accountName === "string" && setupParams.accountName.length > 0
+          ? setupParams.accountName
+          : (enrollment.user.email ?? "user");
       const uri = createTOTPKeyURI(
         provider.options.issuer,
         accountName,
@@ -240,47 +221,15 @@ export const handleTotp = async (
         provider.options.period,
         provider.options.digits,
       );
-      const base32Secret = encodeBase32LowerCaseNoPadding(secret);
-
-      let totpId: string;
-      try {
-        totpId = await mutateTotpInsert(ctx, {
-          userId,
-          secret: await encryptTotpSecret(secret),
-          digits: provider.options.digits,
-          period: provider.options.period,
-          verified: false,
-          name: typeof setupParams.name === "string" ? setupParams.name : undefined,
-          createdAt: Date.now(),
-        });
-      } catch (error) {
-        throw asConvexError(error, ErrorCode.INTERNAL_ERROR, `TOTP setup failed: ${String(error)}`);
-      }
-
-      let verifier: string;
-      try {
-        verifier = await callVerifier(
-          ctx,
-          JSON.stringify({
-            purpose: "totp.setup",
-            userId,
-            totpId,
-            digits: provider.options.digits,
-            period: provider.options.period,
-          }),
-        );
-      } catch (error) {
-        throw asConvexError(error, ErrorCode.INTERNAL_ERROR, `TOTP setup failed: ${String(error)}`);
-      }
 
       return {
         kind: "totpSetup" as const,
         totpSetup: {
           uri,
           secret: base32Secret,
-          totpId,
+          totpId: enrollment.totpId,
         },
-        verifier,
+        verifier: enrollment.verifierId,
       };
     },
 
@@ -305,78 +254,14 @@ export const handleTotp = async (
     verifier: string,
   ): Promise<TotpResult> {
     const userId = await requireAuthenticatedUserId(ctx);
-    let verifierDoc;
-    try {
-      verifierDoc = await queryVerifierById(ctx, verifier);
-    } catch {
-      throw convexError(ErrorCode.TOTP_INVALID_VERIFIER, "Invalid or expired TOTP verifier.");
-    }
-    if (verifierDoc === null) {
-      throw convexError(ErrorCode.TOTP_INVALID_VERIFIER, "Invalid or expired TOTP verifier.");
-    }
-    const verifierData = parseTotpVerifierData(verifierDoc.signature ?? undefined);
-    if (
-      verifierData.purpose !== "totp.setup" ||
-      verifierData.userId !== userId ||
-      verifierData.totpId !== totpId
-    ) {
-      throw convexError(ErrorCode.TOTP_INVALID_VERIFIER, "Invalid or expired TOTP verifier.");
-    }
-    // Reserve (consume) a token up front so concurrent guesses cannot all clear
-    // a non-consuming check before any failure commits — this is an action, so
-    // each runQuery/runMutation is a separate transaction. Refunded on success.
-    if (await reserveSignInAttempt(ctx, userId, ctx.auth.config)) {
-      throw convexError(ErrorCode.RATE_LIMITED, "Too many TOTP attempts. Try again later.");
-    }
-    let doc;
-    try {
-      doc = await queryTotpById(ctx, totpId);
-    } catch {
-      throw convexError(ErrorCode.TOTP_NOT_FOUND, "TOTP enrollment not found.");
-    }
-    if (doc === null) {
-      throw convexError(ErrorCode.TOTP_NOT_FOUND, "TOTP enrollment not found.");
-    }
-    if (doc.userId !== userId) {
-      throw convexError(ErrorCode.TOTP_NOT_FOUND, "TOTP enrollment not found.");
-    }
-    if (doc.verified) {
-      throw convexError(ErrorCode.TOTP_ALREADY_VERIFIED, "TOTP enrollment is already verified.");
-    }
-    const enrollmentSecret = await decryptTotpSecret(doc.secret);
-    if (
-      !verifyTOTPWithGracePeriod(
-        enrollmentSecret,
-        provider.options.period,
-        provider.options.digits,
-        code,
-        30,
-      )
-    ) {
-      // The reservation above already consumed this attempt's token; do not
-      // double-record.
-      throw convexError(ErrorCode.TOTP_INVALID_CODE, "Invalid TOTP code.");
-    }
-    // Atomically consume the verifier BEFORE minting a session: this runs in an
-    // action, so two concurrent confirmations that both passed the earlier read
-    // would otherwise each sign in (duplicate sessions). Only the single winner
-    // gets the doc back; a loser (null) aborts here.
-    if ((await consumeVerifierById(ctx, verifier)) === null) {
-      throw convexError(ErrorCode.TOTP_INVALID_VERIFIER, "Invalid or expired TOTP verifier.");
-    }
-    // Only the verifier-consumption winner may refund the reserved attempt.
-    await resetSignInRateLimit(ctx, userId, ctx.auth.config);
-    let signInResult;
-    try {
-      await mutateTotpMarkVerified(ctx, totpId, Date.now());
-      signInResult = await callSignIn(ctx, {
-        userId,
-        generateTokens: true,
-      });
-    } catch (error) {
-      throw asConvexError(error, ErrorCode.INTERNAL_ERROR, String(error));
-    }
-    await emitAuthEvent(ctx, ctx.auth.config, {
+    const result = await verifyTotp({
+      code,
+      verifier,
+      intent: "enrollment",
+      authenticatedUserId: userId,
+      totpId,
+    });
+    await queueAuthEvent(ctx, ctx.auth.config, {
       kind: "totp.enrolled",
       actor: { type: "user", id: userId },
       subject: { type: "totp", id: totpId },
@@ -384,7 +269,7 @@ export const handleTotp = async (
       outcome: "success",
       data: { totpId },
     });
-    return { kind: "signedIn" as const, session: signInResult };
+    return result;
   }
 
   /**
@@ -392,58 +277,135 @@ export const handleTotp = async (
    * Looks up the user's verified TOTP factor, validates the code, signs in.
    */
   async function verifyChallenge(code: string, verifier: string): Promise<TotpResult> {
-    let doc;
-    try {
-      doc = await queryVerifierById(ctx, verifier);
-    } catch {
-      throw convexError(ErrorCode.TOTP_INVALID_VERIFIER, "Invalid or expired TOTP verifier.");
-    }
-    if (doc === null) {
-      throw convexError(ErrorCode.TOTP_INVALID_VERIFIER, "Invalid or expired TOTP verifier.");
-    }
-    const data = parseTotpVerifierData(doc.signature ?? undefined);
-    if (typeof data.userId !== "string" || data.userId.length === 0) {
-      throw convexError(ErrorCode.TOTP_INVALID_VERIFIER, "Invalid or expired TOTP verifier.");
-    }
-    const userId = data.userId;
+    return await verifyTotp({ code, verifier, intent: "challenge" });
+  }
 
-    // Reserve (consume) a token up front so concurrent guesses cannot all clear
-    // a non-consuming check before any failure commits — this is an action, so
-    // each runQuery/runMutation is a separate transaction. Refunded on success.
-    if (await reserveSignInAttempt(ctx, userId, ctx.auth.config)) {
+  async function verifyTotp(input: {
+    code: string;
+    verifier: string;
+    intent: "enrollment" | "challenge";
+    authenticatedUserId?: string;
+    totpId?: string;
+  }): Promise<TotpResult> {
+    const begun = (await ctx.runMutation(ctx.auth.config.component.factor.totp.beginVerification, {
+      verifierId: input.verifier,
+      intent: input.intent,
+      authenticatedUserId: input.authenticatedUserId,
+      totpId: input.totpId,
+      maxAttemptsPerHour: maxSignInAttempts(ctx.auth.config),
+    })) as
+      | { status: "invalid_verifier" | "limited" | "not_found" | "already_verified" }
+      | {
+          status: "ready";
+          userId: string;
+          factor: {
+            _id: string;
+            secret: ArrayBuffer;
+            period: number;
+            digits: number;
+          };
+        };
+
+    if (begun.status === "invalid_verifier") {
+      throw convexError(ErrorCode.TOTP_INVALID_VERIFIER, "Invalid or expired TOTP verifier.");
+    }
+    if (begun.status === "limited") {
       throw convexError(ErrorCode.RATE_LIMITED, "Too many TOTP attempts. Try again later.");
     }
+    if (begun.status === "already_verified") {
+      throw convexError(ErrorCode.TOTP_ALREADY_VERIFIED, "TOTP enrollment is already verified.");
+    }
+    if (begun.status === "not_found") {
+      throw convexError(
+        input.intent === "enrollment" ? ErrorCode.TOTP_NOT_FOUND : ErrorCode.TOTP_NO_ENROLLMENT,
+        input.intent === "enrollment"
+          ? "TOTP enrollment not found."
+          : "No verified TOTP enrollment found.",
+      );
+    }
+    if (begun.status !== "ready") {
+      throw convexError(ErrorCode.INTERNAL_ERROR, "Unexpected TOTP verification state.");
+    }
 
-    let totp;
-    try {
-      totp = await queryTotpVerifiedByUserId(ctx, userId);
-    } catch {
-      throw convexError(ErrorCode.TOTP_NO_ENROLLMENT, "No verified TOTP enrollment found.");
-    }
-    if (totp === null) {
-      throw convexError(ErrorCode.TOTP_NO_ENROLLMENT, "No verified TOTP enrollment found.");
-    }
-    const challengeSecret = await decryptTotpSecret(totp.secret);
-    if (!verifyTOTPWithGracePeriod(challengeSecret, totp.period, totp.digits, code, 30)) {
-      // The reservation above already consumed this attempt's token; do not
-      // double-record.
+    const secret = await decryptTotpSecret(begun.factor.secret);
+    if (
+      !verifyTOTPWithGracePeriod(secret, begun.factor.period, begun.factor.digits, input.code, 30)
+    ) {
       throw convexError(ErrorCode.TOTP_INVALID_CODE, "Invalid TOTP code.");
     }
-    // Atomically consume the verifier BEFORE minting a session so two concurrent
-    // challenge completions carrying the same verifier cannot each sign in.
-    if ((await consumeVerifierById(ctx, verifier)) === null) {
+
+    const replaceSessionId = (await getAuthSessionId(ctx)) ?? undefined;
+    const completed = (await ctx.runMutation(
+      ctx.auth.config.component.factor.totp.completeVerification,
+      {
+        verifierId: input.verifier,
+        intent: input.intent,
+        authenticatedUserId: input.authenticatedUserId,
+        totpId: input.totpId,
+        replaceSessionId,
+        sessionExpirationTime: sessionExpirationTime(ctx.auth.config),
+        refreshTokenExpirationTime: refreshTokenExpirationTime(ctx.auth.config),
+        now: Date.now(),
+      },
+    )) as
+      | { status: "rejected" }
+      | {
+          status: "accepted";
+          user: CrossComponentUserDoc;
+          factorId: string;
+          sessionId: string;
+          refreshTokenId: string;
+          replacedSessionId?: string;
+        };
+    if (completed.status !== "accepted") {
       throw convexError(ErrorCode.TOTP_INVALID_VERIFIER, "Invalid or expired TOTP verifier.");
     }
-    // Only the verifier-consumption winner may refund the reserved attempt.
-    await resetSignInRateLimit(ctx, userId, ctx.auth.config);
-    let signInResult;
-    try {
-      await mutateTotpUpdateLastUsed(ctx, totp._id, Date.now());
-      signInResult = await callSignIn(ctx, { userId, generateTokens: true });
-    } catch (error) {
-      throw asConvexError(error, ErrorCode.INTERNAL_ERROR, String(error));
+
+    const userId = completed.user._id as GenericId<"User">;
+    const sessionId = completed.sessionId as GenericId<"Session">;
+    setActiveSpanAttributes({
+      "auth.signin.result": "success",
+      ...buildKnownSignInIdentityAttributes(
+        ctx.auth.config,
+        { userId, sessionId },
+        completed.user.email,
+      ),
+    });
+    if (completed.replacedSessionId !== undefined) {
+      const replacedSessionId = completed.replacedSessionId as GenericId<"Session">;
+      await queueAuthEvent(ctx, ctx.auth.config, {
+        kind: "session.invalidated",
+        actor: { type: "system" },
+        subject: { type: "session", id: replacedSessionId },
+        targets: [
+          { kind: "user", id: userId },
+          { kind: "session", id: replacedSessionId },
+        ],
+        outcome: "success",
+        data: { userId, reason: "replaced" },
+      });
     }
-    return { kind: "signedIn" as const, session: signInResult };
+    await queueAuthEvent(ctx, ctx.auth.config, {
+      kind: "session.signed_in",
+      actor: { type: "user", id: userId },
+      subject: { type: "session", id: sessionId },
+      targets: [
+        { kind: "user", id: userId },
+        { kind: "session", id: sessionId },
+      ],
+      outcome: "success",
+      data: { provider: "session", method: provider.id },
+    });
+    const session = await finalizeSessionIssuance(ctx.auth.config, {
+      userId,
+      sessionId,
+      identity: buildSessionIdentity(userId, sessionId, completed.user),
+      refreshToken: encodeRefreshToken(
+        completed.refreshTokenId as GenericId<"RefreshToken">,
+        sessionId,
+      ),
+    });
+    return { kind: "signedIn" as const, session };
   }
 
   const handler = flowHandlers[dispatch.flow];

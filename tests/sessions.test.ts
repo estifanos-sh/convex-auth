@@ -282,6 +282,7 @@ test("session expiration", async () => {
 });
 
 test("password sign-in on an authenticated context replaces the old session", async () => {
+  vi.useFakeTimers();
   const t = convexTest(schema);
 
   const firstTokens = expectSignInSession(
@@ -308,6 +309,7 @@ test("password sign-in on an authenticated context replaces the old session", as
   expect(oldRefresh).toBeNull();
 
   // Replacing a session emits a `session.invalidated` audit event.
+  await t.finishAllScheduledFunctions(vi.runAllTimers);
   const events = await t.run(async (ctx) => {
     return await ctx.runQuery(components.auth.event.list, {
       where: { kind: "session.invalidated" },

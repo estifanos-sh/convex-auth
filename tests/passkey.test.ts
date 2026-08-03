@@ -1,10 +1,9 @@
 /**
  * Passkey (WebAuthn) tests.
  *
- * Focus: the passkey verify path is rate-limited (audit finding H9), reaching
- * TOTP parity. Verification attempts against a resolvable credential consume
- * sign-in rate-limit tokens, and once the limit is exhausted the verify flow
- * fails closed with `RATE_LIMITED` — before any signature work.
+ * WebAuthn uses a one-time challenge, proof of private-key possession, and an
+ * atomic signature-counter transition. Unlike password and TOTP verification,
+ * it does not use the guessable-secret limiter on the sign-in critical path.
  */
 
 import { api, components } from "@convex/_generated/api";
@@ -76,7 +75,7 @@ async function invalidAssertionCode(
   return (error as ConvexError<{ code: string }>).data.code;
 }
 
-test("passkey verify is rate-limited after the failure threshold", async () => {
+test("WebAuthn does not inherit the guessable-secret sign-in limiter", async () => {
   const t = convexTest(schema);
 
   // Seed a user + a resolvable passkey credential.
@@ -107,8 +106,8 @@ test("passkey verify is rate-limited after the failure threshold", async () => {
     }
   });
 
-  // Issue a real passkey challenge, then submit a verify for the seeded
-  // credential. The rate-limit gate fires before any signature check.
+  // Issue a real challenge and submit an invalid signature. The unrelated
+  // sign-in bucket must not intercept WebAuthn; its protocol checks still run.
   const options = await t.action(api.auth.signIn, {
     provider: "webauthn",
     params: { flow: "signIn" },
@@ -137,7 +136,7 @@ test("passkey verify is rate-limited after the failure threshold", async () => {
       (e) => e,
     );
   expect(error).toBeInstanceOf(ConvexError);
-  expect((error as ConvexError<{ code: string }>).data.code).toBe("RATE_LIMITED");
+  expect((error as ConvexError<{ code: string }>).data.code).toBe("PASSKEY_INVALID_SIGNATURE");
 });
 
 test("passkey verify against an unknown credential uses the public signature error", async () => {

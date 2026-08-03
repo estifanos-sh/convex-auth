@@ -4,7 +4,7 @@ import { GenericId } from "convex/values";
 import type { RefreshToken } from "../../shared/brand";
 import { authDb } from "../db";
 import { envOptionalNumber, readConfigSync } from "../env";
-import { emitAuthEvent } from "../events";
+import { queueAuthEvent } from "../events";
 import { getAuthenticatedSessionIdOrNull } from "../identity/claims";
 import { LOG_LEVELS, log, maybeRedact } from "../log";
 import { encodeRefreshToken, refreshTokenExpirationTime } from "../token/refresh";
@@ -153,12 +153,13 @@ export async function issueSession(
     sessionId: string;
     refreshTokenId?: string;
     replacedSessionId?: string;
+    user: Doc<"User">;
   };
   const sessionId = issued.sessionId as GenericId<"Session">;
   const refreshTokenId = issued.refreshTokenId as GenericId<"RefreshToken"> | undefined;
   if (issued.replacedSessionId !== undefined) {
     const replacedSessionId = issued.replacedSessionId as GenericId<"Session">;
-    await emitAuthEvent(ctx, config, {
+    await queueAuthEvent(ctx, config, {
       kind: "session.invalidated",
       actor: { type: "system" },
       subject: { type: "session", id: replacedSessionId },
@@ -170,11 +171,10 @@ export async function issueSession(
       data: { userId: issued.userId, reason: "replaced" },
     });
   }
-  const user = (await db.users.get({ id: issued.userId })) as Doc<"User"> | null;
   return {
     userId: issued.userId as GenericId<"User">,
     sessionId,
-    identity: buildSessionIdentity(issued.userId as GenericId<"User">, sessionId, user),
+    identity: buildSessionIdentity(issued.userId as GenericId<"User">, sessionId, issued.user),
     refreshToken:
       args.generateTokens && refreshTokenId !== undefined
         ? encodeRefreshToken(refreshTokenId, sessionId)

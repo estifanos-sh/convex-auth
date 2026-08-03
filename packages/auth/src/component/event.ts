@@ -1,18 +1,16 @@
 /**
- * `component.event.*` - stream-backed auth events and queryable projections.
+ * `component.event.*` - durable, queryable auth-event projections.
  *
  * @module
  */
 
-import { defineStream } from "@convex-dev/stream";
 import { paginator } from "convex-helpers/server/pagination";
 import { paginationOptsValidator } from "convex/server";
 import { ConvexError, v, type Infer } from "convex/values";
 
-import { components, internal } from "./_generated/api";
-import type { Doc } from "./_generated/dataModel";
 import { ErrorCode } from "../shared/codes";
-import { internalMutation, mutation, query } from "./functions";
+import type { Doc } from "./_generated/dataModel";
+import { mutation, query } from "./functions";
 import {
   vAuthEvent,
   vAuthEventData,
@@ -27,15 +25,6 @@ type AuthEvent = Infer<typeof vAuthEvent>;
 type AuthEventTarget = Infer<typeof vAuthEventTarget>;
 type AuthEventWhere = Infer<typeof vAuthEventWhere>;
 
-const authEventStream = defineStream(components.stream, {
-  name: "auth",
-  event: vAuthEvent,
-});
-
-const PRODUCER = { id: "auth", epoch: 0 } as const;
-
-/** Whole auth events drained into the stream per `drainPending` invocation. */
-const DRAIN_BATCH = 25;
 const MAX_EVENT_TARGETS = 64;
 
 function targetKey(target: AuthEventTarget): string {
@@ -353,13 +342,9 @@ export const list = query({
 /**
  * Append an auth event, fanning out idempotent projections per target.
  *
- * This is the only write the request path makes: one fresh `AuthEventProjection`
- * row per target — contention-free by construction (distinct docs, unique by the
- * `event_id_target` index), so the auth critical path never touches the durable
- * stream's head. Rows land with sentinel `streamId:""`/`streamIndex:-1`; the
- * `drainPending` cron stamps them once they reach the stream. Returns a command
- * summary (`created` flag plus the affected scopes and projections) so callers
- * can react to the idempotency outcome.
+ * The projection row is the durable source of truth and the query surface. One
+ * copy per target provides indexed reads without duplicating every event into a
+ * second stream that no API consumes.
  */
 export const append = mutation({
   args: {
@@ -419,8 +404,6 @@ export const append = mutation({
         ip: args.event.request?.ip,
         userAgent: args.event.request?.userAgent,
         data: args.event.data,
-        streamId: "",
-        streamIndex: -1,
       });
       const projection = await ctx.db.get("AuthEventProjection", projectionId);
       if (projection !== null) projections.push(publicProjection(projection));
@@ -432,90 +415,5 @@ export const append = mutation({
       createdTargets,
       projections,
     };
-  },
-});
-
-function reconstructEvent(
-  eventId: string,
-  rows: Doc<"AuthEventProjection">[],
-): Infer<typeof vAuthEvent> {
-  const [first] = rows;
-  return {
-    eventId,
-    kind: first.kind,
-    category: first.category,
-    occurredAt: first.occurredAt,
-    actor: { type: first.actorType, id: first.actorId },
-    subject: { type: first.subjectType, id: first.subjectId },
-    targets: rows
-      .map((row) => ({ kind: row.targetKind, id: row.targetId }))
-      .sort((a, b) => (`${a.kind}:${a.id}` < `${b.kind}:${b.id}` ? -1 : 1)),
-    request:
-      first.requestId !== undefined || first.ip !== undefined || first.userAgent !== undefined
-        ? { requestId: first.requestId, ip: first.ip, userAgent: first.userAgent }
-        : undefined,
-    outcome: first.outcome,
-    errorCode: first.errorCode,
-    data: first.data,
-  };
-}
-
-/**
- * Drain newly-projected auth events into the durable `auth` stream.
- *
- * The single writer to the stream head, triggered by a cron (never the request
- * path), so the durable log is fed without any auth-critical-path contention.
- * Processes the oldest pending events (`streamIndex === -1`) one whole event at
- * a time — reconstructs the envelope from that event's projection rows, appends
- * it under `eventId` as the stream idempotency key, and stamps `streamId`/
- * `streamIndex` onto those rows in the same transaction. Bounded to
- * `DRAIN_BATCH` events per run and self-reschedules while a backlog remains.
- * Idempotent: appendTail + the row stamp commit together, so a re-run only sees
- * still-pending rows and an interrupted append re-appends the same event freshly.
- */
-export const drainPending = internalMutation({
-  args: {},
-  returns: v.null(),
-  handler: async (ctx) => {
-    const streamId = await authEventStream.getOrCreate(ctx, { key: "auth" });
-    let drained = 0;
-    while (drained < DRAIN_BATCH) {
-      const next = await ctx.db
-        .query("AuthEventProjection")
-        .withIndex("by_stream_index", (q) => q.eq("streamIndex", -1))
-        .order("asc")
-        .first();
-      if (next === null) return null;
-
-      const rows = await ctx.db
-        .query("AuthEventProjection")
-        .withIndex("event_id_target", (q) => q.eq("eventId", next.eventId))
-        .take(MAX_EVENT_TARGETS + 1);
-      if (rows.length > MAX_EVENT_TARGETS) {
-        throw new ConvexError({
-          code: ErrorCode.INVALID_PARAMETERS,
-          message: `Auth event ${next.eventId} has too many projections to drain`,
-        });
-      }
-      const event = reconstructEvent(next.eventId, rows);
-      const receipt = await authEventStream.appendTail(ctx, {
-        streamId,
-        producer: PRODUCER,
-        idempotencyKey: next.eventId,
-        payloadHash: next.eventId,
-        events: [{ event }],
-      });
-      for (const row of rows) {
-        if (row.streamIndex < 0) {
-          await ctx.db.patch("AuthEventProjection", row._id, {
-            streamId,
-            streamIndex: receipt.lastIndex,
-          });
-        }
-      }
-      drained += 1;
-    }
-    await ctx.scheduler.runAfter(0, internal.event.drainPending, {});
-    return null;
   },
 });
