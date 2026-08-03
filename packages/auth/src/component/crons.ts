@@ -28,11 +28,4 @@ crons.daily(
   {},
 );
 
-/**
- * Feed newly-projected auth events into the durable stream. The drainer
- * self-reschedules while a backlog remains, so this interval is a periodic kick
- * (and recovery if a chain ever dies), not the steady-state cadence.
- */
-crons.interval("auth-drain-events", { minutes: 1 }, internal.event.drainPending, {});
-
 export default crons;

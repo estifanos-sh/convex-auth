@@ -132,8 +132,6 @@
   "dependencies": {
     "@convex-dev/action-cache": "^0.3.0",
     "@convex-dev/migrations": "^0.3.5",
-    "@convex-dev/rate-limiter": "^0.3.2",
-    "@convex-dev/stream": "https://pkg.pr.new/get-convex/stream/@convex-dev/stream@96acc6d",
     "@convex-dev/workpool": "^0.4.7",
     "@noble/hashes": "^2.0.1",
     "@oslojs/cbor": "^1.0.0",

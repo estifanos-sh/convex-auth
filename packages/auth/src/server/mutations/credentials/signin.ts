@@ -1,23 +1,34 @@
 /**
- * Combined credentials-verify + session-issue mutation. Replaces the
- * separate `retrieveAccountWithCredentials` + `signIn` pair so password
- * sign-in pays one cross-component RPC instead of two.
+ * Credentials verification backed by two aggregate component transactions:
+ * one to reserve/load sign-in state and one to refund-or-issue. This avoids a
+ * separate component call for every account, user, factor, limiter, and session
+ * operation.
  *
  * @internal
  */
 
 import type { GenericDataModel } from "convex/server";
-import { Infer, v } from "convex/values";
+import { GenericId, Infer, v } from "convex/values";
 
 import * as Provider from "../../crypto";
 import type { Hashed } from "../../../shared/brand";
-import { authDb } from "../../db";
-import { isSignInRateLimited, recordFailedSignIn, resetSignInRateLimit } from "../../limits";
+import { queueAuthEvent } from "../../events";
+import { maxSignInAttempts } from "../../limits";
 import { LOG_LEVELS, log, maybeRedact } from "../../log";
-import { getAuthSessionId, issueSession } from "../../session/lifecycle";
+import {
+  buildSessionIdentity,
+  getAuthSessionId,
+  sessionExpirationTime,
+} from "../../session/lifecycle";
 import type { SessionIssuance } from "../../session/lifecycle";
-import { GenericActionCtxWithAuthConfig, MutationCtx } from "../../types";
-import { withSpan } from "../../utils/span";
+import { encodeRefreshToken, refreshTokenExpirationTime } from "../../token/refresh";
+import { buildKnownSignInIdentityAttributes } from "../../telemetry";
+import {
+  type CrossComponentUserDoc,
+  GenericActionCtxWithAuthConfig,
+  MutationCtx,
+} from "../../types";
+import { setActiveSpanAttributes, withSpan } from "../../utils/span";
 import { AUTH_STORE_REF } from "../store/refs";
 
 /**
@@ -85,13 +96,12 @@ type CredentialsSignInResult =
     }
   | {
       kind: "totpRequired";
-      issuance: SessionIssuance;
       account: { _id: string; emailVerified?: string };
       user: { _id: string; email?: string };
     };
 
 /**
- * Verify credentials and issue a session in a single mutation.
+ * Verify credentials and issue a session through one app mutation.
  *
  * Enforces sign-in rate limiting, optional verified-email and TOTP gates, and
  * returns a discriminated result (`invalidAccount`, `tooManyAttempts`,
@@ -119,8 +129,6 @@ async function credentialsSignInInner(
   config: Provider.Config,
 ): Promise<CredentialsSignInResult> {
   const { provider: providerId, account, generateTokens, requireVerifiedEmail, enforceTotp } = args;
-  const db = authDb(ctx, config);
-
   log(LOG_LEVELS.DEBUG, "credentialsSignInImpl args:", {
     provider: providerId,
     account: { id: account.id, secret: maybeRedact(account.secret) },
@@ -129,11 +137,27 @@ async function credentialsSignInInner(
     enforceTotp,
   });
 
-  const existingAccount = await db.accounts.get({
+  const begun = (await ctx.runMutation(config.component.account.beginCredentialsSignIn, {
     provider: providerId,
     providerAccountId: account.id,
-  });
-  if (existingAccount === null) {
+    maxAttemptsPerHour: maxSignInAttempts(config),
+    reserveAttempt: true,
+    includeTotp: enforceTotp,
+  })) as
+    | { status: "invalid" }
+    | { status: "limited" }
+    | {
+        status: "ready";
+        account: {
+          _id: string;
+          userId: string;
+          secret?: string;
+          emailVerified?: string;
+        };
+        user: CrossComponentUserDoc;
+        hasTotp: boolean;
+      };
+  if (begun.status === "invalid") {
     // A real account pays the full secret-verify (scrypt) cost below, so burn
     // the same cost here before returning the unified rejection. Without this a
     // missing account returns early and its faster response leaks (by timing)
@@ -141,23 +165,11 @@ async function credentialsSignInInner(
     await burnVerifyForTiming(getProviderOrThrow, providerId, account.secret);
     return { kind: "invalidAccount" };
   }
-
-  const [user, rateLimited] = await Promise.all([
-    db.users.get({ id: existingAccount.userId }),
-    isSignInRateLimited(ctx, existingAccount._id, config),
-  ]);
-
-  if (user === null) {
-    log(
-      LOG_LEVELS.ERROR,
-      `Account ${existingAccount._id} links to missing user ${existingAccount.userId}`,
-    );
-    return { kind: "invalidAccount" };
-  }
-
-  if (rateLimited) {
+  if (begun.status === "limited") {
     return { kind: "tooManyAttempts" };
   }
+  const existingAccount = begun.account;
+  const user = begun.user;
 
   const verified = await withSpan("convex-auth.credentials.verify", { providerId }, () =>
     Provider.verify(
@@ -167,12 +179,30 @@ async function credentialsSignInInner(
     ),
   );
   if (!verified) {
-    await recordFailedSignIn(ctx, existingAccount._id, config);
+    // beginCredentialsSignIn reserved this failed attempt transactionally.
     return { kind: "invalidSecret" };
   }
 
+  const complete = async (issueSession: boolean) =>
+    (await ctx.runMutation(config.component.account.completeCredentialsSignIn, {
+      accountId: existingAccount._id,
+      issueSession,
+      generateTokens,
+      replaceSessionId: issueSession ? ((await getAuthSessionId(ctx)) ?? undefined) : undefined,
+      sessionExpirationTime: sessionExpirationTime(config),
+      refreshTokenExpirationTime: refreshTokenExpirationTime(config),
+    })) as
+      | { status: "rejected" | "reset" }
+      | {
+          status: "accepted";
+          user: typeof user;
+          sessionId: string;
+          refreshTokenId?: string;
+          replacedSessionId?: string;
+        };
+
   if (requireVerifiedEmail && !existingAccount.emailVerified) {
-    await resetSignInRateLimit(ctx, existingAccount._id, config);
+    await complete(false);
     return {
       kind: "emailVerificationRequired",
       account: {
@@ -186,31 +216,10 @@ async function credentialsSignInInner(
     };
   }
 
-  let hasTotp = false;
-  if (enforceTotp) {
-    const totpDoc = (await ctx.runQuery(config.component.factor.totp.get, {
-      verifiedForUserId: existingAccount.userId,
-    })) as { _id: string } | null;
-    hasTotp = totpDoc !== null;
-  }
-
-  const totpRequired = enforceTotp && hasTotp;
-
-  const replaceSessionId = (await getAuthSessionId(ctx)) ?? undefined;
-
-  const [issuance] = await Promise.all([
-    issueSession(ctx, config, {
-      userId: existingAccount.userId,
-      replaceSessionId,
-      generateTokens: generateTokens && !totpRequired,
-    }),
-    resetSignInRateLimit(ctx, existingAccount._id, config),
-  ]);
-
-  if (totpRequired) {
+  if (enforceTotp && begun.hasTotp) {
+    await complete(false);
     return {
       kind: "totpRequired",
-      issuance,
       account: {
         _id: existingAccount._id,
         emailVerified: existingAccount.emailVerified,
@@ -218,6 +227,51 @@ async function credentialsSignInInner(
       user: { _id: user._id, email: user.email },
     };
   }
+
+  const completed = await complete(true);
+  if (completed.status !== "accepted") return { kind: "invalidAccount" };
+
+  const userId = completed.user._id as GenericId<"User">;
+  const sessionId = completed.sessionId as GenericId<"Session">;
+  setActiveSpanAttributes({
+    "auth.signin.result": "success",
+    ...buildKnownSignInIdentityAttributes(config, { userId, sessionId }, completed.user.email),
+  });
+  if (completed.replacedSessionId !== undefined) {
+    const replacedSessionId = completed.replacedSessionId as GenericId<"Session">;
+    await queueAuthEvent(ctx, config, {
+      kind: "session.invalidated",
+      actor: { type: "system" },
+      subject: { type: "session", id: replacedSessionId },
+      targets: [
+        { kind: "user", id: userId },
+        { kind: "session", id: replacedSessionId },
+      ],
+      outcome: "success",
+      data: { userId, reason: "replaced" },
+    });
+  }
+  await queueAuthEvent(ctx, config, {
+    kind: "session.signed_in",
+    actor: { type: "user", id: userId },
+    subject: { type: "session", id: sessionId },
+    targets: [
+      { kind: "user", id: userId },
+      { kind: "session", id: sessionId },
+    ],
+    outcome: "success",
+    data: { provider: providerId },
+  });
+  const refreshTokenId = completed.refreshTokenId as GenericId<"RefreshToken"> | undefined;
+  const issuance: SessionIssuance = {
+    userId,
+    sessionId,
+    identity: buildSessionIdentity(userId, sessionId, completed.user),
+    refreshToken:
+      generateTokens && refreshTokenId !== undefined
+        ? encodeRefreshToken(refreshTokenId, sessionId)
+        : null,
+  };
 
   return {
     kind: "signedIn",
@@ -229,7 +283,7 @@ async function credentialsSignInInner(
     user: {
       _id: user._id,
       email: user.email,
-      hasTotp,
+      hasTotp: begun.hasTotp,
     },
   };
 }

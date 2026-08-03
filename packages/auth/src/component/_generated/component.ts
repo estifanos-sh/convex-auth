@@ -23,6 +23,88 @@ import type { FunctionReference } from "convex/server";
  */
 export type ComponentApi<Name extends string | undefined = string | undefined> = {
   account: {
+    beginCredentialsSignIn: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        includeTotp: boolean;
+        maxAttemptsPerHour: number;
+        provider: string;
+        providerAccountId: string;
+        reserveAttempt: boolean;
+      },
+      | { status: "invalid" }
+      | { status: "limited" }
+      | {
+          account: {
+            _creationTime: number;
+            _id: string;
+            emailVerified?: string;
+            extend?: any;
+            phoneVerified?: string;
+            provider: string;
+            providerAccountId: string;
+            secret?: string;
+            userId: string;
+          };
+          hasTotp: boolean;
+          status: "ready";
+          user: {
+            _creationTime: number;
+            _id: string;
+            email?: string;
+            emailVerificationTime?: number;
+            extend?: any;
+            firstName?: string;
+            hasTotp?: boolean;
+            image?: string;
+            isAnonymous?: boolean;
+            lastActiveGroup?: string;
+            lastName?: string;
+            name?: string;
+            phone?: string;
+            phoneVerificationTime?: number;
+          };
+        },
+      Name
+    >;
+    completeCredentialsSignIn: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        accountId: string;
+        generateTokens: boolean;
+        issueSession: boolean;
+        refreshTokenExpirationTime: number;
+        replaceSessionId?: string;
+        sessionExpirationTime: number;
+      },
+      | { status: "rejected" }
+      | { status: "reset" }
+      | {
+          refreshTokenId?: string;
+          replacedSessionId?: string;
+          sessionId: string;
+          status: "accepted";
+          user: {
+            _creationTime: number;
+            _id: string;
+            email?: string;
+            emailVerificationTime?: number;
+            extend?: any;
+            firstName?: string;
+            hasTotp?: boolean;
+            image?: string;
+            isAnonymous?: boolean;
+            lastActiveGroup?: string;
+            lastName?: string;
+            name?: string;
+            phone?: string;
+            phoneVerificationTime?: number;
+          };
+        },
+      Name
+    >;
     create: FunctionReference<
       "mutation",
       "internal",
@@ -2501,6 +2583,79 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         boolean,
         Name
       >;
+      beginAssertion: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          credentialId: string;
+          expectedChallenge: string;
+          verifierId: string;
+        },
+        {
+          passkey: {
+            _creationTime: number;
+            _id: string;
+            algorithm: number;
+            attestation?: {
+              aaguid: string;
+              format: string;
+              metadataDescription?: string;
+              status: "trusted";
+              verifiedAt: number;
+              verifier: string;
+            };
+            backedUp: boolean;
+            counter: number;
+            createdAt: number;
+            credentialId: string;
+            deviceType: string;
+            lastUsedAt?: number;
+            name?: string;
+            publicKey: ArrayBuffer;
+            transports?: Array<string>;
+            userId: string;
+          } | null;
+          verifierAccepted: boolean;
+        },
+        Name
+      >;
+      completeAssertion: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          backedUp: boolean;
+          counter: number;
+          id: string;
+          lastUsedAt: number;
+          refreshTokenExpirationTime: number;
+          replaceSessionId?: string;
+          sessionExpirationTime: number;
+        },
+        | { status: "rejected" }
+        | {
+            refreshTokenId: string;
+            replacedSessionId?: string;
+            sessionId: string;
+            status: "accepted";
+            user: {
+              _creationTime: number;
+              _id: string;
+              email?: string;
+              emailVerificationTime?: number;
+              extend?: any;
+              firstName?: string;
+              hasTotp?: boolean;
+              image?: string;
+              isAnonymous?: boolean;
+              lastActiveGroup?: string;
+              lastName?: string;
+              name?: string;
+              phone?: string;
+              phoneVerificationTime?: number;
+            };
+          },
+        Name
+      >;
       create: FunctionReference<
         "mutation",
         "internal",
@@ -2604,6 +2759,77 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       >;
     };
     totp: {
+      beginVerification: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          authenticatedUserId?: string;
+          intent: "enrollment" | "challenge";
+          maxAttemptsPerHour: number;
+          totpId?: string;
+          verifierId: string;
+        },
+        | { status: "invalid_verifier" }
+        | { status: "limited" }
+        | { status: "not_found" }
+        | { status: "already_verified" }
+        | {
+            factor: {
+              _creationTime: number;
+              _id: string;
+              createdAt: number;
+              digits: number;
+              lastUsedAt?: number;
+              name?: string;
+              period: number;
+              secret: ArrayBuffer;
+              userId: string;
+              verified: boolean;
+            };
+            status: "ready";
+            userId: string;
+          },
+        Name
+      >;
+      completeVerification: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          authenticatedUserId?: string;
+          intent: "enrollment" | "challenge";
+          now: number;
+          refreshTokenExpirationTime: number;
+          replaceSessionId?: string;
+          sessionExpirationTime: number;
+          totpId?: string;
+          verifierId: string;
+        },
+        | { status: "rejected" }
+        | {
+            factorId: string;
+            refreshTokenId: string;
+            replacedSessionId?: string;
+            sessionId: string;
+            status: "accepted";
+            user: {
+              _creationTime: number;
+              _id: string;
+              email?: string;
+              emailVerificationTime?: number;
+              extend?: any;
+              firstName?: string;
+              hasTotp?: boolean;
+              image?: string;
+              isAnonymous?: boolean;
+              lastActiveGroup?: string;
+              lastName?: string;
+              name?: string;
+              phone?: string;
+              phoneVerificationTime?: number;
+            };
+          },
+        Name
+      >;
       create: FunctionReference<
         "mutation",
         "internal",
@@ -2617,6 +2843,39 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           verified: boolean;
         },
         string,
+        Name
+      >;
+      createEnrollment: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          createdAt: number;
+          digits: number;
+          name?: string;
+          period: number;
+          secret: ArrayBuffer;
+          userId: string;
+        },
+        {
+          totpId: string;
+          user: {
+            _creationTime: number;
+            _id: string;
+            email?: string;
+            emailVerificationTime?: number;
+            extend?: any;
+            firstName?: string;
+            hasTotp?: boolean;
+            image?: string;
+            isAnonymous?: boolean;
+            lastActiveGroup?: string;
+            lastName?: string;
+            name?: string;
+            phone?: string;
+            phoneVerificationTime?: number;
+          };
+          verifierId: string;
+        },
         Name
       >;
       get: FunctionReference<
@@ -3448,6 +3707,22 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         refreshTokenId?: string;
         replacedSessionId?: string;
         sessionId: string;
+        user: {
+          _creationTime: number;
+          _id: string;
+          email?: string;
+          emailVerificationTime?: number;
+          extend?: any;
+          firstName?: string;
+          hasTotp?: boolean;
+          image?: string;
+          isAnonymous?: boolean;
+          lastActiveGroup?: string;
+          lastName?: string;
+          name?: string;
+          phone?: string;
+          phoneVerificationTime?: number;
+        };
         userId: string;
       },
       Name
@@ -3562,6 +3837,22 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
             refreshTokenId: string;
             sessionId: string;
             status: "rotated";
+            user: {
+              _creationTime: number;
+              _id: string;
+              email?: string;
+              emailVerificationTime?: number;
+              extend?: any;
+              firstName?: string;
+              hasTotp?: boolean;
+              image?: string;
+              isAnonymous?: boolean;
+              lastActiveGroup?: string;
+              lastName?: string;
+              name?: string;
+              phone?: string;
+              phoneVerificationTime?: number;
+            };
             userId: string;
           }
         | { refreshTokenId: string; status: "reuse_detected"; userId: string }
@@ -3609,6 +3900,83 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       >;
     };
     verification: {
+      beginVerification: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          code: string;
+          identifier?: string;
+          maxAttemptsPerHour: number;
+          now: number;
+          provider?: string;
+          verifier?: string;
+        },
+        | { status: "invalid" }
+        | { status: "limited" }
+        | {
+            account: {
+              _creationTime: number;
+              _id: string;
+              emailVerified?: string;
+              extend?: any;
+              phoneVerified?: string;
+              provider: string;
+              providerAccountId: string;
+              secret?: string;
+              userId: string;
+            };
+            code: {
+              _creationTime: number;
+              _id: string;
+              accountId: string;
+              code: string;
+              emailVerified?: string;
+              expirationTime: number;
+              phoneVerified?: string;
+              provider: string;
+              verifier?: string;
+            };
+            status: "ready";
+          },
+        Name
+      >;
+      completeVerification: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          codeId: string;
+          generateTokens: boolean;
+          identifier?: string;
+          refreshTokenExpirationTime: number;
+          replaceSessionId?: string;
+          sessionExpirationTime: number;
+          userId: string;
+        },
+        | { status: "rejected" }
+        | {
+            refreshTokenId?: string;
+            replacedSessionId?: string;
+            sessionId: string;
+            status: "accepted";
+            user: {
+              _creationTime: number;
+              _id: string;
+              email?: string;
+              emailVerificationTime?: number;
+              extend?: any;
+              firstName?: string;
+              hasTotp?: boolean;
+              image?: string;
+              isAnonymous?: boolean;
+              lastActiveGroup?: string;
+              lastName?: string;
+              name?: string;
+              phone?: string;
+              phoneVerificationTime?: number;
+            };
+          },
+        Name
+      >;
       create: FunctionReference<
         "mutation",
         "internal",
@@ -3642,6 +4010,13 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         Name
       >;
       remove: FunctionReference<"mutation", "internal", { id: string }, null, Name>;
+      resetVerificationLimits: FunctionReference<
+        "mutation",
+        "internal",
+        { accountId: string; identifier?: string },
+        null,
+        Name
+      >;
     };
   };
   user: {

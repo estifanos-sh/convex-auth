@@ -2,6 +2,7 @@ import { afterEach, expect, test, vi } from "vite-plus/test";
 
 import { configDefaults } from "../../packages/auth/src/server/config";
 import {
+  buildKnownSignInIdentityAttributes,
   buildRefreshIdentityAttributes,
   buildSignInIdentityAttributes,
   buildSignOutIdentityAttributes,
@@ -142,6 +143,29 @@ test("sign-in telemetry omits refresh token attributes and preserves shared iden
     "auth.session.id": "session-3",
     "auth.token_identifier": "user-3https://team-c.convex.site",
     "auth.user.id": "user-3",
+  });
+});
+
+test("sign-in telemetry reuses the user loaded by session creation", () => {
+  const config = configDefaults({
+    providers: [],
+    component: {} as any,
+    telemetry: {
+      includeIdentity: "raw",
+      identityFields: { email: true, userId: true },
+    },
+  });
+
+  expect(
+    buildKnownSignInIdentityAttributes(
+      config,
+      { userId: "user-known", sessionId: "session-known" },
+      "known@example.com",
+    ),
+  ).toEqual({
+    "auth.identity.mode": "raw",
+    "auth.user.email": "known@example.com",
+    "auth.user.id": "user-known",
   });
 });
 

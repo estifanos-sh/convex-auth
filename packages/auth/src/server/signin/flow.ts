@@ -385,22 +385,6 @@ async function handleCredentials(
     }
 
     if (hasTotpEnrolled) {
-      if (preIssuedIssuance === undefined) {
-        try {
-          await withSpan(
-            "convex-auth.signin.credentials.issue-session",
-            { generateTokens: false, totpStepUp: true },
-            () =>
-              callSignIn(ctx, {
-                userId: result.userId,
-                sessionId: result.sessionId,
-                generateTokens: false,
-              }),
-          );
-        } catch (error) {
-          throw asConvexError(error, "INTERNAL_ERROR", "Failed to start TOTP sign-in.");
-        }
-      }
       let verifier: string;
       try {
         verifier = await callVerifier(ctx, JSON.stringify({ userId: result.userId }));
