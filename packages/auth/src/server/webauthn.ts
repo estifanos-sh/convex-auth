@@ -58,15 +58,13 @@ import { toConvexError } from "./errors";
 import { queueAuthEvent } from "./events";
 import { getAuthenticatedUserIdOrNull } from "./identity/claims";
 import { LOG_LEVELS, log } from "./log";
-import { callSignIn, callVerifier } from "./mutations/calls";
 import {
   consumeVerifierById,
   mutatePasskeyBeginAssertion,
+  mutatePasskeyBeginRegistration,
+  mutatePasskeyBeginSignIn,
   mutatePasskeyCompleteAssertion,
-  mutatePasskeyInsert,
-  queryPasskeysByUserId,
-  queryUserById,
-  queryUserByVerifiedEmail,
+  mutatePasskeyCompleteRegistration,
 } from "./component/factor/db";
 import {
   buildSessionIdentity,
@@ -787,8 +785,10 @@ export async function handleWebAuthn(
       }
     }
 
+    const replaceSessionId = (await getAuthSessionId(ctx)) ?? undefined;
+    let completed;
     try {
-      const passkeyId = await mutatePasskeyInsert(ctx, {
+      completed = await mutatePasskeyCompleteRegistration(ctx, {
         userId,
         credentialId,
         publicKey: publicKeyBytes.buffer.slice(
@@ -803,7 +803,11 @@ export async function handleWebAuthn(
         name: params.passkeyName,
         ...(attestationEvidence ? { attestation: attestationEvidence } : {}),
         createdAt: Date.now(),
+        replaceSessionId,
+        sessionExpirationTime: sessionExpirationTime(ctx.auth.config),
+        refreshTokenExpirationTime: refreshTokenExpirationTime(ctx.auth.config),
       });
+      const passkeyId = completed.passkeyId as GenericId<"Passkey">;
       await queueAuthEvent(ctx, ctx.auth.config, {
         kind: "passkey.added",
         actor: { type: "user", id: userId },
@@ -823,19 +827,50 @@ export async function handleWebAuthn(
       throw convexError(ErrorCode.INTERNAL_ERROR, "An unexpected error occurred.");
     }
 
-    let signInResult;
-    try {
-      signInResult = await callSignIn(ctx, {
-        userId,
-        generateTokens: true,
+    const signedInUserId = userId as GenericId<"User">;
+    const sessionId = completed.sessionId as GenericId<"Session">;
+    setActiveSpanAttributes({
+      "auth.signin.result": "success",
+      ...buildKnownSignInIdentityAttributes(
+        ctx.auth.config,
+        { userId: signedInUserId, sessionId },
+        completed.user.email,
+      ),
+    });
+    if (completed.replacedSessionId !== undefined) {
+      const replacedSessionId = completed.replacedSessionId as GenericId<"Session">;
+      await queueAuthEvent(ctx, ctx.auth.config, {
+        kind: "session.invalidated",
+        actor: { type: "system" },
+        subject: { type: "session", id: replacedSessionId },
+        targets: [
+          { kind: "user", id: signedInUserId },
+          { kind: "session", id: replacedSessionId },
+        ],
+        outcome: "success",
+        data: { userId: signedInUserId, reason: "replaced" },
       });
-    } catch (error) {
-      throw asConvexError(
-        error,
-        ErrorCode.INTERNAL_ERROR,
-        "Failed to finalize passkey registration.",
-      );
     }
+    await queueAuthEvent(ctx, ctx.auth.config, {
+      kind: "session.signed_in",
+      actor: { type: "user", id: signedInUserId },
+      subject: { type: "session", id: sessionId },
+      targets: [
+        { kind: "user", id: signedInUserId },
+        { kind: "session", id: sessionId },
+      ],
+      outcome: "success",
+      data: { provider: "session" },
+    });
+    const signInResult = await finalizeSessionIssuance(ctx.auth.config, {
+      userId: signedInUserId,
+      sessionId,
+      identity: buildSessionIdentity(signedInUserId, sessionId, completed.user),
+      refreshToken: encodeRefreshToken(
+        completed.refreshTokenId as GenericId<"RefreshToken">,
+        sessionId,
+      ),
+    });
     return { kind: "signedIn" as const, session: signInResult };
   };
 
@@ -988,40 +1023,32 @@ export async function handleWebAuthn(
       crypto.getRandomValues(challenge);
       const challengeHash = encodeBase64urlNoPadding(new Uint8Array(sha256(challenge)));
 
-      let verifier: string;
+      const sessionId = (await getAuthSessionId(ctx)) ?? undefined;
+      let registration;
       try {
-        verifier = await callVerifier(ctx, challengeHash, Date.now() + rp.challengeExpirationMs);
+        registration = await mutatePasskeyBeginRegistration(ctx, {
+          userId,
+          sessionId,
+          signature: challengeHash,
+          expirationTime: Date.now() + rp.challengeExpirationMs,
+        });
       } catch (err) {
         logPasskeyError(err);
         throw convexError(ErrorCode.INTERNAL_ERROR, "An unexpected error occurred.");
       }
-
-      let user;
-      try {
-        user = await queryUserById(ctx, userId);
-      } catch (err) {
-        logPasskeyError(err);
-        throw convexError(ErrorCode.INTERNAL_ERROR, "An unexpected error occurred.");
-      }
+      const user = registration.user;
       const userName = params.userName ?? user?.email ?? "user";
       const userDisplayName = params.userDisplayName ?? user?.name ?? userName;
-
-      let existing;
-      try {
-        existing = await queryPasskeysByUserId(ctx, userId);
-      } catch (err) {
-        logPasskeyError(err);
-        throw convexError(ErrorCode.INTERNAL_ERROR, "An unexpected error occurred.");
-      }
+      const existing = registration.credentials;
       if (existing.length >= MAX_WEBAUTHN_CREDENTIALS_PER_USER) {
         throw convexError(
           ErrorCode.INVALID_PARAMETERS,
           `A user can register at most ${MAX_WEBAUTHN_CREDENTIALS_PER_USER} WebAuthn credentials.`,
         );
       }
-      const excludeCredentials = existing.map((pk) => ({
-        id: pk.credentialId,
-        transports: pk.transports,
+      const excludeCredentials = existing.map((credential) => ({
+        id: credential.id,
+        transports: credential.transports,
       }));
 
       const userHandle = encodeBase64urlNoPadding(new TextEncoder().encode(userId));
@@ -1055,7 +1082,7 @@ export async function handleWebAuthn(
           },
           excludeCredentials,
         },
-        verifier,
+        verifier: registration.verifierId,
       };
     },
 
@@ -1065,37 +1092,28 @@ export async function handleWebAuthn(
       crypto.getRandomValues(challenge);
       const challengeHash = encodeBase64urlNoPadding(new Uint8Array(sha256(challenge)));
 
-      let verifier: string;
+      let allowCredentials: AllowCredential[] | undefined;
+      const email = params.email === undefined ? undefined : normalizeEmail(params.email);
+      const sessionId = (await getAuthSessionId(ctx)) ?? undefined;
+      let signIn;
       try {
-        verifier = await callVerifier(ctx, challengeHash, Date.now() + rp.challengeExpirationMs);
+        signIn = await mutatePasskeyBeginSignIn(ctx, {
+          sessionId,
+          signature: challengeHash,
+          expirationTime: Date.now() + rp.challengeExpirationMs,
+          ...(email === undefined ? {} : { verifiedEmail: email }),
+        });
       } catch (err) {
         logPasskeyError(err);
         throw convexError(ErrorCode.INTERNAL_ERROR, "An unexpected error occurred.");
       }
 
-      let allowCredentials: AllowCredential[] | undefined;
-
-      if (params.email !== undefined) {
-        const email = normalizeEmail(params.email);
-        let user;
-        try {
-          user = await queryUserByVerifiedEmail(ctx, email);
-        } catch (err) {
-          logPasskeyError(err);
-          throw convexError(ErrorCode.INTERNAL_ERROR, "An unexpected error occurred.");
-        }
-        let realCredentialIds: string[] = [];
-        if (user) {
-          let passkeys;
-          try {
-            passkeys = await queryPasskeysByUserId(ctx, user._id);
-          } catch (err) {
-            logPasskeyError(err);
-            throw convexError(ErrorCode.INTERNAL_ERROR, "An unexpected error occurred.");
-          }
-          realCredentialIds = passkeys.map((pk) => pk.credentialId);
-        }
-        allowCredentials = await deriveEmailAllowCredentials(email, rp.rpId, realCredentialIds);
+      if (email !== undefined) {
+        allowCredentials = await deriveEmailAllowCredentials(
+          email,
+          rp.rpId,
+          signIn.credentialIds,
+        );
       }
 
       const options: {
@@ -1123,7 +1141,7 @@ export async function handleWebAuthn(
       return {
         kind: "webauthnOptions" as const,
         options,
-        verifier,
+        verifier: signIn.verifierId,
       };
     },
 

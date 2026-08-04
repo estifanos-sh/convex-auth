@@ -314,6 +314,90 @@ test("passkey assertion begin consumes its challenge and loads the credential at
   expect(replay.verifierAccepted).toBe(false);
 });
 
+test("passkey option transactions create the challenge and load ceremony context", async () => {
+  const t = convexTest(schema);
+  const userId = await t.run(async (ctx) => {
+    const userId = await ctx.runMutation(components.auth.user.create, {
+      data: {
+        email: "options@example.com",
+        emailVerificationTime: Date.now(),
+        name: "Options User",
+      },
+    });
+    await ctx.runMutation(components.auth.factor.passkey.create, {
+      ...passkeyArgs(userId),
+      credentialId: "options-credential",
+    });
+    return userId;
+  });
+
+  const registration = await t.run((ctx) =>
+    ctx.runMutation(components.auth.factor.passkey.beginRegistration, {
+      userId,
+      signature: "registration-challenge",
+      expirationTime: Date.now() + 60_000,
+    }),
+  );
+  expect(registration.user).toEqual({ email: "options@example.com", name: "Options User" });
+  expect(registration.credentials).toEqual([{ id: "options-credential" }]);
+
+  const signIn = await t.run((ctx) =>
+    ctx.runMutation(components.auth.factor.passkey.beginSignIn, {
+      signature: "signin-challenge",
+      expirationTime: Date.now() + 60_000,
+      verifiedEmail: "options@example.com",
+    }),
+  );
+  expect(signIn.credentialIds).toEqual(["options-credential"]);
+
+  const verifiers = await t.run(async (ctx) =>
+    Promise.all([
+      ctx.runQuery(components.auth.token.pkce.get, { id: registration.verifierId }),
+      ctx.runQuery(components.auth.token.pkce.get, { id: signIn.verifierId }),
+    ]),
+  );
+  expect(verifiers.map((verifier: { signature?: string } | null) => verifier?.signature)).toEqual([
+    "registration-challenge",
+    "signin-challenge",
+  ]);
+});
+
+test("passkey registration completion stores the credential and replaces the session atomically", async () => {
+  const t = convexTest(schema);
+  const { userId, previousSessionId } = await t.run(async (ctx) => {
+    const userId = await ctx.runMutation(components.auth.user.create, {
+      data: { email: "registration-complete@example.com" },
+    });
+    const previous = await ctx.runMutation(components.auth.session.create, {
+      userId,
+      sessionExpirationTime: Date.now() + 60_000,
+    });
+    return { userId, previousSessionId: previous.sessionId };
+  });
+
+  const completed = await t.run((ctx) =>
+    ctx.runMutation(components.auth.factor.passkey.completeRegistration, {
+      ...passkeyArgs(userId),
+      credentialId: "registration-complete-credential",
+      replaceSessionId: previousSessionId,
+      sessionExpirationTime: Date.now() + 60_000,
+      refreshTokenExpirationTime: Date.now() + 120_000,
+    }),
+  );
+  expect(completed.replacedSessionId).toBe(previousSessionId);
+
+  const state = await t.run(async (ctx) => ({
+    passkey: await ctx.runQuery(components.auth.factor.passkey.get, {
+      id: completed.passkeyId,
+    }),
+    previous: await ctx.runQuery(components.auth.session.get, { id: previousSessionId }),
+    current: await ctx.runQuery(components.auth.session.get, { id: completed.sessionId }),
+  }));
+  expect(state.passkey?.userId).toBe(userId);
+  expect(state.previous).toBeNull();
+  expect(state.current?.userId).toBe(userId);
+});
+
 test("passkey assertion begin preserves a challenge when the response does not match", async () => {
   const t = convexTest(schema);
   const verifierId = await t.run((ctx) =>

@@ -45,6 +45,26 @@ const benchPasswordBatch = makeFunctionReference<
   { email: string; password: string; iterations: number },
   BatchResult
 >("bench:passwordSignInBatch");
+const seedWebAuthnUser = makeFunctionReference<
+  "action",
+  { email: string; credentialId: string },
+  null
+>("bench:seedWebAuthnUser");
+const benchWebAuthnOptionsBatch = makeFunctionReference<
+  "action",
+  { email: string; iterations: number },
+  BatchResult
+>("bench:webAuthnOptionsBatch");
+const benchLegacyWebAuthnOptionsBatch = makeFunctionReference<
+  "action",
+  { email: string; iterations: number },
+  BatchResult
+>("bench:legacyWebAuthnOptionsBatch");
+const benchWebAuthnOptionTransactionBatch = makeFunctionReference<
+  "action",
+  { email: string; iterations: number },
+  BatchResult
+>("bench:webAuthnOptionTransactionBatch");
 
 type SignInEnvelope = {
   kind: string;
@@ -55,6 +75,7 @@ type SignInEnvelope = {
 const N_ITERATIONS = Number.parseInt(process.env.BENCH_ITERATIONS ?? "20", 10);
 const PASSWORD = "bench-password-!";
 const BENCH_EMAIL = `bench-${Date.now().toString(36)}@example.com`;
+const WEBAUTHN_EMAIL = `webauthn-${Date.now().toString(36)}@example.com`;
 
 declare module "vite-plus/test" {
   interface ProvidedContext {
@@ -119,6 +140,10 @@ beforeAll(async () => {
   if (result.kind !== "signedIn" || tokens === null) {
     throw new Error(`Unable to create bench password account: ${JSON.stringify(result)}`);
   }
+  await client.action(seedWebAuthnUser, {
+    email: WEBAUTHN_EMAIL,
+    credentialId: `bench-credential-${Date.now().toString(36)}`,
+  });
 }, 30_000);
 
 test("auth:signIn baseline — anonymous", async () => {
@@ -177,6 +202,51 @@ test("auth:signIn — password (scrypt verify)", async () => {
   expect(stats(clientSamples).p95).toBeLessThan(1500);
   expect(stats(backend.backendMs).p95).toBeLessThan(1200);
 }, 180_000);
+
+test("auth:signIn — WebAuthn options", async () => {
+  const client = createClient();
+
+  const clientSamples: number[] = [];
+  for (let i = 0; i < N_ITERATIONS; i += 1) {
+    const t0 = performance.now();
+    await client.action(api.auth.signIn, {
+      provider: "webauthn",
+      params: { email: WEBAUTHN_EMAIL, flow: "signIn" },
+    });
+    clientSamples.push(performance.now() - t0);
+  }
+
+  const backend = await client.action(benchWebAuthnOptionsBatch, {
+    email: WEBAUTHN_EMAIL,
+    iterations: N_ITERATIONS,
+  });
+  const legacy = await client.action(benchLegacyWebAuthnOptionsBatch, {
+    email: WEBAUTHN_EMAIL,
+    iterations: N_ITERATIONS,
+  });
+  const optimizedTransactions = await client.action(benchWebAuthnOptionTransactionBatch, {
+    email: WEBAUTHN_EMAIL,
+    iterations: N_ITERATIONS,
+  });
+
+  console.log(`\nauth:signIn WebAuthn options (n=${N_ITERATIONS})`);
+  printRow("client wall time", stats(clientSamples));
+  printRow("backend wall time (bench wrap)", stats(backend.backendMs));
+  printRow("optimized 1-transaction chain", stats(optimizedTransactions.backendMs));
+  printRow("legacy 3-transaction chain", stats(legacy.backendMs));
+  const transportOverhead = stats(clientSamples).p50 - stats(backend.backendMs).p50;
+  const transactionSavings =
+    stats(legacy.backendMs).p50 - stats(optimizedTransactions.backendMs).p50;
+  console.log(
+    `  transport overhead (client p50 − backend p50) = ${transportOverhead.toFixed(1)}ms`,
+  );
+  console.log(
+    `  transaction reduction (legacy p50 − optimized p50) = ${transactionSavings.toFixed(1)}ms`,
+  );
+
+  expect(stats(clientSamples).p95).toBeLessThan(800);
+  expect(stats(backend.backendMs).p95).toBeLessThan(600);
+}, 120_000);
 
 test("scrypt cost = password backend p50 − anonymous backend p50", async () => {
   const client = createClient();

@@ -2619,6 +2619,34 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         },
         Name
       >;
+      beginRegistration: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          expirationTime: number;
+          sessionId?: string;
+          signature: string;
+          userId: string;
+        },
+        {
+          credentials: Array<{ id: string; transports?: Array<string> }>;
+          user: { email?: string; name?: string };
+          verifierId: string;
+        },
+        Name
+      >;
+      beginSignIn: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          expirationTime: number;
+          sessionId?: string;
+          signature: string;
+          verifiedEmail?: string;
+        },
+        { credentialIds: Array<string>; verifierId: string },
+        Name
+      >;
       completeAssertion: FunctionReference<
         "mutation",
         "internal",
@@ -2654,6 +2682,56 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
               phoneVerificationTime?: number;
             };
           },
+        Name
+      >;
+      completeRegistration: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          algorithm: number;
+          attestation?: {
+            aaguid: string;
+            format: string;
+            metadataDescription?: string;
+            status: "trusted";
+            verifiedAt: number;
+            verifier: string;
+          };
+          backedUp: boolean;
+          counter: number;
+          createdAt: number;
+          credentialId: string;
+          deviceType: string;
+          name?: string;
+          publicKey: ArrayBuffer;
+          refreshTokenExpirationTime: number;
+          replaceSessionId?: string;
+          sessionExpirationTime: number;
+          transports?: Array<string>;
+          userId: string;
+        },
+        {
+          passkeyId: string;
+          refreshTokenId: string;
+          replacedSessionId?: string;
+          sessionId: string;
+          user: {
+            _creationTime: number;
+            _id: string;
+            email?: string;
+            emailVerificationTime?: number;
+            extend?: any;
+            firstName?: string;
+            hasTotp?: boolean;
+            image?: string;
+            isAnonymous?: boolean;
+            lastActiveGroup?: string;
+            lastName?: string;
+            name?: string;
+            phone?: string;
+            phoneVerificationTime?: number;
+          };
+        },
         Name
       >;
       create: FunctionReference<
