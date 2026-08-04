@@ -169,134 +169,80 @@ export const update = mutation({
   },
 });
 
-/**
- * Delete a user. Without `cascade` it refuses when any child row (session,
- * account, key, group membership, passkey, or TOTP factor) still exists. With
- * `cascade`, it deletes those children and refresh tokens too, throwing
- * `CASCADE_TOO_LARGE` past ~1000 rows per table. Owned emails are always
- * removed.
- */
+/** Delete a user and all auth-owned child rows, bounded per table. */
 const remove = mutation({
-  args: {
-    id: v.id("User"),
-    cascade: v.optional(v.boolean()),
-  },
+  args: { id: v.id("User") },
   returns: v.null(),
-  handler: async (ctx, { id: userId, cascade }) => {
+  handler: async (ctx, { id: userId }) => {
     const user = await ctx.db.get("User", userId);
     if (user === null) return null;
-
-    if (cascade !== true) {
-      const [session, account, key, member, passkey, totp] = await Promise.all([
-        ctx.db
-          .query("Session")
-          .withIndex("user_id", (q) => q.eq("userId", userId))
-          .first(),
-        ctx.db
-          .query("Account")
-          .withIndex("user_id_provider", (q) => q.eq("userId", userId))
-          .first(),
-        ctx.db
-          .query("ApiKey")
-          .withIndex("user_id", (q) => q.eq("userId", userId))
-          .first(),
-        ctx.db
-          .query("GroupMember")
-          .withIndex("user_id", (q) => q.eq("userId", userId))
-          .first(),
-        ctx.db
-          .query("Passkey")
-          .withIndex("user_id", (q) => q.eq("userId", userId))
-          .first(),
-        ctx.db
-          .query("TotpFactor")
-          .withIndex("user_id", (q) => q.eq("userId", userId))
-          .first(),
-      ]);
-      if (
-        session !== null ||
-        account !== null ||
-        key !== null ||
-        member !== null ||
-        passkey !== null ||
-        totp !== null
-      ) {
-        throw new ConvexError({
-          code: ErrorCode.INVALID_PARAMETERS,
-          message: "The provided parameters are invalid.",
-        });
-      }
+    const [sessions, accounts, keys, members, passkeys, totps] = await Promise.all([
+      ctx.db
+        .query("Session")
+        .withIndex("user_id", (q) => q.eq("userId", userId))
+        .take(CASCADE_MAX + 1),
+      ctx.db
+        .query("Account")
+        .withIndex("user_id_provider", (q) => q.eq("userId", userId))
+        .take(CASCADE_MAX + 1),
+      ctx.db
+        .query("ApiKey")
+        .withIndex("user_id", (q) => q.eq("userId", userId))
+        .take(CASCADE_MAX + 1),
+      ctx.db
+        .query("GroupMember")
+        .withIndex("user_id", (q) => q.eq("userId", userId))
+        .take(CASCADE_MAX + 1),
+      ctx.db
+        .query("Passkey")
+        .withIndex("user_id", (q) => q.eq("userId", userId))
+        .take(CASCADE_MAX + 1),
+      ctx.db
+        .query("TotpFactor")
+        .withIndex("user_id", (q) => q.eq("userId", userId))
+        .take(CASCADE_MAX + 1),
+    ]);
+    if (
+      tooMany(sessions.length) ||
+      tooMany(accounts.length) ||
+      tooMany(keys.length) ||
+      tooMany(members.length) ||
+      tooMany(passkeys.length) ||
+      tooMany(totps.length)
+    ) {
+      throw new ConvexError({
+        code: ErrorCode.CASCADE_TOO_LARGE,
+        message: `User has more than ${CASCADE_MAX} child rows in one or more tables; cascade delete is not safe in a single mutation. Drain child rows with the migrations component, then retry.`,
+      });
     }
-
-    if (cascade === true) {
-      const [sessions, accounts, keys, members, passkeys, totps] = await Promise.all([
-        ctx.db
-          .query("Session")
-          .withIndex("user_id", (q) => q.eq("userId", userId))
-          .take(CASCADE_MAX + 1),
-        ctx.db
-          .query("Account")
-          .withIndex("user_id_provider", (q) => q.eq("userId", userId))
-          .take(CASCADE_MAX + 1),
-        ctx.db
-          .query("ApiKey")
-          .withIndex("user_id", (q) => q.eq("userId", userId))
-          .take(CASCADE_MAX + 1),
-        ctx.db
-          .query("GroupMember")
-          .withIndex("user_id", (q) => q.eq("userId", userId))
-          .take(CASCADE_MAX + 1),
-        ctx.db
-          .query("Passkey")
-          .withIndex("user_id", (q) => q.eq("userId", userId))
-          .take(CASCADE_MAX + 1),
-        ctx.db
-          .query("TotpFactor")
-          .withIndex("user_id", (q) => q.eq("userId", userId))
-          .take(CASCADE_MAX + 1),
-      ]);
-      if (
-        tooMany(sessions.length) ||
-        tooMany(accounts.length) ||
-        tooMany(keys.length) ||
-        tooMany(members.length) ||
-        tooMany(passkeys.length) ||
-        tooMany(totps.length)
-      ) {
-        throw new ConvexError({
-          code: ErrorCode.CASCADE_TOO_LARGE,
-          message: `User has more than ${CASCADE_MAX} child rows in one or more tables; cascade delete is not safe in a single mutation. Use the migrations component to drain children first, then call delete without cascade.`,
-        });
-      }
-      const refreshTokens =
-        sessions.length > 0
-          ? (
-              await Promise.all(
-                sessions.map((s) =>
-                  ctx.db
-                    .query("RefreshToken")
-                    .withIndex("session_id", (q) => q.eq("sessionId", s._id))
-                    .take(CASCADE_MAX + 1),
-                ),
-              )
-            ).flat()
-          : [];
-      if (tooMany(refreshTokens.length)) {
-        throw new ConvexError({
-          code: ErrorCode.CASCADE_TOO_LARGE,
-          message: `User has more than ${CASCADE_MAX} refresh tokens across sessions; cascade delete is not safe in a single mutation.`,
-        });
-      }
-      await Promise.all([
-        ...sessions.map((s) => ctx.db.delete("Session", s._id)),
-        ...refreshTokens.map((r) => ctx.db.delete("RefreshToken", r._id)),
-        ...accounts.map((a) => ctx.db.delete("Account", a._id)),
-        ...keys.map((k) => ctx.db.delete("ApiKey", k._id)),
-        ...members.map((m) => ctx.db.delete("GroupMember", m._id)),
-        ...passkeys.map((p) => ctx.db.delete("Passkey", p._id)),
-        ...totps.map((t) => ctx.db.delete("TotpFactor", t._id)),
-      ]);
+    const refreshTokens =
+      sessions.length > 0
+        ? (
+            await Promise.all(
+              sessions.map((s) =>
+                ctx.db
+                  .query("RefreshToken")
+                  .withIndex("session_id", (q) => q.eq("sessionId", s._id))
+                  .take(CASCADE_MAX + 1),
+              ),
+            )
+          ).flat()
+        : [];
+    if (tooMany(refreshTokens.length)) {
+      throw new ConvexError({
+        code: ErrorCode.CASCADE_TOO_LARGE,
+        message: `User has more than ${CASCADE_MAX} refresh tokens across sessions; cascade delete is not safe in a single mutation.`,
+      });
     }
+    await Promise.all([
+      ...sessions.map((s) => ctx.db.delete("Session", s._id)),
+      ...refreshTokens.map((r) => ctx.db.delete("RefreshToken", r._id)),
+      ...accounts.map((a) => ctx.db.delete("Account", a._id)),
+      ...keys.map((k) => ctx.db.delete("ApiKey", k._id)),
+      ...members.map((m) => ctx.db.delete("GroupMember", m._id)),
+      ...passkeys.map((p) => ctx.db.delete("Passkey", p._id)),
+      ...totps.map((t) => ctx.db.delete("TotpFactor", t._id)),
+    ]);
     const ownedEmails = await ctx.db
       .query("UserEmail")
       .withIndex("user_id", (q) => q.eq("userId", userId))

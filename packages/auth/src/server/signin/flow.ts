@@ -1,4 +1,5 @@
 import { GenericId, ConvexError, type Value } from "convex/values";
+import type { CredentialsAuthorizeResult } from "../../providers/credentials";
 
 import { assertNever } from "../../shared/brand";
 import { authFlowError } from "../../shared/errors";
@@ -333,7 +334,7 @@ async function handleCredentials(
   },
 ): Promise<SignInSessionResult<SessionInfo<AuthTokens | null> | null> | SignInTotpChallengeResult> {
   return withSpan("convex-auth.signin.credentials", {}, async () => {
-    let result;
+    let result: CredentialsAuthorizeResult;
     try {
       result = await withSpan(
         "convex-auth.signin.credentials.authorize",
@@ -359,6 +360,30 @@ async function handleCredentials(
       return result as
         | SignInSessionResult<SessionInfo<AuthTokens | null> | null>
         | SignInTotpChallengeResult;
+    }
+
+    if ("provision" in result) {
+      const { provision, hasTotp } = result;
+      try {
+        const provisioned = await withSpan(
+          "convex-auth.signin.credentials.provision",
+          { providerId: provider.id },
+          () =>
+            ctx.auth.account.create(ctx, {
+              provider: provider.id,
+              account: provision.account,
+              profile: provision.profile,
+              shouldLinkViaEmail: provision.match?.includes("email"),
+              shouldLinkViaPhone: provision.match?.includes("phone"),
+            }),
+        );
+        result = {
+          userId: provisioned.account.userId as GenericId<"User">,
+          hasTotp,
+        };
+      } catch (error) {
+        throw asConvexError(error, "INTERNAL_ERROR", "Failed to provision credentials account.");
+      }
     }
 
     const hintedHasTotp = result.hasTotp;

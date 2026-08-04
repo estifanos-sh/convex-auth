@@ -7,7 +7,9 @@
  * @module
  */
 
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
+
+import { ErrorCode } from "../../shared/codes";
 
 import type { Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
@@ -262,6 +264,7 @@ export const create = mutation({
 export const update = mutation({
   args: {
     id: v.id("TotpFactor"),
+    userId: v.optional(v.id("User")),
     patch: v.object({
       verified: v.optional(v.boolean()),
       name: v.optional(v.string()),
@@ -269,7 +272,16 @@ export const update = mutation({
     }),
   },
   returns: v.null(),
-  handler: async (ctx, { id: totpId, patch }) => {
+  handler: async (ctx, { id: totpId, userId, patch }) => {
+    if (userId !== undefined) {
+      const factor = await ctx.db.get("TotpFactor", totpId);
+      if (factor === null || factor.userId !== userId) {
+        throw new ConvexError({
+          code: ErrorCode.TOTP_NOT_FOUND,
+          message: "TOTP factor not found.",
+        });
+      }
+    }
     await ctx.db.patch("TotpFactor", totpId, patch);
     return null;
   },
@@ -277,9 +289,18 @@ export const update = mutation({
 
 /** Delete a TOTP factor. */
 const remove = mutation({
-  args: { id: v.id("TotpFactor") },
+  args: { id: v.id("TotpFactor"), userId: v.optional(v.id("User")) },
   returns: v.null(),
-  handler: async (ctx, { id: totpId }) => {
+  handler: async (ctx, { id: totpId, userId }) => {
+    if (userId !== undefined) {
+      const factor = await ctx.db.get("TotpFactor", totpId);
+      if (factor === null || factor.userId !== userId) {
+        throw new ConvexError({
+          code: ErrorCode.TOTP_NOT_FOUND,
+          message: "TOTP factor not found.",
+        });
+      }
+    }
     await ctx.db.delete("TotpFactor", totpId);
     return null;
   },

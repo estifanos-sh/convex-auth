@@ -859,7 +859,7 @@ type AuthUnlinkAccountArgs = {
   accountId: GenericId<"Account">;
 };
 
-/** Arguments for `auth.account.passkey.remove()`. */
+/** Arguments for provider-callback passkey removal. */
 type AuthDeletePasskeyArgs = {
   passkeyId: GenericId<"Passkey">;
 };
@@ -892,8 +892,6 @@ type AuthProviderSignInResult =
 type AuthMemberInspectArgs = {
   userId: GenericId<"User">;
   groupId: GenericId<"Group">;
-  ancestry?: boolean;
-  maxDepth?: number;
 };
 
 /** Result of `auth.member.get()` — membership state and derived access details. */
@@ -901,6 +899,15 @@ export type AuthMemberInspectResult = {
   membership: GenericDoc<GenericDataModel, "GroupMember"> | null;
   roleIds: string[];
   grants: string[];
+};
+
+/** Result of explicit inherited membership resolution. */
+export type AuthMemberResolveResult = AuthMemberInspectResult & {
+  matchedGroupId: GenericId<"Group"> | null;
+  depth: number | null;
+  isDirect: boolean;
+  isInherited: boolean;
+  traversedGroupIds: GenericId<"Group">[];
 };
 
 /** Arguments for `auth.member.assert()`. */
@@ -1009,6 +1016,10 @@ type AuthServerHelpers = {
       ctx: GenericActionCtx<GenericDataModel>,
       args: AuthMemberInspectArgs,
     ) => Promise<AuthMemberInspectResult>;
+    resolve: (
+      ctx: GenericActionCtx<GenericDataModel>,
+      args: AuthMemberInspectArgs & { maxDepth?: number },
+    ) => Promise<AuthMemberResolveResult>;
     assert: (
       ctx: GenericActionCtx<GenericDataModel>,
       args: AuthMemberAssertArgs,

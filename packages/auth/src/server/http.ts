@@ -40,23 +40,15 @@ type HttpContextAuthLike = {
   user: {
     get: (ctx: HttpQueryCtx, args: { id: string }) => Promise<UserDoc | null>;
   };
-  member: {
+  active: {
     get: (
       ctx: HttpQueryCtx,
-      args: { userId: string; groupId: string },
+      args: { userId: string },
     ) => Promise<{
-      membership: unknown;
+      groupId: string;
       roleIds: string[];
       grants: string[];
-    }>;
-    list: (
-      ctx: HttpQueryCtx,
-      opts: {
-        where: { userId: string };
-        paginationOpts: { numItems: number; cursor: string | null };
-        withGrants: true;
-      },
-    ) => Promise<{ page: Array<{ groupId: string; roleIds: string[]; grants: string[] }> }>;
+    } | null>;
   };
   key: {
     verify: (

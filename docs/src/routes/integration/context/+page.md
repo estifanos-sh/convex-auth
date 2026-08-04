@@ -100,7 +100,8 @@ lookups inside Convex functions.
 - Queries and mutations wrapped with `auth.ctx()`
 - Permission checks like `auth.member.assert(ctx, ...)`
 - Helper lookups like `auth.user.get`, `auth.member.list`, `auth.group.get`
-- Account and key management like `auth.account.passkey.list` and `auth.key.list`
+- Account, factor, and key management like `auth.account.list`,
+  `auth.factor.list`, and `auth.key.list`
 
 Use `convex/auth.ts` only for the full runtime surface.
 

@@ -227,6 +227,7 @@ export const create = mutation({
 export const update = mutation({
   args: {
     id: v.id("Passkey"),
+    userId: v.optional(v.id("User")),
     patch: v.object({
       counter: v.optional(v.number()),
       transports: v.optional(v.array(v.string())),
@@ -236,7 +237,16 @@ export const update = mutation({
     }),
   },
   returns: v.null(),
-  handler: async (ctx, { id: passkeyId, patch }) => {
+  handler: async (ctx, { id: passkeyId, userId, patch }) => {
+    if (userId !== undefined) {
+      const passkey = await ctx.db.get("Passkey", passkeyId);
+      if (passkey === null || passkey.userId !== userId) {
+        throw new ConvexError({
+          code: ErrorCode.PASSKEY_NOT_FOUND,
+          message: "Passkey not found.",
+        });
+      }
+    }
     await ctx.db.patch("Passkey", passkeyId, patch);
     return null;
   },
@@ -316,11 +326,30 @@ export const completeAssertion = mutation({
 
 /** Delete a passkey credential. */
 const remove = mutation({
-  args: { id: v.id("Passkey") },
+  args: {
+    id: v.id("Passkey"),
+    userId: v.optional(v.id("User")),
+    requireOtherAccount: v.optional(v.boolean()),
+  },
   returns: v.null(),
-  handler: async (ctx, { id: passkeyId }) => {
+  handler: async (ctx, { id: passkeyId, userId, requireOtherAccount }) => {
     const passkey = await ctx.db.get("Passkey", passkeyId);
-    if (passkey === null) return null;
+    if (passkey === null) {
+      if (userId !== undefined) {
+        throw new ConvexError({
+          code: ErrorCode.PASSKEY_NOT_FOUND,
+          message: "Passkey not found.",
+        });
+      }
+      return null;
+    }
+    if (userId !== undefined && passkey.userId !== userId) {
+      throw new ConvexError({
+        code: ErrorCode.PASSKEY_NOT_FOUND,
+        message: "Passkey not found.",
+      });
+    }
+    const linkedAccounts = [];
     for (const provider of ["passkey", "webauthn"]) {
       const accounts = await ctx.db
         .query("Account")
@@ -328,10 +357,24 @@ const remove = mutation({
           q.eq("provider", provider).eq("providerAccountId", passkey.credentialId),
         )
         .take(PASSKEY_LIST_BATCH);
-      for (const account of accounts) {
-        if (account.userId === passkey.userId) {
-          await ctx.db.delete("Account", account._id);
-        }
+      linkedAccounts.push(...accounts);
+    }
+    if (requireOtherAccount === true) {
+      const linkedIds = new Set(linkedAccounts.map((account) => account._id));
+      const otherAccount = await ctx.db
+        .query("Account")
+        .withIndex("user_id_provider", (q) => q.eq("userId", passkey.userId))
+        .take(PASSKEY_LIST_BATCH);
+      if (!otherAccount.some((account) => !linkedIds.has(account._id))) {
+        throw new ConvexError({
+          code: ErrorCode.INVALID_PARAMETERS,
+          message: "Cannot remove the user's last sign-in method.",
+        });
+      }
+    }
+    for (const account of linkedAccounts) {
+      if (account.userId === passkey.userId) {
+        await ctx.db.delete("Account", account._id);
       }
     }
     await ctx.db.delete("Passkey", passkeyId);

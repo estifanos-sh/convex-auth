@@ -14,6 +14,7 @@ const modules: Record<string, () => Promise<unknown>> = {
   "./component/migrations.ts": () => import("./migrations"),
   "./component/model.ts": () => import("./model"),
   "./component/group.ts": () => import("./group"),
+  "./component/group/active.ts": () => import("./group/active"),
   "./component/group/member.ts": () => import("./group/member"),
   "./component/group/invite.ts": () => import("./group/invite"),
   "./component/user/key.ts": () => import("./user/key"),

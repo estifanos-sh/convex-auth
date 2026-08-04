@@ -28,6 +28,7 @@ import type * as factor_passkey from "../factor/passkey.js";
 import type * as factor_totp from "../factor/totp.js";
 import type * as functions from "../functions.js";
 import type * as group from "../group.js";
+import type * as group_active from "../group/active.js";
 import type * as group_invite from "../group/invite.js";
 import type * as group_member from "../group/member.js";
 import type * as http from "../http.js";
@@ -72,6 +73,7 @@ const fullApi: ApiFromModules<{
   "factor/totp": typeof factor_totp;
   functions: typeof functions;
   group: typeof group;
+  "group/active": typeof group_active;
   "group/invite": typeof group_invite;
   "group/member": typeof group_member;
   http: typeof http;

@@ -2,8 +2,42 @@
 
 ## Unreleased
 
+### Breaking
+
+- **Make expensive and privileged behavior explicit.** `auth.member.get` and
+  `assert` are direct-only; use `member.resolve` for inherited traversal.
+  `member.list` no longer accepts `withGroup` or `withGrants` projection modes.
+- **Replace raw account/factor access with current-user management.** The public
+  account surface is now `account.list/remove`; use `factor.list/update/remove`
+  for sanitized WebAuthn and TOTP management. Credential creation, lookup, and
+  updates remain capability-scoped to provider callbacks. WebAuthn backing
+  accounts are excluded from `account.list/remove` so passkeys have one atomic
+  management path.
+- **Move linking into verified provider ceremonies.** Custom credentials
+  providers can return `{ provision: { account, profile, match? } }`; the
+  runtime provisions the account before session issuance. The unverified
+  `auth.account.link` helper was removed.
+- **Normalize state-changing arguments.** Active group update is now
+  `active.update(ctx, { groupId, userId? })`; `active.reset` replaces the
+  misleading `remove`. Token invite acceptance is
+  `invite.token.accept(ctx, { token })` and derives the user from auth context.
+  `user.remove(ctx, { id })` always cleans up all auth-owned child records.
+- **Replace the router escape hatch.** `auth.request.routes()` returns stable
+  Convex route descriptors for handler adapters; `request.router()` was removed.
+- OAuth code/refresh internals and OAuth secret-verification helpers are no
+  longer on the app facade. `auth.oauth.authorize` remains public.
+- **Remove `auth.group.get(ctx, { id, tree: true })`.** Use
+  `auth.group.ancestors(ctx, { groupId })` for explicit hierarchy traversal and
+  direct `get`/`list` calls for the current group and children.
+
 ### New
 
+- **Restore deliberate extension points.** `auth.provider.signIn` and
+  `auth.event.emit` are public for app-owned provider orchestration and domain
+  audit events.
+- **Transactional active-group reads/writes.** Preference validation and
+  deterministic membership fallback now run in dedicated indexed component
+  functions rather than bounded facade scans.
 - **Canonical WebAuthn provider** — `webauthn()` replaces `passkey()` and groups
   ceremony preferences under `registration` and `authentication`. The browser
   and Expo client surface is now `client.webauthn`, and supporting browsers

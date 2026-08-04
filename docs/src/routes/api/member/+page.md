@@ -1,6 +1,6 @@
 ---
 title: auth.member
-description: Membership management — add users to groups with roles and permissions.
+description: Direct membership management and explicit inherited resolution.
 ---
 
 <svelte:head>
@@ -10,96 +10,45 @@ description: Membership management — add users to groups with roles and permis
 
 # auth.member
 
-The `auth.member` namespace manages the relationship between users and groups.
-Each membership stores assigned `roleIds`. Use `auth.member.get(...)` to
-look up membership details and `auth.member.assert(...)` to enforce
-authorization with a single call.
+Membership APIs make query cost explicit: `get` and `assert` inspect only a
+direct membership, while `resolve` walks the group hierarchy.
 
-See [Authorization Patterns](/guides/authorization) for the full model.
+| Method    | Signature                                       | Returns                                   | Description                                                                  |
+| --------- | ----------------------------------------------- | ----------------------------------------- | ---------------------------------------------------------------------------- |
+| `create`  | `(ctx, { data })`                               | `Id<"GroupMember">`                       | Creates a direct membership.                                                 |
+| `get`     | `(ctx, { userId, groupId })`                    | `{ membership, roleIds, grants }`         | Indexed direct lookup. Also accepts `groupIds` for a batch lookup.           |
+| `resolve` | `(ctx, { userId, groupId, maxDepth? })`         | Membership access plus traversal metadata | Explicitly resolves inherited access through parent groups.                  |
+| `list`    | `(ctx, options?)`                               | `PaginationResult<Doc<"GroupMember">>`    | Lists raw membership documents; it does not join groups or calculate grants. |
+| `update`  | `(ctx, { id, patch })`                          | `null`                                    | Updates roles or metadata.                                                   |
+| `remove`  | `(ctx, { id })`                                 | `null`                                    | Deletes a membership.                                                        |
+| `assert`  | `(ctx, { userId, groupId, roleIds?, grants? })` | `{ membership, roleIds, grants }`         | Enforces direct membership and requirements.                                 |
 
-## Methods
-
-| Method   | Signature                                                             | Returns                                                                     | Description                                                                                                                         |
-| -------- | --------------------------------------------------------------------- | --------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `create` | `(ctx, { data: { userId, groupId, roleIds?, status?, extend? } })`    | `Id<"GroupMember">`                                                         | Creates a user membership in a group with optional assigned role IDs. Throws `ConvexError` with code `INVALID_ROLE_IDS` on failure. |
-| `get`    | `(ctx, { id })`                                                       | `Doc<"GroupMember"> \| null`                                                | Returns the membership record for a given membership ID, or `null` if it does not exist.                                            |
-| `get`    | `(ctx, { userId, groupId, ancestry?, maxDepth? })`                    | `{ membership, roleIds, grants }`                                           | Overloaded: resolves a user's membership in a group (optionally walking ancestry), with roles and grants. Returns without throwing. |
-| `list`   | `(ctx, { where?, paginationOpts, orderBy?, order? })`                 | `PaginationResult<Doc<"GroupMember">>` — `{ page, isDone, continueCursor }` | Lists members by group, by user, or both. Convex-native shape.                                                                      |
-| `update` | `(ctx, { id, patch })`                                                | `null`                                                                      | Updates a membership's assigned role IDs or metadata. Throws `ConvexError` with code `INVALID_ROLE_IDS` on failure.                 |
-| `remove` | `(ctx, { id })`                                                       | `null`                                                                      | Removes a user membership from a group.                                                                                             |
-| `assert` | `(ctx, { userId, groupId, ancestry?, roleIds?, grants?, maxDepth? })` | `{ membership, roleIds, grants }`                                           | Resolves membership and enforces required roleIds/grants. Throws `ConvexError` on failure.                                          |
-
-## Examples
-
-### Create a membership
+## Direct authorization
 
 ```ts
-const memberId = await auth.member.create(ctx, {
-  data: {
-    userId,
-    groupId: orgId,
-    roleIds: ["member"],
-  },
-});
-```
+const access = await auth.member.get(ctx, { userId, groupId });
 
-### Check membership by record ID
-
-```ts
-const member = await auth.member.get(ctx, { id: memberId });
-
-if (!member) {
-  throw new Error("Membership not found");
-}
-```
-
-### Inspect membership and grants
-
-```ts
-const result = await auth.member.get(ctx, {
-  userId,
-  groupId: orgId,
-});
-
-if (result.membership) {
-  console.log(result.roleIds); // e.g. ["orgAdmin"]
-  console.log(result.grants); // e.g. ["members.create", "members.update"]
-}
-```
-
-### Require specific grants (throws on failure)
-
-```ts
-// Throws `NOT_A_MEMBER` or `MISSING_GRANTS` on failure.
 await auth.member.assert(ctx, {
   userId,
-  groupId: orgId,
+  groupId,
   grants: ["members.update"],
 });
 ```
 
-### Inspect role from parent group
+## Inherited authorization
 
 ```ts
-// Checks teamId, then walks up to the parent org
-const result = await auth.member.get(ctx, {
+const access = await auth.member.resolve(ctx, {
   userId,
   groupId: teamId,
+  maxDepth: 16,
 });
 
-if (result.membership) {
-  console.log(result.roleIds, result.grants);
+if (access.membership) {
+  console.log(access.matchedGroupId, access.depth);
+  console.log(access.traversedGroupIds);
 }
 ```
 
-### Inspect with ancestry trail
-
-Pass `ancestry: true` to get the list of group IDs traversed during resolution:
-
-```ts
-const result = await auth.member.get(ctx, {
-  userId,
-  groupId: teamId,
-  ancestry: true,
-});
-```
+This separation prevents a boolean option from silently changing an indexed
+lookup into an unbounded hierarchy traversal.

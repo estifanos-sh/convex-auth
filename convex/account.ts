@@ -1,6 +1,5 @@
 import { ConvexError, v } from "convex/values";
 
-import { components } from "./_generated/api";
 import { auth } from "./auth/core";
 import { ErrorCode } from "./errors";
 import { authUserMutation, authUserQuery } from "./functions";
@@ -29,21 +28,7 @@ const vApiKey = v.object({
   scopes: v.array(vApiKeyScope),
 });
 
-type PasskeyListCtx = Parameters<typeof auth.account.passkey.list>[0];
 type ApiKeyGetCtx = Parameters<typeof auth.key.get>[0];
-type AccountDoc = { provider: string };
-
-async function requireOwnedPasskey(ctx: PasskeyListCtx, userId: string, passkeyId: string) {
-  const passkeys = await auth.account.passkey.list(ctx, { userId });
-  const passkey = passkeys.find((item) => item._id === passkeyId);
-  if (!passkey) {
-    throw new ConvexError({
-      code: ErrorCode.NOT_FOUND,
-      message: "Passkey not found.",
-    });
-  }
-  return passkey;
-}
 
 async function requireOwnedApiKey(ctx: ApiKeyGetCtx, userId: string, keyId: string) {
   const key = await auth.key.get(ctx, { id: keyId });
@@ -60,13 +45,10 @@ export const listPasskeys = authUserQuery({
   args: {},
   returns: v.array(vPasskey),
   handler: async (ctx) => {
-    const userId = ctx.auth.userId;
-    const passkeys = await auth.account.passkey.list(ctx, {
-      userId,
-    });
+    const passkeys = (await auth.factor.list(ctx)).filter((factor) => factor.kind === "webauthn");
     return passkeys.map((passkey) => ({
-      passkeyId: passkey._id,
-      name: passkey.name ?? null,
+      passkeyId: passkey.id,
+      name: passkey.name,
       deviceType: passkey.deviceType,
       backedUp: passkey.backedUp,
       createdAt: passkey.createdAt,
@@ -79,12 +61,12 @@ export const renamePasskey = authUserMutation({
   args: { passkeyId: v.string(), name: v.string() },
   returns: v.object({ passkeyId: v.string() }),
   handler: async (ctx, args) => {
-    const userId = ctx.auth.userId;
-    await requireOwnedPasskey(ctx, userId, args.passkeyId);
-    return await auth.account.passkey.update(ctx, {
+    await auth.factor.update(ctx, {
+      kind: "webauthn",
       id: args.passkeyId,
       patch: { name: args.name.trim() },
     });
+    return { passkeyId: args.passkeyId };
   },
 });
 
@@ -92,9 +74,8 @@ export const removePasskey = authUserMutation({
   args: { passkeyId: v.string() },
   returns: v.object({ passkeyId: v.string() }),
   handler: async (ctx, args) => {
-    const userId = ctx.auth.userId;
-    await requireOwnedPasskey(ctx, userId, args.passkeyId);
-    return await auth.account.passkey.remove(ctx, { id: args.passkeyId });
+    await auth.factor.remove(ctx, { kind: "webauthn", id: args.passkeyId });
+    return { passkeyId: args.passkeyId };
   },
 });
 
@@ -161,9 +142,7 @@ export const hasPassword = authUserQuery({
   args: {},
   returns: v.boolean(),
   handler: async (ctx) => {
-    const accounts: AccountDoc[] = await ctx.runQuery(components.auth.account.list, {
-      userId: ctx.auth.userId,
-    });
+    const accounts = await auth.account.list(ctx);
     return accounts.some((account) => account.provider === "password");
   },
 });

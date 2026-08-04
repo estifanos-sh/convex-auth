@@ -113,6 +113,8 @@ void defineAuth(authComponent, {
 
 void auth.user.get(readCtx, { id: userId });
 void auth.user.update(userUpdateCtx, { id: userId, patch: { name: "Alice" } });
+// @ts-expect-error user deletion is always a complete auth-owned cascade.
+void auth.user.remove(userUpdateCtx, { id: userId, cascade: false });
 void auth.member.create(memberCreateCtx, {
   data: { groupId, userId, roleIds: ["orgAdmin"] },
 });
@@ -128,6 +130,38 @@ void auth.event.list(eventCtx, {
       .eq("outcome", "success"),
   paginationOpts: { numItems: 10, cursor: null },
 });
+
+void auth.provider.signIn;
+void auth.event.emit;
+void auth.factor.list;
+void auth.factor.update;
+void auth.factor.remove;
+void auth.group.active.reset;
+void auth.request.routes();
+
+// @ts-expect-error route-table internals are replaced by stable descriptors.
+void auth.request.router;
+
+// @ts-expect-error credential primitives are provider-callback internals.
+void auth.account.create;
+
+// @ts-expect-error account linking must complete through a verified provider ceremony.
+void auth.account.link;
+
+// @ts-expect-error raw TOTP documents include credential material.
+void auth.account.totp;
+
+// @ts-expect-error authorization-code consumption is owned by the token endpoint.
+void auth.oauth.code;
+
+// @ts-expect-error refresh-token minting and exchange are wire-protocol internals.
+void auth.oauth.refresh;
+
+// @ts-expect-error client-secret verification is owned by the token endpoint.
+void auth.oauth.client.verify;
+
+// @ts-expect-error registration-token verification is owned by RFC 7592 endpoints.
+void auth.oauth.client.verifyRegistrationToken;
 
 const readOnlyPermissions = definePermissions({
   grants: ["issues.read"],

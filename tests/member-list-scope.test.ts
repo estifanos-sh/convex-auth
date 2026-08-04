@@ -8,10 +8,8 @@ import { afterEach, expect, test, vi } from "vite-plus/test";
 import { convexTest } from "./convex/setup";
 import { subjectToUserId } from "./helpers";
 
-// `capGrantsForCaller` guards three call sites: `member.get`, `member.assert`
-// (both pinned in `oauth-scope.test.ts`), and the `member.list({ withGrants })`
-// read path pinned here. A scoped OAuth token must never surface grants beyond
-// its scope through the list enrichment, while a session keeps its full grants.
+// A scoped OAuth token must never surface grants beyond its scope through a
+// direct membership inspection, while a browser session keeps its full grants.
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -39,29 +37,23 @@ async function setupAdminMember(t: ReturnType<typeof convexTest>) {
   return { sessionSubject: claims.sub!, userId, groupId };
 }
 
-async function listGrantsFor(
+async function grantsFor(
   runner: Pick<ReturnType<typeof convexTest>, "run">,
   userId: string,
   groupId: string,
 ): Promise<string[] | null> {
   return await runner.run(async (ctx) => {
-    const { page } = await backendAuth.member.list(ctx as any, {
-      where: { groupId },
-      withGrants: true,
-    });
-    const item = (page as Array<{ userId: string; grants: string[] }>).find(
-      (m) => m.userId === userId,
-    );
-    return item ? item.grants : null;
+    const result = await backendAuth.member.get(ctx as any, { userId, groupId });
+    return result.membership === null ? null : result.grants;
   });
 }
 
-test("member.list withGrants caps an OAuth caller's grants to the token scope", async () => {
+test("member.get caps an OAuth caller's grants to the token scope", async () => {
   const t = convexTest(schema);
   const { sessionSubject, userId, groupId } = await setupAdminMember(t);
 
   // A session (no client_id claim) sees the membership's full orgAdmin grants.
-  const sessionGrants = await listGrantsFor(
+  const sessionGrants = await grantsFor(
     t.withIdentity({ subject: sessionSubject, sid: "session1" } as any),
     userId,
     groupId,
@@ -72,7 +64,7 @@ test("member.list withGrants caps an OAuth caller's grants to the token scope", 
 
   // A scoped OAuth token only sees grants within its scope — the broad grants
   // (members.manage, issues.delete) are filtered out of the list item.
-  const oauthGrants = await listGrantsFor(
+  const oauthGrants = await grantsFor(
     t.withIdentity({
       subject: userId,
       client_id: "oc_test",

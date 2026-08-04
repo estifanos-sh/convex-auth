@@ -30,17 +30,17 @@ configured. Pair them with `auth.v.*` as your function `returns:` — see
 
 ## Methods
 
-| Method   | Signature                                             | Returns                                                              | Description                                                                                                                                                                            |
-| -------- | ----------------------------------------------------- | -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `get`    | `(ctx, { id })`                                       | `Doc<"User"> \| null`                                                | Reads a user document by ID.                                                                                                                                                           |
-| `id`     | `(ctx)`                                               | `Id<"User"> \| null`                                                 | Current session user's id, or `null` when unauthenticated. Faster than `viewer` when you only need the id (no DB read).                                                                |
-| `list`   | `(ctx, { where?, paginationOpts, orderBy?, order? })` | `PaginationResult<Doc<"User">>` — `{ page, isDone, continueCursor }` | Lists users with optional filtering and pagination. Convex-native shape; pass directly to `usePaginatedQuery`.                                                                         |
-| `update` | `(ctx, { id, patch })`                                | `null`                                                               | Updates fields on a user document.                                                                                                                                                     |
-| `viewer` | `(ctx)`                                               | `Doc<"User"> \| null`                                                | Returns the current session user's full document, or `null` when unauthenticated.                                                                                                      |
-| `remove` | `(ctx, { id, cascade? })`                             | `null`                                                               | Deletes a user. With `cascade: true`, also deletes all linked sessions, accounts, memberships, keys, and owned emails. Throws `ConvexError` with code `INVALID_PARAMETERS` on failure. |
+| Method   | Signature                                             | Returns                                                              | Description                                                                                                             |
+| -------- | ----------------------------------------------------- | -------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `get`    | `(ctx, { id })`                                       | `Doc<"User"> \| null`                                                | Reads a user document by ID.                                                                                            |
+| `id`     | `(ctx)`                                               | `Id<"User"> \| null`                                                 | Current session user's id, or `null` when unauthenticated. Faster than `viewer` when you only need the id (no DB read). |
+| `list`   | `(ctx, { where?, paginationOpts, orderBy?, order? })` | `PaginationResult<Doc<"User">>` — `{ page, isDone, continueCursor }` | Lists users with optional filtering and pagination. Convex-native shape; pass directly to `usePaginatedQuery`.          |
+| `update` | `(ctx, { id, patch })`                                | `null`                                                               | Updates fields on a user document.                                                                                      |
+| `viewer` | `(ctx)`                                               | `Doc<"User"> \| null`                                                | Returns the current session user's full document, or `null` when unauthenticated.                                       |
+| `remove` | `(ctx, { id })`                                       | `null`                                                               | Deletes the user and all auth-owned sessions, accounts, memberships, factors, keys, and emails.                         |
 
 > Active-group selection lives on the dedicated `auth.group.active`
-> namespace (`get` / `update` / `remove`), not on `auth.user`.
+> namespace (`get` / `update` / `reset`), not on `auth.user`.
 
 ### `auth.user.email`
 
@@ -83,10 +83,10 @@ const user = ctx.auth.user;
 const user = await auth.user.get(ctx, { id: userId });
 ```
 
-### Delete a user with cascade
+### Delete a user
 
 ```ts
-await auth.user.remove(ctx, { id: userId, cascade: true });
+await auth.user.remove(ctx, { id: userId });
 ```
 
 ### Active group
@@ -95,10 +95,12 @@ Active-group selection lives on the `auth.group.active` namespace, not
 `auth.user`:
 
 ```ts
-await auth.group.active.update(ctx, orgId, { userId });
+await auth.group.active.update(ctx, { groupId: orgId, userId });
 
 const active = await auth.group.active.get(ctx, { userId });
 const activeGroupId = active?.groupId ?? null;
+
+await auth.group.active.reset(ctx, { userId });
 ```
 
 ### Advanced: raw HTTP mixed auth

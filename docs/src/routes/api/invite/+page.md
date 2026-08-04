@@ -13,15 +13,20 @@ description: Invite management — create, accept, and revoke group invitations.
 The `auth.invite` namespace manages invitations to groups. Invites have a status
 lifecycle: `pending` -> `accepted` or `revoked`.
 
+Token acceptance is a separate current-user flow: `token.accept` derives the
+accepting user from the authenticated context rather than trusting an input ID.
+
 ## Methods
 
-| Method   | Signature                                                                | Returns                                                                     | Description                                                                                                          |
-| -------- | ------------------------------------------------------------------------ | --------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `create` | `(ctx, { data: { groupId?, email?, roleIds?, expiresTime?, extend? } })` | `{ id, token }`                                                             | Creates a pending invite. Throws `ConvexError` with code `INVALID_ROLE_IDS` on failure.                              |
-| `get`    | `(ctx, { id })`                                                          | `Doc<"GroupInvite">`                                                        | Reads an invite document by ID.                                                                                      |
-| `list`   | `(ctx, { where?, paginationOpts, orderBy?, order? })`                    | `PaginationResult<Doc<"GroupInvite">>` — `{ page, isDone, continueCursor }` | Lists invites, optionally filtered by group and/or status. Convex-native shape; pass through to `usePaginatedQuery`. |
-| `accept` | `(ctx, { id, acceptedByUserId? })`                                       | `{ id, acceptedByUserId }`                                                  | Accepts a pending invite and records acceptance metadata.                                                            |
-| `revoke` | `(ctx, { id })`                                                          | `null`                                                                      | Revokes a pending invite so it can no longer be accepted.                                                            |
+| Method         | Signature                                                                | Returns                                                                     | Description                                                                                                          |
+| -------------- | ------------------------------------------------------------------------ | --------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `create`       | `(ctx, { data: { groupId?, email?, roleIds?, expiresTime?, extend? } })` | `{ id, token }`                                                             | Creates a pending invite. Throws `ConvexError` with code `INVALID_ROLE_IDS` on failure.                              |
+| `get`          | `(ctx, { id })`                                                          | `Doc<"GroupInvite">`                                                        | Reads an invite document by ID.                                                                                      |
+| `list`         | `(ctx, { where?, paginationOpts, orderBy?, order? })`                    | `PaginationResult<Doc<"GroupInvite">>` — `{ page, isDone, continueCursor }` | Lists invites, optionally filtered by group and/or status. Convex-native shape; pass through to `usePaginatedQuery`. |
+| `accept`       | `(ctx, { id, acceptedByUserId? })`                                       | `{ id, acceptedByUserId }`                                                  | Accepts a pending invite and records acceptance metadata.                                                            |
+| `revoke`       | `(ctx, { id })`                                                          | `null`                                                                      | Revokes a pending invite so it can no longer be accepted.                                                            |
+| `token.get`    | `(ctx, { token })`                                                       | `Doc<"GroupInvite"> \| null`                                                | Resolves an invite token.                                                                                            |
+| `token.accept` | `(ctx, { token })`                                                       | Acceptance result                                                           | Accepts for the current authenticated user and creates the membership when applicable.                               |
 
 ## Examples
 
@@ -38,7 +43,7 @@ const { id, token } = await auth.invite.create(ctx, {
 });
 
 // Later, when Alice signs in and accepts:
-await auth.invite.accept(ctx, { id });
+await auth.invite.token.accept(ctx, { token });
 ```
 
 ### Create an invite with expiration

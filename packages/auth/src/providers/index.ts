@@ -35,7 +35,11 @@ export type {
 export { anonymous } from "./anonymous";
 export type { AnonymousConfig } from "./anonymous";
 export { credentials } from "./credentials";
-export type { CredentialsConfig } from "./credentials";
+export type {
+  CredentialsAuthorizeResult,
+  CredentialsConfig,
+  CredentialsProvisioning,
+} from "./credentials";
 export { device } from "./device";
 export type { DeviceConfig } from "./device";
 export { connection } from "./connection";

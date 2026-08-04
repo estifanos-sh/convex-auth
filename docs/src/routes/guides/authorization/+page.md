@@ -195,12 +195,12 @@ await auth.member.assert(ctx, {
 
 ## Membership traversal
 
-If your groups are nested, `auth.member.get(...)` can still resolve
-inherited membership, but access decisions should usually be expressed in
-grants.
+If your groups are nested, use the explicitly traversing
+`auth.member.resolve(...)` operation. `member.get` remains a direct indexed
+lookup.
 
 ```ts
-const result = await auth.member.get(ctx, {
+const result = await auth.member.resolve(ctx, {
   userId: ctx.auth.userId,
   groupId: teamId,
 });
@@ -212,11 +212,11 @@ if (result.grants.includes("members.read")) {
 
 ## Performance: derive permissions from resolved grants
 
-When you already have a user's resolved grants (e.g. from `member.get`), you
+When you already have a user's resolved grants (e.g. from `member.resolve`), you
 can derive permissions locally instead of making separate authorization calls:
 
 ```ts
-const { grants } = await auth.member.get(ctx, {
+const { grants } = await auth.member.resolve(ctx, {
   userId: ctx.auth.userId,
   groupId,
 });
