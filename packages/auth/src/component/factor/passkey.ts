@@ -8,7 +8,7 @@
  */
 
 import { getOneFrom } from "convex-helpers/server/relationships";
-import { ConvexError, v } from "convex/values";
+import { ConvexError, type Infer, v } from "convex/values";
 
 import { ErrorCode } from "../../shared/codes";
 import { MAX_WEBAUTHN_CREDENTIALS_PER_USER } from "../../shared/webauthn";
@@ -19,6 +19,131 @@ import { vPasskeyDoc, vUserDoc } from "../model";
 import { createSessionRows } from "../session";
 
 const PASSKEY_LIST_BATCH = 128;
+const DEFAULT_VERIFIER_TTL_MS = 15 * 60 * 1000;
+
+const vPasskeyCreateArgs = v.object({
+  userId: v.id("User"),
+  credentialId: v.string(),
+  publicKey: v.bytes(),
+  algorithm: v.number(),
+  counter: v.number(),
+  transports: v.optional(v.array(v.string())),
+  deviceType: v.string(),
+  backedUp: v.boolean(),
+  name: v.optional(v.string()),
+  attestation: v.optional(
+    v.object({
+      verifier: v.string(),
+      aaguid: v.string(),
+      format: v.string(),
+      metadataDescription: v.optional(v.string()),
+      verifiedAt: v.number(),
+      status: v.literal("trusted"),
+    }),
+  ),
+  createdAt: v.number(),
+});
+
+async function createVerifier(
+  ctx: MutationCtx,
+  args: {
+    sessionId?: Id<"Session">;
+    signature: string;
+    expirationTime?: number;
+  },
+) {
+  return await ctx.db.insert("AuthVerifier", {
+    sessionId: args.sessionId,
+    signature: args.signature,
+    expirationTime: args.expirationTime ?? Date.now() + DEFAULT_VERIFIER_TTL_MS,
+  });
+}
+
+async function listPasskeys(ctx: MutationCtx, userId: Id<"User">) {
+  return await ctx.db
+    .query("Passkey")
+    .withIndex("user_id", (q) => q.eq("userId", userId))
+    .take(PASSKEY_LIST_BATCH);
+}
+
+/** Create a registration challenge and load the user and existing credentials atomically. */
+export const beginRegistration = mutation({
+  args: {
+    userId: v.id("User"),
+    sessionId: v.optional(v.id("Session")),
+    signature: v.string(),
+    expirationTime: v.number(),
+  },
+  returns: v.object({
+    verifierId: v.id("AuthVerifier"),
+    user: v.object({
+      email: v.optional(v.string()),
+      name: v.optional(v.string()),
+    }),
+    credentials: v.array(
+      v.object({
+        id: v.string(),
+        transports: v.optional(v.array(v.string())),
+      }),
+    ),
+  }),
+  handler: async (ctx, args) => {
+    const [user, passkeys] = await Promise.all([
+      ctx.db.get("User", args.userId),
+      listPasskeys(ctx, args.userId),
+    ]);
+    if (user === null) {
+      throw new Error(`Cannot register a passkey for missing user ${args.userId}`);
+    }
+    const verifierId = await createVerifier(ctx, args);
+    return {
+      verifierId,
+      user: {
+        ...(user.email === undefined ? {} : { email: user.email }),
+        ...(user.name === undefined ? {} : { name: user.name }),
+      },
+      credentials: passkeys.map((passkey) => ({
+        id: passkey.credentialId,
+        ...(passkey.transports === undefined ? {} : { transports: passkey.transports }),
+      })),
+    };
+  },
+});
+
+/** Create an assertion challenge and resolve an optional email allow-list in one transaction. */
+export const beginSignIn = mutation({
+  args: {
+    sessionId: v.optional(v.id("Session")),
+    signature: v.string(),
+    expirationTime: v.number(),
+    verifiedEmail: v.optional(v.string()),
+  },
+  returns: v.object({
+    verifierId: v.id("AuthVerifier"),
+    credentialIds: v.array(v.string()),
+  }),
+  handler: async (ctx, args) => {
+    let user: Infer<typeof vUserDoc> | null = null;
+    let passkeys: Array<Infer<typeof vPasskeyDoc>> = [];
+    if (args.verifiedEmail !== undefined) {
+      const users = await ctx.db
+        .query("User")
+        .withIndex("email_verified", (q) =>
+          q.eq("email", args.verifiedEmail!).gt("emailVerificationTime", undefined),
+        )
+        .take(2);
+      user = users.length === 1 ? users[0] : null;
+      if (user !== null) {
+        passkeys = await listPasskeys(ctx, user._id);
+      }
+    }
+    const verifierId = await createVerifier(ctx, args);
+    return {
+      verifierId,
+      credentialIds: passkeys.map((passkey) => passkey.credentialId),
+    };
+  },
+});
 
 /**
  * Consume a WebAuthn challenge and load its credential in one transaction.
@@ -129,89 +254,39 @@ export const list = query({
  * `.unique()` lookup throw on every later sign-in — a permanent lockout for that
  * credential.
  */
-export const create = mutation({
-  args: {
-    userId: v.id("User"),
-    credentialId: v.string(),
-    publicKey: v.bytes(),
-    algorithm: v.number(),
-    counter: v.number(),
-    transports: v.optional(v.array(v.string())),
-    deviceType: v.string(),
-    backedUp: v.boolean(),
-    name: v.optional(v.string()),
-    attestation: v.optional(
-      v.object({
-        verifier: v.string(),
-        aaguid: v.string(),
-        format: v.string(),
-        metadataDescription: v.optional(v.string()),
-        verifiedAt: v.number(),
-        status: v.literal("trusted"),
-      }),
+async function createPasskey(ctx: MutationCtx, args: Infer<typeof vPasskeyCreateArgs>) {
+  const linkedAccounts = await Promise.all(
+    ["passkey", "webauthn"].map((provider) =>
+      ctx.db
+        .query("Account")
+        .withIndex("provider_account_id", (q) =>
+          q.eq("provider", provider).eq("providerAccountId", args.credentialId),
+        )
+        .first(),
     ),
-    createdAt: v.number(),
-  },
-  returns: v.id("Passkey"),
-  handler: async (ctx, args) => {
-    const linkedAccounts = await Promise.all(
-      ["passkey", "webauthn"].map((provider) =>
-        ctx.db
-          .query("Account")
-          .withIndex("provider_account_id", (q) =>
-            q.eq("provider", provider).eq("providerAccountId", args.credentialId),
-          )
-          .first(),
-      ),
-    );
-    for (const account of linkedAccounts) {
-      if (account !== null && account.userId !== args.userId) {
-        throw new ConvexError({
-          code: ErrorCode.ACCOUNT_ALREADY_LINKED,
-          message: "This passkey credential is already registered to another account.",
-          credentialId: args.credentialId,
-        });
-      }
-    }
-
-    const existing = await ctx.db
-      .query("Passkey")
-      .withIndex("credential_id", (q) => q.eq("credentialId", args.credentialId))
-      .first();
-    if (existing !== null) {
-      if (existing.userId !== args.userId) {
-        throw new ConvexError({
-          code: ErrorCode.ACCOUNT_ALREADY_LINKED,
-          message: "This passkey credential is already registered to another account.",
-          credentialId: args.credentialId,
-        });
-      }
-      if (linkedAccounts[0] === null) {
-        await ctx.db.insert("Account", {
-          userId: args.userId,
-          provider: "passkey",
-          providerAccountId: args.credentialId,
-        });
-      }
-      // Same user re-submitting the same credential (a double-clicked or raced
-      // registration): idempotent — return the credential already stored rather
-      // than inserting a duplicate.
-      if (args.attestation !== undefined) {
-        await ctx.db.patch("Passkey", existing._id, { attestation: args.attestation });
-      }
-      return existing._id;
-    }
-    const userPasskeys = await ctx.db
-      .query("Passkey")
-      .withIndex("user_id", (q) => q.eq("userId", args.userId))
-      .take(MAX_WEBAUTHN_CREDENTIALS_PER_USER);
-    if (userPasskeys.length >= MAX_WEBAUTHN_CREDENTIALS_PER_USER) {
+  );
+  for (const account of linkedAccounts) {
+    if (account !== null && account.userId !== args.userId) {
       throw new ConvexError({
-        code: ErrorCode.INVALID_PARAMETERS,
-        message: `A user can register at most ${MAX_WEBAUTHN_CREDENTIALS_PER_USER} WebAuthn credentials.`,
+        code: ErrorCode.ACCOUNT_ALREADY_LINKED,
+        message: "This passkey credential is already registered to another account.",
+        credentialId: args.credentialId,
       });
     }
-    const passkeyId = await ctx.db.insert("Passkey", args);
+  }
+
+  const existing = await ctx.db
+    .query("Passkey")
+    .withIndex("credential_id", (q) => q.eq("credentialId", args.credentialId))
+    .first();
+  if (existing !== null) {
+    if (existing.userId !== args.userId) {
+      throw new ConvexError({
+        code: ErrorCode.ACCOUNT_ALREADY_LINKED,
+        message: "This passkey credential is already registered to another account.",
+        credentialId: args.credentialId,
+      });
+    }
     if (linkedAccounts[0] === null) {
       await ctx.db.insert("Account", {
         userId: args.userId,
@@ -219,7 +294,78 @@ export const create = mutation({
         providerAccountId: args.credentialId,
       });
     }
-    return passkeyId;
+    // Same user re-submitting the same credential (a double-clicked or raced
+    // registration): idempotent — return the credential already stored rather
+    // than inserting a duplicate.
+    if (args.attestation !== undefined) {
+      await ctx.db.patch("Passkey", existing._id, { attestation: args.attestation });
+    }
+    return existing._id;
+  }
+  const userPasskeys = await ctx.db
+    .query("Passkey")
+    .withIndex("user_id", (q) => q.eq("userId", args.userId))
+    .take(MAX_WEBAUTHN_CREDENTIALS_PER_USER);
+  if (userPasskeys.length >= MAX_WEBAUTHN_CREDENTIALS_PER_USER) {
+    throw new ConvexError({
+      code: ErrorCode.INVALID_PARAMETERS,
+      message: `A user can register at most ${MAX_WEBAUTHN_CREDENTIALS_PER_USER} WebAuthn credentials.`,
+    });
+  }
+  const passkeyId = await ctx.db.insert("Passkey", args);
+  if (linkedAccounts[0] === null) {
+    await ctx.db.insert("Account", {
+      userId: args.userId,
+      provider: "passkey",
+      providerAccountId: args.credentialId,
+    });
+  }
+  return passkeyId;
+}
+
+export const create = mutation({
+  args: vPasskeyCreateArgs,
+  returns: v.id("Passkey"),
+  handler: createPasskey,
+});
+
+/** Store a verified registration and replace its current session in one transaction. */
+export const completeRegistration = mutation({
+  args: {
+    ...vPasskeyCreateArgs.fields,
+    replaceSessionId: v.optional(v.id("Session")),
+    sessionExpirationTime: v.number(),
+    refreshTokenExpirationTime: v.number(),
+  },
+  returns: v.object({
+    passkeyId: v.id("Passkey"),
+    user: vUserDoc,
+    sessionId: v.id("Session"),
+    refreshTokenId: v.id("RefreshToken"),
+    replacedSessionId: v.optional(v.id("Session")),
+  }),
+  handler: async (ctx, args) => {
+    const { replaceSessionId, sessionExpirationTime, refreshTokenExpirationTime, ...passkey } =
+      args;
+    const passkeyId = await createPasskey(ctx, passkey);
+    const created = await createSessionRows(ctx, {
+      userId: passkey.userId,
+      replaceSessionId,
+      sessionExpirationTime,
+      refreshTokenExpirationTime,
+    });
+    if (created === null || created.refreshTokenId === undefined) {
+      throw new Error("Cannot create a session for the registered passkey");
+    }
+    return {
+      passkeyId,
+      user: created.user,
+      sessionId: created.sessionId,
+      refreshTokenId: created.refreshTokenId,
+      ...(created.replacedSessionId === undefined
+        ? {}
+        : { replacedSessionId: created.replacedSessionId }),
+    };
   },
 });
 

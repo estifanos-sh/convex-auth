@@ -25,6 +25,7 @@ import type { Infer } from "convex/values";
 import { v } from "convex/values";
 
 import { action } from "./_generated/server";
+import { components } from "./_generated/api";
 
 const vAuthTokens = v.object({
   token: v.string(),
@@ -79,8 +80,23 @@ type SignInArgs =
   | {
       provider: "password";
       params: { email: string; password: string; flow: "signIn" | "signUp" };
+    }
+  | {
+      provider: "webauthn";
+      params: { email: string; flow: "signIn" };
     };
 const authSignIn = makeFunctionReference<"action", SignInArgs, SignInResult>("auth:signIn");
+const authStore = makeFunctionReference<
+  "mutation",
+  {
+    args: {
+      type: "verifier";
+      signature: string;
+      expirationTime: number;
+    };
+  },
+  string
+>("auth:store");
 
 /**
  * Issue a password sign-in and return the backend-observed wall time
@@ -175,6 +191,109 @@ export const anonymousSignInBatch = action({
       const start = Date.now();
       await ctx.runAction(authSignIn, {
         provider: "anonymous",
+      });
+      backendMs.push(Date.now() - start);
+    }
+    return { backendMs, totalMs: Date.now() - batchStart };
+  },
+});
+
+/** Seed a verified user with one credential for the WebAuthn option benchmark. */
+export const seedWebAuthnUser = action({
+  args: { email: v.string(), credentialId: v.string() },
+  returns: v.null(),
+  handler: async (ctx, { email, credentialId }) => {
+    const userId = await ctx.runMutation(components.auth.user.create, {
+      data: {
+        email,
+        emailVerificationTime: Date.now(),
+      },
+    });
+    await ctx.runMutation(components.auth.factor.passkey.create, {
+      userId,
+      credentialId,
+      publicKey: new Uint8Array(65).buffer,
+      algorithm: -7,
+      counter: 0,
+      deviceType: "singleDevice",
+      backedUp: false,
+      createdAt: Date.now(),
+    });
+    return null;
+  },
+});
+
+/** Measure the action-side WebAuthn challenge and allow-list phase. */
+export const webAuthnOptionsBatch = action({
+  args: { email: v.string(), iterations: v.number() },
+  returns: v.object({
+    backendMs: v.array(v.number()),
+    totalMs: v.number(),
+  }),
+  handler: async (ctx, { email, iterations }) => {
+    const batchStart = Date.now();
+    const backendMs: number[] = [];
+    for (let i = 0; i < iterations; i += 1) {
+      const start = Date.now();
+      await ctx.runAction(authSignIn, {
+        provider: "webauthn",
+        params: { email, flow: "signIn" },
+      });
+      backendMs.push(Date.now() - start);
+    }
+    return { backendMs, totalMs: Date.now() - batchStart };
+  },
+});
+
+/** Reproduce the pre-optimization WebAuthn option transaction chain for comparison. */
+export const legacyWebAuthnOptionsBatch = action({
+  args: { email: v.string(), iterations: v.number() },
+  returns: v.object({
+    backendMs: v.array(v.number()),
+    totalMs: v.number(),
+  }),
+  handler: async (ctx, { email, iterations }) => {
+    const batchStart = Date.now();
+    const backendMs: number[] = [];
+    for (let i = 0; i < iterations; i += 1) {
+      const start = Date.now();
+      await ctx.runMutation(authStore, {
+        args: {
+          type: "verifier",
+          signature: `benchmark-${i}-${start}`,
+          expirationTime: start + 15 * 60 * 1000,
+        },
+      });
+      const user = (await ctx.runQuery(components.auth.user.get, {
+        verifiedEmail: email,
+      })) as { _id: string } | null;
+      if (user !== null) {
+        await ctx.runQuery(components.auth.factor.passkey.list, {
+          userId: user._id,
+        });
+      }
+      backendMs.push(Date.now() - start);
+    }
+    return { backendMs, totalMs: Date.now() - batchStart };
+  },
+});
+
+/** Measure the single component transaction replacing the legacy option chain. */
+export const webAuthnOptionTransactionBatch = action({
+  args: { email: v.string(), iterations: v.number() },
+  returns: v.object({
+    backendMs: v.array(v.number()),
+    totalMs: v.number(),
+  }),
+  handler: async (ctx, { email, iterations }) => {
+    const batchStart = Date.now();
+    const backendMs: number[] = [];
+    for (let i = 0; i < iterations; i += 1) {
+      const start = Date.now();
+      await ctx.runMutation(components.auth.factor.passkey.beginSignIn, {
+        signature: `benchmark-${i}-${start}`,
+        expirationTime: start + 15 * 60 * 1000,
+        verifiedEmail: email,
       });
       backendMs.push(Date.now() - start);
     }
