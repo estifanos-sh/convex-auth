@@ -34,8 +34,8 @@ importers:
         specifier: latest
         version: 0.2.4(convex-helpers@0.1.118(@standard-schema/spec@1.1.0)(convex@1.42.0(react@19.2.5))(react@19.2.5)(typescript@6.0.2)(zod@4.4.3))(convex@1.42.0(react@19.2.5))(react@19.2.5)
       '@convex-dev/static-hosting':
-        specifier: ^0.1.4
-        version: 0.1.4(convex@1.42.0(react@19.2.5))(react@19.2.5)
+        specifier: ^0.2.1
+        version: 0.2.1(convex@1.42.0(react@19.2.5))(react@19.2.5)
       '@robelest/convex-auth':
         specifier: workspace:*
         version: link:packages/auth
@@ -1413,11 +1413,11 @@ packages:
       convex: ^1.31.7
       convex-helpers: ^0.1.106
 
-  '@convex-dev/static-hosting@0.1.4':
-    resolution: {integrity: sha512-dc6fFP6oFI1tbeh80NMXbwcmpGQre31nrHrzH/F/gmXkR8+iRiNsY2SOjae/Vc4u8qlQVDoAVMsp9HZPf7V+Vw==}
+  '@convex-dev/static-hosting@0.2.1':
+    resolution: {integrity: sha512-QMcfKUOB8dHeLa81xzk2GEIn7LzhEvtdgYhfFpIFer6uE/+xMStDxHAZsX5h1qsttYi7wNbEKAMf7MfOQ7ZrMw==}
     hasBin: true
     peerDependencies:
-      convex: ^1.35.0
+      convex: ^1.37.0
       react: ^18.3.1 || ^19.0.0
 
   '@convex-dev/stream@https://pkg.pr.new/get-convex/stream/@convex-dev/stream@96acc6d':
@@ -10024,7 +10024,7 @@ snapshots:
       - '@react-email/render'
       - react
 
-  '@convex-dev/static-hosting@0.1.4(convex@1.42.0(react@19.2.5))(react@19.2.5)':
+  '@convex-dev/static-hosting@0.2.1(convex@1.42.0(react@19.2.5))(react@19.2.5)':
     dependencies:
       convex: 1.42.0(react@19.2.5)
       react: 19.2.5

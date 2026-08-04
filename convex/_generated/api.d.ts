@@ -14,7 +14,6 @@ import type * as auth_core from "../auth/core.js";
 import type * as auth_group from "../auth/group.js";
 import type * as bench from "../bench.js";
 import type * as comments from "../comments.js";
-import type * as docs from "../docs.js";
 import type * as errors from "../errors.js";
 import type * as functions from "../functions.js";
 import type * as groups from "../groups.js";
@@ -24,9 +23,12 @@ import type * as issues_http from "../issues/http.js";
 import type * as oauth from "../oauth.js";
 import type * as projects from "../projects.js";
 import type * as roles from "../roles.js";
-import type * as staticHosting from "../staticHosting.js";
 
-import type { ApiFromModules, FilterApi, FunctionReference } from "convex/server";
+import type {
+  ApiFromModules,
+  FilterApi,
+  FunctionReference,
+} from "convex/server";
 
 declare const fullApi: ApiFromModules<{
   account: typeof account;
@@ -35,7 +37,6 @@ declare const fullApi: ApiFromModules<{
   "auth/group": typeof auth_group;
   bench: typeof bench;
   comments: typeof comments;
-  docs: typeof docs;
   errors: typeof errors;
   functions: typeof functions;
   groups: typeof groups;
@@ -45,7 +46,6 @@ declare const fullApi: ApiFromModules<{
   oauth: typeof oauth;
   projects: typeof projects;
   roles: typeof roles;
-  staticHosting: typeof staticHosting;
 }>;
 
 /**
@@ -56,7 +56,10 @@ declare const fullApi: ApiFromModules<{
  * const myFunctionReference = api.myModule.myFunction;
  * ```
  */
-export declare const api: FilterApi<typeof fullApi, FunctionReference<any, "public">>;
+export declare const api: FilterApi<
+  typeof fullApi,
+  FunctionReference<any, "public">
+>;
 
 /**
  * A utility for referencing Convex functions in your app's internal API.
@@ -66,7 +69,10 @@ export declare const api: FilterApi<typeof fullApi, FunctionReference<any, "publ
  * const myFunctionReference = internal.myModule.myFunction;
  * ```
  */
-export declare const internal: FilterApi<typeof fullApi, FunctionReference<any, "internal">>;
+export declare const internal: FilterApi<
+  typeof fullApi,
+  FunctionReference<any, "internal">
+>;
 
 export declare const components: {
   auth: import("@robelest/convex-auth/_generated/component.js").ComponentApi<"auth">;
