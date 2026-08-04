@@ -61,6 +61,7 @@ const SCHEMA_BY_KIND: {
   bytes: () => ({ type: "string" }),
   float64: () => ({ type: "number" }),
   int64: () => ({ type: "integer" }),
+  commitTs: () => ({ type: "integer" }),
   boolean: () => ({ type: "boolean" }),
   null: () => ({ type: "null" }),
   any: () => ({}),
