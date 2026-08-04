@@ -36,8 +36,8 @@ export type { AuthContext, OptionalAuthContext, UserDoc, AuthContextConfig };
 /**
  * Create a lightweight auth context object.
  *
- * Returns the same `user`, `session`, `member`, `group`, `account`,
- * `invite`, `key`, `context`, and `ctx` APIs as `defineAuth`, but
+ * Returns the same app-facing `user`, `session`, `member`, `group`, `account`,
+ * `factor`, `invite`, `key`, `context`, and `ctx` APIs as `defineAuth`, but
  * without `signIn`, `signOut`, `store`, `http`, or provider logic.
  *
  * Use this in query/mutation files that only need to resolve the
@@ -97,7 +97,8 @@ export function createAuthContext(
   return {
     user: domains.user,
     session: domains.session,
-    account: domains.account,
+    account: domains.accountManagement,
+    factor: domains.factor,
     group: { ...domains.group, active: domains.active },
     member: domains.member,
     invite: domains.invite,

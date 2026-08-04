@@ -1,6 +1,6 @@
 ---
 title: auth.account
-description: Account management — link/unlink providers, passkeys, and TOTP.
+description: Safe account management for the current user.
 ---
 
 <svelte:head>
@@ -10,93 +10,47 @@ description: Account management — link/unlink providers, passkeys, and TOTP.
 
 # auth.account
 
-The `auth.account` namespace manages the link between users and authentication
-methods. A user can have multiple accounts (e.g. password + Google OAuth),
-passkey credentials, and TOTP enrollments.
+`auth.account` is the current user's account-management surface. It never
+returns password hashes or other credential secrets.
 
-## Account methods
-
-| Method   | Signature                          | Returns                                | Description                                                                                                                                                                                                                                                |
-| -------- | ---------------------------------- | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `create` | `(ctx, { userId, provider, ... })` | `{ account, user }`                    | Links a new authentication provider to a user and returns the created account plus resolved user.                                                                                                                                                          |
-| `link`   | `(ctx, { provider, profile })`     | `{ accountId, userId, alreadyLinked }` | Attaches a provider account to the **currently authenticated user**. Idempotent on duplicate links to the same user. Also folds in the "upgrade anonymous" flow: when the current user is anonymous, flips `isAnonymous: false` and merges profile fields. |
-| `update` | `(ctx, { provider, account })`     | `{ accountId }`                        | Updates provider credentials, such as a password secret.                                                                                                                                                                                                   |
-| `remove` | `(ctx, { id })`                    | `{ accountId }`                        | Deletes an account link. Throws `ConvexError` with code `ACCOUNT_NOT_FOUND` or `INVALID_PARAMETERS` on failure.                                                                                                                                            |
-
-## Passkey methods
-
-Manage WebAuthn passkey credentials. Requires `webauthn()` in providers.
-
-| Method           | Signature              | Returns             | Description                               |
-| ---------------- | ---------------------- | ------------------- | ----------------------------------------- |
-| `passkey.list`   | `(ctx, { userId })`    | `Doc<"passkeys">[]` | Lists all registered passkeys for a user. |
-| `passkey.update` | `(ctx, { id, patch })` | `{ passkeyId }`     | Renames a passkey credential.             |
-| `passkey.remove` | `(ctx, { id })`        | `{ passkeyId }`     | Deletes a passkey credential.             |
+| Method   | Signature       | Returns            | Description                                                            |
+| -------- | --------------- | ------------------ | ---------------------------------------------------------------------- |
+| `list`   | `(ctx)`         | `AccountSummary[]` | Lists the current user's linked provider accounts.                     |
+| `remove` | `(ctx, { id })` | `{ id }`           | Removes an owned account while preserving at least one sign-in method. |
 
 ```ts
-const passkeys = await auth.account.passkey.list(ctx, { userId });
-await auth.account.passkey.remove(ctx, { id: passkeyId });
-```
+const accounts = await auth.account.list(ctx);
 
-## TOTP methods
-
-Manage TOTP two-factor authentication. Requires `totp()` in providers.
-
-| Method        | Signature           | Returns          | Description                        |
-| ------------- | ------------------- | ---------------- | ---------------------------------- |
-| `totp.list`   | `(ctx, { userId })` | `Doc<"totps">[]` | Lists TOTP enrollments for a user. |
-| `totp.remove` | `(ctx, { id })`     | `{ totpId }`     | Deletes a TOTP enrollment.         |
-
-```ts
-const totps = await auth.account.totp.list(ctx, { userId });
-await auth.account.totp.remove(ctx, { id: totpId });
-```
-
-## Examples
-
-### Link a new provider to the current user
-
-```ts
-// User signed in with password and wants to attach Google.
-await auth.account.link(ctx, {
-  provider: "google",
-  profile: { id: googleSub, email, name, image },
+await auth.account.remove(ctx, {
+  id: accounts[0].id,
 });
 ```
 
-`profile` must include at least one of `id`, `email`, or `phone` to derive
-the provider account id. If the `(provider, providerAccountId)` is already
-linked to a different user, throws `ConvexError` with code
-`ACCOUNT_ALREADY_LINKED` — catch it and prompt the user to sign in to the
-other account if you want to merge.
+Each summary contains `id`, `provider`, `createdAt`, `emailVerified`, and
+`phoneVerified`. It does not expose the provider account identifier, credential
+secret, or provider extension data. WebAuthn's internal backing account is not
+listed or removable here; use [`auth.factor`](/api/factor) so the credential and
+its backing identity are removed atomically.
 
-### Upgrade an anonymous account
-
-`auth.account.link` detects an anonymous current user and finishes the
-upgrade in the same call:
+Account creation, credential lookup, credential updates, and linking are owned
+by provider ceremonies. Custom credentials providers can return a verified
+identity for the runtime to provision:
 
 ```ts
-// User had an anonymous session; now linking real credentials.
-await auth.account.link(ctx, {
-  provider: "password",
-  profile: { id: email, email, name },
+credentials({
+  id: "invite",
+  authorize: async (params) => {
+    const invite = await verifyInvite(params.token);
+    if (!invite) return null;
+
+    return {
+      provision: {
+        account: { id: invite.email },
+        profile: { email: invite.email, name: invite.name },
+      },
+    };
+  },
 });
-// userId is unchanged. user.isAnonymous is now false.
-// user.name / email are populated from the profile.
 ```
 
-### Delete an account
-
-```ts
-import { ConvexError } from "convex/values";
-
-try {
-  const { accountId } = await auth.account.remove(ctx, { id: accountId });
-} catch (error) {
-  if (error instanceof ConvexError) {
-    // error.data.code is "ACCOUNT_NOT_FOUND" or "INVALID_PARAMETERS"
-    console.error(`Failed to delete account: ${error.data.code}`);
-  }
-  throw error;
-}
-```
+Use [`auth.factor`](/api/factor) to manage passkeys and TOTP enrollments.

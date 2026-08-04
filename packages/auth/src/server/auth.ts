@@ -57,9 +57,18 @@ type MemberAccessResult<TPermissions extends PermissionsConfig | undefined> = Om
   grants: Grant<TPermissions>[];
 };
 
+type MemberResolutionResult<TPermissions extends PermissionsConfig | undefined> =
+  MemberAccessResult<TPermissions> & {
+    matchedGroupId: string | null;
+    depth: number | null;
+    isDirect: boolean;
+    isInherited: boolean;
+    traversedGroupIds: string[];
+  };
+
 type MemberApiWithPermissions<TPermissions extends PermissionsConfig | undefined> = Omit<
   ReturnType<typeof AuthFactory>["auth"]["member"],
-  "create" | "list" | "update" | "get" | "assert"
+  "create" | "list" | "update" | "get" | "resolve" | "assert"
 > & {
   create: (
     ctx: Parameters<ReturnType<typeof AuthFactory>["auth"]["member"]["create"]>[0],
@@ -73,36 +82,20 @@ type MemberApiWithPermissions<TPermissions extends PermissionsConfig | undefined
       };
     },
   ) => Promise<string>;
-  list: <
-    O extends
-      | {
-          where?: {
-            groupId?: string;
-            userId?: string;
-            status?: string;
-          };
-          paginationOpts?: { numItems: number; cursor: string | null };
-          orderBy?: "_creationTime" | "status";
-          order?: "asc" | "desc";
-          /** Join each item's `group` document. */
-          withGroup?: true;
-          /** Resolve each item's `roleIds` + `grants`, capped to the caller's scope. */
-          withGrants?: true;
-        }
-      | undefined = undefined,
-  >(
+  list: (
     ctx: Parameters<ReturnType<typeof AuthFactory>["auth"]["member"]["list"]>[0],
-    opts?: O,
+    opts?: {
+      where?: { groupId?: string; userId?: string; status?: string };
+      paginationOpts?: { numItems: number; cursor: string | null };
+      orderBy?: "_creationTime" | "status";
+      order?: "asc" | "desc";
+    },
   ) => Promise<{
-    page: Array<
-      Doc<"GroupMember"> &
-        (O extends { withGroup: true } ? { group: Doc<"Group"> | null } : unknown) &
-        (O extends { withGrants: true }
-          ? { roleIds: RoleId<TPermissions>[]; grants: Grant<TPermissions>[] }
-          : unknown)
-    >;
+    page: Doc<"GroupMember">[];
     isDone: boolean;
     continueCursor: string;
+    splitCursor?: string | null;
+    pageStatus?: "SplitRecommended" | "SplitRequired" | null;
   }>;
   update: (
     ctx: Parameters<ReturnType<typeof AuthFactory>["auth"]["member"]["update"]>[0],
@@ -114,25 +107,41 @@ type MemberApiWithPermissions<TPermissions extends PermissionsConfig | undefined
   get: {
     (
       ctx: Parameters<ReturnType<typeof AuthFactory>["auth"]["member"]["get"]>[0],
-      args: { userId: string; groupId: string; ancestry?: boolean; maxDepth?: number },
+      args: { userId: string; groupId: string },
     ): Promise<MemberAccessResult<TPermissions>>;
     (
       ctx: Parameters<ReturnType<typeof AuthFactory>["auth"]["member"]["get"]>[0],
       args: { userId: string; groupIds: readonly string[] },
     ): Promise<MemberAccessResult<TPermissions>[]>;
   };
+  resolve: (
+    ctx: Parameters<ReturnType<typeof AuthFactory>["auth"]["member"]["resolve"]>[0],
+    args: { userId: string; groupId: string; maxDepth?: number },
+  ) => Promise<MemberResolutionResult<TPermissions>>;
   assert: (
     ctx: Parameters<ReturnType<typeof AuthFactory>["auth"]["member"]["assert"]>[0],
     opts: {
       userId: string;
       groupId: string;
-      ancestry?: boolean;
       roleIds?: RoleId<TPermissions>[];
       grants?: Grant<TPermissions>[];
-      maxDepth?: number;
     },
   ) => Promise<MemberAccessResult<TPermissions>>;
 };
+
+type RuntimeAuthApi = ReturnType<typeof AuthFactory>["auth"];
+
+/** App-facing account management. Provider credential internals remain on provider callback ctx. */
+type PublicAccountApi = RuntimeAuthApi["accountManagement"];
+
+/** App-facing OAuth administration and consent; wire-protocol helpers stay runtime-internal. */
+type PublicOAuthApi = {
+  authorize: RuntimeAuthApi["oauth"]["authorize"];
+  client: Omit<RuntimeAuthApi["oauth"]["client"], "verify" | "verifyRegistrationToken">;
+};
+
+/** Audit event read/write surface for app-owned domain events. */
+type PublicEventApi = RuntimeAuthApi["event"];
 
 /**
  * `request.mcp` with each tool's `scope` narrowed from `string` to the
@@ -141,7 +150,7 @@ type MemberApiWithPermissions<TPermissions extends PermissionsConfig | undefined
  */
 type RequestApiWithPermissions<TPermissions extends PermissionsConfig | undefined> = Omit<
   ReturnType<typeof AuthFactory>["auth"]["request"],
-  "mcp"
+  "mcp" | "router"
 > & {
   mcp: <T extends Record<string, GenericValidator>>(
     http: HttpRouter,
@@ -224,17 +233,18 @@ export type AuthApiBase<
   http: ReturnType<typeof AuthFactory>["http"];
   user: ReturnType<typeof AuthFactory>["auth"]["user"];
   session: ReturnType<typeof AuthFactory>["auth"]["session"];
-  provider: ReturnType<typeof AuthFactory>["auth"]["provider"];
-  account: ReturnType<typeof AuthFactory>["auth"]["account"];
+  account: PublicAccountApi;
+  factor: RuntimeAuthApi["factor"];
   group: ReturnType<typeof AuthFactory>["auth"]["group"] & {
-    /** Current user's active-group selection (`get` / `update` / `remove`). */
+    /** Current user's active-group selection (`get` / `update` / `reset`). */
     active: ReturnType<typeof AuthFactory>["auth"]["active"];
   };
   member: MemberApiWithPermissions<TPermissions>;
   invite: ReturnType<typeof AuthFactory>["auth"]["invite"];
   key: ReturnType<typeof AuthFactory>["auth"]["key"];
-  oauth: ReturnType<typeof AuthFactory>["auth"]["oauth"];
-  event: ReturnType<typeof AuthFactory>["auth"]["event"];
+  provider: ReturnType<typeof AuthFactory>["auth"]["provider"];
+  oauth: PublicOAuthApi;
+  event: PublicEventApi;
   request: RequestApiWithPermissions<TPermissions>;
   /**
    * Build app-owned public RPCs for group Connection admin screens.
@@ -671,8 +681,27 @@ export function defineAuth<
 
   const groupApi = {
     ...authResult.auth.group,
-    active: authResult.auth.active,
+    active: {
+      get: authResult.auth.active.get,
+      update: authResult.auth.active.update,
+      reset: authResult.auth.active.reset,
+    },
   };
+
+  const accountApi: PublicAccountApi = authResult.auth.accountManagement;
+
+  const oauthApi: PublicOAuthApi = {
+    authorize: authResult.auth.oauth.authorize,
+    client: {
+      create: authResult.auth.oauth.client.create,
+      get: authResult.auth.oauth.client.get,
+      list: authResult.auth.oauth.client.list,
+      update: authResult.auth.oauth.client.update,
+      revoke: authResult.auth.oauth.client.revoke,
+    },
+  };
+
+  const eventApi: PublicEventApi = authResult.auth.event;
 
   const api = {
     v: createAuthValidators(config.extend ?? ({} as TExtend)),
@@ -682,14 +711,15 @@ export function defineAuth<
     http: authResult.http,
     user: authResult.auth.user,
     session: authResult.auth.session,
-    provider: authResult.auth.provider,
-    account: authResult.auth.account,
+    account: accountApi,
+    factor: authResult.auth.factor,
     group: groupApi,
     member: authResult.auth.member,
     invite: authResult.auth.invite,
     key: authResult.auth.key,
-    oauth: authResult.auth.oauth,
-    event: authResult.auth.event,
+    provider: authResult.auth.provider,
+    oauth: oauthApi,
+    event: eventApi,
     request: authResult.auth.request,
     connection: publicGroupConnection,
 

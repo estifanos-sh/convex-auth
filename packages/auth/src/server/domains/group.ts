@@ -14,13 +14,6 @@ type Paginated<T> = {
   pageStatus?: "SplitRecommended" | "SplitRequired" | null;
 };
 
-type GroupTree = {
-  current: Doc<"Group">;
-  parent: Doc<"Group"> | null;
-  children: Array<Doc<"Group">>;
-  ancestors: Array<Doc<"Group">>;
-};
-
 export type GroupDeps = {
   config: ReturnType<typeof configDefaults>;
 };
@@ -76,48 +69,16 @@ export function createGroupDomain(deps: GroupDeps) {
     opts: { ids: readonly string[] },
   ): Promise<Array<GroupDocLike>>;
   function groupGetEx(ctx: ComponentReadCtx, selector: { slug: string }): Promise<GroupDocLike>;
-  function groupGetEx(
-    ctx: ComponentReadCtx,
-    opts: { id: string; tree: true },
-  ): Promise<GroupTree | null>;
   async function groupGetEx(
     ctx: ComponentReadCtx,
-    opts: { id: string; tree?: true } | { ids: readonly string[] } | { slug: string },
-  ): Promise<GroupDocLike | Array<GroupDocLike> | GroupTree | null> {
+    opts: { id: string } | { ids: readonly string[] } | { slug: string },
+  ): Promise<GroupDocLike | Array<GroupDocLike>> {
     if ("slug" in opts) {
       const { page } = await group.list(ctx, {
         where: { slug: opts.slug },
         paginationOpts: { numItems: 1, cursor: null },
       });
       return page[0] ?? null;
-    }
-    if ("id" in opts && opts.tree === true) {
-      const current = await groupGet(ctx, { id: opts.id });
-      if (current === null) return null;
-      const parentId = typeof current.parentGroupId === "string" ? current.parentGroupId : null;
-      const [parent, childrenPage] = await Promise.all([
-        parentId !== null ? groupGet(ctx, { id: parentId }) : Promise.resolve(null),
-        group.list(ctx, {
-          where: { parentGroupId: opts.id },
-          paginationOpts: { numItems: 100, cursor: null },
-        }),
-      ]);
-      const ancestors: Array<Doc<"Group">> = [];
-      let walk = parentId;
-      const seen = new Set<string>([opts.id]);
-      while (walk !== null && !seen.has(walk)) {
-        seen.add(walk);
-        const ancestor = await groupGet(ctx, { id: walk });
-        if (ancestor === null) break;
-        ancestors.push(ancestor);
-        walk = typeof ancestor.parentGroupId === "string" ? ancestor.parentGroupId : null;
-      }
-      return {
-        current,
-        parent,
-        children: childrenPage.page,
-        ancestors,
-      };
     }
     if ("ids" in opts) {
       return groupGet(ctx, opts);
@@ -191,11 +152,6 @@ export function createGroupDomain(deps: GroupDeps) {
      * const group = await auth.group.get(ctx, { slug: "acme" });
      * ```
      *
-     * @example With hierarchy
-     * ```ts
-     * const { current, parent, children, ancestors } =
-     *   (await auth.group.get(ctx, { id: groupId, tree: true }))!;
-     * ```
      */
     get: groupGetEx,
     /**

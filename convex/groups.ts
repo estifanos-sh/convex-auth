@@ -314,8 +314,7 @@ export const acceptInvite = authMutation({
   args: { token: v.string() },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const userId = ctx.auth.userId;
-    await auth.invite.token.accept(ctx, { token: args.token, acceptedByUserId: userId });
+    await auth.invite.token.accept(ctx, { token: args.token });
     return null;
   },
 });

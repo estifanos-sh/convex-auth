@@ -108,10 +108,13 @@ authorization model.
 - `auth.user.*` — User helpers
 - `auth.session.*` — Session helpers
 - `auth.account.*` — Account helpers
+- `auth.factor.*` — Safe current-user passkey and TOTP management
 - `auth.group.*` — Group helpers
 - `auth.member.*` — Membership helpers
 - `auth.invite.*` — Invite helpers
 - `auth.key.*` — API key helpers
+- `auth.provider.signIn` — Server-side provider orchestration
+- `auth.event.*` — Audit reads and app-owned event emission
 - `auth.request.*` — HTTP route helpers
 - `auth.http()` — app-owned HTTP router for OAuth callbacks, JWKS, and protocol
   routes

@@ -75,6 +75,7 @@ export const sidebar: SidebarGroup[] = [
       { title: "Users", slug: "/api/user" },
       { title: "Sessions", slug: "/api/session" },
       { title: "Accounts", slug: "/api/account" },
+      { title: "Factors", slug: "/api/factor" },
       { title: "Groups", slug: "/api/group" },
       { title: "Members", slug: "/api/member" },
       { title: "Invites", slug: "/api/invite" },

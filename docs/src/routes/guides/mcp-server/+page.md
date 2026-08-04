@@ -206,8 +206,10 @@ const { clientId, clientSecret, registrationAccessToken } = await auth.oauth.cli
 });
 ```
 
-`clientSecret` is returned only for confidential clients. The other client verbs
-are `auth.oauth.client.{get, list, revoke, verify, update, verifyRegistrationToken}`.
+`clientSecret` is returned only for confidential clients. The other app-facing
+client verbs are `auth.oauth.client.{get, list, update, revoke}`. Secret and
+registration-token verification are handled internally by the OAuth endpoints
+mounted through `auth.http()`.
 
 ## Tokens, scopes, and resource binding
 

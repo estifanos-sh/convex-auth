@@ -492,18 +492,13 @@ test("group connection component stores scim config, audit events, and webhook d
     });
   });
   const eventId = await t.run(async (ctx) => {
-    const result = await auth.event.emit(ctx, {
-      kind: "connection.scim.set",
-      actor: { type: "system" },
-      subject: { type: "connection", id: connectionId },
-      targets: [
-        { kind: "group", id: groupId },
-        { kind: "connection", id: connectionId },
-      ],
-      outcome: "success",
-      data: { scimConfigId },
+    const { page } = await auth.connection.audit.list(ctx, {
+      connectionId,
+      paginationOpts: { numItems: 10, cursor: null },
     });
-    return result.eventId;
+    const event = page.find((candidate) => candidate.kind === "connection.scim.set");
+    if (event === undefined) throw new Error("SCIM configuration event was not emitted");
+    return event.eventId;
   });
   const { endpointId } = await t.run(async (ctx) => {
     return await auth.connection.webhook.endpoint.create(ctx, {

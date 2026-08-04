@@ -20,13 +20,23 @@ import { GenericId, Value } from "convex/values";
 import type { Hashed } from "../shared/brand";
 import type { SignInFlowResult } from "../shared/results";
 import type { SessionIssuance } from "../server/session/lifecycle";
+import type { AuthProfile } from "../server/payloads";
 import type {
   AuthProviderConfig,
   ConvexCredentialsConfig,
   GenericActionCtxWithAuthConfig,
 } from "../server/types";
 
-type CredentialsAuthorizeResult =
+export type CredentialsProvisioning = {
+  /** Stable provider-owned identifier and optional credential secret. */
+  account: { id: string; secret?: string };
+  /** User profile established by the provider's verified ceremony. */
+  profile: AuthProfile;
+  /** Verified profile fields that may safely match an existing user. */
+  match?: Array<"email" | "phone">;
+};
+
+export type CredentialsAuthorizeResult =
   | {
       userId: GenericId<"User">;
       sessionId?: GenericId<"Session">;
@@ -42,6 +52,12 @@ type CredentialsAuthorizeResult =
        */
       issuance?: SessionIssuance;
     }
+  | {
+      /** Provision or retrieve the provider account before issuing a session. */
+      provision: CredentialsProvisioning;
+      /** TOTP step-up hint for the resulting user. */
+      hasTotp?: boolean;
+    }
   | Exclude<SignInFlowResult<null>, { kind: "signedIn" }>
   | null;
 
@@ -50,7 +66,8 @@ export interface CredentialsConfig<DataModel extends GenericDataModel = GenericD
   /** Stable provider identifier used in `signIn("<id>")`. */
   id?: string;
   /**
-   * Validate the submitted credentials and return the authenticated user.
+   * Validate the submitted credentials and return the authenticated user or
+   * verified identity to provision.
    * Return `null` to reject the sign-in attempt.
    */
   authorize: (

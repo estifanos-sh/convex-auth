@@ -191,15 +191,14 @@ export { remove };
  * Resolve a user's effective membership in a group, walking up the parent
  * chain so an ancestor membership is inherited by descendants. Returns the
  * matched membership plus where it was found (`matchedGroupId`, `depth`,
- * `isDirect`/`isInherited`); `ancestry: true` also reports the
- * `traversedGroupIds`. All match fields are null when no membership exists.
+ * `isDirect`/`isInherited`) and the complete traversal. All match fields are
+ * null when no membership exists.
  */
 export const resolve = query({
   args: {
     userId: v.id("User"),
     groupId: v.id("Group"),
     maxDepth: v.optional(v.number()),
-    ancestry: v.optional(v.boolean()),
   },
   returns: v.object({
     membership: v.union(vGroupMemberDoc, v.null()),
@@ -207,11 +206,10 @@ export const resolve = query({
     depth: v.union(v.number(), v.null()),
     isDirect: v.boolean(),
     isInherited: v.boolean(),
-    traversedGroupIds: v.optional(v.array(v.id("Group"))),
+    traversedGroupIds: v.array(v.id("Group")),
   }),
   handler: async (ctx, args) => {
     const maxDepth = Math.max(0, Math.floor(args.maxDepth ?? 32));
-    const includeAncestry = args.ancestry ?? false;
     const visited = new Set<string>();
     const traversedGroupIds: Id<"Group">[] = [];
     let currentGroupId: Id<"Group"> | undefined = args.groupId;
@@ -220,7 +218,7 @@ export const resolve = query({
     while (currentGroupId !== undefined && depth <= maxDepth) {
       if (visited.has(currentGroupId)) break;
       visited.add(currentGroupId);
-      if (includeAncestry) traversedGroupIds.push(currentGroupId);
+      traversedGroupIds.push(currentGroupId);
 
       const membership = await ctx.db
         .query("GroupMember")
@@ -236,7 +234,7 @@ export const resolve = query({
           depth,
           isDirect: depth === 0,
           isInherited: depth > 0,
-          ...(includeAncestry ? { traversedGroupIds } : {}),
+          traversedGroupIds,
         };
       }
 
@@ -255,7 +253,7 @@ export const resolve = query({
       depth: null,
       isDirect: false,
       isInherited: false,
-      ...(includeAncestry ? { traversedGroupIds } : {}),
+      traversedGroupIds,
     };
   },
 });

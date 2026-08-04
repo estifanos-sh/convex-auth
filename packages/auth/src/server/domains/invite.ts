@@ -1,5 +1,10 @@
+import type { Auth } from "convex/server";
+import { ConvexError } from "convex/values";
+
+import { ErrorCode } from "../../shared/codes";
 import type { ComponentCtx, ComponentReadCtx } from "../component/context";
 import { configDefaults } from "../config";
+import { getSessionUserId } from "../context";
 import { generateRandomString, sha256 } from "../random";
 import type { Doc } from "../types";
 
@@ -134,20 +139,18 @@ export function createInviteDomain(deps: InviteDeps) {
        *
        * @param ctx - Convex mutation context.
        * @param args.token - The raw invite token string.
-       * @param args.acceptedByUserId - The user accepting the invite.
        * @returns The created membership details.
        *
        * @example
        * ```ts
        * const result = await auth.invite.token.accept(ctx, {
        *   token: tokenFromUrl,
-       *   acceptedByUserId: userId,
        * });
        * ```
        */
       accept: async (
-        ctx: ComponentCtx,
-        args: { token: string; acceptedByUserId: string },
+        ctx: ComponentCtx & { auth: Auth },
+        args: { token: string },
       ): Promise<{
         inviteId: string;
         groupId: string | null;
@@ -155,10 +158,17 @@ export function createInviteDomain(deps: InviteDeps) {
         inviteStatus: string;
         membershipStatus: string;
       }> => {
+        const acceptedByUserId = await getSessionUserId(ctx);
+        if (acceptedByUserId === null) {
+          throw new ConvexError({
+            code: ErrorCode.NOT_SIGNED_IN,
+            message: "Authentication required.",
+          });
+        }
         const tokenHash = await sha256(args.token);
         const result = (await ctx.runMutation(config.component.group.invite.accept, {
           tokenHash,
-          acceptedByUserId: args.acceptedByUserId,
+          acceptedByUserId,
         })) as {
           inviteId: string;
           groupId: string | null;

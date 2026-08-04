@@ -224,18 +224,19 @@ export const update = mutation({
 const remove = mutation({
   args: {
     id: v.id("Account"),
+    userId: v.optional(v.id("User")),
     requireOtherAccount: v.optional(v.boolean()),
   },
   returns: v.null(),
-  handler: async (ctx, { id: accountId, requireOtherAccount }) => {
+  handler: async (ctx, { id: accountId, userId, requireOtherAccount }) => {
+    const doc = await ctx.db.get("Account", accountId);
+    if (doc === null || (userId !== undefined && doc.userId !== userId)) {
+      throw new ConvexError({
+        code: ErrorCode.ACCOUNT_NOT_FOUND,
+        message: "Account not found.",
+      });
+    }
     if (requireOtherAccount === true) {
-      const doc = await ctx.db.get("Account", accountId);
-      if (doc === null) {
-        throw new ConvexError({
-          code: ErrorCode.ACCOUNT_NOT_FOUND,
-          message: "Account not found.",
-        });
-      }
       let otherFound = false;
       for await (const sibling of ctx.db
         .query("Account")

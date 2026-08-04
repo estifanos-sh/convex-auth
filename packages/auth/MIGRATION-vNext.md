@@ -9,8 +9,9 @@ This is a hard breaking cut: removed names are not kept as compatibility aliases
 ## WebAuthn provider and client
 
 The protocol-level provider and client surface is now named `webauthn`.
-Credential resources remain passkeys under `auth.account.passkey`, and the
-Account credential-resource identifier remains `passkey`.
+Credential resources remain passkeys in storage, while current-user management
+moves to the sanitized `auth.factor` namespace. The Account
+credential-resource identifier remains `passkey`.
 
 ```ts
 // Before

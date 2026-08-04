@@ -155,7 +155,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
     remove: FunctionReference<
       "mutation",
       "internal",
-      { id: string; requireOtherAccount?: boolean },
+      { id: string; requireOtherAccount?: boolean; userId?: string },
       null,
       Name
     >;
@@ -2740,7 +2740,13 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         }>,
         Name
       >;
-      remove: FunctionReference<"mutation", "internal", { id: string }, null, Name>;
+      remove: FunctionReference<
+        "mutation",
+        "internal",
+        { id: string; requireOtherAccount?: boolean; userId?: string },
+        null,
+        Name
+      >;
       update: FunctionReference<
         "mutation",
         "internal",
@@ -2753,6 +2759,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
             name?: string;
             transports?: Array<string>;
           };
+          userId?: string;
         },
         null,
         Name
@@ -2914,13 +2921,20 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         }>,
         Name
       >;
-      remove: FunctionReference<"mutation", "internal", { id: string }, null, Name>;
+      remove: FunctionReference<
+        "mutation",
+        "internal",
+        { id: string; userId?: string },
+        null,
+        Name
+      >;
       update: FunctionReference<
         "mutation",
         "internal",
         {
           id: string;
           patch: { lastUsedAt?: number; name?: string; verified?: boolean };
+          userId?: string;
         },
         null,
         Name
@@ -2928,6 +2942,81 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
     };
   };
   group: {
+    active: {
+      get: FunctionReference<
+        "query",
+        "internal",
+        { userId: string },
+        {
+          group: {
+            _creationTime: number;
+            _id: string;
+            extend?: any;
+            isRoot?: boolean;
+            name: string;
+            parentGroupId?: string;
+            policy?: {
+              extend?: any;
+              identity: {
+                accountLinking: {
+                  oidc: "verifiedEmail" | "none" | "sameConnection";
+                  saml: "verifiedEmail" | "none" | "sameConnection";
+                };
+              };
+              provisioning: {
+                deprovision: { mode: "soft" | "hard" };
+                groups: {
+                  mapping?: Record<string, Array<string>>;
+                  mode: "ignore" | "sync";
+                  source: "protocol";
+                };
+                jit: {
+                  defaultRole?: string;
+                  defaultRoleIds?: Array<string>;
+                  mode: "off" | "createUser" | "createUserAndMembership";
+                };
+                roles: {
+                  mapping?: Record<string, Array<string>>;
+                  mode: "ignore" | "map";
+                  source: "protocol";
+                };
+                scimReuse: { user: "externalId" | "none" };
+                user: {
+                  authority: "app" | "connection" | "scim";
+                  createOnSignIn: boolean;
+                  updateProfileFromScim: "never" | "missing" | "always";
+                  updateProfileOnLogin: "never" | "missing" | "always";
+                };
+              };
+              version: 1;
+            };
+            rootGroupId?: string;
+            slug?: string;
+            type?: string;
+          } | null;
+          groupId: string;
+          membership: {
+            _creationTime: number;
+            _id: string;
+            extend?: any;
+            groupId: string;
+            role?: string;
+            roleIds?: Array<string>;
+            status?: string;
+            userId: string;
+          };
+        } | null,
+        Name
+      >;
+      reset: FunctionReference<"mutation", "internal", { userId: string }, null, Name>;
+      update: FunctionReference<
+        "mutation",
+        "internal",
+        { groupId: string; userId: string },
+        null,
+        Name
+      >;
+    };
     ancestors: FunctionReference<
       "query",
       "internal",
@@ -3355,12 +3444,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       resolve: FunctionReference<
         "query",
         "internal",
-        {
-          ancestry?: boolean;
-          groupId: string;
-          maxDepth?: number;
-          userId: string;
-        },
+        { groupId: string; maxDepth?: number; userId: string },
         {
           depth: number | null;
           isDirect: boolean;
@@ -3376,7 +3460,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
             status?: string;
             userId: string;
           } | null;
-          traversedGroupIds?: Array<string>;
+          traversedGroupIds: Array<string>;
         },
         Name
       >;
@@ -4322,13 +4406,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       },
       Name
     >;
-    remove: FunctionReference<
-      "mutation",
-      "internal",
-      { cascade?: boolean; id: string },
-      null,
-      Name
-    >;
+    remove: FunctionReference<"mutation", "internal", { id: string }, null, Name>;
     update: FunctionReference<
       "mutation",
       "internal",

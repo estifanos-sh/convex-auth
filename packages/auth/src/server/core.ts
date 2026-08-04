@@ -9,13 +9,16 @@ import { createOAuthCodeDomain } from "./oauth/code";
 import { createOAuthRefreshDomain } from "./oauth/refresh";
 import type { OAuthRuntimeDomain } from "./oauth/domain";
 import { getSessionUserId } from "./context";
+import { invalidateCtxCache } from "./cache/context";
 import { createSessionDomain } from "./domains/session";
 import { createKeyDomain } from "./domains/key";
 import { createInviteDomain } from "./domains/invite";
 import { createMemberDomain } from "./domains/member";
-import { createAccountDomain } from "./domains/account";
+import { createAccountDomain, createAccountManagementDomain } from "./domains/account";
 import { createUserDomain } from "./domains/user";
 import { createGroupDomain } from "./domains/group";
+import { capGrantsForCaller, resolveOAuthCaller } from "./domains/access";
+import { createFactorDomain } from "./domains/factor";
 import type { AuthProviderConfig, Doc } from "./types";
 import type { SignInParams } from "./payloads";
 import type { SignInFlowResult } from "../shared/results";
@@ -143,7 +146,6 @@ export function createCoreDomains(deps: CoreDeps) {
     config,
     normalizeRoleIds,
     resolveGrantedPermissions,
-    groupGet: groupDomain.groupGet,
   });
   const invite = createInviteDomain({
     config,
@@ -157,6 +159,8 @@ export function createCoreDomains(deps: CoreDeps) {
     callRetrieveAccountWithCredentials,
     callModifyAccount,
   });
+  const accountManagement = createAccountManagementDomain({ config });
+  const factor = createFactorDomain({ config });
 
   const { groupGet: _groupGet, ...group } = groupDomain;
 
@@ -206,15 +210,9 @@ export function createCoreDomains(deps: CoreDeps) {
       : undefined,
   };
 
-  const readLastActiveGroup = (doc: Doc<"User"> | null): string | null => {
-    const val = doc?.lastActiveGroup;
-    return typeof val === "string" ? val : null;
-  };
-
   /**
-   * The current user's active group — the workspace selection persisted
-   * natively on `User.lastActiveGroup`. Exposes `get` / `update` / `remove`
-   * instead of bespoke `setActiveGroup`/`getActiveGroup`.
+   * The current user's active group — a stored preference with deterministic
+   * membership fallback.
    */
   const active = {
     /**
@@ -239,66 +237,61 @@ export function createCoreDomains(deps: CoreDeps) {
       groupId: string;
       group: Doc<"Group"> | null;
       membership: Doc<"GroupMember">;
+      roleIds: string[];
+      grants: string[];
     } | null> => {
       const userId = opts?.userId ?? (await getSessionUserId(ctx));
       if (userId === null || userId === undefined) return null;
-      const [userDoc, { page: memberships }] = await Promise.all([
-        user.get(ctx, { id: userId }),
-        member.list(ctx, {
-          where: { userId },
-          paginationOpts: { numItems: 100, cursor: null },
-        }),
-      ]);
-      if (memberships.length === 0) return null;
-      const stored = readLastActiveGroup(userDoc);
-      const chosen =
-        memberships.find((m: Doc<"GroupMember">) => m.groupId === stored) ?? memberships[0];
-      const groupDoc = await group.get(ctx, { id: chosen.groupId });
-      return { groupId: chosen.groupId, group: groupDoc, membership: chosen };
+      const result = (await ctx.runQuery(config.component.group.active.get, { userId })) as {
+        groupId: string;
+        group: Doc<"Group"> | null;
+        membership: Doc<"GroupMember">;
+      } | null;
+      if (result === null) return null;
+      const roleIds = result.membership.roleIds ?? [];
+      const caller = await resolveOAuthCaller(ctx);
+      return {
+        ...result,
+        roleIds,
+        grants: capGrantsForCaller(caller, userId, resolveGrantedPermissions(roleIds)),
+      };
     },
     /**
      * Update the active group, validating the user is a member first.
      *
      * @param ctx - Convex mutation context with `auth`.
-     * @param groupId - Group to activate.
-     * @param opts.userId - Target user; defaults to the current session user.
+     * @param args.groupId - Group to activate.
+     * @param args.userId - Target user; defaults to the current session user.
      * @throws `NOT_SIGNED_IN` if no user, `NOT_A_MEMBER` if not a member.
      */
     update: async (
       ctx: ComponentCtx & { auth: Auth },
-      groupId: string,
-      opts?: { userId?: string },
+      args: { groupId: string; userId?: string },
     ): Promise<{ groupId: string }> => {
-      const userId = opts?.userId ?? (await getSessionUserId(ctx));
+      const userId = args.userId ?? (await getSessionUserId(ctx));
       if (userId === null || userId === undefined) {
         throw new ConvexError({
           code: ErrorCode.NOT_SIGNED_IN,
           message: "Authentication required.",
         });
       }
-      const { page } = await member.list(ctx, {
-        where: { userId, groupId },
-        paginationOpts: { numItems: 1, cursor: null },
+      await ctx.runMutation(config.component.group.active.update, {
+        userId,
+        groupId: args.groupId,
       });
-      if (page.length === 0) {
-        throw new ConvexError({
-          code: ErrorCode.NOT_A_MEMBER,
-          message: "User is not a member of this group.",
-        });
-      }
-      await user.update(ctx, { id: userId, patch: { lastActiveGroup: groupId } });
-      return { groupId };
+      invalidateCtxCache(ctx, `user:${userId}`);
+      return { groupId: args.groupId };
     },
     /**
-     * Remove the stored active group selection.
+     * Reset the stored preference to deterministic membership fallback.
      *
      * @param ctx - Convex mutation context with `auth`.
      * @param opts.userId - Target user; defaults to the current session user.
      */
-    remove: async (
+    reset: async (
       ctx: ComponentCtx & { auth: Auth },
       opts?: { userId?: string },
-    ): Promise<{ groupId: null }> => {
+    ): Promise<null> => {
       const userId = opts?.userId ?? (await getSessionUserId(ctx));
       if (userId === null || userId === undefined) {
         throw new ConvexError({
@@ -306,11 +299,9 @@ export function createCoreDomains(deps: CoreDeps) {
           message: "Authentication required.",
         });
       }
-      await user.update(ctx, {
-        id: userId,
-        patch: { lastActiveGroup: undefined },
-      });
-      return { groupId: null };
+      await ctx.runMutation(config.component.group.active.reset, { userId });
+      invalidateCtxCache(ctx, `user:${userId}`);
+      return null;
     },
   };
 
@@ -338,6 +329,8 @@ export function createCoreDomains(deps: CoreDeps) {
     user,
     session,
     account,
+    accountManagement,
+    factor,
     provider,
     group,
     member,
