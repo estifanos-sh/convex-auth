@@ -24,7 +24,7 @@ test("generateToken retries private-key import after an invalid warmup", async (
   process.env.CONVEX_SITE_URL = "http://127.0.0.1:3211";
   process.env.JWT_PRIVATE_KEY = "not-a-valid-private-key";
 
-  const tokens = await import("@robelest/convex-auth/server/tokens");
+  const tokens = await import("@estifanos-sh/convex-auth/server/tokens");
   await expect(
     tokens.generateToken(
       { identity: { subject: "user1" as any, sessionId: "session1" as any } },
@@ -73,7 +73,7 @@ test("generateToken accepts flattened PKCS#8 private keys", async () => {
   const pem = await exportPKCS8(keys.privateKey);
   process.env.JWT_PRIVATE_KEY = pem.trimEnd().replace(/\n/g, " ");
 
-  const tokens = await import("@robelest/convex-auth/server/tokens");
+  const tokens = await import("@estifanos-sh/convex-auth/server/tokens");
   const token = await tokens.generateToken(
     { identity: { subject: "user2" as any, sessionId: "session2" as any } },
     {} as any,
@@ -93,7 +93,7 @@ test("generateToken uses the mounted auth route as issuer", async () => {
   });
   process.env.JWT_PRIVATE_KEY = await exportPKCS8(keys.privateKey);
 
-  const tokens = await import("@robelest/convex-auth/server/tokens");
+  const tokens = await import("@estifanos-sh/convex-auth/server/tokens");
   const token = await tokens.generateToken(
     { identity: { subject: "user3" as any, sessionId: "session3" as any } },
     { path: "/custom-auth" } as any,
@@ -113,7 +113,7 @@ test("generateToken defaults to the /auth issuer", async () => {
   });
   process.env.JWT_PRIVATE_KEY = await exportPKCS8(keys.privateKey);
 
-  const tokens = await import("@robelest/convex-auth/server/tokens");
+  const tokens = await import("@estifanos-sh/convex-auth/server/tokens");
   const token = await tokens.generateToken(
     { identity: { subject: "user4" as any, sessionId: "session4" as any } },
     {} as any,

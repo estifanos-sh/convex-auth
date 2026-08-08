@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@clack/prompts": "^1.2.0",
-    "@robelest/convex-auth": "workspace:*",
+    "@estifanos-sh/convex-auth": "workspace:*",
     "convex": "catalog:",
     "dotenv": "^17.2.4",
     "figlet": "^1.11.0",

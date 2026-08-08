@@ -1,7 +1,7 @@
 import {
   ProxyRequestError,
   isRetriableProxyRefreshError,
-} from "@robelest/convex-auth/client/runtime/proxy";
+} from "@estifanos-sh/convex-auth/client/runtime/proxy";
 import { expect, test } from "vite-plus/test";
 
 test("isRetriableProxyRefreshError retries 429", () => {

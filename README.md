@@ -24,7 +24,7 @@ target shape and migration notes.
 
 ## API design
 
-`@robelest/convex-auth` is a Convex component, but unlike single-purpose
+`@estifanos-sh/convex-auth` is a Convex component, but unlike single-purpose
 components — which you instantiate as a class (`new RateLimiter(components.rateLimiter)`,
 `new Resend(components.resend)`) — it spans many domains: users, sessions,
 accounts, group memberships, SSO connections, OAuth clients, and API keys.
@@ -32,9 +32,9 @@ Rather than one class with dozens of methods, it uses a definition-first factory
 that returns a facade namespaced by domain:
 
 ```ts
-import { defineAuth } from "@robelest/convex-auth/server";
-import { definePermissions } from "@robelest/convex-auth/permissions";
-import { password, google } from "@robelest/convex-auth/providers";
+import { defineAuth } from "@estifanos-sh/convex-auth/server";
+import { definePermissions } from "@estifanos-sh/convex-auth/permissions";
+import { password, google } from "@estifanos-sh/convex-auth/providers";
 import { components } from "./_generated/api";
 
 export const permissions = definePermissions({
@@ -65,30 +65,30 @@ shape contract.
 
 ## Package exports
 
-| Import path                                          | Use                                                                                                                        |
-| ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `@robelest/convex-auth/server`                       | Backend: `defineAuth`, the `auth.*` facade, `authEnv`, `authEvents`, and HTTP route helpers                                |
-| `@robelest/convex-auth/convex.config`                | The component definition for `app.use(auth)` in `convex.config.ts`                                                         |
-| `@robelest/convex-auth/permissions`                  | `definePermissions` and the grant/role types                                                                               |
-| `@robelest/convex-auth/providers` (+ `/providers/*`) | Auth providers: `password`, `google`, `github`, `apple`, `microsoft`, `passkey`, `totp`, `anonymous`, `email`, `device`, … |
-| `@robelest/convex-auth/client`                       | Framework-agnostic browser client factory (`client()` — sign-in/out, token store)                                          |
-| `@robelest/convex-auth/react`                        | React bindings: `ConvexAuthProvider`, `useAuth`, `useConvexAuthClient`                                                     |
-| `@robelest/convex-auth/expo`                         | React Native / Expo client                                                                                                 |
-| `@robelest/convex-auth/browser`                      | Low-level browser primitives (navigation, passkey, web locks)                                                              |
-| `@robelest/convex-auth/core`                         | `createAuthContext` and low-level building blocks for custom integrations                                                  |
+| Import path                                              | Use                                                                                                                         |
+| -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `@estifanos-sh/convex-auth/server`                       | Backend: `defineAuth`, the `auth.*` facade, `authEnv`, `authEvents`, and HTTP route helpers                                 |
+| `@estifanos-sh/convex-auth/convex.config`                | The component definition for `app.use(auth)` in `convex.config.ts`                                                          |
+| `@estifanos-sh/convex-auth/permissions`                  | `definePermissions` and the grant/role types                                                                                |
+| `@estifanos-sh/convex-auth/providers` (+ `/providers/*`) | Auth providers: `password`, `google`, `github`, `apple`, `microsoft`, `webauthn`, `totp`, `anonymous`, `email`, `device`, … |
+| `@estifanos-sh/convex-auth/client`                       | Framework-agnostic browser client factory (`client()` — sign-in/out, token store)                                           |
+| `@estifanos-sh/convex-auth/react`                        | React bindings: `ConvexAuthProvider`, `useAuth`, `useConvexAuthClient`                                                      |
+| `@estifanos-sh/convex-auth/expo`                         | React Native / Expo client                                                                                                  |
+| `@estifanos-sh/convex-auth/browser`                      | Low-level browser primitives (navigation, WebAuthn, web locks)                                                              |
+| `@estifanos-sh/convex-auth/core`                         | `createAuthContext` and low-level building blocks for custom integrations                                                   |
 
 ## Documentation
 
-**[convex-auth.estifanos.com](https://convex-auth.estifanos.com)**
+**[estifanos.sh/convex-auth](https://estifanos.sh/convex-auth/)**
 
-| Section                                                                            | Description                                                     |
-| ---------------------------------------------------------------------------------- | --------------------------------------------------------------- |
-| [Getting Started](https://convex-auth.estifanos.com/getting-started/installation/) | Installation, providers, environment variables                  |
-| [API Reference](https://convex-auth.estifanos.com/api/user/)                       | `auth.user`, `auth.session`, `auth.group`, `auth.key`, and more |
-| [Group SSO](https://convex-auth.estifanos.com/connection/overview/)                | OIDC, SAML, SCIM, audit, webhooks                               |
-| [SSR Integration](https://convex-auth.estifanos.com/ssr/overview/)                 | SvelteKit, TanStack Start, Next.js                              |
-| [Guides](https://convex-auth.estifanos.com/guides/multi-access/)                   | Multi-access, device flow, authorization, production            |
-| [Reference](https://convex-auth.estifanos.com/reference/config/)                   | Config options, error codes, CLI, architecture                  |
+| Section                                                                           | Description                                                     |
+| --------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| [Getting Started](https://estifanos.sh/convex-auth/getting-started/installation/) | Installation, providers, environment variables                  |
+| [API Reference](https://estifanos.sh/convex-auth/api/user/)                       | `auth.user`, `auth.session`, `auth.group`, `auth.key`, and more |
+| [Group SSO](https://estifanos.sh/convex-auth/connection/overview/)                | OIDC, SAML, SCIM, audit, webhooks                               |
+| [SSR Integration](https://estifanos.sh/convex-auth/ssr/overview/)                 | SvelteKit, TanStack Start, Next.js                              |
+| [Guides](https://estifanos.sh/convex-auth/guides/multi-access/)                   | Multi-access, device flow, authorization, production            |
+| [Reference](https://estifanos.sh/convex-auth/reference/config/)                   | Config options, error codes, CLI, architecture                  |
 
 ## Agent Skills
 
@@ -96,11 +96,11 @@ Install focused setup and review workflows for Codex, Claude Code, Cursor, and
 other Agent Skills-compatible coding agents:
 
 ```bash
-npx skills add robelest/convex-auth --all
+npx skills add estifanos-sh/convex-auth --all
 ```
 
-See the [Agent Skills documentation](https://convex-auth.estifanos.com/ai/agent-skills/)
-or use the compact [`llms.txt`](https://convex-auth.estifanos.com/llms.txt)
+See the [Agent Skills documentation](https://estifanos.sh/convex-auth/ai/agent-skills/)
+or use the compact [`llms.txt`](https://estifanos.sh/convex-auth/llms.txt)
 documentation index.
 
 ## Contributing
@@ -115,7 +115,7 @@ vp test --run --project convex
 | --------------- | ---------------------------------------------- |
 | `packages/auth` | Auth component, server helpers, providers, CLI |
 | `tests/`        | Vitest test suite (convex + node projects)     |
-| `docs/`         | Starlight documentation site                   |
+| `docs/`         | TanStack Start + Solid documentation site      |
 
 ## License
 

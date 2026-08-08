@@ -1,5 +1,5 @@
 /**
- * Lightweight auth context entry point for `@robelest/convex-auth/core`.
+ * Lightweight auth context entry point for `@estifanos-sh/convex-auth/core`.
  *
  * Provides auth context resolution, user/session/member/group lookups,
  * and authorization helpers without pulling in provider implementations,
@@ -46,7 +46,7 @@ export type { AuthContext, OptionalAuthContext, UserDoc, AuthContextConfig };
  * @example
  * ```ts
  * // convex/auth-core.ts
- * import { createAuthContext } from "@robelest/convex-auth/core";
+ * import { createAuthContext } from "@estifanos-sh/convex-auth/core";
  * import { components } from "./_generated/api";
  *
  * export const auth = createAuthContext(components.auth);

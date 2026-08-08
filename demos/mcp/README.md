@@ -18,7 +18,7 @@ and the client does discovery → registration → login for you:
 For this repository's production deployment:
 
 ```text
-https://convex-auth.estifanos.com/mcp
+https://estifanos.sh/convex-auth/mcp
 ```
 
 For another deployment, use `https://<deployment>.convex.site/mcp`.
@@ -125,7 +125,7 @@ against `definePermissions`.
 
 The Svelte demo is a static SPA served by **Convex static hosting** at `/demo`. The app,
 auth server (`/auth/*`), resource metadata, and `POST /mcp` share one origin. In this
-repository that origin is `https://convex-auth.estifanos.com`. Deploy it from the root with
+repository that origin is `https://estifanos.sh/convex-auth`. Deploy it from the root with
 `vp run deploy:demo`.
 
 ## Notes / follow-ups

@@ -4,7 +4,7 @@
 
 ## Project Overview
 
-Monorepo for `@robelest/convex-auth` — a Convex authentication library. Uses
+Monorepo for `@estifanos-sh/convex-auth` — a Convex authentication library. Uses
 **pnpm** workspaces and **Vite+** (`vp`) as the top-level workflow tool with ESM
 (`"type": "module"`) throughout.
 

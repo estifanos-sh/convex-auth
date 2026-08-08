@@ -24,7 +24,7 @@ export interface PhoneProviderConfig {
  *
  * @example
  * ```ts
- * import { phone } from "@robelest/convex-auth/providers";
+ * import { phone } from "@estifanos-sh/convex-auth/providers";
  *
  * phone({
  *   send: async ({ identifier, token }) => {

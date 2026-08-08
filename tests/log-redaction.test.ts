@@ -1,5 +1,5 @@
-import { redactCreateVerificationCodeArgsForLog } from "@robelest/convex-auth/server/mutations/code";
-import { redactUserOAuthArgsForLog } from "@robelest/convex-auth/server/mutations/oauth";
+import { redactCreateVerificationCodeArgsForLog } from "@estifanos-sh/convex-auth/server/mutations/code";
+import { redactUserOAuthArgsForLog } from "@estifanos-sh/convex-auth/server/mutations/oauth";
 import { expect, test } from "vite-plus/test";
 
 test("DEBUG log redaction hides the plaintext verification code", () => {

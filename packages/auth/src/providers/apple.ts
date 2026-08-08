@@ -2,7 +2,7 @@
  * Apple OAuth provider.
  *
  * ```ts
- * import { apple } from "@robelest/convex-auth/providers/apple";
+ * import { apple } from "@estifanos-sh/convex-auth/providers/apple";
  *
  * apple({
  *   clientId: env.AUTH_APPLE_ID!,
@@ -51,7 +51,7 @@ export interface AppleConfig {
  *
  * @example
  * ```ts
- * import { apple } from "@robelest/convex-auth/providers/apple";
+ * import { apple } from "@estifanos-sh/convex-auth/providers/apple";
  *
  * apple({
  *   clientId: env.AUTH_APPLE_ID!,

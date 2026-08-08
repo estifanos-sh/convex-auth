@@ -458,7 +458,7 @@ export type ConvexAuthResult<
  *
  * // Frontend
  * import type { auth } from "../convex/auth";
- * import type { InferClientApi } from "@robelest/convex-auth/server";
+ * import type { InferClientApi } from "@estifanos-sh/convex-auth/server";
  * const c = client<InferClientApi<typeof auth>>({ convex, api: api.auth });
  * ```
  *

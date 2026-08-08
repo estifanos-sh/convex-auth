@@ -1,7 +1,7 @@
 # convex-auth Expo demo
 
 The native companion to the
-[convex-auth web demo](https://convex-auth.estifanos.com/demo/). It exercises
+[convex-auth web demo](https://estifanos.sh/convex-auth/demo/). It exercises
 the Expo client, OAuth redirects, secure token storage, and native WebAuthn
 ceremonies against the repository's root Convex deployment.
 

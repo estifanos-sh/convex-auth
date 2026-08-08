@@ -15,11 +15,11 @@
  * to stay hermetic.
  */
 
-import { apple } from "@robelest/convex-auth/providers/apple";
-import { credentials } from "@robelest/convex-auth/providers/credentials";
-import { custom } from "@robelest/convex-auth/providers/custom";
-import { github } from "@robelest/convex-auth/providers/github";
-import { google } from "@robelest/convex-auth/providers/google";
+import { apple } from "@estifanos-sh/convex-auth/providers/apple";
+import { credentials } from "@estifanos-sh/convex-auth/providers/credentials";
+import { custom } from "@estifanos-sh/convex-auth/providers/custom";
+import { github } from "@estifanos-sh/convex-auth/providers/github";
+import { google } from "@estifanos-sh/convex-auth/providers/google";
 import {
   anonymous,
   connection,
@@ -28,10 +28,10 @@ import {
   webauthn,
   phone,
   totp,
-} from "@robelest/convex-auth/providers/index";
-import { microsoft } from "@robelest/convex-auth/providers/microsoft";
-import { password } from "@robelest/convex-auth/providers/password";
-import * as providers from "@robelest/convex-auth/providers/index";
+} from "@estifanos-sh/convex-auth/providers/index";
+import { microsoft } from "@estifanos-sh/convex-auth/providers/microsoft";
+import { password } from "@estifanos-sh/convex-auth/providers/password";
+import * as providers from "@estifanos-sh/convex-auth/providers/index";
 import { expect, test } from "vite-plus/test";
 
 // Importing the convex setup for its side effect: it seeds CONVEX_SITE_URL /

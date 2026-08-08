@@ -4,7 +4,7 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 
 import * as p from "@clack/prompts";
-import type { DeviceCodeResult } from "@robelest/convex-auth/client";
+import type { DeviceCodeResult } from "@estifanos-sh/convex-auth/client";
 import { ConvexHttpClient } from "convex/browser";
 import { config as loadEnvFile } from "dotenv";
 import figlet from "figlet";

@@ -2,7 +2,7 @@
  * Microsoft OAuth provider.
  *
  * ```ts
- * import { microsoft } from "@robelest/convex-auth/providers/microsoft";
+ * import { microsoft } from "@estifanos-sh/convex-auth/providers/microsoft";
  *
  * microsoft({
  *   tenant: env.AUTH_MICROSOFT_TENANT_ID!,
@@ -51,7 +51,7 @@ export interface MicrosoftConfig {
  *
  * @example
  * ```ts
- * import { microsoft } from "@robelest/convex-auth/providers/microsoft";
+ * import { microsoft } from "@estifanos-sh/convex-auth/providers/microsoft";
  *
  * microsoft({
  *   tenant: env.AUTH_MICROSOFT_TENANT_ID!,

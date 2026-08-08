@@ -12,10 +12,12 @@ import {
 import { beforeAll, expect, test, vi } from "vite-plus/test";
 
 type AuthorizeFactory =
-  typeof import("@robelest/convex-auth/server/oauth/authorize").createAuthorizeHandler;
-type TokenFactory = typeof import("@robelest/convex-auth/server/oauth/token").createTokenHandler;
-type GenerateOAuthToken = typeof import("@robelest/convex-auth/server/tokens").generateOAuthToken;
-type VerifyOAuthToken = typeof import("@robelest/convex-auth/server/tokens").verifyOAuthToken;
+  typeof import("@estifanos-sh/convex-auth/server/oauth/authorize").createAuthorizeHandler;
+type TokenFactory =
+  typeof import("@estifanos-sh/convex-auth/server/oauth/token").createTokenHandler;
+type GenerateOAuthToken =
+  typeof import("@estifanos-sh/convex-auth/server/tokens").generateOAuthToken;
+type VerifyOAuthToken = typeof import("@estifanos-sh/convex-auth/server/tokens").verifyOAuthToken;
 
 let createAuthorizeHandler: AuthorizeFactory;
 let createTokenHandler: TokenFactory;
@@ -30,9 +32,10 @@ beforeAll(async () => {
     keys: [{ use: "sig", ...(await exportJWK(keys.publicKey)) }],
   });
   vi.resetModules();
-  ({ createAuthorizeHandler } = await import("@robelest/convex-auth/server/oauth/authorize"));
-  ({ createTokenHandler } = await import("@robelest/convex-auth/server/oauth/token"));
-  ({ generateOAuthToken, verifyOAuthToken } = await import("@robelest/convex-auth/server/tokens"));
+  ({ createAuthorizeHandler } = await import("@estifanos-sh/convex-auth/server/oauth/authorize"));
+  ({ createTokenHandler } = await import("@estifanos-sh/convex-auth/server/oauth/token"));
+  ({ generateOAuthToken, verifyOAuthToken } =
+    await import("@estifanos-sh/convex-auth/server/tokens"));
 });
 
 const MCP_RESOURCE = "https://example.convex.site/mcp";

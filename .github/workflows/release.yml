@@ -1,24 +1,31 @@
 name: npm Release
 
 on:
-  push:
-    tags:
-      - "v*"
   pull_request:
     branches: [main]
     types: [opened, synchronize, reopened, labeled, unlabeled, ready_for_review]
+  pull_request_target:
+    types: [closed]
   workflow_dispatch:
     inputs:
+      mode:
+        description: Publish a prerelease to preview or a stable release to latest
+        required: true
+        default: prerelease
+        type: choice
+        options: [prerelease, release]
+      ref:
+        description: Reviewed main-reachable Git ref to validate, tag, and publish
+        required: true
+        default: main
+        type: string
       tag:
-        description: Release tag to publish
+        description: Matching v<version> release tag to create or verify
         required: true
         type: string
-  pull_request_target:
-    types:
-      - closed
 
 concurrency:
-  group: release-package-${{ inputs.tag || github.ref_name }}
+  group: release-package-${{ inputs.tag || github.event.pull_request.number || github.ref_name }}
   cancel-in-progress: false
 
 jobs:
@@ -44,47 +51,58 @@ jobs:
           registry-url: https://registry.npmjs.org
           package-manager-cache: false
 
-      - name: Validate version and release channel
+      - name: Validate stable release version
         working-directory: packages/auth
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
           PACKAGE_NAME=$(node -p "require('./package.json').name")
           VERSION=$(node -p "require('./package.json').version")
-          BASE_VERSION=$(
-            git show "$BASE_SHA:packages/auth/package.json" |
-              node -p "JSON.parse(require('fs').readFileSync(0, 'utf8')).version"
-          )
+          BASE_VERSION=$(git show "$BASE_SHA:packages/auth/package.json" | node -p "JSON.parse(require('fs').readFileSync(0, 'utf8')).version")
 
-          if [[ "$VERSION" == "$BASE_VERSION" ]]; then
-            echo "::error::The npm package label requires a version change from $BASE_VERSION."
+          if [[ "$PACKAGE_NAME" != "@estifanos-sh/convex-auth" ]]; then
+            echo "::error::Refusing to release unexpected package $PACKAGE_NAME."
             exit 1
           fi
-
           if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "::error::npm releases require a stable x.y.z version. Use the pkg.pr.new package preview instead."
+            echo "::error::The npm package label only releases stable x.y.z versions. Dispatch this workflow in prerelease mode for preview versions."
             exit 1
           fi
-
           if ! node -e '
-            const [base, next] = process.argv.slice(1).map((version) =>
-              version.split(".").map(Number),
-            );
-            for (let i = 0; i < 3; i += 1) {
-              if (next[i] > base[i]) process.exit(0);
-              if (next[i] < base[i]) process.exit(1);
-            }
-            process.exit(1);
+            const parse = (version) => {
+              const match = /^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/.exec(version);
+              if (!match) throw new Error(`Invalid semver: ${version}`);
+              return { core: match.slice(1, 4).map(Number), prerelease: match[4]?.split(".") };
+            };
+            const compare = (a, b) => {
+              const left = parse(a);
+              const right = parse(b);
+              for (let i = 0; i < 3; i += 1) {
+                if (left.core[i] !== right.core[i]) return left.core[i] - right.core[i];
+              }
+              if (!left.prerelease || !right.prerelease) return left.prerelease ? -1 : right.prerelease ? 1 : 0;
+              for (let i = 0; i < Math.max(left.prerelease.length, right.prerelease.length); i += 1) {
+                const aId = left.prerelease[i];
+                const bId = right.prerelease[i];
+                if (aId === undefined || bId === undefined) return aId === undefined ? -1 : 1;
+                if (aId === bId) continue;
+                const aNumeric = /^\d+$/.test(aId);
+                const bNumeric = /^\d+$/.test(bId);
+                if (aNumeric && bNumeric) return Number(aId) - Number(bId);
+                if (aNumeric !== bNumeric) return aNumeric ? -1 : 1;
+                return aId < bId ? -1 : 1;
+              }
+              return 0;
+            };
+            process.exit(compare(process.argv[1], process.argv[2]) < 0 ? 0 : 1);
           ' "$BASE_VERSION" "$VERSION"; then
             echo "::error::Version $VERSION must be newer than $BASE_VERSION."
             exit 1
           fi
-
           if npm view "$PACKAGE_NAME@$VERSION" version --json >/dev/null 2>&1; then
             echo "::error::$PACKAGE_NAME@$VERSION is already published."
             exit 1
           fi
-
           if git ls-remote --exit-code --tags origin "refs/tags/v$VERSION" >/dev/null 2>&1; then
             echo "::error::Git tag v$VERSION already exists."
             exit 1
@@ -97,88 +115,99 @@ jobs:
             echo "| --- | --- | --- |"
             echo "| \`$PACKAGE_NAME\` | \`$VERSION\` | \`latest\` |"
             echo
-            echo "Merging this labeled PR will publish the package."
+            echo "Merging this labeled PR will dispatch the stable release workflow."
           } >> "$GITHUB_STEP_SUMMARY"
 
-  tag:
-    name: Tag npm release
+  dispatch-stable-release:
+    name: Dispatch stable release
     if: >-
       github.event_name == 'pull_request_target' &&
-      (
-        github.event.pull_request.merged == true &&
-        contains(github.event.pull_request.labels.*.name, 'npm package')
-      )
+      github.event.pull_request.merged == true &&
+      contains(github.event.pull_request.labels.*.name, 'npm package')
     runs-on: ubuntu-latest
     permissions:
       actions: write
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
+
+      - name: Dispatch reviewed stable release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.event.pull_request.merge_commit_sha }}
+        run: |
+          VERSION=$(node -p "require('./packages/auth/package.json').version")
+          gh workflow run release.yml --ref main \
+            -f mode=release \
+            -f ref="$SHA" \
+            -f tag="v$VERSION"
+
+  publish:
+    name: Publish npm package
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    environment: npm
+    permissions:
       contents: write
+      id-token: write
 
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-          ref: ${{ github.event.pull_request.merge_commit_sha }}
+          ref: ${{ inputs.ref }}
 
-      - name: Setup Node
-        uses: actions/setup-node@v7
-        with:
-          node-version: 24.15.0
-          registry-url: https://registry.npmjs.org
-          package-manager-cache: false
-
-      - name: Resolve release metadata
+      - name: Verify release source and metadata
         id: release
         working-directory: packages/auth
+        env:
+          PUBLISH_MODE: ${{ inputs.mode }}
+          RELEASE_TAG: ${{ inputs.tag }}
         run: |
           PACKAGE_NAME=$(node -p "require('./package.json').name")
           VERSION=$(node -p "require('./package.json').version")
           TAG="v$VERSION"
+          SOURCE_SHA=$(git rev-parse HEAD)
 
-          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "::error::npm releases require a stable x.y.z version. Use the pkg.pr.new package preview instead."
+          if [[ "$PACKAGE_NAME" != "@estifanos-sh/convex-auth" ]]; then
+            echo "::error::Refusing to publish unexpected package $PACKAGE_NAME."
             exit 1
           fi
-
+          if [[ "$RELEASE_TAG" != "$TAG" ]]; then
+            echo "::error::Tag $RELEASE_TAG does not match package version $VERSION."
+            exit 1
+          fi
+          if ! git merge-base --is-ancestor "$SOURCE_SHA" origin/main; then
+            echo "::error::Releases must build a commit already reachable from main."
+            exit 1
+          fi
+          if [[ "$PUBLISH_MODE" == "prerelease" && ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+-[0-9A-Za-z.-]+$ ]]; then
+            echo "::error::Prerelease mode requires an x.y.z-prerelease package version."
+            exit 1
+          fi
+          if [[ "$PUBLISH_MODE" == "release" && ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Release mode requires a stable x.y.z package version."
+            exit 1
+          fi
           if npm view "$PACKAGE_NAME@$VERSION" version --json >/dev/null 2>&1; then
-            echo "::error::$PACKAGE_NAME@$VERSION is already published."
-            exit 1
-          fi
-
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-
-      - name: Tag merged release
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TAG: ${{ steps.release.outputs.tag }}
-        run: |
-          if git rev-parse --verify "refs/tags/$TAG" >/dev/null 2>&1; then
-            TAG_COMMIT=$(git rev-list -n 1 "$TAG")
-            HEAD_COMMIT=$(git rev-parse HEAD)
-            if [[ "$TAG_COMMIT" != "$HEAD_COMMIT" ]]; then
-              echo "::error::Tag $TAG already points to $TAG_COMMIT, not $HEAD_COMMIT."
-              exit 1
-            fi
+            PUBLISHED=true
           else
-            git tag "$TAG"
-            git push origin "$TAG"
+            PUBLISHED=false
           fi
 
-          gh workflow run release.yml --ref main -f tag="$TAG"
-
-  publish:
-    name: Publish npm package
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    environment: npm
-    permissions:
-      id-token: write
-      contents: write
-
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+          echo "package=$PACKAGE_NAME" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "sha=$SOURCE_SHA" >> "$GITHUB_OUTPUT"
+          echo "published=$PUBLISHED" >> "$GITHUB_OUTPUT"
+          if [[ "$PUBLISH_MODE" == "prerelease" ]]; then
+            echo "dist_tag=preview" >> "$GITHUB_OUTPUT"
+          else
+            echo "dist_tag=latest" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Setup Vite+
         uses: voidzero-dev/setup-vp@v1
@@ -195,58 +224,46 @@ jobs:
           registry-url: https://registry.npmjs.org
           package-manager-cache: false
 
-      - name: Resolve release metadata
-        id: release
-        working-directory: packages/auth
-        env:
-          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
-        run: |
-          PACKAGE_NAME=$(node -p "require('./package.json').name")
-          VERSION=$(node -p "require('./package.json').version")
-          TAG="v$VERSION"
-
-          if [[ "$RELEASE_TAG" != "$TAG" ]]; then
-            echo "::error::Tag $RELEASE_TAG does not match package version $VERSION."
-            exit 1
-          fi
-
-          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "::error::npm releases require a stable x.y.z version. Use the pkg.pr.new package preview instead."
-            exit 1
-          fi
-
-          if vp exec npm view "$PACKAGE_NAME@$VERSION" version --json >/dev/null 2>&1; then
-            PUBLISHED=true
-          else
-            PUBLISHED=false
-          fi
-
-          echo "package=$PACKAGE_NAME" >> "$GITHUB_OUTPUT"
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          echo "published=$PUBLISHED" >> "$GITHUB_OUTPUT"
-
       - name: Build package prerequisites
-        run: |
-          vp run '@robelest/convex-auth#build'
+        run: vp run '@estifanos-sh/convex-auth#build'
 
       - name: Run offline test suite
         run: vp test --run --project convex --project node
 
       - name: Run package publish checks
         run: |
-          vp run '@robelest/convex-auth#typecheck:consumer'
-          vp run '@robelest/convex-auth#typecheck:consumer:dist'
-          vp run '@robelest/convex-auth#check:packaging'
+          vp run '@estifanos-sh/convex-auth#typecheck:consumer'
+          vp run '@estifanos-sh/convex-auth#typecheck:consumer:dist'
+          vp run '@estifanos-sh/convex-auth#check:packaging'
 
-      - name: Publish package
+      - name: Create or verify exact release tag
+        env:
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+          SOURCE_SHA: ${{ steps.release.outputs.sha }}
+        run: |
+          if git rev-parse --verify "refs/tags/$RELEASE_TAG" >/dev/null 2>&1; then
+            TAG_SHA=$(git rev-list -n 1 "$RELEASE_TAG")
+            if [[ "$TAG_SHA" != "$SOURCE_SHA" ]]; then
+              echo "::error::Tag $RELEASE_TAG points to $TAG_SHA, not $SOURCE_SHA."
+              exit 1
+            fi
+          else
+            git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+              tag -a "$RELEASE_TAG" "$SOURCE_SHA" -m "@estifanos-sh/convex-auth $RELEASE_TAG"
+            git push origin "refs/tags/$RELEASE_TAG"
+          fi
+
+      - name: Publish package with trusted publishing
         if: steps.release.outputs.published != 'true'
         working-directory: packages/auth
-        run: vp exec npm publish --ignore-scripts --provenance --tag latest
+        env:
+          NPM_CONFIG_PROVENANCE: "true"
+        run: npm publish --ignore-scripts --access public --tag "${{ steps.release.outputs.dist_tag }}"
 
       - name: Create GitHub release
         uses: softprops/action-gh-release@v3
         with:
           generate_release_notes: true
+          prerelease: ${{ inputs.mode == 'prerelease' }}
           tag_name: ${{ steps.release.outputs.tag }}
           name: ${{ steps.release.outputs.package }} ${{ steps.release.outputs.version }}

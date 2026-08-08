@@ -3,7 +3,7 @@
  * coverage).
  *
  * These exercise the framework-agnostic client core (`client()` from
- * `@robelest/convex-auth/client`) — the shared engine every platform adapter
+ * `@estifanos-sh/convex-auth/client`) — the shared engine every platform adapter
  * (react/svelte/expo/browser) wraps. The core needs no DOM, so it runs in the
  * node project against a mocked `ConvexTransport` + an in-memory `Storage`.
  *
@@ -20,14 +20,17 @@
  * wrappers over exactly the subscribe/getSnapshot contract these tests pin.
  */
 
-import { client } from "@robelest/convex-auth/client";
-import type { AuthApiRefs, AuthState, Storage } from "@robelest/convex-auth/client";
+import { client } from "@estifanos-sh/convex-auth/client";
+import type { AuthApiRefs, AuthState, Storage } from "@estifanos-sh/convex-auth/client";
 // ConvexTransport and SignInActionResult are internal to the client core (they
 // are not part of the public `/client` type surface), so the tests import them
 // from the core type module directly rather than widening the package exports.
-import type { ConvexTransport, SignInActionResult } from "@robelest/convex-auth/client/core/types";
-import type { AuthTokens } from "@robelest/convex-auth/shared/results";
-import { ErrorCode } from "@robelest/convex-auth/client/errors";
+import type {
+  ConvexTransport,
+  SignInActionResult,
+} from "@estifanos-sh/convex-auth/client/core/types";
+import type { AuthTokens } from "@estifanos-sh/convex-auth/shared/results";
+import { ErrorCode } from "@estifanos-sh/convex-auth/client/errors";
 import { expect, test } from "vite-plus/test";
 
 /** Build a branded {@link AuthTokens} pair for a mocked `signedIn` result. */

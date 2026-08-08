@@ -9,7 +9,7 @@
  * (60s timeout) rather than the 10s edge-runtime project.
  */
 
-import { password } from "@robelest/convex-auth/providers/password";
+import { password } from "@estifanos-sh/convex-auth/providers/password";
 import { expect, test } from "vite-plus/test";
 
 test("password() default crypto round-trips a scrypt hash", async () => {

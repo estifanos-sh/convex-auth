@@ -1,13 +1,13 @@
-import { definePermissions } from "@robelest/convex-auth/permissions";
+import { definePermissions } from "@estifanos-sh/convex-auth/permissions";
 import type {
   AuthApiRefs,
   ParamsForProvider,
   PlatformAuthClient,
-} from "@robelest/convex-auth/client";
-import { webauthn } from "@robelest/convex-auth/providers/webauthn";
+} from "@estifanos-sh/convex-auth/client";
+import { webauthn } from "@estifanos-sh/convex-auth/providers/webauthn";
 // @ts-expect-error createAuth was hard-cut from the vNext public server API.
-import { createAuth } from "@robelest/convex-auth/server";
-import { authEnv, authEvents, defineAuth, type AuthEnv } from "@robelest/convex-auth/server";
+import { createAuth } from "@estifanos-sh/convex-auth/server";
+import { authEnv, authEvents, defineAuth, type AuthEnv } from "@estifanos-sh/convex-auth/server";
 import { defineApp, type HttpRouter } from "convex/server";
 import { v, type GenericId } from "convex/values";
 

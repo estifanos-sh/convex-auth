@@ -1,5 +1,5 @@
 /**
- * Framework-agnostic auth client for `@robelest/convex-auth/client`.
+ * Framework-agnostic auth client for `@estifanos-sh/convex-auth/client`.
  *
  * Exposes the {@link client} factory, which wires auth tokens into a Convex
  * transport and returns `signIn`, `signOut`, `subscribe`, `getSnapshot`, and the
@@ -212,13 +212,13 @@ function decodeJwtSubject(jwt: string): string | null {
  * Returns an object with `signIn`, `signOut`, `subscribe`, `getSnapshot`, and any
  * factor helpers enabled by your configured providers. Platform-specific
  * WebAuthn support is added by higher-level entrypoints such as
- * `@robelest/convex-auth/browser`.
+ * `@estifanos-sh/convex-auth/browser`.
  *
  * ### SPA mode (default)
  *
  * ```ts
  * import { ConvexClient } from 'convex/browser';
- * import { client } from '@robelest/convex-auth/client';
+ * import { client } from '@estifanos-sh/convex-auth/client';
  * import { api } from '../convex/_generated/api';
  *
  * const convex = new ConvexClient(CONVEX_URL);
@@ -272,7 +272,7 @@ export function client<Api extends AuthApiRefs<boolean, boolean, boolean> = Auth
     if (!runtime.proxy) {
       throw new Error(
         "The `runtime.proxy` option is required when `proxyPath` is set. " +
-          "Use `@robelest/convex-auth/browser` for browser defaults or inject a proxy runtime explicitly.",
+          "Use `@estifanos-sh/convex-auth/browser` for browser defaults or inject a proxy runtime explicitly.",
       );
     }
     return runtime.proxy;
@@ -291,7 +291,7 @@ export function client<Api extends AuthApiRefs<boolean, boolean, boolean> = Auth
     if (!httpClient) {
       throw new Error(
         "The `httpClient` option is required when `proxyPath` is not set in a non-browser runtime. " +
-          "Use `@robelest/convex-auth/browser` for browser defaults or pass an action-only transport explicitly.",
+          "Use `@estifanos-sh/convex-auth/browser` for browser defaults or pass an action-only transport explicitly.",
       );
     }
     return httpClient;

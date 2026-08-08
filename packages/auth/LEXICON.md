@@ -1,4 +1,4 @@
-# LEXICON — `@robelest/convex-auth` API conventions
+# LEXICON — `@estifanos-sh/convex-auth` API conventions
 
 This file is the authoritative naming and shape contract for everything
 exposed by the auth component (`packages/auth/src/component/**`) and the

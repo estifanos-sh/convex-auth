@@ -1,4 +1,7 @@
-import { SHARED_COOKIE_OPTIONS, redirectToParamCookie } from "@robelest/convex-auth/server/cookies";
+import {
+  SHARED_COOKIE_OPTIONS,
+  redirectToParamCookie,
+} from "@estifanos-sh/convex-auth/server/cookies";
 import { expect, test } from "vite-plus/test";
 
 // The OAuth flow cookies must ride cross-site redirect chains while staying

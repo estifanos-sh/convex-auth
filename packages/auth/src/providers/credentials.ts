@@ -2,7 +2,7 @@
  * Credentials provider for custom authentication flows.
  *
  * ```ts
- * import { credentials } from "@robelest/convex-auth/providers";
+ * import { credentials } from "@estifanos-sh/convex-auth/providers";
  *
  * credentials({
  *   authorize: async (credentials, ctx) => {
@@ -92,7 +92,7 @@ export interface CredentialsConfig<DataModel extends GenericDataModel = GenericD
  *
  * @example
  * ```ts
- * import { credentials } from "@robelest/convex-auth/providers";
+ * import { credentials } from "@estifanos-sh/convex-auth/providers";
  *
  * credentials({
  *   authorize: async (params, ctx) => {

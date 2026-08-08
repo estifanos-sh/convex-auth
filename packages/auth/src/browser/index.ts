@@ -1,5 +1,5 @@
 /**
- * Browser-first auth client for `@robelest/convex-auth/browser`.
+ * Browser-first auth client for `@estifanos-sh/convex-auth/browser`.
  *
  * This entrypoint wraps the framework-agnostic `client(...)`
  * helper with browser defaults such as `ConvexHttpClient`, local storage, URL

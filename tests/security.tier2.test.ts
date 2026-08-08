@@ -1,4 +1,4 @@
-import { BrowserLocksLive } from "@robelest/convex-auth/browser/locks";
+import { BrowserLocksLive } from "@estifanos-sh/convex-auth/browser/locks";
 import { afterEach, expect, test, vi } from "vite-plus/test";
 
 import { createInviteManager } from "../packages/auth/src/client/runtime/invite";

@@ -1,8 +1,8 @@
-import { password } from "@robelest/convex-auth/providers/password";
-import { credentialsSignInImpl } from "@robelest/convex-auth/server/mutations/credentials/signin";
-import * as mutations from "@robelest/convex-auth/server/mutations/calls";
-import { enrichActionCtx } from "@robelest/convex-auth/server/runtime";
-import { signInImpl } from "@robelest/convex-auth/server/signin/flow";
+import { password } from "@estifanos-sh/convex-auth/providers/password";
+import { credentialsSignInImpl } from "@estifanos-sh/convex-auth/server/mutations/credentials/signin";
+import * as mutations from "@estifanos-sh/convex-auth/server/mutations/calls";
+import { enrichActionCtx } from "@estifanos-sh/convex-auth/server/runtime";
+import { signInImpl } from "@estifanos-sh/convex-auth/server/signin/flow";
 import type { GenericActionCtx, GenericDataModel } from "convex/server";
 import { afterEach, expect, test, vi } from "vite-plus/test";
 

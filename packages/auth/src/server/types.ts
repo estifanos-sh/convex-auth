@@ -160,7 +160,7 @@ export type ConvexAuthConfig<TExtend = {}> = {
    * A list of authentication provider configs.
    *
    * You can import existing configs from
-   * `@robelest/convex-auth/providers/<provider-name>`
+   * `@estifanos-sh/convex-auth/providers/<provider-name>`
    */
   providers: AuthProviderConfig[];
   /**
@@ -283,14 +283,14 @@ export type ConvexAuthConfig<TExtend = {}> = {
    * Stream-backed lifecycle event handlers.
    *
    * Configure with `authEvents.handlers({ ... })` from
-   * `@robelest/convex-auth/server`.
+   * `@estifanos-sh/convex-auth/server`.
    */
   events?: AuthEventHandlerMap<TExtend>;
   /**
    * Application-defined permission model used by membership access checks.
    *
    * Use `definePermissions({ grants, roles })` from
-   * `@robelest/convex-auth/permissions` to preserve literal role IDs and
+   * `@estifanos-sh/convex-auth/permissions` to preserve literal role IDs and
    * grant strings.
    */
   permissions?: {
@@ -1399,7 +1399,7 @@ export type SessionTokenIdentityClaims = {
  * Used by internal typed wrappers (`queryUserById`, etc.) so server code stays
  * aligned with the component runtime contract. Not intended for consumer use —
  * consumers should use `UserDoc` (exported from
- * `@robelest/convex-auth/component`).
+ * `@estifanos-sh/convex-auth/component`).
  *
  * @internal
  */

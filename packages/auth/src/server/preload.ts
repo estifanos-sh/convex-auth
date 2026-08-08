@@ -474,7 +474,7 @@ function defaultAcceptedIssuersForUrl(value: string) {
  * @example SvelteKit hooks
  * ```ts
  * // src/hooks.server.ts
- * import { server } from '@robelest/convex-auth/server';
+ * import { server } from '@estifanos-sh/convex-auth/server';
  *
  * const auth = server({ url: CONVEX_URL });
  *

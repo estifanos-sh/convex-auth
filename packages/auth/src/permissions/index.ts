@@ -21,7 +21,7 @@
  *
  * @example
  * ```ts
- * import { definePermissions } from "@robelest/convex-auth/permissions";
+ * import { definePermissions } from "@estifanos-sh/convex-auth/permissions";
  *
  * const permissions = definePermissions({
  *   grants: ["issues:read", "issues:write", "members:manage"],

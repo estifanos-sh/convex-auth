@@ -1,5 +1,5 @@
 /**
- * Expo-first auth client for `@robelest/convex-auth/expo`.
+ * Expo-first auth client for `@estifanos-sh/convex-auth/expo`.
  *
  * This entrypoint wraps the framework-agnostic `client(...)` helper with
  * Expo-native defaults such as SecureStore-backed token persistence, auth

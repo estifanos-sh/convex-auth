@@ -1,38 +1,16 @@
 # convex-auth documentation
 
-The technical documentation for
-[`@robelest/convex-auth`](https://www.npmjs.com/package/@robelest/convex-auth).
-Production is served by Convex static hosting at
-[convex-auth.estifanos.com](https://convex-auth.estifanos.com/).
+This package is a TanStack Start + SolidJS static documentation application for
+`@estifanos-sh/convex-auth`. Markdown under `src/content/` is the canonical
+source; `scripts/compile-content.mjs` parses it with Unified/Remark MDX and
+builds Shiki-highlighted HTML before the app is compiled.
 
-## Work locally
-
-Run commands from the repository root:
-
-```bash
-vp install
-vp run --filter docs dev
-```
-
-The development server is only for the documentation frontend. The Convex
-development process is managed separately.
-
-## Validate
-
-```bash
+```sh
 vp run --filter docs check
 vp run build:docs
 ```
 
-`build:docs` produces `docs/build`, generates the Pagefind search index, and
-checks that the local fonts and static routes are present.
-
-## Deploy
-
-```bash
-vp run deploy:docs
-```
-
-The root deployment task builds the package and docs, deploys the production
-Convex backend, and uploads `docs/build` to the `docs` static-hosting component.
-The demo is deployed separately at `/demo/`.
+The production artifact is `docs/dist/client/convex-auth/`. It contains
+directory-index pages for `/convex-auth/` and every documentation route,
+Pagefind, `.md` aliases, `llms.txt`, and `llms-full.txt`; it can be copied into
+the landing build directly without a second prefix.

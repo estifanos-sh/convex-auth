@@ -1,5 +1,5 @@
 /**
- * Provider exports for `@robelest/convex-auth/providers`.
+ * Provider exports for `@estifanos-sh/convex-auth/providers`.
  *
  * @module
  */

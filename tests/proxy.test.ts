@@ -1,5 +1,5 @@
-import { client as browserClient } from "@robelest/convex-auth/browser";
-import { client } from "@robelest/convex-auth/client";
+import { client as browserClient } from "@estifanos-sh/convex-auth/browser";
+import { client } from "@estifanos-sh/convex-auth/client";
 import { ConvexError } from "convex/values";
 import { afterEach, expect, test, vi } from "vite-plus/test";
 

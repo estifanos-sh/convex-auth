@@ -209,7 +209,7 @@ export interface FidoMdsOptions {
  *
  * @example
  * ```ts
- * import { webauthn } from "@robelest/convex-auth/providers";
+ * import { webauthn } from "@estifanos-sh/convex-auth/providers";
  *
  * webauthn({
  *   registration: {

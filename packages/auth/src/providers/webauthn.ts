@@ -65,7 +65,7 @@ export interface WebAuthnConfig {
  *
  * @example
  * ```ts
- * import { webauthn } from "@robelest/convex-auth/providers";
+ * import { webauthn } from "@estifanos-sh/convex-auth/providers";
  *
  * webauthn({
  *   rpName: "Staff access",

@@ -12,10 +12,10 @@
     "lint": "expo lint"
   },
   "dependencies": {
+    "@estifanos-sh/convex-auth": "workspace:*",
     "@react-navigation/bottom-tabs": "^7.4.0",
     "@react-navigation/elements": "^2.9.14",
     "@react-navigation/native": "^7.1.8",
-    "@robelest/convex-auth": "workspace:*",
     "convex": "catalog:",
     "expo": "~54.0.34",
     "expo-auth-session": "~7.0.11",

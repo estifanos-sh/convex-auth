@@ -5,9 +5,9 @@ const root = path.resolve(import.meta.dirname, "..");
 const skillsRoot = path.join(root, "skills");
 const namePattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
 const expectedSkills = [
-  "robelest-convex-auth",
-  "robelest-convex-auth-review",
-  "robelest-convex-auth-setup",
+  "estifanos-sh-convex-auth",
+  "estifanos-sh-convex-auth-review",
+  "estifanos-sh-convex-auth-setup",
 ];
 
 function fail(message) {
@@ -79,7 +79,7 @@ for (const name of skillNames) {
   }
 }
 
-const docsPage = path.join(root, "docs", "src", "routes", "ai", "agent-skills", "+page.md");
+const docsPage = path.join(root, "docs", "src", "content", "ai", "agent-skills", "+page.md");
 if (!existsSync(docsPage)) fail("missing Agent Skills documentation page");
 const docs = readFileSync(docsPage, "utf8");
 for (const name of expectedSkills) {

@@ -1,6 +1,6 @@
 import { Resend } from "@convex-dev/resend";
 import type { AnyDataModel, GenericActionCtx } from "convex/server";
-import { defineAuth } from "@robelest/convex-auth/server";
+import { defineAuth } from "@estifanos-sh/convex-auth/server";
 import {
   anonymous,
   device,
@@ -10,7 +10,7 @@ import {
   password,
   connection,
   totp,
-} from "@robelest/convex-auth/providers";
+} from "@estifanos-sh/convex-auth/providers";
 
 import { components } from "./_generated/api";
 import { env } from "./_generated/server";

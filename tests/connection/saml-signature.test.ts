@@ -3,9 +3,9 @@ import {
   enforceSamlMetadataSize,
   enforceSamlResponseSize,
   reconstructRedirectOctetString,
-} from "@robelest/convex-auth/server/connection/saml";
-import { verifySignature } from "@robelest/convex-auth/server/connection/saml/signature";
-import { decryptAssertion } from "@robelest/convex-auth/server/connection/saml/xmlenc";
+} from "@estifanos-sh/convex-auth/server/connection/saml";
+import { verifySignature } from "@estifanos-sh/convex-auth/server/connection/saml/signature";
+import { decryptAssertion } from "@estifanos-sh/convex-auth/server/connection/saml/xmlenc";
 import { expect, test } from "vite-plus/test";
 
 const NS = `xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion"`;

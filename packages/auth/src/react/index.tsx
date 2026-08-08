@@ -1,5 +1,5 @@
 /**
- * React bindings for `@robelest/convex-auth/react`.
+ * React bindings for `@estifanos-sh/convex-auth/react`.
  *
  * @module
  */

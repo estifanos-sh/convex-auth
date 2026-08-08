@@ -1,11 +1,11 @@
-import { base64urlDecode, createBrowserRuntime } from "@robelest/convex-auth/browser/runtime";
-import { localMutex } from "@robelest/convex-auth/client/runtime/mutex";
-import { parseRefreshToken } from "@robelest/convex-auth/server/token/refresh";
-import { createArcticOAuthClient } from "@robelest/convex-auth/server/oauth/factory";
+import { base64urlDecode, createBrowserRuntime } from "@estifanos-sh/convex-auth/browser/runtime";
+import { localMutex } from "@estifanos-sh/convex-auth/client/runtime/mutex";
+import { parseRefreshToken } from "@estifanos-sh/convex-auth/server/token/refresh";
+import { createArcticOAuthClient } from "@estifanos-sh/convex-auth/server/oauth/factory";
 import {
   createSamlPostBindingResponse,
   parseSamlIdpMetadata,
-} from "@robelest/convex-auth/server/connection/saml";
+} from "@estifanos-sh/convex-auth/server/connection/saml";
 import { expect, test } from "vite-plus/test";
 
 test("refresh token parser rejects extra separators", () => {

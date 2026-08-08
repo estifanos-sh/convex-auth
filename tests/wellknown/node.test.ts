@@ -1,4 +1,4 @@
-import { wellKnown } from "@robelest/convex-auth/server";
+import { wellKnown } from "@estifanos-sh/convex-auth/server";
 import { afterEach, beforeEach, expect, test } from "vite-plus/test";
 
 const ENV_KEYS = [

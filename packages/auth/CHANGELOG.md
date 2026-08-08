@@ -69,14 +69,14 @@
   user profile. **Behavior change** — apps that previously hand-edited
   user fields will see them overwritten on next OAuth sign-in; opt out
   with `google({ updateProfileOnLogin: false, ... })`.
-- **`@robelest/convex-auth/react`** subpath — ships `ConvexAuthProvider`,
+- **`@estifanos-sh/convex-auth/react`** subpath — ships `ConvexAuthProvider`,
   `useAuth()`, `useAuthActions()`, `useConvexAuthClient()`, and gate
   components for an app-owned browser auth client. `useAuth()` returns the
   public discriminated state:
   `{ status: "loading", token: null } | { status: "signedOut", token: null } | { status: "signedIn", token: string }`.
   `react` is **not** a declared peer dep — consumers who use this subpath bring
   their own React (any React app already has it).
-- **`@robelest/convex-auth/svelte`** subpath — ships `setupConvexAuth`,
+- **`@estifanos-sh/convex-auth/svelte`** subpath — ships `setupConvexAuth`,
   `useConvexAuth()`, and gate components for Svelte 5 apps. The binding bridges
   an app-owned browser auth client into a reactive runes object instead of
   owning client construction.
@@ -159,7 +159,7 @@ v.optional })`. Catches typo'd / unknown patch fields at the
 - `convex-test` catalog bumped to `^0.0.53` to match what `@convex-dev/rate-limiter`
   and `@convex-dev/workpool` pull in.
 
-- `@robelest/convex-auth/test` `register()` now also registers the
+- `@estifanos-sh/convex-auth/test` `register()` now also registers the
   `auth/rateLimiter` and `auth/webhookWorkpool` subcomponents — required
   for `convex-test` setups that exercise sign-in flows or webhook delivery.
 

@@ -19,7 +19,7 @@ import schema from "./component/schema";
  * @example
  * ```ts
  * import { convexTest } from "convex-test";
- * import { register } from "@robelest/convex-auth/test";
+ * import { register } from "@estifanos-sh/convex-auth/test";
  *
  * const t = convexTest(schema);
  * register(t);
@@ -51,7 +51,7 @@ const testHelpers: {
  *
  * @example
  * ```ts
- * import authTest from "@robelest/convex-auth/test";
+ * import authTest from "@estifanos-sh/convex-auth/test";
  * import { convexTest } from "convex-test";
  *
  * const t = convexTest(schema);

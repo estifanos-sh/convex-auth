@@ -1,4 +1,4 @@
-import { definePermissions } from "@robelest/convex-auth/permissions";
+import { definePermissions } from "@estifanos-sh/convex-auth/permissions";
 
 export const permissions = definePermissions({
   grants: [

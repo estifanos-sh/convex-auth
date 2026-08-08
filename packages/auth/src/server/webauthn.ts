@@ -1109,11 +1109,7 @@ export async function handleWebAuthn(
       }
 
       if (email !== undefined) {
-        allowCredentials = await deriveEmailAllowCredentials(
-          email,
-          rp.rpId,
-          signIn.credentialIds,
-        );
+        allowCredentials = await deriveEmailAllowCredentials(email, rp.rpId, signIn.credentialIds);
       }
 
       const options: {

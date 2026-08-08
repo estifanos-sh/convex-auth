@@ -1,16 +1,16 @@
 import { api, components } from "@convex/_generated/api";
 import { auth } from "@convex/auth";
 import schema from "@convex/schema";
-import { sha256 } from "@robelest/convex-auth/server/random";
-import { encryptSecret } from "@robelest/convex-auth/server/secret";
+import { sha256 } from "@estifanos-sh/convex-auth/server/random";
+import { encryptSecret } from "@estifanos-sh/convex-auth/server/secret";
 import {
   getPublicConnectionConfig,
   getPublicOidcConfig,
   getPublicSamlConfig,
   upsertProtocolConfig,
-} from "@robelest/convex-auth/server/connection/config";
-import { createGroupConnectionOidcProvider } from "@robelest/convex-auth/server/connection/oidc";
-import { resolveProvisionedRoleIds } from "@robelest/convex-auth/server/connection/policy";
+} from "@estifanos-sh/convex-auth/server/connection/config";
+import { createGroupConnectionOidcProvider } from "@estifanos-sh/convex-auth/server/connection/oidc";
+import { resolveProvisionedRoleIds } from "@estifanos-sh/convex-auth/server/connection/policy";
 import {
   createServiceProviderMetadata,
   enforceSamlAlgorithmPolicy,
@@ -18,8 +18,8 @@ import {
   enforceSamlResponseSize,
   enforceGroupConnectionSamlSecurity,
   parseSamlIdpMetadata,
-} from "@robelest/convex-auth/server/connection/saml";
-import { parseScimListRequest } from "@robelest/convex-auth/server/connection/scim";
+} from "@estifanos-sh/convex-auth/server/connection/saml";
+import { parseScimListRequest } from "@estifanos-sh/convex-auth/server/connection/scim";
 import {
   decodeGroupOidcState,
   encodeGroupOidcState,
@@ -28,7 +28,7 @@ import {
   isGroupSamlSourceActive,
   groupOidcProviderId,
   groupSamlProviderId,
-} from "@robelest/convex-auth/server/connection/shared";
+} from "@estifanos-sh/convex-auth/server/connection/shared";
 import idpMetadataXml from "./idpmeta.xml?raw";
 import { SignJWT } from "jose";
 import { afterEach, expect, test, vi } from "vite-plus/test";

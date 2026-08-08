@@ -32,7 +32,7 @@ type AuthIdentityCtx = {
  *
  * @example
  * ```ts
- * import type { AuthContext } from "@robelest/convex-auth/server";
+ * import type { AuthContext } from "@estifanos-sh/convex-auth/server";
  *
  * const mockAuth: AuthContext = {
  *   userId: "user123" as Id<"User">,

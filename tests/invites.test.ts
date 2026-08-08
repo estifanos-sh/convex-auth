@@ -2,7 +2,7 @@ import { api, components } from "@convex/_generated/api";
 import type { DataModel } from "@convex/_generated/dataModel";
 import { auth as backendAuth } from "@convex/auth";
 import schema from "@convex/schema";
-import { client } from "@robelest/convex-auth/client";
+import { client } from "@estifanos-sh/convex-auth/client";
 import { decodeJwt } from "jose";
 import { afterEach, expect, test, vi } from "vite-plus/test";
 

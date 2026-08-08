@@ -27,7 +27,7 @@
  * @internal
  */
 
-const CACHE_SYMBOL = Symbol.for("@robelest/convex-auth/ctxCache");
+const CACHE_SYMBOL = Symbol.for("@estifanos-sh/convex-auth/ctxCache");
 
 /** @internal */
 export type CtxCacheStore = Map<string, Promise<unknown>>;

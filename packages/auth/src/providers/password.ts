@@ -13,7 +13,7 @@
  * - `change` — Authenticated password change (requires `currentPassword`).
  *
  * ```ts
- * import { password } from "@robelest/convex-auth/providers";
+ * import { password } from "@estifanos-sh/convex-auth/providers";
  *
  * password()
  * password({ verify: myEmailProvider, reset: myEmailProvider })

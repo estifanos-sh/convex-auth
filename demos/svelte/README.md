@@ -1,7 +1,7 @@
 # convex-auth Svelte demo
 
-The live demo for `@robelest/convex-auth`, served at
-[convex-auth.estifanos.com/demo/](https://convex-auth.estifanos.com/demo/).
+The live demo for `@estifanos-sh/convex-auth`, served at
+[estifanos.sh/convex-auth/demo/](https://estifanos.sh/convex-auth/demo/).
 It is a SvelteKit static SPA backed by the repository's root Convex deployment.
 
 ## Work locally

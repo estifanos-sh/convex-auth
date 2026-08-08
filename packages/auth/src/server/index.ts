@@ -1,5 +1,5 @@
 /**
- * Server-side entrypoint for `@robelest/convex-auth/server`.
+ * Server-side entrypoint for `@estifanos-sh/convex-auth/server`.
  *
  * Re-exports the public helpers, types, and HTTP integration utilities used to
  * configure Convex Auth on the backend.
