@@ -63,7 +63,7 @@ function resolveProcessors(
  * ```ts
  * import { BatchSpanProcessor } from "@opentelemetry/sdk-trace-base";
  * import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
- * import { nodeTelemetry } from "@robelest/convex-auth/otel";
+ * import { nodeTelemetry } from "@estifanos-sh/convex-auth/otel";
  *
  * const provider = nodeTelemetry({
  *   serviceName: "my-app",
@@ -97,7 +97,7 @@ export function nodeTelemetry(config: TelemetryConfig): NodeTracerProvider {
  *
  * @example
  * ```ts
- * import { browserTelemetry } from "@robelest/convex-auth/otel";
+ * import { browserTelemetry } from "@estifanos-sh/convex-auth/otel";
  *
  * const provider = browserTelemetry({
  *   serviceName: "my-web-app",

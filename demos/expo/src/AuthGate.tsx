@@ -20,8 +20,8 @@ function useAuthForm() {
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
   const passkeyClient = (
-    auth as { passkey?: { isSupported(): boolean; signIn(): Promise<{ kind: string }> } }
-  ).passkey;
+    auth as { webauthn?: { isSupported(): boolean; signIn(): Promise<{ kind: string }> } }
+  ).webauthn;
 
   const submit = React.useCallback(
     async (provider: string, params?: Record<string, unknown>) => {

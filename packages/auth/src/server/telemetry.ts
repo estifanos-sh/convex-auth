@@ -67,24 +67,35 @@ async function buildAuthIdentityAttributes(
     return {};
   }
 
-  const values: Partial<Record<AuthTelemetryIdentityField, string>> = {
-    userId: args.userId,
-    sessionId: args.sessionId,
-    tokenIdentifier: tokenIdentifierForUser(args.userId),
-  };
-
-  if (args.refreshTokenId !== undefined) {
-    values.refreshTokenId = args.refreshTokenId;
-  }
-
+  let email: string | undefined;
   if (fields.email) {
     const user = (await authDb(ctx, config).users.get({
       id: args.userId,
     })) as CrossComponentUserDoc | null;
     if (typeof user?.email === "string") {
-      values.email = user.email;
+      email = user.email;
     }
   }
+
+  return buildKnownAuthIdentityAttributes(config, args, email);
+}
+
+function buildKnownAuthIdentityAttributes(
+  config: ConvexAuthMaterializedConfig,
+  args: AuthIdentityArgs,
+  email?: string,
+): Attributes {
+  const fields = config.telemetry?.identityFields ?? {};
+  const mode = config.telemetry?.includeIdentity ?? "none";
+  if (mode === "none") return {};
+
+  const values: Partial<Record<AuthTelemetryIdentityField, string>> = {
+    userId: args.userId,
+    sessionId: args.sessionId,
+    tokenIdentifier: tokenIdentifierForUser(args.userId),
+    ...(args.refreshTokenId === undefined ? {} : { refreshTokenId: args.refreshTokenId }),
+    ...(email === undefined ? {} : { email }),
+  };
 
   const attributes: Attributes = {};
   for (const field of Object.keys(fields) as AuthTelemetryIdentityField[]) {
@@ -104,6 +115,15 @@ async function buildAuthIdentityAttributes(
   return attributes;
 }
 
+/** Build refresh span attributes from the user returned by token rotation. @internal */
+export function buildKnownRefreshIdentityAttributes(
+  config: ConvexAuthMaterializedConfig,
+  args: Required<Pick<AuthIdentityArgs, "userId" | "sessionId" | "refreshTokenId">>,
+  email?: string,
+): Attributes {
+  return buildKnownAuthIdentityAttributes(config, args, email);
+}
+
 /** @internal */
 export async function buildRefreshIdentityAttributes(
   ctx: MutationCtx,
@@ -120,6 +140,15 @@ export async function buildSignInIdentityAttributes(
   args: Pick<AuthIdentityArgs, "userId" | "sessionId">,
 ): Promise<Attributes> {
   return await buildAuthIdentityAttributes(ctx, config, args);
+}
+
+/** Build sign-in span attributes from a user already loaded by the session transaction. @internal */
+export function buildKnownSignInIdentityAttributes(
+  config: ConvexAuthMaterializedConfig,
+  args: Pick<AuthIdentityArgs, "userId" | "sessionId">,
+  email?: string,
+): Attributes {
+  return buildKnownAuthIdentityAttributes(config, args, email);
 }
 
 /** @internal */

@@ -92,14 +92,14 @@ export interface ClientRuntime {
 
 /** Platform-specific factor adapters injected by entrypoints like `browser`. */
 export interface ClientAdapters {
-  passkey?: PasskeyClient;
+  webauthn?: WebAuthnClient;
   totp?: TotpClient;
   device?: DeviceClient;
 }
 
 /**
  * Shared dependencies threaded into every factor client (`totp`, `device`,
- * `passkey`). The core `client` builds one of these and passes it to each
+ * `webauthn`). The core `client` builds one of these and passes it to each
  * factor factory.
  *
  * @internal
@@ -139,7 +139,7 @@ export type ClientAdapterDeps = FactorDeps;
  * @internal
  */
 export interface ClientAdapterFactories {
-  passkey?: (deps: ClientAdapterDeps) => PasskeyClient;
+  webauthn?: (deps: ClientAdapterDeps) => WebAuthnClient;
 }
 
 /** @internal */
@@ -198,12 +198,12 @@ export type AuthSubscriber = (state: AuthState) => void;
  * Typed Convex API references for the auth functions.
  * Pass these from your generated `api` object.
  *
- * @typeParam HasPasskey - Whether the passkey provider is configured.
+ * @typeParam HasWebAuthn - Whether the WebAuthn provider is configured.
  * @typeParam HasTotp - Whether the TOTP provider is configured.
  * @typeParam HasDevice - Whether the device provider is configured.
  */
 export type AuthApiRefs<
-  HasPasskey extends boolean = boolean,
+  HasWebAuthn extends boolean = boolean,
   HasTotp extends boolean = boolean,
   HasDevice extends boolean = boolean,
 > = {
@@ -211,20 +211,18 @@ export type AuthApiRefs<
   signOut: FunctionReference<"action", "public", Record<string, Value>, unknown>;
   /** @internal Set automatically by `defineAuth` — do not set manually. */
   _capabilities?: {
-    passkey: HasPasskey;
+    webauthn: HasWebAuthn;
     totp: HasTotp;
     device: HasDevice;
   };
 };
 
 /**
- * Optional hints for {@link PasskeyClient.register}.
+ * Optional hints for {@link WebAuthnClient.register}.
  */
-export type PasskeyRegisterOptions = {
+export type WebAuthnRegisterOptions = {
   /** Human-readable label for this credential (e.g. `"MacBook Pro"`). */
   name?: string;
-  /** Email hint stored with the credential. */
-  email?: string;
   /** WebAuthn `user.name` override. */
   userName?: string;
   /** WebAuthn `user.displayName` override. */
@@ -232,9 +230,9 @@ export type PasskeyRegisterOptions = {
 };
 
 /**
- * Optional hints for {@link PasskeyClient.signIn}.
+ * Optional hints for {@link WebAuthnClient.signIn}.
  */
-export type PasskeySignInOptions = {
+export type WebAuthnSignInOptions = {
   /** Email hint to filter discoverable credentials. */
   email?: string;
   /** Set to `true` for conditional UI (autofill) mode. */
@@ -242,12 +240,12 @@ export type PasskeySignInOptions = {
 };
 
 /**
- * Passkey (WebAuthn) client-side helpers.
+ * WebAuthn client-side helpers.
  *
  * @see {@link TotpClient}
  * @see {@link DeviceClient}
  */
-export interface PasskeyClient {
+export interface WebAuthnClient {
   /**
    * Check whether the current runtime exposes WebAuthn passkey APIs.
    *
@@ -255,7 +253,7 @@ export interface PasskeyClient {
    *
    * @example
    * ```ts
-   * if (auth.passkey.isSupported()) {
+   * if (auth.webauthn.isSupported()) {
    *   // Show passkey registration button
    * }
    * ```
@@ -269,8 +267,8 @@ export interface PasskeyClient {
    *
    * @example
    * ```ts
-   * if (await auth.passkey.isAutofillSupported()) {
-   *   await auth.passkey.signIn({ autofill: true });
+   * if (await auth.webauthn.isAutofillSupported()) {
+   *   await auth.webauthn.signIn({ autofill: true });
    * }
    * ```
    */
@@ -283,17 +281,16 @@ export interface PasskeyClient {
    *
    * @param opts - Optional registration hints.
    * @param opts.name - Human-readable name for the passkey (e.g. `"MacBook Pro"`).
-   * @param opts.email - Email hint for discoverable credentials.
    * @param opts.userName - WebAuthn `user.name` override.
    * @param opts.userDisplayName - WebAuthn `user.displayName` override.
    * @returns A {@link SignInResult} — typically `{ kind: "signedIn" }` once a client session is available.
    *
    * @example
    * ```ts
-   * const result = await auth.passkey.register({ name: "My laptop" });
+   * const result = await auth.webauthn.register({ name: "My laptop" });
    * ```
    */
-  register(opts?: PasskeyRegisterOptions): Promise<SignInResult>;
+  register(opts?: WebAuthnRegisterOptions): Promise<SignInResult>;
 
   /**
    * Sign in with an existing passkey and complete the WebAuthn ceremony.
@@ -305,10 +302,10 @@ export interface PasskeyClient {
    *
    * @example
    * ```ts
-   * const result = await auth.passkey.signIn();
+   * const result = await auth.webauthn.signIn();
    * ```
    */
-  signIn(opts?: PasskeySignInOptions): Promise<SignInResult>;
+  signIn(opts?: WebAuthnSignInOptions): Promise<SignInResult>;
 }
 
 /**
@@ -354,7 +351,7 @@ export type TotpVerifyParams = {
 /**
  * TOTP two-factor authentication client-side helpers.
  *
- * @see {@link PasskeyClient}
+ * @see {@link WebAuthnClient}
  * @see {@link DeviceClient}
  */
 export interface TotpClient {
@@ -434,7 +431,7 @@ export type DeviceVerifyParams = { code: string };
 /**
  * Device authorization (RFC 8628) client-side helpers.
  *
- * @see {@link PasskeyClient}
+ * @see {@link WebAuthnClient}
  * @see {@link TotpClient}
  */
 export interface DeviceClient {
@@ -488,8 +485,20 @@ export interface DeviceClient {
  */
 type InferCaps<Api extends AuthApiRefs<boolean, boolean, boolean>> =
   Api extends AuthApiRefs<infer P, infer T, infer D>
-    ? { passkey: P; totp: T; device: D }
-    : { passkey: boolean; totp: boolean; device: boolean };
+    ? { webauthn: P; totp: T; device: D }
+    : { webauthn: boolean; totp: boolean; device: boolean };
+
+/**
+ * Include a capability when configured, omit it when disabled, and keep it
+ * optional when a framework binding cannot know the capability.
+ */
+type CapabilityClient<Enabled extends boolean, Name extends string, Client> = [Enabled] extends [
+  false,
+]
+  ? {}
+  : [boolean] extends [Enabled]
+    ? { [Key in Name]?: Client }
+    : { [Key in Name]: Client };
 
 /** Pending invite detected from URL or recovered from storage after redirect. */
 export interface PendingInvite {
@@ -559,13 +568,6 @@ export type AnonymousParams = { redirectTo?: string };
 export type OAuthSignInParams = { redirectTo?: string };
 
 /**
- * Params for `signIn("passkey", ...)`. Direct passkey flows are typically
- * triggered through `auth.passkey.register()` / `auth.passkey.signIn()`
- * — this overload is for advanced callers that bypass the helper.
- */
-export type PasskeySignInParams = { redirectTo?: string };
-
-/**
  * Resolves the `params` argument shape from the `provider` literal.
  *
  * Known special providers (`"password"`, `"email"`, etc.) get strict typing.
@@ -580,8 +582,8 @@ export type ParamsForProvider<P> = P extends "password"
       ? AnonymousParams | undefined
       : P extends "connection"
         ? ConnectionParams
-        : P extends "passkey"
-          ? PasskeySignInParams | undefined
+        : P extends "webauthn"
+          ? never
           : P extends undefined
             ? CodeCompletionParams
             : OAuthSignInParams | undefined;
@@ -589,8 +591,6 @@ export type ParamsForProvider<P> = P extends "password"
 /**
  * Tuple-rest helper that flips `params` between required and optional based
  * on whether `undefined` is in its resolved type.
- *
- * @internal
  */
 export type SignInArgs<P> =
   undefined extends ParamsForProvider<P>
@@ -609,7 +609,7 @@ export type SignInArgs<P> =
  * auth.signIn("anonymous"); // params optional
  * ```
  */
-export type SignInOverloads = <P extends string | undefined>(
+export type SignInOverloads = <const P extends string | undefined>(
   provider: P,
   ...args: SignInArgs<P>
 ) => Promise<SignInResult>;
@@ -655,26 +655,26 @@ interface AuthClientBase {
  * Framework-agnostic auth client return type.
  *
  * Conditionally includes `totp` and `device` helpers based on the
- * capabilities in the `AuthApiRefs` type. Platform-specific `passkey` helpers
+ * capabilities in the `AuthApiRefs` type. Platform-specific `webauthn` helpers
  * are added by {@link PlatformAuthClient}.
  *
  * @typeParam Api - An AuthApiRefs type that determines which factor helpers are included.
  */
 export type AuthClient<Api extends AuthApiRefs<boolean, boolean, boolean> = AuthApiRefs> =
   AuthClientBase &
-    (InferCaps<Api>["totp"] extends true ? { totp: TotpClient } : {}) &
-    (InferCaps<Api>["device"] extends true ? { device: DeviceClient } : {});
+    CapabilityClient<InferCaps<Api>["totp"], "totp", TotpClient> &
+    CapabilityClient<InferCaps<Api>["device"], "device", DeviceClient>;
 
 /**
  * Browser auth client return type.
  *
- * Extends {@link AuthClient} with conditional passkey helpers when the
- * generated auth API exposes passkey capabilities.
+ * Extends {@link AuthClient} with conditional WebAuthn helpers when the
+ * generated auth API exposes WebAuthn capabilities.
  *
  * @typeParam Api - An AuthApiRefs type that determines which factor helpers are included.
  */
 export type PlatformAuthClient<Api extends AuthApiRefs<boolean, boolean, boolean> = AuthApiRefs> =
-  AuthClient<Api> & (InferCaps<Api>["passkey"] extends true ? { passkey: PasskeyClient } : {});
+  AuthClient<Api> & CapabilityClient<InferCaps<Api>["webauthn"], "webauthn", WebAuthnClient>;
 
 /** @deprecated Use `PlatformAuthClient`. */
 export type BrowserAuthClient<Api extends AuthApiRefs<boolean, boolean, boolean> = AuthApiRefs> =

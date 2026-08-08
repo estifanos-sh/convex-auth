@@ -11,6 +11,7 @@ type ReturnType = GenericId<"AuthVerifier">;
 
 export const vVerifierArgs = v.object({
   signature: v.optional(v.string()),
+  expirationTime: v.optional(v.number()),
 });
 
 export async function verifierImpl(
@@ -22,6 +23,7 @@ export async function verifierImpl(
   const verifierId = await authDb(ctx, config).verifiers.create(
     sessionId ?? undefined,
     args.signature,
+    args.expirationTime,
   );
   return verifierId as ReturnType;
 }
@@ -29,11 +31,13 @@ export async function verifierImpl(
 export const callVerifier = async <DataModel extends GenericDataModel>(
   ctx: GenericActionCtx<DataModel>,
   signature?: string,
+  expirationTime?: number,
 ): Promise<ReturnType> => {
   return ctx.runMutation(AUTH_STORE_REF, {
     args: {
       type: "verifier",
       ...(signature === undefined ? {} : { signature }),
+      ...(expirationTime === undefined ? {} : { expirationTime }),
     },
   }) as Promise<ReturnType>;
 };

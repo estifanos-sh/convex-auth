@@ -169,6 +169,15 @@ export default defineSchema({
     .index("signature", ["signature"])
     .index("expiration_time", ["expirationTime"]),
 
+  /** Token-bucket state for guessable-secret authentication attempts. */
+  SignInLimit: defineTable({
+    identifier: v.string(),
+    tokens: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("identifier", ["identifier"])
+    .index("updated_at", ["updatedAt"]),
+
   /**
    * WebAuthn passkey credentials. Each credential links a user to a
    * registered authenticator (Touch ID, Face ID, security key, etc.).
@@ -192,6 +201,17 @@ export default defineSchema({
     backedUp: v.boolean(),
     /** User-assigned friendly name (e.g. "MacBook Touch ID"). */
     name: v.optional(v.string()),
+    /** Trusted authenticator-attestation evidence, absent on legacy/unattested credentials. */
+    attestation: v.optional(
+      v.object({
+        verifier: v.string(),
+        aaguid: v.string(),
+        format: v.string(),
+        metadataDescription: v.optional(v.string()),
+        verifiedAt: v.number(),
+        status: v.literal("trusted"),
+      }),
+    ),
     createdAt: v.number(),
     lastUsedAt: v.optional(v.number()),
   })
@@ -531,11 +551,11 @@ export default defineSchema({
     .index("mapped_group_id", ["mappedGroupId"]),
 
   /**
-   * Queryable projection rows for stream-backed auth events.
+   * Durable, queryable auth-event projection rows.
    *
-   * The durable stream owns the immutable event envelope. This table projects
-   * the fields auth needs for native Convex reads without duplicating event
-   * timelines into multiple tables.
+   * Each target owns one immutable copy of the fields needed for indexed reads.
+   * Legacy stream fields remain temporarily so existing deployments can
+   * migrate in place.
    *
    * NOTE (0.1 upgrade): this table REPLACES the removed `GroupAuditEvent` table.
    * Dropping a table is not deploy-blocking (Convex simply orphans its rows), so
@@ -563,8 +583,10 @@ export default defineSchema({
     ip: v.optional(v.string()),
     userAgent: v.optional(v.string()),
     data: v.optional(vAuthEventData),
-    streamId: v.string(),
-    streamIndex: v.number(),
+    /** @deprecated Retained only for stored-row compatibility. */
+    streamId: v.optional(v.string()),
+    /** @deprecated Retained only for stored-row compatibility. */
+    streamIndex: v.optional(v.number()),
   })
     .index("target_time", ["targetKind", "targetId", "occurredAt"])
     .index("target_kind_time", ["targetKind", "targetId", "kind", "occurredAt"])
@@ -577,10 +599,6 @@ export default defineSchema({
     .index("actor_time", ["actorType", "actorId", "occurredAt"])
     .index("subject_time", ["subjectType", "subjectId", "occurredAt"])
     .index("request_id_time", ["requestId", "occurredAt"])
-    .index("by_stream_index", ["streamIndex"])
-    // Retention: `maintenance.pruneExpired` deletes DRAINED rows (streamIndex >= 0)
-    // older than the retention window via this index. Undrained rows
-    // (streamIndex === -1, not yet in the durable stream) are never pruned.
     .index("occurred_at", ["occurredAt"]),
 
   /**

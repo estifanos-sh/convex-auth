@@ -1,22 +1,35 @@
 import type { GenericDataModel } from "convex/server";
-import { Infer, v } from "convex/values";
+import { GenericId, Infer, v } from "convex/values";
 
 import type { Hashed } from "../../shared/brand";
 import * as Provider from "../crypto";
-import { authDb } from "../db";
 import { requireEnv } from "../env";
-import { isSignInRateLimited, recordFailedSignIn, resetSignInRateLimit } from "../limits";
+import { queueAuthEvent } from "../events";
+import { maxSignInAttempts } from "../limits";
 import { LOG_LEVELS, log } from "../log";
 import type { SignInParams } from "../payloads";
 import { vPayloadRecord } from "../payloads";
 import { sha256 } from "../random";
-import { finalizeSessionIssuance, getAuthSessionId, issueSession } from "../session/lifecycle";
+import {
+  buildSessionIdentity,
+  finalizeSessionIssuance,
+  getAuthSessionId,
+  sessionExpirationTime,
+} from "../session/lifecycle";
 import type { SessionIssuance } from "../session/lifecycle";
+import { encodeRefreshToken, refreshTokenExpirationTime } from "../token/refresh";
+import { buildKnownSignInIdentityAttributes } from "../telemetry";
 import { createSyntheticOAuthMaterializedConfig } from "../connection/oidc";
 import { isGroupProviderId } from "../connection/shared";
-import { GenericActionCtxWithAuthConfig, MutationCtx, SessionInfo } from "../types";
+import {
+  type CrossComponentUserDoc,
+  type Doc,
+  GenericActionCtxWithAuthConfig,
+  MutationCtx,
+  SessionInfo,
+} from "../types";
 import { upsertUserAndAccount } from "../user/account";
-import { withSpan } from "../utils/span";
+import { setActiveSpanAttributes, withSpan } from "../utils/span";
 import { AUTH_STORE_REF } from "./store/refs";
 
 export const vVerifyCodeAndSignInArgs = v.object({
@@ -59,17 +72,7 @@ async function verifyCodeAndSignInImplInner(
       : typeof params.phone === "string"
         ? params.phone
         : undefined;
-
-  // Every rate-limit key this attempt is throttled and recorded against. Seeded
-  // with the email/phone identifier when present, then extended with the
-  // resolved code's account below. Keying on the account closes the code-only
-  // bypass: a `signIn({ code })` with no email/phone previously skipped the
-  // limit entirely (both the check and the failure-record were gated on
-  // `identifier !== undefined`), letting a resolved code be replayed unthrottled.
-  const rateLimitKeys = new Set<string>();
-  if (identifier !== undefined) {
-    rateLimitKeys.add(identifier);
-  }
+  let resolvedAccountId: string | undefined;
 
   try {
     log(LOG_LEVELS.DEBUG, "verifyCodeAndSignInImpl args:", {
@@ -85,49 +88,37 @@ async function verifyCodeAndSignInImplInner(
       requireEnv("CONVEX_SITE_URL");
     }
 
-    if (identifier !== undefined && (await isSignInRateLimited(ctx, identifier, config))) {
-      throw new VerifyFailure("Too many failed attempts to verify code for this email");
-    }
-
-    const db = authDb(ctx, config);
     const verifier = args.verifier;
     const codeValue = params.code;
-    if (typeof codeValue !== "string") {
-      throw new VerifyFailure("Invalid verification code");
+    const hash = (await sha256(
+      typeof codeValue === "string" ? codeValue : "__invalid_verification_code__",
+    )) as Hashed<"VerificationCode">;
+    const begun = (await ctx.runMutation(config.component.token.verification.beginVerification, {
+      code: hash,
+      identifier,
+      verifier,
+      provider,
+      maxAttemptsPerHour: maxSignInAttempts(config),
+      now: Date.now(),
+    })) as
+      | { status: "invalid" | "limited" }
+      | {
+          status: "ready";
+          code: {
+            _id: string;
+            provider: string;
+            emailVerified?: string;
+            phoneVerified?: string;
+          };
+          account: Doc<"Account">;
+        };
+    if (typeof codeValue !== "string" || begun.status !== "ready") {
+      throw new VerifyFailure(
+        begun.status === "limited" ? "Too many failed attempts to verify code" : "Invalid code",
+      );
     }
-    const hash = (await sha256(codeValue)) as Hashed<"VerificationCode">;
-    const code = await db.verificationCodes.get({ code: hash });
-    if (code === null) {
-      throw new VerifyFailure("Invalid verification code");
-    }
-
-    // The code resolved to an account: throttle (and, on failure below, record)
-    // against that account too, so a code-only verify with no email/phone is
-    // still rate-limited. Prefixed so it can never collide with an email/phone
-    // identifier key. This whole handler is one mutation transaction, so the
-    // check + record + reset are atomic (no TOCTOU as in the action flows).
-    const accountKey = `accountId:${code.accountId}`;
-    if (!rateLimitKeys.has(accountKey)) {
-      rateLimitKeys.add(accountKey);
-      if (await isSignInRateLimited(ctx, accountKey, config)) {
-        throw new VerifyFailure("Too many failed attempts to verify code");
-      }
-    }
-
-    if (code.verifier !== verifier) {
-      throw new VerifyFailure("Invalid verifier");
-    }
-    if (code.expirationTime < Date.now()) {
-      throw new VerifyFailure("Expired verification code");
-    }
-    if (provider !== undefined && code.provider !== provider) {
-      throw new VerifyFailure(`Invalid provider "${provider}" for given \`code\``);
-    }
-
-    const account = await db.accounts.get({ id: code.accountId });
-    if (account === null) {
-      throw new VerifyFailure("Account associated with this email has been deleted");
-    }
+    const { code, account } = begun;
+    resolvedAccountId = account._id;
 
     const codeProvider = isGroupProviderId(code.provider)
       ? createSyntheticOAuthMaterializedConfig(code.provider)
@@ -145,13 +136,14 @@ async function verifyCodeAndSignInImplInner(
       ? createSyntheticOAuthMaterializedConfig(account.provider)
       : getProviderOrThrow(account.provider);
 
+    const replaceSessionId = await getAuthSessionId(ctx);
     const userId =
       methodProvider.type === "oauth"
         ? account.userId
         : (
             await upsertUserAndAccount(
               ctx,
-              await getAuthSessionId(ctx),
+              replaceSessionId,
               { existingAccount: account },
               {
                 type: "verification",
@@ -169,28 +161,87 @@ async function verifyCodeAndSignInImplInner(
             )
           ).userId;
 
-    const [, replaceSessionId] = await Promise.all([
-      db.verificationCodes.delete(code._id),
-      getAuthSessionId(ctx),
-    ]);
-    // Successful verify: clear the failure counter for every key we accumulated
-    // (email/phone plus the resolved account).
-    await Promise.all([...rateLimitKeys].map((key) => resetSignInRateLimit(ctx, key, config)));
+    const completed = (await ctx.runMutation(
+      config.component.token.verification.completeVerification,
+      {
+        codeId: code._id,
+        userId,
+        identifier,
+        replaceSessionId: replaceSessionId ?? undefined,
+        generateTokens,
+        sessionExpirationTime: sessionExpirationTime(config),
+        refreshTokenExpirationTime: refreshTokenExpirationTime(config),
+      },
+    )) as
+      | { status: "rejected" }
+      | {
+          status: "accepted";
+          user: CrossComponentUserDoc;
+          sessionId: string;
+          refreshTokenId?: string;
+          replacedSessionId?: string;
+        };
+    if (completed.status !== "accepted") throw new VerifyFailure("Invalid code");
 
-    return await issueSession(ctx, config, {
-      userId,
-      replaceSessionId: replaceSessionId ?? undefined,
-      generateTokens,
+    const typedUserId = completed.user._id as GenericId<"User">;
+    const sessionId = completed.sessionId as GenericId<"Session">;
+    setActiveSpanAttributes({
+      "auth.signin.result": "success",
+      ...buildKnownSignInIdentityAttributes(
+        config,
+        { userId: typedUserId, sessionId },
+        completed.user.email,
+      ),
     });
+    if (completed.replacedSessionId !== undefined) {
+      const replacedSessionId = completed.replacedSessionId as GenericId<"Session">;
+      await queueAuthEvent(ctx, config, {
+        kind: "session.invalidated",
+        actor: { type: "system" },
+        subject: { type: "session", id: replacedSessionId },
+        targets: [
+          { kind: "user", id: typedUserId },
+          { kind: "session", id: replacedSessionId },
+        ],
+        outcome: "success",
+        data: { userId: typedUserId, reason: "replaced" },
+      });
+    }
+    await queueAuthEvent(ctx, config, {
+      kind: "session.signed_in",
+      actor: { type: "user", id: typedUserId },
+      subject: { type: "session", id: sessionId },
+      targets: [
+        { kind: "user", id: typedUserId },
+        { kind: "session", id: sessionId },
+      ],
+      outcome: "success",
+      data: { provider: code.provider },
+    });
+    const refreshTokenId = completed.refreshTokenId as GenericId<"RefreshToken"> | undefined;
+    return {
+      userId: typedUserId,
+      sessionId,
+      identity: buildSessionIdentity(typedUserId, sessionId, completed.user),
+      refreshToken:
+        generateTokens && refreshTokenId !== undefined
+          ? encodeRefreshToken(refreshTokenId, sessionId)
+          : null,
+    };
   } catch (error) {
     if (error instanceof VerifyFailure) {
       log(LOG_LEVELS.ERROR, error.reason);
-      // Record the failure against every key we resolved (email/phone and, once
-      // the code was found, its account). A code-only attempt whose code never
-      // resolves accumulates no account key; throttling that residual would need
-      // an IP/global limiter unavailable inside this mutation.
-      await Promise.all([...rateLimitKeys].map((key) => recordFailedSignIn(ctx, key, config)));
       return null;
+    }
+    if (resolvedAccountId !== undefined) {
+      try {
+        await ctx.runMutation(config.component.token.verification.resetVerificationLimits, {
+          accountId: resolvedAccountId,
+          identifier,
+        });
+      } catch (resetError) {
+        log(LOG_LEVELS.ERROR, "Failed to refund verification rate limit", resetError);
+      }
     }
     throw error;
   }

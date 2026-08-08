@@ -1,13 +1,21 @@
 /**
- * Provider exports for `@robelest/convex-auth/providers`.
+ * Provider exports for `@estifanos-sh/convex-auth/providers`.
  *
  * @module
  */
 
 export { password } from "./password";
 export type { PasswordConfig } from "./password";
-export { passkey } from "./passkey";
-export type { PasskeyConfig } from "./passkey";
+export { webauthn } from "./webauthn";
+export type {
+  WebAuthnAttestationEvidence,
+  WebAuthnAttestationPolicy,
+  WebAuthnAlgorithm,
+  WebAuthnAuthenticationConfig,
+  WebAuthnConfig,
+  WebAuthnHint,
+  WebAuthnRegistrationConfig,
+} from "./webauthn";
 export { totp } from "./totp";
 export type { TotpConfig } from "./totp";
 export { google } from "./google";
@@ -27,7 +35,11 @@ export type {
 export { anonymous } from "./anonymous";
 export type { AnonymousConfig } from "./anonymous";
 export { credentials } from "./credentials";
-export type { CredentialsConfig } from "./credentials";
+export type {
+  CredentialsAuthorizeResult,
+  CredentialsConfig,
+  CredentialsProvisioning,
+} from "./credentials";
 export { device } from "./device";
 export type { DeviceConfig } from "./device";
 export { connection } from "./connection";

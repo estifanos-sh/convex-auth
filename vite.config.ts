@@ -8,9 +8,9 @@ const authSrc = path.resolve(import.meta.dirname, "./packages/auth/src");
 const testProjectAliases = {
   "@convex": convexApp,
   "@convex/": `${convexApp}/`,
-  "@robelest/convex-auth/test": path.join(authSrc, "test.ts"),
-  "@robelest/convex-auth": authSrc,
-  "@robelest/convex-auth/": `${authSrc}/`,
+  "@estifanos-sh/convex-auth/test": path.join(authSrc, "test.ts"),
+  "@estifanos-sh/convex-auth": authSrc,
+  "@estifanos-sh/convex-auth/": `${authSrc}/`,
 } as const;
 
 export default defineConfig({
@@ -59,7 +59,7 @@ export default defineConfig({
         ],
       },
       "cache:build:auth": {
-        command: "vp run --filter @robelest/convex-auth build",
+        command: "vp run --filter @estifanos-sh/convex-auth build",
         cache: true,
         input: [
           "convex/**",
@@ -159,7 +159,7 @@ export default defineConfig({
       },
       "cache:validate": {
         command:
-          "vp run typecheck:tests && vp run '@robelest/convex-auth#typecheck:consumer' && vp run '@robelest/convex-auth#check:packaging'",
+          "vp run typecheck:tests && vp run '@estifanos-sh/convex-auth#typecheck:consumer' && vp run '@estifanos-sh/convex-auth#check:packaging'",
         cache: true,
         input: [
           "convex/**",

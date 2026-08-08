@@ -2,7 +2,7 @@
 
 import resendTest from "@convex-dev/resend/test";
 import staticHostingTest from "@convex-dev/static-hosting/test";
-import authTest from "@robelest/convex-auth/test";
+import authTest from "@estifanos-sh/convex-auth/test";
 import { convexTest as baseConvexTest } from "convex-test";
 import type { FunctionReference } from "convex/server";
 import { exportJWK, exportPKCS8, generateKeyPair } from "jose";

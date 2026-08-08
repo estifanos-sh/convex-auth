@@ -604,6 +604,16 @@ export const vPasskeyDoc = v.object({
   deviceType: v.string(),
   backedUp: v.boolean(),
   name: v.optional(v.string()),
+  attestation: v.optional(
+    v.object({
+      verifier: v.string(),
+      aaguid: v.string(),
+      format: v.string(),
+      metadataDescription: v.optional(v.string()),
+      verifiedAt: v.number(),
+      status: v.literal("trusted"),
+    }),
+  ),
   createdAt: v.number(),
   lastUsedAt: v.optional(v.number()),
 });

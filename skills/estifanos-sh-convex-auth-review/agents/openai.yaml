@@ -1,0 +1,4 @@
+interface:
+  display_name: "Review estifanos.sh Convex Auth"
+  short_description: "Audit Convex Auth security and correctness"
+  default_prompt: "Use $estifanos-sh-convex-auth-review to audit this @estifanos-sh/convex-auth integration and report evidence-backed fixes."

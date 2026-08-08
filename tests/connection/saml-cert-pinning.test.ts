@@ -13,8 +13,8 @@
  * so no real key material or signature is required to exercise it.
  */
 
-import { verifySignature } from "@robelest/convex-auth/server/connection/saml/signature";
-import type { SamlMetadata } from "@robelest/convex-auth/server/connection/saml/metadata";
+import { verifySignature } from "@estifanos-sh/convex-auth/server/connection/saml/signature";
+import type { SamlMetadata } from "@estifanos-sh/convex-auth/server/connection/saml/metadata";
 import { expect, test } from "vite-plus/test";
 
 const NS = `xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion"`;

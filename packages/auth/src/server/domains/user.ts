@@ -303,21 +303,16 @@ export function createUserDomain(deps: UserDeps) {
     /**
      * Delete a user and all associated data.
      *
-     * By default (`cascade: true`) deletes the user's sessions, accounts,
-     * API keys, group memberships, passkey credentials, and TOTP factors.
-     * Pass `{ cascade: false }` to delete only the user document itself.
+     * Deletes the user's sessions, accounts, API keys, group memberships,
+     * passkey credentials, TOTP factors, refresh tokens, and owned emails.
      *
      * @param ctx - Convex mutation context.
      * @param opts.id - The user's document ID.
-     * @param opts.cascade - Whether to delete related records (default `true`).
      * @returns `null`.
-     * @throws `INVALID_PARAMETERS` if `cascade` is `false` but the user has linked data.
+     * @throws `CASCADE_TOO_LARGE` when cleanup exceeds a safe transaction bound.
      */
-    remove: async (ctx: ComponentCtx, opts: { id: string; cascade?: boolean }) => {
-      await ctx.runMutation(config.component.user.remove, {
-        id: opts.id,
-        cascade: opts.cascade !== false,
-      });
+    remove: async (ctx: ComponentCtx, opts: { id: string }) => {
+      await ctx.runMutation(config.component.user.remove, { id: opts.id });
       invalidateCtxCache(ctx);
       return null;
     },

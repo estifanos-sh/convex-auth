@@ -1,6 +1,6 @@
 import { api } from "$convex/_generated/api";
-import { client as createAuthClient, type AuthClient } from "@robelest/convex-auth/expo";
-import type { AuthState, SignInResult } from "@robelest/convex-auth/client";
+import { client as createAuthClient, type AuthClient } from "@estifanos-sh/convex-auth/expo";
+import type { AuthState, SignInResult } from "@estifanos-sh/convex-auth/client";
 import React from "react";
 
 import { getClient } from "./client";

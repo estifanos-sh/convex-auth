@@ -24,18 +24,18 @@
 import {
   extract,
   loginResponseStatusFields,
-} from "@robelest/convex-auth/server/connection/saml/extractor";
-import { getTransformByAlgorithm } from "@robelest/convex-auth/server/connection/saml/c14n";
+} from "@estifanos-sh/convex-auth/server/connection/saml/extractor";
+import { getTransformByAlgorithm } from "@estifanos-sh/convex-auth/server/connection/saml/c14n";
 import {
   base64Decode,
   base64Encode,
   deflateString,
   inflateString,
-} from "@robelest/convex-auth/server/connection/saml/encoding";
-import { parseIdpMetadata } from "@robelest/convex-auth/server/connection/saml/metadata";
-import { safeParseXml } from "@robelest/convex-auth/server/connection/saml/api";
-import { decryptAssertion } from "@robelest/convex-auth/server/connection/saml/xmlenc";
-import { verifyTime } from "@robelest/convex-auth/server/connection/saml/validator";
+} from "@estifanos-sh/convex-auth/server/connection/saml/encoding";
+import { parseIdpMetadata } from "@estifanos-sh/convex-auth/server/connection/saml/metadata";
+import { safeParseXml } from "@estifanos-sh/convex-auth/server/connection/saml/api";
+import { decryptAssertion } from "@estifanos-sh/convex-auth/server/connection/saml/xmlenc";
+import { verifyTime } from "@estifanos-sh/convex-auth/server/connection/saml/validator";
 import { expect, test } from "vite-plus/test";
 
 // ---------------------------------------------------------------------------

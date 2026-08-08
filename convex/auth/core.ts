@@ -1,4 +1,4 @@
-import { createAuthContext } from "@robelest/convex-auth/core";
+import { createAuthContext } from "@estifanos-sh/convex-auth/core";
 
 import { components } from "../_generated/api";
 import { permissions } from "../roles";

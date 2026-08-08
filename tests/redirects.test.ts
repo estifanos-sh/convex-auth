@@ -1,4 +1,4 @@
-import { redirectAbsoluteUrl } from "@robelest/convex-auth/server/redirects";
+import { redirectAbsoluteUrl } from "@estifanos-sh/convex-auth/server/redirects";
 import { afterEach, beforeEach, expect, test } from "vite-plus/test";
 
 const APP_URL = "http://localhost:5173";

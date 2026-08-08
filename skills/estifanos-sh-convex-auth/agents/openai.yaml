@@ -1,0 +1,4 @@
+interface:
+  display_name: "estifanos.sh Convex Auth"
+  short_description: "Route Convex Auth integration work"
+  default_prompt: "Use $estifanos-sh-convex-auth to choose the right workflow for this Convex authentication task."

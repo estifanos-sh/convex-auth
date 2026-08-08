@@ -13,7 +13,7 @@
  * - `change` — Authenticated password change (requires `currentPassword`).
  *
  * ```ts
- * import { password } from "@robelest/convex-auth/providers";
+ * import { password } from "@estifanos-sh/convex-auth/providers";
  *
  * password()
  * password({ verify: myEmailProvider, reset: myEmailProvider })
@@ -206,7 +206,7 @@ export function password<DataModel extends GenericDataModel = GenericDataModel>(
           return {
             userId: result.user._id as GenericDoc<DataModel, "User">["_id"],
             hasTotp,
-            issuance: result.issuance,
+            ...(result.kind === "signedIn" ? { issuance: result.issuance } : {}),
           };
         },
 

@@ -160,7 +160,7 @@ export type ConvexAuthConfig<TExtend = {}> = {
    * A list of authentication provider configs.
    *
    * You can import existing configs from
-   * `@robelest/convex-auth/providers/<provider-name>`
+   * `@estifanos-sh/convex-auth/providers/<provider-name>`
    */
   providers: AuthProviderConfig[];
   /**
@@ -283,14 +283,14 @@ export type ConvexAuthConfig<TExtend = {}> = {
    * Stream-backed lifecycle event handlers.
    *
    * Configure with `authEvents.handlers({ ... })` from
-   * `@robelest/convex-auth/server`.
+   * `@estifanos-sh/convex-auth/server`.
    */
   events?: AuthEventHandlerMap<TExtend>;
   /**
    * Application-defined permission model used by membership access checks.
    *
    * Use `definePermissions({ grants, roles })` from
-   * `@robelest/convex-auth/permissions` to preserve literal role IDs and
+   * `@estifanos-sh/convex-auth/permissions` to preserve literal role IDs and
    * grant strings.
    */
   permissions?: {
@@ -325,8 +325,8 @@ export type AuthProviderConfig =
   | (() => EmailConfig)
   | PhoneConfig
   | (() => PhoneConfig)
-  | PasskeyProviderConfig
-  | (() => PasskeyProviderConfig)
+  | WebAuthnProviderConfig
+  | (() => WebAuthnProviderConfig)
   | TotpProviderConfig
   | (() => TotpProviderConfig)
   | DeviceProviderConfig
@@ -648,12 +648,58 @@ export type ConvexCredentialsConfig<DataModel extends GenericDataModel = Generic
     id: string;
   };
 
+/** Persisted proof that a WebAuthn credential passed a trusted attestation policy. */
+export interface WebAuthnAttestationEvidence {
+  /** Stable verifier identifier used to create this evidence. */
+  verifier: string;
+  /** Authenticator Attestation GUID from the verified authenticator data. */
+  aaguid: string;
+  /** WebAuthn attestation statement format. */
+  format: string;
+  /** Human-readable authenticator description from trusted metadata, when available. */
+  metadataDescription?: string;
+  /** Unix timestamp in milliseconds when attestation was verified. */
+  verifiedAt: number;
+  /** A literal trust result so stored evidence cannot be mistaken for an unchecked claim. */
+  status: "trusted";
+}
+
+/** @internal Input passed from the WebAuthn ceremony to an attestation verifier. */
+export interface WebAuthnAttestationVerificationInput {
+  clientDataJSON: string;
+  attestationObject: string;
+  credentialId: string;
+  transports?: string[];
+  expectedChallenge: string;
+  expectedOrigin: string | string[];
+  expectedRpId: string;
+  requireUserVerification: boolean;
+  supportedAlgorithms: Array<-7 | -257>;
+}
+
+/** @internal Runtime verifier carried by a strict WebAuthn attestation policy. */
+export interface WebAuthnAttestationVerifier {
+  readonly id: string;
+  verify(
+    input: WebAuthnAttestationVerificationInput,
+  ): Promise<Omit<WebAuthnAttestationEvidence, "status" | "verifiedAt" | "verifier">>;
+  assertTrusted(evidence: WebAuthnAttestationEvidence): Promise<void>;
+}
+
+/** Strict registration policy returned by `webauthn.attestation.fidoMds()`. */
+export interface WebAuthnAttestationPolicy {
+  /** Attestation conveyance sent to the browser. */
+  conveyance: "direct";
+  /** @internal Server-side verifier for registration and later trust re-checks. */
+  verifier: WebAuthnAttestationVerifier;
+}
+
 /**
- * Configuration for the passkey (WebAuthn) provider.
+ * Normalized configuration for the WebAuthn provider.
  */
-export interface PasskeyProviderConfig {
+export interface WebAuthnProviderConfig {
   id: string;
-  type: "passkey";
+  type: "webauthn";
   options: {
     /** Relying Party display name. Defaults to APP_URL hostname. */
     rpName?: string;
@@ -662,37 +708,23 @@ export interface PasskeyProviderConfig {
     /** Allowed origins for credential verification. Defaults to APP_URL. */
     origin?: string | string[];
     /**
-     * Attestation conveyance preference. Defaults to "none".
-     *
-     * @defaultValue "none"
-     */
-    attestation?: "none" | "direct";
-    /**
-     * User verification requirement. Defaults to "required".
-     *
-     * @defaultValue "required"
-     */
-    userVerification?: "required" | "preferred" | "discouraged";
-    /**
-     * Resident key (discoverable credential) preference. Defaults to "preferred".
-     *
-     * @defaultValue "preferred"
-     */
-    residentKey?: "required" | "preferred" | "discouraged";
-    /** Restrict to platform or cross-platform authenticators. */
-    authenticatorAttachment?: "platform" | "cross-platform";
-    /**
-     * Supported COSE algorithms. Defaults to [-7 (ES256), -257 (RS256)].
-     *
-     * @defaultValue [-7, -257]
-     */
-    algorithms?: number[];
-    /**
      * Challenge expiration in ms. Defaults to 300_000 (5 minutes).
      *
      * @defaultValue 300_000
      */
     challengeExpirationMs?: number;
+    registration: {
+      userVerification: "required" | "preferred" | "discouraged";
+      residentKey: "required" | "preferred" | "discouraged";
+      authenticatorAttachment?: "platform" | "cross-platform";
+      hints?: Array<"security-key" | "client-device" | "hybrid">;
+      algorithms: Array<-7 | -257>;
+      attestation?: WebAuthnAttestationPolicy;
+    };
+    authentication: {
+      userVerification: "required" | "preferred" | "discouraged";
+      hints?: Array<"security-key" | "client-device" | "hybrid">;
+    };
   };
 }
 
@@ -827,7 +859,7 @@ type AuthUnlinkAccountArgs = {
   accountId: GenericId<"Account">;
 };
 
-/** Arguments for `auth.passkey.remove()`. */
+/** Arguments for provider-callback passkey removal. */
 type AuthDeletePasskeyArgs = {
   passkeyId: GenericId<"Passkey">;
 };
@@ -860,8 +892,6 @@ type AuthProviderSignInResult =
 type AuthMemberInspectArgs = {
   userId: GenericId<"User">;
   groupId: GenericId<"Group">;
-  ancestry?: boolean;
-  maxDepth?: number;
 };
 
 /** Result of `auth.member.get()` — membership state and derived access details. */
@@ -869,6 +899,15 @@ export type AuthMemberInspectResult = {
   membership: GenericDoc<GenericDataModel, "GroupMember"> | null;
   roleIds: string[];
   grants: string[];
+};
+
+/** Result of explicit inherited membership resolution. */
+export type AuthMemberResolveResult = AuthMemberInspectResult & {
+  matchedGroupId: GenericId<"Group"> | null;
+  depth: number | null;
+  isDirect: boolean;
+  isInherited: boolean;
+  traversedGroupIds: GenericId<"Group">[];
 };
 
 /** Arguments for `auth.member.assert()`. */
@@ -977,6 +1016,10 @@ type AuthServerHelpers = {
       ctx: GenericActionCtx<GenericDataModel>,
       args: AuthMemberInspectArgs,
     ) => Promise<AuthMemberInspectResult>;
+    resolve: (
+      ctx: GenericActionCtx<GenericDataModel>,
+      args: AuthMemberInspectArgs & { maxDepth?: number },
+    ) => Promise<AuthMemberResolveResult>;
     assert: (
       ctx: GenericActionCtx<GenericDataModel>,
       args: AuthMemberAssertArgs,
@@ -1155,13 +1198,13 @@ export type AuthProviderMaterializedConfig =
   | EmailConfig
   | PhoneConfig
   | ConvexCredentialsConfig
-  | PasskeyProviderConfig
+  | WebAuthnProviderConfig
   | TotpProviderConfig
   | DeviceProviderConfig
   | ConnectionProviderConfig;
 
-export type HasPasskeyProvider<P extends AuthProviderConfig[]> =
-  Extract<P[number], { type: "passkey" }> extends never ? false : true;
+export type HasWebAuthnProvider<P extends AuthProviderConfig[]> =
+  Extract<P[number], { type: "webauthn" }> extends never ? false : true;
 
 export type HasTotpProvider<P extends AuthProviderConfig[]> =
   Extract<P[number], { type: "totp" }> extends never ? false : true;
@@ -1356,7 +1399,7 @@ export type SessionTokenIdentityClaims = {
  * Used by internal typed wrappers (`queryUserById`, etc.) so server code stays
  * aligned with the component runtime contract. Not intended for consumer use —
  * consumers should use `UserDoc` (exported from
- * `@robelest/convex-auth/component`).
+ * `@estifanos-sh/convex-auth/component`).
  *
  * @internal
  */

@@ -1,8 +1,8 @@
-import { password } from "@robelest/convex-auth/providers/password";
-import { credentialsSignInImpl } from "@robelest/convex-auth/server/mutations/credentials/signin";
-import * as mutations from "@robelest/convex-auth/server/mutations/calls";
-import { enrichActionCtx } from "@robelest/convex-auth/server/runtime";
-import { signInImpl } from "@robelest/convex-auth/server/signin/flow";
+import { password } from "@estifanos-sh/convex-auth/providers/password";
+import { credentialsSignInImpl } from "@estifanos-sh/convex-auth/server/mutations/credentials/signin";
+import * as mutations from "@estifanos-sh/convex-auth/server/mutations/calls";
+import { enrichActionCtx } from "@estifanos-sh/convex-auth/server/runtime";
+import { signInImpl } from "@estifanos-sh/convex-auth/server/signin/flow";
 import type { GenericActionCtx, GenericDataModel } from "convex/server";
 import { afterEach, expect, test, vi } from "vite-plus/test";
 
@@ -23,6 +23,8 @@ function createCredentialsMutationHarness(args: {
   accountMissing?: boolean;
 }) {
   const refs = {
+    beginCredentialsSignIn: Symbol("beginCredentialsSignIn"),
+    completeCredentialsSignIn: Symbol("completeCredentialsSignIn"),
     accountGet: Symbol("accountGet"),
     userGetById: Symbol("userGetById"),
     userPatch: Symbol("userPatch"),
@@ -31,6 +33,7 @@ function createCredentialsMutationHarness(args: {
     signInRecord: Symbol("signInRecord"),
     signInReset: Symbol("signInReset"),
     totpGetVerifiedByUserId: Symbol("totpGetVerifiedByUserId"),
+    eventAppend: Symbol("eventAppend"),
   } as const;
 
   const account = {
@@ -67,6 +70,25 @@ function createCredentialsMutationHarness(args: {
   });
 
   const runMutation = vi.fn(async (ref: unknown, mutationArgs: unknown) => {
+    if (ref === refs.beginCredentialsSignIn) {
+      if (args.accountMissing) return { status: "invalid" };
+      return {
+        status: "ready",
+        account,
+        user,
+        hasTotp: args.totpDoc !== null && args.totpDoc !== undefined,
+      };
+    }
+    if (ref === refs.completeCredentialsSignIn) {
+      const completeArgs = mutationArgs as { issueSession: boolean };
+      if (!completeArgs.issueSession) return { status: "reset" };
+      return {
+        status: "accepted",
+        user,
+        sessionId: "session1",
+        refreshTokenId: "refresh1",
+      };
+    }
     if (ref === refs.userPatch) {
       const patch = mutationArgs as { data: { hasTotp: boolean } };
       user = { ...user, ...patch.data };
@@ -92,6 +114,7 @@ function createCredentialsMutationHarness(args: {
     runQuery,
     runMutation,
     auth: { getUserIdentity: async () => null },
+    scheduler: { runAfter: vi.fn(async () => "scheduled") },
   } as any;
 
   const config = {
@@ -100,7 +123,11 @@ function createCredentialsMutationHarness(args: {
         get: refs.userGetById,
         update: refs.userPatch,
       },
-      account: { get: refs.accountGet },
+      account: {
+        get: refs.accountGet,
+        beginCredentialsSignIn: refs.beginCredentialsSignIn,
+        completeCredentialsSignIn: refs.completeCredentialsSignIn,
+      },
       session: { create: refs.sessionCreate },
       limits: {
         signInCheck: refs.signInCheck,
@@ -110,6 +137,7 @@ function createCredentialsMutationHarness(args: {
       factor: {
         totp: { get: refs.totpGetVerifiedByUserId },
       },
+      event: { append: refs.eventAppend },
     },
   } as any;
 
@@ -153,9 +181,10 @@ test("credentialsSignIn skips session issuance when email verification is requir
     account: { _id: "account1", emailVerified: undefined },
     user: { _id: "user1", email: "user@example.com" },
   });
-  expect(harness.runMutation).toHaveBeenCalledWith(harness.refs.signInReset, {
-    identifier: "account1",
-  });
+  expect(harness.runMutation).toHaveBeenCalledWith(
+    harness.refs.completeCredentialsSignIn,
+    expect.objectContaining({ accountId: "account1", issueSession: false }),
+  );
   expect(harness.runMutation).not.toHaveBeenCalledWith(
     harness.refs.sessionCreate,
     expect.anything(),
@@ -166,7 +195,7 @@ test("credentialsSignIn skips session issuance when email verification is requir
   );
 });
 
-test("credentialsSignIn resolves TOTP enrollment by query without caching", async () => {
+test("credentialsSignIn resolves TOTP enrollment in the begin transaction", async () => {
   const harness = createCredentialsMutationHarness({
     emailVerified: "verified",
     hasTotp: undefined,
@@ -199,14 +228,14 @@ test("credentialsSignIn resolves TOTP enrollment by query without caching", asyn
     throw new Error("Expected sign-in result");
   }
   expect(result.user.hasTotp).toBe(false);
-  expect(harness.runQuery).toHaveBeenCalledWith(
-    harness.refs.totpGetVerifiedByUserId,
-    expect.anything(),
+  expect(harness.runMutation).toHaveBeenCalledWith(
+    harness.refs.beginCredentialsSignIn,
+    expect.objectContaining({ includeTotp: true }),
   );
   expect(harness.runMutation).not.toHaveBeenCalledWith(harness.refs.userPatch, expect.anything());
   expect(harness.runMutation).toHaveBeenCalledWith(
-    harness.refs.sessionCreate,
-    expect.objectContaining({ userId: "user1" }),
+    harness.refs.completeCredentialsSignIn,
+    expect.objectContaining({ issueSession: true }),
   );
 });
 

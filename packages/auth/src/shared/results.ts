@@ -47,9 +47,9 @@ export type SignInStartResult = {
   kind: "started";
 };
 
-/** Sign-in result carrying WebAuthn options for a passkey ceremony. */
-export type SignInPasskeyOptionsResult = {
-  kind: "passkeyOptions";
+/** Sign-in result carrying options for a WebAuthn ceremony. */
+export type SignInWebAuthnOptionsResult = {
+  kind: "webauthnOptions";
   options: Record<string, unknown>;
   verifier: string;
 };
@@ -78,7 +78,7 @@ export type SignInFlowResult<TSession, TRedirect = string> =
   | SignInSessionResult<TSession>
   | SignInRedirectResult<TRedirect>
   | SignInStartResult
-  | SignInPasskeyOptionsResult
+  | SignInWebAuthnOptionsResult
   | SignInTotpChallengeResult
   | SignInTotpSetupResult
   | SignInDeviceCodeResult;

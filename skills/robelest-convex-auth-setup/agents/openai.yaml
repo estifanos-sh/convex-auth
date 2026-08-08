@@ -1,4 +1,0 @@
-interface:
-  display_name: "Set Up Robelest Convex Auth"
-  short_description: "Install and verify Convex authentication"
-  default_prompt: "Use $robelest-convex-auth-setup to add @robelest/convex-auth to this app and verify a real sign-in flow."

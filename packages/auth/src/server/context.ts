@@ -32,7 +32,7 @@ type AuthIdentityCtx = {
  *
  * @example
  * ```ts
- * import type { AuthContext } from "@robelest/convex-auth/server";
+ * import type { AuthContext } from "@estifanos-sh/convex-auth/server";
  *
  * const mockAuth: AuthContext = {
  *   userId: "user123" as Id<"User">,
@@ -124,7 +124,11 @@ export type AuthLike = {
     [key: string]: unknown;
   };
   active: {
-    get: (...args: never[]) => Promise<{ groupId: string } | null>;
+    get: (...args: never[]) => Promise<{
+      groupId: string;
+      roleIds: string[];
+      grants: string[];
+    } | null>;
     [key: string]: unknown;
   };
   member: {
@@ -132,9 +136,6 @@ export type AuthLike = {
       membership: unknown;
       roleIds: string[];
       grants: string[];
-    }>;
-    list: (...args: never[]) => Promise<{
-      page: Array<{ groupId: string; roleIds?: string[]; grants?: string[] }>;
     }>;
     [key: string]: unknown;
   };
@@ -182,31 +183,19 @@ export type AuthContextConfig<
   resolve?: (ctx: TCtx, user: UserDoc, auth: AuthContext) => Promise<TResolve> | TResolve;
 };
 
-type ResolvedMembership = {
-  membership: unknown;
-  roleIds: string[];
-  grants: string[];
-};
-
-type MembershipListItem = { groupId: string; roleIds?: string[]; grants?: string[] };
-
 type AuthContextResolverLike = {
   user: {
     get: (ctx: AuthQueryCtx, args: { id: string }) => Promise<UserDoc | null>;
   };
-  member: {
+  active: {
     get: (
       ctx: AuthQueryCtx,
-      args: { userId: string; groupId: string },
-    ) => Promise<ResolvedMembership>;
-    list: (
-      ctx: AuthQueryCtx,
-      opts: {
-        where: { userId: string };
-        paginationOpts: { numItems: number; cursor: string | null };
-        withGrants: true;
-      },
-    ) => Promise<{ page: MembershipListItem[] }>;
+      opts: { userId: string },
+    ) => Promise<{
+      groupId: string;
+      roleIds: string[];
+      grants: string[];
+    } | null>;
   };
 };
 
@@ -262,13 +251,8 @@ function makeAssert(groupId: string | null, grants: readonly string[]): AuthCont
 /**
  * Resolve the caller's *effective* active group and its grants on the hot path.
  *
- * The user's persisted selection (`User.lastActiveGroup`, already on the doc
- * fetched in step 1) is honored first: a single `member.get` confirms it is
- * still a current membership and returns that membership's grants in one read.
- * Only when the selection is unset — or is no longer a current membership —
- * does this fall back to a bounded lookup of the user's first membership. This
- * preserves the "stored selection, else first membership" semantics of
- * `active.get` without the `member.list(100)` + `group.get` it performs.
+ * The active-group domain resolves the stored preference, membership fallback,
+ * and grants through one component transaction.
  *
  * @internal
  */
@@ -276,24 +260,9 @@ async function resolveActiveMembership(
   auth: AuthContextResolverLike,
   ctx: AuthQueryCtx,
   userId: string,
-  lastActiveGroup: string | null,
 ): Promise<{ groupId: string | null; roleIds: string[]; grants: string[] }> {
-  if (lastActiveGroup !== null) {
-    const resolved = await auth.member.get(ctx, { userId, groupId: lastActiveGroup });
-    if (resolved.membership) {
-      return { groupId: lastActiveGroup, roleIds: resolved.roleIds, grants: resolved.grants };
-    }
-  }
-  const { page } = await auth.member.list(ctx, {
-    where: { userId },
-    paginationOpts: { numItems: 1, cursor: null },
-    withGrants: true,
-  });
-  const first = page[0];
-  if (first === undefined) {
-    return { groupId: null, roleIds: [], grants: [] };
-  }
-  return { groupId: first.groupId, roleIds: first.roleIds ?? [], grants: first.grants ?? [] };
+  const active = await auth.active.get(ctx, { userId });
+  return active ?? { groupId: null, roleIds: [], grants: [] };
 }
 
 /**
@@ -312,9 +281,10 @@ export async function getAuthContextForUser(
   userId: string,
   oauthScopes?: readonly string[],
 ): Promise<AuthContext> {
-  const user = await auth.user.get(ctx, { id: userId });
-  const lastActiveGroup = typeof user?.lastActiveGroup === "string" ? user.lastActiveGroup : null;
-  const resolved = await resolveActiveMembership(auth, ctx, userId, lastActiveGroup);
+  const [user, resolved] = await Promise.all([
+    auth.user.get(ctx, { id: userId }),
+    resolveActiveMembership(auth, ctx, userId),
+  ]);
   const groupId = resolved.groupId;
   const role = groupId === null ? null : (resolved.roleIds[0] ?? null);
   const grants = groupId === null ? [] : resolved.grants;

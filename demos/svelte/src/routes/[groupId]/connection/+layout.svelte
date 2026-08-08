@@ -4,7 +4,7 @@
   import { page } from "$app/state";
   import { goto } from "$app/navigation";
   import { base } from "$app/paths";
-  import { useConvexAuth } from "@robelest/convex-auth/svelte";
+  import { useConvexAuth } from "@estifanos-sh/convex-auth/svelte";
   import { api } from "$convex/_generated/api.js";
   import type { AppContext } from "$lib/app";
   import AppLoading from "$lib/components/AppLoading.svelte";

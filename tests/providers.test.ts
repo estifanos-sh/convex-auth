@@ -15,22 +15,23 @@
  * to stay hermetic.
  */
 
-import { apple } from "@robelest/convex-auth/providers/apple";
-import { credentials } from "@robelest/convex-auth/providers/credentials";
-import { custom } from "@robelest/convex-auth/providers/custom";
-import { github } from "@robelest/convex-auth/providers/github";
-import { google } from "@robelest/convex-auth/providers/google";
+import { apple } from "@estifanos-sh/convex-auth/providers/apple";
+import { credentials } from "@estifanos-sh/convex-auth/providers/credentials";
+import { custom } from "@estifanos-sh/convex-auth/providers/custom";
+import { github } from "@estifanos-sh/convex-auth/providers/github";
+import { google } from "@estifanos-sh/convex-auth/providers/google";
 import {
   anonymous,
   connection,
   device,
   email,
-  passkey,
+  webauthn,
   phone,
   totp,
-} from "@robelest/convex-auth/providers/index";
-import { microsoft } from "@robelest/convex-auth/providers/microsoft";
-import { password } from "@robelest/convex-auth/providers/password";
+} from "@estifanos-sh/convex-auth/providers/index";
+import { microsoft } from "@estifanos-sh/convex-auth/providers/microsoft";
+import { password } from "@estifanos-sh/convex-auth/providers/password";
+import * as providers from "@estifanos-sh/convex-auth/providers/index";
 import { expect, test } from "vite-plus/test";
 
 // Importing the convex setup for its side effect: it seeds CONVEX_SITE_URL /
@@ -327,7 +328,7 @@ test("phone() defaults id/type and a 20-minute maxAge", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Factor / flow providers (totp / passkey / device / connection)
+// Factor / flow providers (totp / WebAuthn / device / connection)
 // ---------------------------------------------------------------------------
 
 test("totp() emits documented defaults (ConvexAuth issuer, 6 digits, 30s)", () => {
@@ -342,33 +343,76 @@ test("totp() forwards issuer/digits/period overrides", () => {
   expect(provider.options).toEqual({ issuer: "My App", digits: 8, period: 60 });
 });
 
-test("passkey() emits secure WebAuthn defaults", () => {
-  const provider = passkey();
-  expect(provider.id).toBe("passkey");
-  expect(provider.type).toBe("passkey");
-  expect(provider.options).toMatchObject({
-    attestation: "none",
-    userVerification: "required",
-    residentKey: "preferred",
-    algorithms: [-7, -257],
+test("webauthn() emits secure ceremony defaults", () => {
+  const provider = webauthn();
+  expect(provider.id).toBe("webauthn");
+  expect(provider.type).toBe("webauthn");
+  expect(provider.options).toEqual({
+    rpName: undefined,
+    rpId: undefined,
+    origin: undefined,
     challengeExpirationMs: 300_000,
+    registration: {
+      residentKey: "preferred",
+      userVerification: "required",
+      algorithms: [-7, -257],
+    },
+    authentication: {
+      userVerification: "required",
+    },
   });
 });
 
-test("passkey() merges caller options over the defaults", () => {
-  const provider = passkey({
-    rpName: "My App",
-    rpId: "app.example",
-    userVerification: "preferred",
+test("webauthn() keeps registration and authentication overrides independent", () => {
+  const provider = webauthn({
+    rpName: "Staff access",
+    rpId: "staff.example",
+    origin: "https://staff.example",
+    registration: {
+      authenticatorAttachment: "cross-platform",
+      residentKey: "discouraged",
+      userVerification: "required",
+      hints: ["security-key"],
+    },
+    authentication: {
+      userVerification: "preferred",
+      hints: ["security-key"],
+    },
   });
-  expect(provider.options).toMatchObject({
-    rpName: "My App",
-    rpId: "app.example",
-    userVerification: "preferred",
-    // Untouched defaults still present.
-    attestation: "none",
+  expect(provider.options.registration).toEqual({
+    authenticatorAttachment: "cross-platform",
+    residentKey: "discouraged",
+    userVerification: "required",
+    hints: ["security-key"],
     algorithms: [-7, -257],
   });
+  expect(provider.options.authentication).toEqual({
+    userVerification: "preferred",
+    hints: ["security-key"],
+  });
+});
+
+test("webauthn() carries a strict FIDO MDS policy inside registration", () => {
+  const attestation = webauthn.attestation.fidoMds({
+    allowedAaguids: ["2FC0579F-8113-47EA-B116-BB5A8DB9202A"],
+  });
+  const provider = webauthn({ registration: { attestation } });
+
+  expect(provider.options.registration.attestation).toBe(attestation);
+  expect(provider.options.registration.attestation?.conveyance).toBe("direct");
+  expect(provider.options.registration.attestation?.verifier.id).toBe("fido-mds-v3");
+});
+
+test("FIDO MDS is namespaced under the WebAuthn provider", () => {
+  expect(providers).not.toHaveProperty("fidoMds");
+  expect(providers.webauthn.attestation.fidoMds).toBeTypeOf("function");
+});
+
+test("webauthn.attestation.fidoMds() rejects an empty or malformed AAGUID allow list", () => {
+  expect(() => webauthn.attestation.fidoMds({ allowedAaguids: [] })).toThrow("at least one AAGUID");
+  expect(() => webauthn.attestation.fidoMds({ allowedAaguids: ["not-an-aaguid"] })).toThrow(
+    "Invalid AAGUID",
+  );
 });
 
 test("device() emits RFC 8628 defaults (charset/length/expiry/interval)", () => {

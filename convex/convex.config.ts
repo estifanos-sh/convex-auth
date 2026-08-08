@@ -1,7 +1,7 @@
 import resend from "@convex-dev/resend/convex.config";
 import staticHosting from "@convex-dev/static-hosting/convex.config";
-import auth from "@robelest/convex-auth/convex.config";
-import { authEnv } from "@robelest/convex-auth/server";
+import auth from "@estifanos-sh/convex-auth/convex.config";
+import { authEnv } from "@estifanos-sh/convex-auth/server";
 import { defineApp } from "convex/server";
 
 const app = defineApp({

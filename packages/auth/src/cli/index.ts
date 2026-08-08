@@ -159,9 +159,9 @@ const flagDefs = new Map<string, { type: "string" | "boolean"; description: stri
 
 function printHelp() {
   printBanner();
-  console.log("  Add code and set environment variables for @robelest/convex-auth.\n");
-  console.log("  Full docs: https://convex-auth.estifanos.com");
-  console.log("  Agent skills: npx skills add robelest/convex-auth --all\n");
+  console.log("  Add code and set environment variables for @estifanos-sh/convex-auth.\n");
+  console.log("  Full docs: https://estifanos.sh/convex-auth");
+  console.log("  Agent skills: npx skills add estifanos-sh/convex-auth --all\n");
   console.log("  Commands:\n");
   console.log("    setup                         Scaffold files and set env vars");
   console.log("    doctor                        Verify env, files, and mounted auth endpoints");
@@ -695,8 +695,8 @@ async function configureConvexConfig(config: ProjectConfig) {
   logStep(config, "Configure convex config file");
   const sourceTemplate = `\
 import { defineApp } from "convex/server";
-import auth from "@robelest/convex-auth/convex.config";
-import { authEnv } from "@robelest/convex-auth/server";
+import auth from "@estifanos-sh/convex-auth/convex.config";
+import { authEnv } from "@estifanos-sh/convex-auth/server";
 
 const app = defineApp({ env: authEnv });
 
@@ -735,7 +735,7 @@ export default app;
 async function initializeAuth(config: ProjectConfig) {
   logStep(config, "Initialize auth file");
   const sourceTemplate = `\
-import { defineAuth } from "@robelest/convex-auth/server";
+import { defineAuth } from "@estifanos-sh/convex-auth/server";
 import { components } from "./_generated/api";
 
 const auth = defineAuth(components.auth, {$$
@@ -807,7 +807,7 @@ export default auth.http();
 async function initializeAuthCore(config: ProjectConfig) {
   logStep(config, "Initialize auth/core file");
   const sourceTemplate = `\
-import { createAuthContext } from "@robelest/convex-auth/core";
+import { createAuthContext } from "@estifanos-sh/convex-auth/core";
 import { components } from "../_generated/api";
 
 export const auth = createAuthContext(components.auth);
@@ -1099,7 +1099,7 @@ function readPackageJson(): PackageJSON {
     return JSON.parse(data);
   } catch (error: unknown) {
     logErrorAndExit(
-      "`@robelest/convex-auth` must be run from a project directory which " +
+      "`@estifanos-sh/convex-auth` must be run from a project directory which " +
         'includes a valid "package.json" file. You can create one by running ' +
         "`npm init`.",
       error instanceof Error ? error.message : String(error),
@@ -1243,8 +1243,8 @@ function printFinalSuccessMessage(config: ProjectConfig) {
     p.log.success(`Production setup complete for ${deploymentName}.`);
     p.note(
       [
-        "Full docs: https://convex-auth.estifanos.com",
-        "Agent skills: npx skills add robelest/convex-auth --all",
+        "Full docs: https://estifanos.sh/convex-auth",
+        "Agent skills: npx skills add estifanos-sh/convex-auth --all",
       ].join("\n"),
     );
   } else {
@@ -1252,14 +1252,14 @@ function printFinalSuccessMessage(config: ProjectConfig) {
     p.note(
       [
         "To set up production, run:",
-        '  npx @robelest/convex-auth --prod --app-url "https://myapp.com"',
+        '  npx @estifanos-sh/convex-auth --prod --app-url "https://myapp.com"',
         "",
         "Don't forget to set provider secrets on production too:",
         '  npx convex env set --prod AUTH_GITHUB_ID "..."',
         '  npx convex env set --prod AUTH_GITHUB_SECRET "..."',
         "",
-        "Full docs: https://convex-auth.estifanos.com",
-        "Agent skills: npx skills add robelest/convex-auth --all",
+        "Full docs: https://estifanos.sh/convex-auth",
+        "Agent skills: npx skills add estifanos-sh/convex-auth --all",
       ].join("\n"),
       "Next steps",
     );

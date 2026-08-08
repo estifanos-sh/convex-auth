@@ -67,10 +67,10 @@ jobs:
         run: vp run fmt:check
 
       - name: Spellcheck docs
-        run: vp run '@robelest/convex-auth#spellcheck'
+        run: vp run '@estifanos-sh/convex-auth#spellcheck'
 
       - name: Check component pagination
-        run: vp run '@robelest/convex-auth#check:component-paginate'
+        run: vp run '@estifanos-sh/convex-auth#check:component-paginate'
 
       - name: Stop self-hosted Convex backend
         if: always()

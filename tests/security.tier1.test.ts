@@ -1,8 +1,8 @@
 import { components } from "@convex/_generated/api";
 import schema from "@convex/schema";
-import { safeParseXml } from "@robelest/convex-auth/server/connection/saml";
-import { decryptSecret } from "@robelest/convex-auth/server/secret";
-import { setURLSearchParam } from "@robelest/convex-auth/server/redirects";
+import { safeParseXml } from "@estifanos-sh/convex-auth/server/connection/saml";
+import { decryptSecret } from "@estifanos-sh/convex-auth/server/secret";
+import { setURLSearchParam } from "@estifanos-sh/convex-auth/server/redirects";
 import { ConvexError } from "convex/values";
 import { expect, test } from "vite-plus/test";
 

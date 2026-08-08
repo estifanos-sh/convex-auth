@@ -1,7 +1,13 @@
-import { definePermissions } from "@robelest/convex-auth/permissions";
+import { definePermissions } from "@estifanos-sh/convex-auth/permissions";
+import type {
+  AuthApiRefs,
+  ParamsForProvider,
+  PlatformAuthClient,
+} from "@estifanos-sh/convex-auth/client";
+import { webauthn } from "@estifanos-sh/convex-auth/providers/webauthn";
 // @ts-expect-error createAuth was hard-cut from the vNext public server API.
-import { createAuth } from "@robelest/convex-auth/server";
-import { authEnv, authEvents, defineAuth, type AuthEnv } from "@robelest/convex-auth/server";
+import { createAuth } from "@estifanos-sh/convex-auth/server";
+import { authEnv, authEvents, defineAuth, type AuthEnv } from "@estifanos-sh/convex-auth/server";
 import { defineApp, type HttpRouter } from "convex/server";
 import { v, type GenericId } from "convex/values";
 
@@ -25,6 +31,43 @@ const optionalProviderEnvironment: string | undefined = authEnvironment.AUTH_GIT
 declare const authComponent: Parameters<typeof defineAuth>[0];
 declare const authUserId: GenericId<"User">;
 declare const authGroupId: GenericId<"Group">;
+declare const webauthnClient: PlatformAuthClient<AuthApiRefs<true, false, false>>;
+
+void webauthnClient.webauthn.register({ name: "Security key" });
+void webauthnClient.webauthn.signIn();
+
+type Assert<T extends true> = T;
+type IsNever<T> = [T] extends [never] ? true : false;
+type _DirectWebAuthnSignInIsDisabled = Assert<IsNever<ParamsForProvider<"webauthn">>>;
+type _PasskeyClientWasRemoved = Assert<
+  "passkey" extends keyof typeof webauthnClient ? false : true
+>;
+type UnknownFactorClient = Pick<
+  PlatformAuthClient<AuthApiRefs<boolean, boolean, boolean>>,
+  "webauthn" | "totp" | "device"
+>;
+const optionalFactors: UnknownFactorClient = {};
+void optionalFactors.webauthn?.signIn();
+void optionalFactors.totp?.setup();
+void optionalFactors.device?.verify({ code: "ABCD-EFGH" });
+
+const readonlyOrigins = ["https://app.example.com"] as const;
+const readonlyWebAuthnHints = ["security-key"] as const;
+const readonlyWebAuthnAlgorithms = [-7, -257] as const;
+void webauthn({
+  origin: readonlyOrigins,
+  registration: {
+    hints: readonlyWebAuthnHints,
+    algorithms: readonlyWebAuthnAlgorithms,
+  },
+  authentication: { hints: readonlyWebAuthnHints },
+});
+webauthn({
+  registration: {
+    // @ts-expect-error The verifier supports only ES256 (-7) and RS256 (-257).
+    algorithms: [-8],
+  },
+});
 
 const permissions = definePermissions({
   grants: ["issues.read", "issues.write"],
@@ -73,6 +116,8 @@ void defineAuth(authComponent, {
 
 void auth.user.get(readCtx, { id: userId });
 void auth.user.update(userUpdateCtx, { id: userId, patch: { name: "Alice" } });
+// @ts-expect-error user deletion is always a complete auth-owned cascade.
+void auth.user.remove(userUpdateCtx, { id: userId, cascade: false });
 void auth.member.create(memberCreateCtx, {
   data: { groupId, userId, roleIds: ["orgAdmin"] },
 });
@@ -88,6 +133,38 @@ void auth.event.list(eventCtx, {
       .eq("outcome", "success"),
   paginationOpts: { numItems: 10, cursor: null },
 });
+
+void auth.provider.signIn;
+void auth.event.emit;
+void auth.factor.list;
+void auth.factor.update;
+void auth.factor.remove;
+void auth.group.active.reset;
+void auth.request.routes();
+
+// @ts-expect-error route-table internals are replaced by stable descriptors.
+void auth.request.router;
+
+// @ts-expect-error credential primitives are provider-callback internals.
+void auth.account.create;
+
+// @ts-expect-error account linking must complete through a verified provider ceremony.
+void auth.account.link;
+
+// @ts-expect-error raw TOTP documents include credential material.
+void auth.account.totp;
+
+// @ts-expect-error authorization-code consumption is owned by the token endpoint.
+void auth.oauth.code;
+
+// @ts-expect-error refresh-token minting and exchange are wire-protocol internals.
+void auth.oauth.refresh;
+
+// @ts-expect-error client-secret verification is owned by the token endpoint.
+void auth.oauth.client.verify;
+
+// @ts-expect-error registration-token verification is owned by RFC 7592 endpoints.
+void auth.oauth.client.verifyRegistrationToken;
 
 const readOnlyPermissions = definePermissions({
   grants: ["issues.read"],

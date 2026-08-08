@@ -200,7 +200,7 @@ function createRuntimeClient(config: CustomOAuthConfig): OAuthRuntimeClient {
  *
  * @example
  * ```ts
- * import { custom } from "@robelest/convex-auth/providers";
+ * import { custom } from "@estifanos-sh/convex-auth/providers";
  *
  * custom({
  *   id: "workos",

@@ -10,7 +10,7 @@
 import { v } from "convex/values";
 
 import { mutation, query } from "../functions";
-import { vRefreshTokenDoc } from "../model";
+import { vRefreshTokenDoc, vUserDoc } from "../model";
 
 /**
  * Upper bound on a session's RefreshToken rows deleted in one cleanup. The
@@ -121,6 +121,7 @@ const refreshSessionExchangeResult = v.union(
   v.object({
     status: v.literal("rotated"),
     userId: v.id("User"),
+    user: vUserDoc,
     sessionId: v.id("Session"),
     refreshTokenId: v.id("RefreshToken"),
   }),
@@ -180,6 +181,11 @@ export const exchange = mutation({
       await cleanupSessionArtifacts();
       return { status: "invalid" as const };
     }
+    const user = await ctx.db.get("User", session.userId);
+    if (user === null) {
+      await cleanupSessionArtifacts();
+      return { status: "invalid" as const };
+    }
 
     const issueRefreshToken = () =>
       ctx.db.insert("RefreshToken", {
@@ -196,6 +202,7 @@ export const exchange = mutation({
       return {
         status: "rotated" as const,
         userId: session.userId,
+        user,
         sessionId: args.sessionId,
         refreshTokenId,
       };
@@ -216,6 +223,7 @@ export const exchange = mutation({
       return {
         status: "rotated" as const,
         userId: session.userId,
+        user,
         sessionId: args.sessionId,
         refreshTokenId: activeRefreshToken._id,
       };
@@ -226,6 +234,7 @@ export const exchange = mutation({
       return {
         status: "rotated" as const,
         userId: session.userId,
+        user,
         sessionId: args.sessionId,
         refreshTokenId,
       };

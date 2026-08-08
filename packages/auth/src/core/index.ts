@@ -1,5 +1,5 @@
 /**
- * Lightweight auth context entry point for `@robelest/convex-auth/core`.
+ * Lightweight auth context entry point for `@estifanos-sh/convex-auth/core`.
  *
  * Provides auth context resolution, user/session/member/group lookups,
  * and authorization helpers without pulling in provider implementations,
@@ -36,8 +36,8 @@ export type { AuthContext, OptionalAuthContext, UserDoc, AuthContextConfig };
 /**
  * Create a lightweight auth context object.
  *
- * Returns the same `user`, `session`, `member`, `group`, `account`,
- * `invite`, `key`, `context`, and `ctx` APIs as `defineAuth`, but
+ * Returns the same app-facing `user`, `session`, `member`, `group`, `account`,
+ * `factor`, `invite`, `key`, `context`, and `ctx` APIs as `defineAuth`, but
  * without `signIn`, `signOut`, `store`, `http`, or provider logic.
  *
  * Use this in query/mutation files that only need to resolve the
@@ -46,7 +46,7 @@ export type { AuthContext, OptionalAuthContext, UserDoc, AuthContextConfig };
  * @example
  * ```ts
  * // convex/auth-core.ts
- * import { createAuthContext } from "@robelest/convex-auth/core";
+ * import { createAuthContext } from "@estifanos-sh/convex-auth/core";
  * import { components } from "./_generated/api";
  *
  * export const auth = createAuthContext(components.auth);
@@ -97,7 +97,8 @@ export function createAuthContext(
   return {
     user: domains.user,
     session: domains.session,
-    account: domains.account,
+    account: domains.accountManagement,
+    factor: domains.factor,
     group: { ...domains.group, active: domains.active },
     member: domains.member,
     invite: domains.invite,

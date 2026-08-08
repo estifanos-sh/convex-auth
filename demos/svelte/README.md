@@ -1,45 +1,36 @@
-# sv
+# convex-auth Svelte demo
 
-Everything you need to build a Svelte project, powered by
-[`sv`](https://github.com/sveltejs/cli).
+The live demo for `@estifanos-sh/convex-auth`, served at
+[estifanos.sh/convex-auth/demo/](https://estifanos.sh/convex-auth/demo/).
+It is a SvelteKit static SPA backed by the repository's root Convex deployment.
 
-## Creating a project
+## Work locally
 
-If you're seeing this, you've probably already done this step. Congrats!
+Run commands from the repository root:
 
-```sh
-# create a new project
-npx sv create my-app
+```bash
+vp install
+vp run dev:svelte
 ```
 
-To recreate this project with the same configuration:
+Start the Convex development process separately. The Svelte app reads the root
+environment files and generated Convex API.
 
-```sh
-# recreate this project
-pnpm dlx sv@0.12.8 create --template minimal --types ts --add sveltekit-adapter="adapter:cloudflare+cfTarget:workers" tailwindcss="plugins:none" --install pnpm svelte
+## Validate
+
+```bash
+vp run check:demo
+vp run build:demo
 ```
 
-## Developing
+The app uses `/demo` as its SvelteKit base path so the documentation and demo
+can share one Convex static-hosting origin.
 
-Once you've created a project and installed dependencies with `npm install` (or
-`pnpm install` or `yarn`), start a development server:
+## Deploy
 
-```sh
-npm run dev
-
-# or start the server and open the app in a new browser tab
-npm run dev -- --open
+```bash
+vp run deploy:demo
 ```
 
-## Building
-
-To create a production version of your app:
-
-```sh
-npm run build
-```
-
-You can preview the production build with `npm run preview`.
-
-> To deploy your app, you may need to install an
-> [adapter](https://svelte.dev/docs/kit/adapters) for your target environment.
+This deploys the production Convex backend and uploads `demos/svelte/build` to
+Convex static hosting. Use `vp run deploy:demo:dev` for a development upload.

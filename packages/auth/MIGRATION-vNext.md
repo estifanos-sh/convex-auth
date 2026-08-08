@@ -6,6 +6,27 @@ typed app env, and permissions-first group authorization.
 
 This is a hard breaking cut: removed names are not kept as compatibility aliases.
 
+## WebAuthn provider and client
+
+The protocol-level provider and client surface is now named `webauthn`.
+Credential resources remain passkeys in storage, while current-user management
+moves to the sanitized `auth.factor` namespace. The Account
+credential-resource identifier remains `passkey`.
+
+```ts
+// Before
+providers: [passkey()];
+await client.passkey.signIn();
+
+// After
+providers: [webauthn()];
+await client.webauthn.signIn();
+```
+
+Provider preferences are grouped by ceremony under `registration` and
+`authentication`. Existing Passkey and Account credential storage is preserved;
+no data migration is required.
+
 ## Setup: `defineAuth` and `definePermissions`
 
 The preferred vNext setup surface is `defineAuth`. It keeps providers,
@@ -13,8 +34,8 @@ permissions, table extensions, and HTTP intent on one typed auth definition.
 
 ```ts
 // Before
-import { defineRoles } from "@robelest/convex-auth/authorization";
-import { createAuth } from "@robelest/convex-auth/server";
+import { defineRoles } from "@estifanos-sh/convex-auth/authorization";
+import { createAuth } from "@estifanos-sh/convex-auth/server";
 
 export const roles = defineRoles({
   admin: {
@@ -31,8 +52,8 @@ export const auth = createAuth(components.auth, {
 
 ```ts
 // vNext
-import { defineAuth } from "@robelest/convex-auth/server";
-import { definePermissions } from "@robelest/convex-auth/permissions";
+import { defineAuth } from "@estifanos-sh/convex-auth/server";
+import { definePermissions } from "@estifanos-sh/convex-auth/permissions";
 
 export const permissions = definePermissions({
   grants: ["members.read", "sso.connection.manage"],
@@ -120,8 +141,8 @@ Import `authEnv` into your app definition and read generated env values from
 ```ts
 // convex/convex.config.ts
 import { defineApp } from "convex/server";
-import { authEnv } from "@robelest/convex-auth/server";
-import auth from "@robelest/convex-auth/convex.config";
+import { authEnv } from "@estifanos-sh/convex-auth/server";
+import auth from "@estifanos-sh/convex-auth/convex.config";
 
 const app = defineApp({ env: authEnv });
 app.use(auth, { name: "auth" });

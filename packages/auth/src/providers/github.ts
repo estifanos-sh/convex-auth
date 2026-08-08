@@ -2,7 +2,7 @@
  * GitHub OAuth provider.
  *
  * ```ts
- * import { github } from "@robelest/convex-auth/providers/github";
+ * import { github } from "@estifanos-sh/convex-auth/providers/github";
  *
  * github({
  *   clientId: env.AUTH_GITHUB_ID!,
@@ -61,7 +61,7 @@ export interface GitHubConfig {
  *
  * @example
  * ```ts
- * import { github } from "@robelest/convex-auth/providers/github";
+ * import { github } from "@estifanos-sh/convex-auth/providers/github";
  *
  * github({
  *   clientId: env.AUTH_GITHUB_ID!,

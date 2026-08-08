@@ -8,10 +8,74 @@
 
 import { v } from "convex/values";
 
+import type { Id } from "./_generated/dataModel";
+import type { MutationCtx } from "./_generated/server";
 import { mutation, query } from "./functions";
-import { vSessionDoc } from "./model";
+import { vSessionDoc, vUserDoc } from "./model";
 
 const SESSION_TOKEN_DELETE_BATCH = 1024;
+
+type CreateSessionArgs = {
+  userId: Id<"User">;
+  sessionId?: Id<"Session">;
+  replaceSessionId?: Id<"Session">;
+  sessionExpirationTime: number;
+  refreshTokenExpirationTime?: number;
+};
+
+/**
+ * Create or rotate session rows inside an existing component mutation.
+ *
+ * Keeping the database work in a plain helper lets factor-specific completion
+ * mutations commit their anti-replay state and the new session atomically,
+ * without nesting another `ctx.runMutation` transaction.
+ *
+ * @internal
+ */
+export async function createSessionRows(ctx: MutationCtx, args: CreateSessionArgs) {
+  const user = await ctx.db.get("User", args.userId);
+  if (user === null) return null;
+
+  let sessionId = args.sessionId;
+  let replacedSessionId = args.replaceSessionId;
+
+  if (sessionId === undefined) {
+    if (replacedSessionId !== undefined) {
+      const existingSession = await ctx.db.get("Session", replacedSessionId);
+      if (existingSession !== null) {
+        await ctx.db.delete("Session", replacedSessionId);
+      } else {
+        replacedSessionId = undefined;
+      }
+
+      const existingTokens = await ctx.db
+        .query("RefreshToken")
+        .withIndex("session_id", (q) => q.eq("sessionId", args.replaceSessionId!))
+        .take(SESSION_TOKEN_DELETE_BATCH);
+      await Promise.all(existingTokens.map((token) => ctx.db.delete("RefreshToken", token._id)));
+    }
+
+    sessionId = await ctx.db.insert("Session", {
+      userId: user._id,
+      expirationTime: args.sessionExpirationTime,
+    });
+  }
+
+  const refreshTokenId =
+    args.refreshTokenExpirationTime === undefined
+      ? undefined
+      : await ctx.db.insert("RefreshToken", {
+          sessionId,
+          expirationTime: args.refreshTokenExpirationTime,
+        });
+
+  return {
+    user,
+    sessionId,
+    ...(refreshTokenId === undefined ? {} : { refreshTokenId }),
+    ...(replacedSessionId === undefined ? {} : { replacedSessionId }),
+  };
+}
 
 /** Read a session by id. */
 export const get = query({
@@ -56,45 +120,17 @@ export const create = mutation({
     sessionId: v.id("Session"),
     refreshTokenId: v.optional(v.id("RefreshToken")),
     replacedSessionId: v.optional(v.id("Session")),
+    user: vUserDoc,
   }),
   handler: async (ctx, args) => {
-    let sessionId = args.sessionId;
-    let replacedSessionId: typeof args.replaceSessionId;
-
-    if (sessionId === undefined) {
-      if (args.replaceSessionId !== undefined) {
-        const existingSession = await ctx.db.get("Session", args.replaceSessionId);
-        if (existingSession !== null) {
-          await ctx.db.delete("Session", args.replaceSessionId);
-          replacedSessionId = args.replaceSessionId;
-        }
-
-        const existingTokens = await ctx.db
-          .query("RefreshToken")
-          .withIndex("session_id", (q) => q.eq("sessionId", args.replaceSessionId!))
-          .take(SESSION_TOKEN_DELETE_BATCH);
-        await Promise.all(existingTokens.map((token) => ctx.db.delete("RefreshToken", token._id)));
-      }
-
-      sessionId = await ctx.db.insert("Session", {
-        userId: args.userId,
-        expirationTime: args.sessionExpirationTime,
-      });
+    const created = await createSessionRows(ctx, args);
+    if (created === null) {
+      throw new Error(`Cannot create a session for missing user ${args.userId}`);
     }
-
-    const refreshTokenId =
-      args.refreshTokenExpirationTime === undefined
-        ? undefined
-        : await ctx.db.insert("RefreshToken", {
-            sessionId: sessionId,
-            expirationTime: args.refreshTokenExpirationTime,
-          });
 
     return {
       userId: args.userId,
-      sessionId,
-      ...(refreshTokenId === undefined ? {} : { refreshTokenId }),
-      ...(replacedSessionId === undefined ? {} : { replacedSessionId }),
+      ...created,
     };
   },
 });

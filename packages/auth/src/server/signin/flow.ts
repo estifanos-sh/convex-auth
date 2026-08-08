@@ -1,4 +1,5 @@
 import { GenericId, ConvexError, type Value } from "convex/values";
+import type { CredentialsAuthorizeResult } from "../../providers/credentials";
 
 import { assertNever } from "../../shared/brand";
 import { authFlowError } from "../../shared/errors";
@@ -21,7 +22,7 @@ import {
   callVerifier,
   callVerifyCodeAndSignIn,
 } from "../mutations/calls";
-import { handlePasskey } from "../passkey";
+import { handleWebAuthn } from "../webauthn";
 import type { SignInParams } from "../payloads";
 import { generateRandomString } from "../random";
 import { redirectAbsoluteUrl, setURLSearchParam } from "../redirects";
@@ -195,8 +196,8 @@ export async function signInImpl(
           return handleCredentials(ctx, resolvedProvider, args, options);
         case "oauth":
           return handleOAuthProvider(ctx, resolvedProvider, args, options);
-        case "passkey":
-          return handlePasskey(ctx, resolvedProvider, args);
+        case "webauthn":
+          return handleWebAuthn(ctx, resolvedProvider, args);
         case "totp":
           return handleTotp(ctx, resolvedProvider, args);
         case "device":
@@ -333,7 +334,7 @@ async function handleCredentials(
   },
 ): Promise<SignInSessionResult<SessionInfo<AuthTokens | null> | null> | SignInTotpChallengeResult> {
   return withSpan("convex-auth.signin.credentials", {}, async () => {
-    let result;
+    let result: CredentialsAuthorizeResult;
     try {
       result = await withSpan(
         "convex-auth.signin.credentials.authorize",
@@ -361,6 +362,30 @@ async function handleCredentials(
         | SignInTotpChallengeResult;
     }
 
+    if ("provision" in result) {
+      const { provision, hasTotp } = result;
+      try {
+        const provisioned = await withSpan(
+          "convex-auth.signin.credentials.provision",
+          { providerId: provider.id },
+          () =>
+            ctx.auth.account.create(ctx, {
+              provider: provider.id,
+              account: provision.account,
+              profile: provision.profile,
+              shouldLinkViaEmail: provision.match?.includes("email"),
+              shouldLinkViaPhone: provision.match?.includes("phone"),
+            }),
+        );
+        result = {
+          userId: provisioned.account.userId as GenericId<"User">,
+          hasTotp,
+        };
+      } catch (error) {
+        throw asConvexError(error, "INTERNAL_ERROR", "Failed to provision credentials account.");
+      }
+    }
+
     const hintedHasTotp = result.hasTotp;
     const preIssuedIssuance = result.issuance;
 
@@ -385,22 +410,6 @@ async function handleCredentials(
     }
 
     if (hasTotpEnrolled) {
-      if (preIssuedIssuance === undefined) {
-        try {
-          await withSpan(
-            "convex-auth.signin.credentials.issue-session",
-            { generateTokens: false, totpStepUp: true },
-            () =>
-              callSignIn(ctx, {
-                userId: result.userId,
-                sessionId: result.sessionId,
-                generateTokens: false,
-              }),
-          );
-        } catch (error) {
-          throw asConvexError(error, "INTERNAL_ERROR", "Failed to start TOTP sign-in.");
-        }
-      }
       let verifier: string;
       try {
         verifier = await callVerifier(ctx, JSON.stringify({ userId: result.userId }));

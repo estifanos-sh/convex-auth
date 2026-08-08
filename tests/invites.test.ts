@@ -2,12 +2,11 @@ import { api, components } from "@convex/_generated/api";
 import type { DataModel } from "@convex/_generated/dataModel";
 import { auth as backendAuth } from "@convex/auth";
 import schema from "@convex/schema";
-import { client } from "@robelest/convex-auth/client";
+import { client } from "@estifanos-sh/convex-auth/client";
 import { decodeJwt } from "jose";
 import { afterEach, expect, test, vi } from "vite-plus/test";
 
 import { convexTest, type TestConvexForDataModel } from "./convex/setup";
-import { subjectToUserId } from "./helpers";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -37,12 +36,13 @@ test("token invite acceptance allows matching unverified email", async () => {
     email: inviteEmail,
   });
 
-  const result = await t.run(async (ctx) => {
-    return await backendAuth.invite.token.accept(ctx as any, {
-      token,
-      acceptedByUserId: subjectToUserId(claims.sub),
+  const result = await t
+    .withIdentity({ subject: claims.sub!, sid: "invite-1" as any })
+    .run(async (ctx) => {
+      return await backendAuth.invite.token.accept(ctx as any, {
+        token,
+      });
     });
-  });
 
   expect(result.inviteId).toBe(inviteId);
   expect(result.inviteStatus).toBe("accepted");
@@ -79,10 +79,9 @@ test("token invite acceptance still rejects mismatched email", async () => {
   });
 
   await expect(async () => {
-    await t.run(async (ctx) => {
+    await t.withIdentity({ subject: claims.sub!, sid: "invite-2" as any }).run(async (ctx) => {
       return await backendAuth.invite.token.accept(ctx as any, {
         token,
-        acceptedByUserId: subjectToUserId(claims.sub),
       });
     });
   }).rejects.toThrow("Invite email does not match accepting user's email");
@@ -150,12 +149,13 @@ test("proxy sign up can immediately accept invite", async () => {
   const snapshot = auth.getSnapshot();
   const claims = decodeJwt(snapshot.status === "signedIn" ? snapshot.token : "");
   expect(typeof claims.sub).toBe("string");
-  const acceptResult = await t.run(async (ctx) => {
-    return await backendAuth.invite.token.accept(ctx as any, {
-      token: inviteToken,
-      acceptedByUserId: subjectToUserId(claims.sub),
+  const acceptResult = await t
+    .withIdentity({ subject: claims.sub!, sid: "invite-3" as any })
+    .run(async (ctx) => {
+      return await backendAuth.invite.token.accept(ctx as any, {
+        token: inviteToken,
+      });
     });
-  });
   expect(acceptResult.inviteStatus).toBe("accepted");
   expect(acceptResult.membershipStatus).toBe("not_applicable");
 

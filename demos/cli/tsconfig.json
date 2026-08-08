@@ -12,8 +12,8 @@
     "noEmit": true,
     "lib": ["ES2022", "DOM"],
     "paths": {
-      "@robelest/convex-auth": ["../../packages/auth/src"],
-      "@robelest/convex-auth/*": ["../../packages/auth/src/*"]
+      "@estifanos-sh/convex-auth": ["../../packages/auth/src"],
+      "@estifanos-sh/convex-auth/*": ["../../packages/auth/src/*"]
     }
   },
   "include": ["src/**/*.ts", "../../convex/_generated/**/*.d.ts"],

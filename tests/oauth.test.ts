@@ -1,11 +1,11 @@
 import { api } from "@convex/_generated/api";
 import schema from "@convex/schema";
-import { custom } from "@robelest/convex-auth/providers";
+import { custom } from "@estifanos-sh/convex-auth/providers";
 import {
   OAUTH_SIGN_IN_CODE_ALPHABET,
   OAUTH_SIGN_IN_CODE_LENGTH,
-} from "@robelest/convex-auth/server/mutations/oauth";
-import { generateRandomString } from "@robelest/convex-auth/server/random";
+} from "@estifanos-sh/convex-auth/server/mutations/oauth";
+import { generateRandomString } from "@estifanos-sh/convex-auth/server/random";
 import { expect, test, vi } from "vite-plus/test";
 
 import { convexTest } from "./convex/setup";

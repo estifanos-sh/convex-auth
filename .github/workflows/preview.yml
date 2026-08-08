@@ -55,7 +55,7 @@ jobs:
         run: |
           vp run typecheck
           vp test --run --project convex --project node
-          vp run '@robelest/convex-auth#build'
+          vp run '@estifanos-sh/convex-auth#build'
 
       - name: Publish PR package preview
         if: github.event_name == 'pull_request'

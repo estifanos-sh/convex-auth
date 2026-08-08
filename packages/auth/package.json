@@ -1,6 +1,6 @@
 {
-  "name": "@robelest/convex-auth",
-  "version": "0.0.4",
+  "name": "@estifanos-sh/convex-auth",
+  "version": "0.0.1-preview.0",
   "description": "Authentication for Convex",
   "keywords": [
     "auth",
@@ -8,18 +8,19 @@
     "authorization",
     "convex"
   ],
-  "homepage": "https://convex-auth.estifanos.com/",
-  "bugs": "https://github.com/robelest/convex-auth/issues",
+  "homepage": "https://estifanos.sh/convex-auth/",
+  "bugs": "https://github.com/estifanos-sh/convex-auth/issues",
   "license": "Apache-2.0",
-  "author": "robelest",
+  "author": "estifanos-sh",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/robelest/convex-auth.git"
+    "url": "git+https://github.com/estifanos-sh/convex-auth.git"
   },
   "bin": {
     "convex-auth": "dist/bin.js"
   },
   "files": [
+    "README.md",
     "dist",
     "!dist/**/*.map",
     "!dist/index.js",
@@ -119,7 +120,7 @@
     "check:component-paginate": "node ../../scripts/check-component-paginate.mjs",
     "docs": "vp run --cwd ../../docs dev",
     "lint": "vp run typecheck",
-    "spellcheck": "cspell \"../../docs/src/routes/**/*.md*\" \"../../skills/**/*.md\"",
+    "spellcheck": "cspell \"../../docs/src/content/**/*.md*\" \"../../skills/**/*.md\"",
     "prepublishOnly": "vp run build && vp run typecheck:consumer && vp run typecheck:consumer:dist && vp run check:packaging",
     "test": "vp test --config ../../vite.config.ts --project convex --project node --project interop",
     "test:once": "vp test --config ../../vite.config.ts --run --project convex --project node --project interop",
@@ -132,14 +133,14 @@
   "dependencies": {
     "@convex-dev/action-cache": "^0.3.0",
     "@convex-dev/migrations": "^0.3.5",
-    "@convex-dev/rate-limiter": "^0.3.2",
-    "@convex-dev/stream": "https://pkg.pr.new/get-convex/stream/@convex-dev/stream@96acc6d",
-    "@convex-dev/workpool": "^0.4.7",
+    "@convex-dev/workpool": "^0.4.9",
     "@noble/hashes": "^2.0.1",
+    "@oslojs/cbor": "^1.0.0",
     "@oslojs/crypto": "^1.0.1",
     "@oslojs/encoding": "^1.1.0",
     "@oslojs/otp": "^1.1.0",
     "@oslojs/webauthn": "^1.0.0",
+    "@simplewebauthn/server": "^13.3.2",
     "@xmldom/xmldom": "^0.8.11",
     "arctic": "^3.7.0",
     "camelcase": "^6.3.0",

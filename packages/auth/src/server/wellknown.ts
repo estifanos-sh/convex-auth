@@ -260,7 +260,7 @@ function changePasswordResponse(
  *
  * @example
  * ```ts
- * import { wellKnown } from "@robelest/convex-auth/server";
+ * import { wellKnown } from "@estifanos-sh/convex-auth/server";
  *
  * export const GET = () => {
  *   const r = wellKnown("assetlinks.json");

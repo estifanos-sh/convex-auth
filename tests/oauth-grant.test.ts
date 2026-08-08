@@ -1,5 +1,5 @@
-import type { OAuthClientDoc } from "@robelest/convex-auth/server/oauth/client";
-import { checkOAuthGrant } from "@robelest/convex-auth/server/oauth/grant";
+import type { OAuthClientDoc } from "@estifanos-sh/convex-auth/server/oauth/client";
+import { checkOAuthGrant } from "@estifanos-sh/convex-auth/server/oauth/grant";
 import { expect, test } from "vite-plus/test";
 
 // Unit coverage for the single source of truth behind every OAuth trust

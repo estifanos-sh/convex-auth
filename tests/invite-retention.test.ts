@@ -9,7 +9,7 @@ import { convexTest, pruneExpiredForTest } from "./convex/setup";
  * (component/maintenance.ts + component/group/invite.ts).
  *
  * These run against the component SOURCE (the test project aliases
- * `@robelest/convex-auth` to `packages/auth/src`), so they exercise the patched
+ * `@estifanos-sh/convex-auth` to `packages/auth/src`), so they exercise the patched
  * behavior directly.
  */
 

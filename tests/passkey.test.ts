@@ -1,10 +1,9 @@
 /**
  * Passkey (WebAuthn) tests.
  *
- * Focus: the passkey verify path is rate-limited (audit finding H9), reaching
- * TOTP parity. Verification attempts against a resolvable credential consume
- * sign-in rate-limit tokens, and once the limit is exhausted the verify flow
- * fails closed with `RATE_LIMITED` — before any signature work.
+ * WebAuthn uses a one-time challenge, proof of private-key possession, and an
+ * atomic signature-counter transition. Unlike password and TOTP verification,
+ * it does not use the guessable-secret limiter on the sign-in critical path.
  */
 
 import { api, components } from "@convex/_generated/api";
@@ -12,6 +11,11 @@ import schema from "@convex/schema";
 import { ConvexError } from "convex/values";
 import { expect, test } from "vite-plus/test";
 
+import {
+  parseBackupState,
+  validateBackupEligibility,
+  validateCredentialAlgorithm,
+} from "../packages/auth/src/server/webauthn";
 import { convexTest } from "./convex/setup";
 
 const RP_ORIGIN = "http://localhost:5173";
@@ -23,11 +27,59 @@ function base64url(input: string) {
   return b64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
-test("passkey verify is rate-limited after the failure threshold", async () => {
+async function assertionAuthenticatorData(deviceFlags = 0x05): Promise<string> {
+  const rpIdHash = new Uint8Array(
+    await crypto.subtle.digest("SHA-256", new TextEncoder().encode("localhost")),
+  );
+  const bytes = new Uint8Array(37);
+  bytes.set(rpIdHash);
+  bytes[32] = deviceFlags;
+  return Buffer.from(bytes).toString("base64url");
+}
+
+async function credentialRateLimitIdentifier(credentialId: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(credentialId));
+  return `webauthn:credential:${Buffer.from(digest).toString("base64url")}`;
+}
+
+async function invalidAssertionCode(
+  t: ReturnType<typeof convexTest>,
+  credentialId: string,
+): Promise<string> {
+  const options = await t.action(api.auth.signIn, {
+    provider: "webauthn",
+    params: { flow: "signIn" },
+  });
+  if (options.kind !== "webauthnOptions") throw new Error("expected webauthnOptions");
+  const challenge = (options.options as { challenge: string }).challenge;
+  const clientDataJSON = base64url(
+    JSON.stringify({ type: "webauthn.get", challenge, origin: RP_ORIGIN, crossOrigin: false }),
+  );
+  const error = await t
+    .action(api.auth.signIn, {
+      provider: "webauthn",
+      params: {
+        flow: "verify",
+        credentialId,
+        clientDataJSON,
+        signature: "AA",
+        authenticatorData: await assertionAuthenticatorData(),
+      },
+      verifier: options.verifier,
+    })
+    .then(
+      () => null,
+      (caught) => caught,
+    );
+  expect(error).toBeInstanceOf(ConvexError);
+  return (error as ConvexError<{ code: string }>).data.code;
+}
+
+test("WebAuthn does not inherit the guessable-secret sign-in limiter", async () => {
   const t = convexTest(schema);
 
   // Seed a user + a resolvable passkey credential.
-  const { userId } = await t.run(async (ctx) => {
+  await t.run(async (ctx) => {
     const userId = (await ctx.runMutation(components.auth.user.create, {
       data: { email: "passkey-rl@example.com" },
     })) as string;
@@ -41,27 +93,27 @@ test("passkey verify is rate-limited after the failure threshold", async () => {
       backedUp: true,
       createdAt: Date.now(),
     });
-    return { userId };
   });
 
-  // Exhaust the sign-in rate limit for this user (token bucket capacity 10).
+  // Exhaust the per-credential sign-in rate limit (token bucket capacity 10).
+  const identifier = await credentialRateLimitIdentifier("rl-credential");
   await t.run(async (ctx) => {
     for (let i = 0; i < DEFAULT_MAX_ATTEMPTS + 2; i++) {
       await ctx.runMutation(components.auth.limits.signInRecord, {
-        identifier: userId,
+        identifier,
         maxAttemptsPerHour: DEFAULT_MAX_ATTEMPTS,
       });
     }
   });
 
-  // Issue a real passkey challenge, then submit a verify for the seeded
-  // credential. The rate-limit gate fires before any signature check.
+  // Issue a real challenge and submit an invalid signature. The unrelated
+  // sign-in bucket must not intercept WebAuthn; its protocol checks still run.
   const options = await t.action(api.auth.signIn, {
-    provider: "passkey",
+    provider: "webauthn",
     params: { flow: "signIn" },
   });
-  expect(options.kind).toBe("passkeyOptions");
-  if (options.kind !== "passkeyOptions") throw new Error("expected passkeyOptions");
+  expect(options.kind).toBe("webauthnOptions");
+  if (options.kind !== "webauthnOptions") throw new Error("expected webauthnOptions");
   const challenge = (options.options as { challenge: string }).challenge;
   const clientDataJSON = base64url(
     JSON.stringify({ type: "webauthn.get", challenge, origin: RP_ORIGIN, crossOrigin: false }),
@@ -69,13 +121,13 @@ test("passkey verify is rate-limited after the failure threshold", async () => {
 
   const error = await t
     .action(api.auth.signIn, {
-      provider: "passkey",
+      provider: "webauthn",
       params: {
         flow: "verify",
         credentialId: "rl-credential",
         clientDataJSON,
         signature: "AA",
-        authenticatorData: "AA",
+        authenticatorData: await assertionAuthenticatorData(0x0d),
       },
       verifier: options.verifier,
     })
@@ -84,33 +136,141 @@ test("passkey verify is rate-limited after the failure threshold", async () => {
       (e) => e,
     );
   expect(error).toBeInstanceOf(ConvexError);
-  expect((error as ConvexError<{ code: string }>).data.code).toBe("RATE_LIMITED");
+  expect((error as ConvexError<{ code: string }>).data.code).toBe("PASSKEY_INVALID_SIGNATURE");
 });
 
-test("passkey verify against an unknown credential is rejected", async () => {
+test("passkey verify against an unknown credential uses the public signature error", async () => {
   const t = convexTest(schema);
 
   const options = await t.action(api.auth.signIn, {
-    provider: "passkey",
+    provider: "webauthn",
     params: { flow: "signIn" },
   });
-  if (options.kind !== "passkeyOptions") throw new Error("expected passkeyOptions");
+  if (options.kind !== "webauthnOptions") throw new Error("expected webauthnOptions");
   const challenge = (options.options as { challenge: string }).challenge;
   const clientDataJSON = base64url(
     JSON.stringify({ type: "webauthn.get", challenge, origin: RP_ORIGIN, crossOrigin: false }),
   );
 
-  await expect(
-    t.action(api.auth.signIn, {
-      provider: "passkey",
+  const error = await t
+    .action(api.auth.signIn, {
+      provider: "webauthn",
       params: {
         flow: "verify",
         credentialId: "does-not-exist",
         clientDataJSON,
         signature: "AA",
+        authenticatorData: await assertionAuthenticatorData(),
+      },
+      verifier: options.verifier,
+    })
+    .then(
+      () => null,
+      (caught) => caught,
+    );
+  expect(error).toBeInstanceOf(ConvexError);
+  expect((error as ConvexError<{ code: string }>).data.code).toBe("PASSKEY_INVALID_SIGNATURE");
+});
+
+test("WebAuthn does not reveal whether an invalid assertion names a stored credential", async () => {
+  const t = convexTest(schema);
+  const knownCredentialId = "known-invalid-signature";
+  const knownRsaCredentialId = "known-rsa-invalid-signature";
+  await t.run(async (ctx) => {
+    const userId = await ctx.runMutation(components.auth.user.create, {
+      data: { email: "known-invalid@example.com" },
+    });
+    await ctx.runMutation(components.auth.factor.passkey.create, {
+      userId,
+      credentialId: knownCredentialId,
+      publicKey: new ArrayBuffer(32),
+      algorithm: -7,
+      counter: 0,
+      deviceType: "singleDevice",
+      backedUp: false,
+      createdAt: Date.now(),
+    });
+    await ctx.runMutation(components.auth.factor.passkey.create, {
+      userId,
+      credentialId: knownRsaCredentialId,
+      publicKey: new ArrayBuffer(32),
+      algorithm: -257,
+      counter: 0,
+      deviceType: "singleDevice",
+      backedUp: false,
+      createdAt: Date.now(),
+    });
+  });
+
+  expect(await invalidAssertionCode(t, "unknown-invalid-signature")).toBe(
+    "PASSKEY_INVALID_SIGNATURE",
+  );
+  expect(await invalidAssertionCode(t, knownCredentialId)).toBe("PASSKEY_INVALID_SIGNATURE");
+  expect(await invalidAssertionCode(t, knownRsaCredentialId)).toBe("PASSKEY_INVALID_SIGNATURE");
+});
+
+test("WebAuthn rejects cross-origin client data before consuming the challenge", async () => {
+  const t = convexTest(schema);
+  const options = await t.action(api.auth.signIn, {
+    provider: "webauthn",
+    params: { flow: "signIn" },
+  });
+  if (options.kind !== "webauthnOptions") throw new Error("expected webauthnOptions");
+  const challenge = (options.options as { challenge: string }).challenge;
+  const clientDataJSON = base64url(
+    JSON.stringify({ type: "webauthn.get", challenge, origin: RP_ORIGIN, crossOrigin: true }),
+  );
+
+  const error = await t
+    .action(api.auth.signIn, {
+      provider: "webauthn",
+      params: {
+        flow: "verify",
+        credentialId: "unused",
+        clientDataJSON,
+        signature: "AA",
         authenticatorData: "AA",
       },
       verifier: options.verifier,
-    }),
-  ).rejects.toThrow(ConvexError);
+    })
+    .then(
+      () => null,
+      (caught) => caught,
+    );
+  expect(error).toBeInstanceOf(ConvexError);
+  expect((error as ConvexError<{ code: string }>).data.code).toBe("PASSKEY_INVALID_CLIENT_DATA");
+
+  const verifier = await t.run((ctx) =>
+    ctx.runQuery(components.auth.token.pkce.get, { id: options.verifier as never }),
+  );
+  expect(verifier).not.toBeNull();
+});
+
+test("WebAuthn derives backup state from signed authenticator flags", () => {
+  const singleDevice = new Uint8Array(33);
+  expect(parseBackupState(singleDevice)).toEqual({
+    deviceType: "singleDevice",
+    backedUp: false,
+  });
+
+  const multiDevice = new Uint8Array(33);
+  multiDevice[32] = 0x08 | 0x10;
+  expect(parseBackupState(multiDevice)).toEqual({
+    deviceType: "multiDevice",
+    backedUp: true,
+  });
+
+  const invalid = new Uint8Array(33);
+  invalid[32] = 0x10;
+  expect(() => parseBackupState(invalid)).toThrow(ConvexError);
+});
+
+test("WebAuthn rejects changed backup eligibility for an existing credential", () => {
+  expect(() => validateBackupEligibility("singleDevice", "singleDevice")).not.toThrow();
+  expect(() => validateBackupEligibility("singleDevice", "multiDevice")).toThrow(ConvexError);
+});
+
+test("WebAuthn rejects a credential algorithm the server did not offer", () => {
+  expect(() => validateCredentialAlgorithm(-7, [-7])).not.toThrow();
+  expect(() => validateCredentialAlgorithm(-257, [-7])).toThrow(ConvexError);
 });

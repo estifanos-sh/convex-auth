@@ -6,6 +6,7 @@ import {
   httpRouter,
   internalMutationGeneric,
 } from "convex/server";
+import type { RouteSpec } from "convex/server";
 import { v } from "convex/values";
 
 import type { AuthTokens, SignInFlowResult } from "../shared/results";
@@ -163,7 +164,7 @@ export type SignOutAction = FunctionReferenceFromExport<ReturnType<typeof Auth>[
  * from `convex/auth.ts` to make them callable:
  *
  * ```ts filename="convex/auth.ts"
- * import { defineAuth } from "@robelest/convex-auth/component";
+ * import { defineAuth } from "@estifanos-sh/convex-auth/component";
  * import { components } from "./_generated/api";
  *
  * export const auth = defineAuth(components.auth, {
@@ -398,23 +399,17 @@ export function Auth(config_: ConvexAuthConfig) {
       }
     },
 
-    /**
-     * Create a Convex HTTP router with auth protocol routes already mounted.
-     *
-     * Defaults to the `/auth` prefix. Use {@link request.mount mount} instead when
-     * you need to compose auth routes with app-specific HTTP routes in the same
-     * router.
-     *
-     * ```ts
-     * import { auth } from "./auth";
-     *
-     * export default auth.http();
-     * ```
-     */
-    router: () => {
+    /** Return stable route descriptors for apps that need to wrap auth handlers. */
+    routes: (): RouteSpec[] => {
       const http = httpRouter();
       request.mount(http);
-      return http;
+      return http
+        .getRoutes()
+        .map(([path, method, handler]) =>
+          path.endsWith("*")
+            ? { pathPrefix: path.slice(0, -1), method, handler }
+            : { path, method, handler },
+        );
     },
 
     /**
@@ -558,7 +553,11 @@ export function Auth(config_: ConvexAuthConfig) {
    * with every auth protocol route mounted via {@link request.mount}, so there is
    * exactly one route table.
    */
-  const http = () => request.router();
+  const http = () => {
+    const router = httpRouter();
+    request.mount(router);
+    return router;
+  };
 
   const { accountUnlink, passkeyDelete, totpDelete } = createFactorUnlinkHelpers(config);
 
@@ -625,7 +624,7 @@ export function Auth(config_: ConvexAuthConfig) {
             };
           case "redirect":
           case "started":
-          case "passkeyOptions":
+          case "webauthnOptions":
           case "totpRequired":
           case "totpSetup":
           case "deviceCode":

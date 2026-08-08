@@ -15,9 +15,13 @@ Once deployed (served by Convex static-hosting at the site URL), the server is a
 standard remote MCP server with OAuth — you only configure the **MCP endpoint URL**
 and the client does discovery → registration → login for you:
 
+For this repository's production deployment:
+
+```text
+https://estifanos.sh/convex-auth/mcp
 ```
-<your-deployment>.convex.site/mcp
-```
+
+For another deployment, use `https://<deployment>.convex.site/mcp`.
 
 e.g. `codex mcp login <that-url>`, `claude mcp add … <that-url>`, Cursor, or the MCP
 Inspector. The client hits `/mcp`, gets `401` + `WWW-Authenticate`, reads
@@ -85,9 +89,10 @@ against `definePermissions`.
      (a secret is issued) and authorization-code only. Dynamic registration is always on
      when `oauth` is configured in `convex/auth.ts`.
 
-   - **Manual** — in the svelte demo open **`/settings/developers`**, enter a name + redirect
-     URI(s), and copy the returned `clientId` / `clientSecret` (shown only once). That page
-     calls `api.oauth.registerClient`, which grants the client the workspace's full capabilities.
+   - **Manual** — in the Svelte demo open **`/demo/settings/developers`**, enter a name +
+     redirect URI(s), and copy the returned `clientId` / `clientSecret` (shown only once).
+     That page calls `api.oauth.registerClient`, which grants the client the workspace's full
+     capabilities.
 
 2. **Build an authorization URL** with PKCE (env: `MCP_AUTH_ISSUER`, `MCP_RESOURCE`,
    `MCP_CLIENT_ID`, `MCP_REDIRECT_URI`):
@@ -118,11 +123,10 @@ against `definePermissions`.
 
 ## Deployment (same-origin)
 
-The svelte demo is a static SPA served by **Convex static-hosting** at the deployment's site
-URL. So the app, the auth server (`/auth/*`), the resource metadata, and `POST /mcp` all live
-on one origin (`https://<deployment>.convex.site`) — the OAuth redirect to `/oauth/authorize`,
-the consent page, the token endpoint, and the MCP endpoint are same-origin. Build + ship the
-SPA with `pnpm --filter svelte deploy` (or `… upload`).
+The Svelte demo is a static SPA served by **Convex static hosting** at `/demo`. The app,
+auth server (`/auth/*`), resource metadata, and `POST /mcp` share one origin. In this
+repository that origin is `https://estifanos.sh/convex-auth`. Deploy it from the root with
+`vp run deploy:demo`.
 
 ## Notes / follow-ups
 

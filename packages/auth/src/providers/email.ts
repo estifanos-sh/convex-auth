@@ -35,7 +35,7 @@ export interface EmailProviderConfig {
  *
  * @example
  * ```ts
- * import { email } from "@robelest/convex-auth/providers";
+ * import { email } from "@estifanos-sh/convex-auth/providers";
  *
  * email({
  *   from: "My App <noreply@example.com>",

@@ -1,4 +1,4 @@
-import { buildCorsHeaders } from "@robelest/convex-auth/server/cors";
+import { buildCorsHeaders } from "@estifanos-sh/convex-auth/server/cors";
 import { expect, test } from "vite-plus/test";
 
 // Origin-matched CORS for the credentialed API-key surface is deny-by-default:

@@ -3,7 +3,7 @@ import http from "node:http";
 import https from "node:https";
 
 import { api } from "@convex/_generated/api";
-import type { AuthEventKind } from "@robelest/convex-auth/server";
+import type { AuthEventKind } from "@estifanos-sh/convex-auth/server";
 import { ConvexHttpClient } from "convex/browser";
 import { inject } from "vite-plus/test";
 

@@ -6,19 +6,21 @@
     "types": ["node"],
     "strict": true,
     "skipLibCheck": true,
+    "jsx": "react-jsx",
     "moduleResolution": "bundler",
     "noEmit": true,
     "paths": {
       "@convex/*": ["../../convex/*"],
-      "@robelest/convex-auth/permissions": ["./src/permissions/index"],
-      "@robelest/convex-auth/browser": ["./src/browser/index"],
-      "@robelest/convex-auth/client": ["./src/client/index"],
-      "@robelest/convex-auth/component": ["./src/component/index"],
-      "@robelest/convex-auth/convex.config": ["./src/component/convex.config"],
-      "@robelest/convex-auth/expo": ["./src/expo/index"],
-      "@robelest/convex-auth/server": ["./src/server/index"],
-      "@robelest/convex-auth/providers": ["./src/providers/index"],
-      "@robelest/convex-auth/providers/*": ["./src/providers/*"]
+      "@estifanos-sh/convex-auth/permissions": ["./src/permissions/index"],
+      "@estifanos-sh/convex-auth/browser": ["./src/browser/index"],
+      "@estifanos-sh/convex-auth/client": ["./src/client/index"],
+      "@estifanos-sh/convex-auth/component": ["./src/component/index"],
+      "@estifanos-sh/convex-auth/core": ["./src/core/index"],
+      "@estifanos-sh/convex-auth/convex.config": ["./src/component/convex.config"],
+      "@estifanos-sh/convex-auth/expo": ["./src/expo/index"],
+      "@estifanos-sh/convex-auth/server": ["./src/server/index"],
+      "@estifanos-sh/convex-auth/providers": ["./src/providers/index"],
+      "@estifanos-sh/convex-auth/providers/*": ["./src/providers/*"]
     }
   },
   "include": ["consumer/**/*.ts"]

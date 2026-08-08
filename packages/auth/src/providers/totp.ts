@@ -2,7 +2,7 @@
  * TOTP (Time-based One-Time Password) two-factor authentication provider.
  *
  * ```ts
- * import { totp } from "@robelest/convex-auth/providers";
+ * import { totp } from "@estifanos-sh/convex-auth/providers";
  *
  * totp({ issuer: "My App" })
  * ```
@@ -30,7 +30,7 @@ export interface TotpConfig {
  *
  * @example
  * ```ts
- * import { totp } from "@robelest/convex-auth/providers";
+ * import { totp } from "@estifanos-sh/convex-auth/providers";
  *
  * totp({ issuer: "My App" })
  * ```

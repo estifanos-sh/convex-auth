@@ -7,8 +7,8 @@
 	import { Toaster } from "svelte-sonner";
 	import { setupConvex, useQuery } from "convex-svelte";
 	import { onDestroy, setContext } from "svelte";
-	import { client as createAuthClient } from "@robelest/convex-auth/browser";
-	import { setupConvexAuth } from "@robelest/convex-auth/svelte";
+	import { client as createAuthClient } from "@estifanos-sh/convex-auth/browser";
+	import { setupConvexAuth } from "@estifanos-sh/convex-auth/svelte";
 	import { api } from "$convex/_generated/api.js";
 	import AppLoading from "$lib/components/AppLoading.svelte";
 

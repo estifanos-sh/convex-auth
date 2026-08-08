@@ -5,7 +5,7 @@
  * by displaying a short code that the user enters on a secondary device.
  *
  * ```ts
- * import { device } from "@robelest/convex-auth/providers";
+ * import { device } from "@estifanos-sh/convex-auth/providers";
  *
  * device()
  * ```
@@ -39,7 +39,7 @@ const DEFAULT_CHARSET = "BCDFGHJKLMNPQRSTVWXZ";
  *
  * @example
  * ```ts
- * import { device } from "@robelest/convex-auth/providers";
+ * import { device } from "@estifanos-sh/convex-auth/providers";
  *
  * device({ verificationUri: "https://example.com/device" })
  * ```

@@ -21,7 +21,11 @@ import {
   vTotpFactorDoc,
 } from "../../../component/model";
 import type { AuthComponentApi } from "../api";
-import type { AuthDataModel, CrossComponentUserDoc } from "../../types";
+import type {
+  AuthDataModel,
+  CrossComponentUserDoc,
+  WebAuthnAttestationEvidence,
+} from "../../types";
 
 type TotpDoc = Infer<typeof vTotpFactorDoc>;
 
@@ -45,31 +49,6 @@ export type ComponentCallCtx = {
   runAction?: GenericActionCtx<AuthDataModel>["runAction"];
   auth: { config: { component: AuthComponentApi } };
 };
-
-/**
- * Fetch a user by ID across the component boundary.
- *
- * One of a family of typed wrappers that each encapsulate the single cast at
- * the component boundary, so callers keep full type safety on args and results.
- */
-export async function queryUserById(
-  ctx: ComponentCallCtx,
-  userId: string,
-): Promise<CrossComponentUserDoc | null> {
-  return (await ctx.runQuery(ctx.auth.config.component.user.get, {
-    id: userId,
-  })) as CrossComponentUserDoc | null;
-}
-
-/** Fetch a user by verified email across the component boundary. */
-export async function queryUserByVerifiedEmail(
-  ctx: ComponentCallCtx,
-  email: string,
-): Promise<CrossComponentUserDoc | null> {
-  return (await ctx.runQuery(ctx.auth.config.component.user.get, {
-    verifiedEmail: email,
-  })) as CrossComponentUserDoc | null;
-}
 
 /** Fetch a PKCE verifier by ID across the component boundary. */
 export async function queryVerifierById(
@@ -171,16 +150,6 @@ export async function mutateTotpUpdateLastUsed(
   });
 }
 
-/** List a user's passkeys across the component boundary. */
-export async function queryPasskeysByUserId(
-  ctx: ComponentCallCtx,
-  userId: string,
-): Promise<PasskeyDoc[]> {
-  return (await ctx.runQuery(ctx.auth.config.component.factor.passkey.list, {
-    userId,
-  })) as PasskeyDoc[];
-}
-
 /** Fetch a passkey by credential ID across the component boundary. */
 export async function queryPasskeyByCredentialId(
   ctx: ComponentCallCtx,
@@ -191,8 +160,67 @@ export async function queryPasskeyByCredentialId(
   })) as PasskeyDoc | null;
 }
 
-/** Insert a passkey across the component boundary; returns its ID. */
-export async function mutatePasskeyInsert(
+/** Create a registration challenge and load registration context in one component transaction. */
+export async function mutatePasskeyBeginRegistration(
+  ctx: ComponentCallCtx,
+  args: {
+    userId: string;
+    sessionId?: string;
+    signature: string;
+    expirationTime: number;
+  },
+): Promise<{
+  verifierId: string;
+  user: Pick<CrossComponentUserDoc, "email" | "name">;
+  credentials: Array<{ id: string; transports?: string[] }>;
+}> {
+  return (await ctx.runMutation(
+    ctx.auth.config.component.factor.passkey.beginRegistration,
+    args,
+  )) as {
+    verifierId: string;
+    user: Pick<CrossComponentUserDoc, "email" | "name">;
+    credentials: Array<{ id: string; transports?: string[] }>;
+  };
+}
+
+/** Create a sign-in challenge and resolve its optional email allow-list atomically. */
+export async function mutatePasskeyBeginSignIn(
+  ctx: ComponentCallCtx,
+  args: {
+    sessionId?: string;
+    signature: string;
+    expirationTime: number;
+    verifiedEmail?: string;
+  },
+): Promise<{
+  verifierId: string;
+  credentialIds: string[];
+}> {
+  return (await ctx.runMutation(ctx.auth.config.component.factor.passkey.beginSignIn, args)) as {
+    verifierId: string;
+    credentialIds: string[];
+  };
+}
+
+/** Consume a WebAuthn challenge and load its credential in one component transaction. */
+export async function mutatePasskeyBeginAssertion(
+  ctx: ComponentCallCtx,
+  args: {
+    verifierId: string;
+    expectedChallenge: string;
+    credentialId: string;
+  },
+): Promise<{ verifierAccepted: boolean; passkey: PasskeyDoc | null }> {
+  return (await ctx.runMutation(ctx.auth.config.component.factor.passkey.beginAssertion, {
+    verifierId: args.verifierId,
+    expectedChallenge: args.expectedChallenge,
+    credentialId: args.credentialId,
+  })) as { verifierAccepted: boolean; passkey: PasskeyDoc | null };
+}
+
+/** Store a verified registration and create its session in one component transaction. */
+export async function mutatePasskeyCompleteRegistration(
   ctx: ComponentCallCtx,
   args: {
     userId: string;
@@ -204,10 +232,29 @@ export async function mutatePasskeyInsert(
     deviceType: string;
     backedUp: boolean;
     name?: string;
+    attestation?: WebAuthnAttestationEvidence;
     createdAt: number;
+    replaceSessionId?: string;
+    sessionExpirationTime: number;
+    refreshTokenExpirationTime: number;
   },
-): Promise<string> {
-  return (await ctx.runMutation(ctx.auth.config.component.factor.passkey.create, args)) as string;
+): Promise<{
+  passkeyId: string;
+  user: CrossComponentUserDoc;
+  sessionId: string;
+  refreshTokenId: string;
+  replacedSessionId?: string;
+}> {
+  return (await ctx.runMutation(
+    ctx.auth.config.component.factor.passkey.completeRegistration,
+    args,
+  )) as {
+    passkeyId: string;
+    user: CrossComponentUserDoc;
+    sessionId: string;
+    refreshTokenId: string;
+    replacedSessionId?: string;
+  };
 }
 
 /**
@@ -219,12 +266,50 @@ export async function mutatePasskeyUpdateCounter(
   passkeyId: string,
   counter: number,
   lastUsedAt: number,
+  backedUp: boolean,
 ): Promise<boolean> {
   return (await ctx.runMutation(ctx.auth.config.component.factor.passkey.acceptAssertion, {
     id: passkeyId,
     counter,
     lastUsedAt,
+    backedUp,
   })) as boolean;
+}
+
+/** Atomically accept a verified assertion and create its session. */
+export async function mutatePasskeyCompleteAssertion(
+  ctx: ComponentCallCtx,
+  args: {
+    id: string;
+    counter: number;
+    lastUsedAt: number;
+    backedUp: boolean;
+    replaceSessionId?: string;
+    sessionExpirationTime: number;
+    refreshTokenExpirationTime: number;
+  },
+): Promise<
+  | { status: "rejected" }
+  | {
+      status: "accepted";
+      user: CrossComponentUserDoc;
+      sessionId: string;
+      refreshTokenId: string;
+      replacedSessionId?: string;
+    }
+> {
+  return (await ctx.runMutation(
+    ctx.auth.config.component.factor.passkey.completeAssertion,
+    args,
+  )) as
+    | { status: "rejected" }
+    | {
+        status: "accepted";
+        user: CrossComponentUserDoc;
+        sessionId: string;
+        refreshTokenId: string;
+        replacedSessionId?: string;
+      };
 }
 
 /** Insert a device-authorization record across the component boundary; returns its ID. */

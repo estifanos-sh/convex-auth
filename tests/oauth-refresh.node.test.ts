@@ -1,4 +1,4 @@
-import { createOAuthRefreshDomain } from "@robelest/convex-auth/server/oauth/refresh";
+import { createOAuthRefreshDomain } from "@estifanos-sh/convex-auth/server/oauth/refresh";
 import { expect, test } from "vite-plus/test";
 
 const refs = {

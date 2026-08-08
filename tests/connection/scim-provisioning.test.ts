@@ -22,7 +22,7 @@
 
 import { components } from "@convex/_generated/api";
 import schema from "@convex/schema";
-import { ErrorCode } from "@robelest/convex-auth/shared/codes";
+import { ErrorCode } from "@estifanos-sh/convex-auth/shared/codes";
 import { ConvexError } from "convex/values";
 import { expect, test } from "vite-plus/test";
 

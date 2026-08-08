@@ -2,7 +2,7 @@
  * Google OAuth provider.
  *
  * ```ts
- * import { google } from "@robelest/convex-auth/providers/google";
+ * import { google } from "@estifanos-sh/convex-auth/providers/google";
  *
  * google({
  *   clientId: env.AUTH_GOOGLE_ID!,
@@ -48,7 +48,7 @@ export interface GoogleConfig {
  *
  * @example
  * ```ts
- * import { google } from "@robelest/convex-auth/providers/google";
+ * import { google } from "@estifanos-sh/convex-auth/providers/google";
  *
  * google({
  *   clientId: env.AUTH_GOOGLE_ID!,

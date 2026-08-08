@@ -2,12 +2,12 @@ import type { GenericDataModel } from "convex/server";
 import { GenericId, Infer, v } from "convex/values";
 
 import * as Provider from "../crypto";
-import { emitAuthEvent } from "../events";
+import { queueAuthEvent } from "../events";
 import { LOG_LEVELS } from "../log";
 import { log } from "../log";
 import { finalizeSessionIssuance, getAuthSessionId, issueSession } from "../session/lifecycle";
 import type { SessionIssuance } from "../session/lifecycle";
-import { buildSignInIdentityAttributes } from "../telemetry";
+import { buildKnownSignInIdentityAttributes } from "../telemetry";
 import { GenericActionCtxWithAuthConfig, MutationCtx, SessionInfo } from "../types";
 import { setActiveSpanAttributes, withSpan } from "../utils/span";
 import { AUTH_STORE_REF } from "./store/refs";
@@ -44,12 +44,16 @@ export async function signInSessionImpl(
       });
       setActiveSpanAttributes({
         "auth.signin.result": "success",
-        ...(await buildSignInIdentityAttributes(ctx, config, {
-          userId: issuance.userId,
-          sessionId: issuance.sessionId,
-        })),
+        ...buildKnownSignInIdentityAttributes(
+          config,
+          {
+            userId: issuance.userId,
+            sessionId: issuance.sessionId,
+          },
+          issuance.identity.email,
+        ),
       });
-      await emitAuthEvent(ctx, config, {
+      await queueAuthEvent(ctx, config, {
         kind: "session.signed_in",
         actor: { type: "user", id: issuance.userId },
         subject: { type: "session", id: issuance.sessionId },

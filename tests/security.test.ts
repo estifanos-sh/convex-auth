@@ -1,4 +1,4 @@
-import { authCookieNames, parseAuthCookies, server } from "@robelest/convex-auth/server";
+import { authCookieNames, parseAuthCookies, server } from "@estifanos-sh/convex-auth/server";
 import { ConvexHttpClient } from "convex/browser";
 import { ConvexError } from "convex/values";
 import { afterEach, expect, test, vi } from "vite-plus/test";

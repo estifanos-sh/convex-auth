@@ -1,9 +1,9 @@
 import { components } from "@convex/_generated/api";
 import { auth } from "@convex/auth";
 import schema from "@convex/schema";
-import { getLegacyWebhookEndpointPatch } from "@robelest/convex-auth/component/migrations";
-import { getPublicWebhookEndpoint } from "@robelest/convex-auth/server/connection/webhook";
-import { decryptSecret } from "@robelest/convex-auth/server/secret";
+import { getLegacyWebhookEndpointPatch } from "@estifanos-sh/convex-auth/component/migrations";
+import { getPublicWebhookEndpoint } from "@estifanos-sh/convex-auth/server/connection/webhook";
+import { decryptSecret } from "@estifanos-sh/convex-auth/server/secret";
 import { expect, test } from "vite-plus/test";
 
 import { convexTest } from "../convex/setup";

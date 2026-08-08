@@ -45,7 +45,7 @@ export class ConvexAuth {
   get signOut(): () => Promise<void> {
     return this.#client.signOut;
   }
-  /** The underlying imperative client, for factor flows (`totp`, `passkey`, `device`). */
+  /** The underlying imperative client, for factor flows (`totp`, `webauthn`, `device`). */
   get client(): AnyAuthClient {
     return this.#client;
   }

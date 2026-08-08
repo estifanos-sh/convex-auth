@@ -1,5 +1,5 @@
-import { client as browserClient } from "@robelest/convex-auth/browser";
-import { client } from "@robelest/convex-auth/client";
+import { client as browserClient } from "@estifanos-sh/convex-auth/browser";
+import { client } from "@estifanos-sh/convex-auth/client";
 import { ConvexError } from "convex/values";
 import { afterEach, expect, test, vi } from "vite-plus/test";
 
@@ -634,6 +634,33 @@ test("headless client completes OAuth manually and returns cleanup URL", async (
     cleanupUrl: new URL("myapp://auth/callback"),
   });
   expect(Array.from(storage.values.values())).not.toContain("oauth-verifier");
+
+  auth.destroy();
+});
+
+test("client initialization ignores host application code parameters without OAuth state", async () => {
+  const storage = createMemoryStorage();
+  const convex = createConvexMock();
+  const location = new URL("https://app.example/invite?code=8031");
+  const replace = vi.fn();
+  const auth = client({
+    convex,
+    api: { signIn: {} as never, signOut: {} as never },
+    url: "https://example.convex.cloud",
+    storage,
+    runtime: {
+      location: {
+        get: () => location,
+        replace,
+      },
+    },
+  });
+
+  await auth.initialize();
+
+  expect(convex.action).not.toHaveBeenCalled();
+  expect(replace).not.toHaveBeenCalled();
+  expect(location.searchParams.get("code")).toBe("8031");
 
   auth.destroy();
 });

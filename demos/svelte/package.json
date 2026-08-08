@@ -12,7 +12,7 @@
     "check:watch": "vp exec svelte-kit sync && vp exec svelte-check --tsconfig ./tsconfig.json --watch"
   },
   "dependencies": {
-    "@robelest/convex-auth": "workspace:*",
+    "@estifanos-sh/convex-auth": "workspace:*",
     "convex": "catalog:",
     "convex-svelte": "^0.14.0",
     "svelte-radix": "^3.0.2",

@@ -1,9 +1,9 @@
 /**
- * Browser-first auth client for `@robelest/convex-auth/browser`.
+ * Browser-first auth client for `@estifanos-sh/convex-auth/browser`.
  *
  * This entrypoint wraps the framework-agnostic `client(...)`
  * helper with browser defaults such as `ConvexHttpClient`, local storage, URL
- * replacement, OAuth launching, and passkey adapters.
+ * replacement, OAuth launching, and WebAuthn adapters.
  *
  * @module
  */
@@ -17,7 +17,7 @@ import {
   type ClientOptions,
   type PlatformAuthClient,
 } from "../client/index";
-import { createPasskeyClient } from "./passkey";
+import { createWebAuthnClient } from "./webauthn";
 import { createBrowserRuntime } from "./runtime";
 
 export type { AuthApiRefs, PlatformAuthClient as AuthClient, ClientOptions } from "../client/index";
@@ -26,7 +26,7 @@ export type { AuthApiRefs, PlatformAuthClient as AuthClient, ClientOptions } fro
  * Create a browser-configured auth client.
  *
  * Applies browser runtime defaults (`ConvexHttpClient` transport, local
- * storage, URL cleanup, OAuth launch, passkey support) on top of the
+ * storage, URL cleanup, OAuth launch, WebAuthn support) on top of the
  * framework-agnostic `client(...)` helper, then returns it directly — the core
  * owns OAuth launch/completion and initialization, driven by the injected
  * browser runtime.
@@ -48,7 +48,7 @@ export function client<Api extends AuthApiRefs<boolean, boolean, boolean> = Auth
     runtime: mergeBrowserRuntime(options.runtime),
     adapterFactories: {
       ...options.adapterFactories,
-      passkey: options.adapterFactories?.passkey ?? ((deps) => createPasskeyClient(deps)),
+      webauthn: options.adapterFactories?.webauthn ?? ((deps) => createWebAuthnClient(deps)),
     },
     httpClient: proxyMode ? null : (options.httpClient ?? (url ? new ConvexHttpClient(url) : null)),
   }) as PlatformAuthClient<Api>;

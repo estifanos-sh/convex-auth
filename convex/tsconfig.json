@@ -14,8 +14,8 @@
     "isolatedModules": true,
     "noEmit": true,
     "paths": {
-      "@robelest/convex-auth": ["../packages/auth/src"],
-      "@robelest/convex-auth/*": ["../packages/auth/src/*"]
+      "@estifanos-sh/convex-auth": ["../packages/auth/src"],
+      "@estifanos-sh/convex-auth/*": ["../packages/auth/src/*"]
     }
   },
   "include": ["./**/*"],

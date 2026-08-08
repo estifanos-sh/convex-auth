@@ -1,4 +1,4 @@
-# LEXICON — `@robelest/convex-auth` API conventions
+# LEXICON — `@estifanos-sh/convex-auth` API conventions
 
 This file is the authoritative naming and shape contract for everything
 exposed by the auth component (`packages/auth/src/component/**`) and the
@@ -68,6 +68,8 @@ code→token), `accept` (consume a one-time token — invites, OAuth codes),
 `revoke` (soft-delete / invalidate, incl. signing out a user's sessions),
 `assert` (assert the caller holds grants, throws), `dispatch` (webhook
 delivery), `provision` (atomically materialize an externally managed identity),
+`resolve` (explicitly traverse relationships), `reset` (clear a stored
+preference so its documented fallback applies),
 `promote` (raise one item in a set to a privileged role, e.g.
 `user.email.promote` making a verified address primary). Add to this list when
 introduced. **Not verbs** (cut from the
@@ -98,8 +100,9 @@ app + tests + docs), as hard cuts (no aliases/back-compat):
   `oauth.client.archive`→`revoke` (+ doc field `isArchived`→`revoked`, event
   `oauth.client.archived`→`revoked`, indexes); `oauth.code.consume`→`accept`;
   `oauth.refresh.issue`→`create`. `archive`/`consume`/`issue` no longer appear.
-- `member.inspect`→`get` (the by-id facade `get` was dropped; `get` now resolves
-  a member's effective grants by `{ userId, groupId }`).
+- `member.inspect`→`get` (the by-id facade `get` was dropped). `get` is a direct
+  indexed lookup by `{ userId, groupId }`; inherited access is the explicitly
+  traversing `member.resolve` operation.
 - `metadata`→`extend` for the app-extension blob (ApiKey / OAuthClient). The
   `@convex-dev/stream` event-stream `metadata` field is unrelated and untouched.
 - Audit-event `scope`→`target` (`targetKind`/`targetId`, `authEvents.target.*`,
@@ -136,7 +139,7 @@ inside the handler. Component calls look like `ctx.runQuery(component.user.get,
 | Pagination input       | `paginationOpts: paginationOptsValidator` (from `convex/server`).          |
 | List filter envelope   | `where: v.optional(v.object({ … }))` — every filter field optional.        |
 | Sorting                | `orderBy` (literal union of field names) + `order` (`"asc"` \| `"desc"`).  |
-| Mutation patch payload | `data: v.object({ … })` — every field optional for partial update.         |
+| Mutation patch payload | `patch: v.object({ … })` — every field optional for partial update.        |
 
 Don't accept positional args in public APIs (always use object args after `ctx`).
 Don't use `args.opts` / `args.input` envelopes — flat args only.
@@ -221,17 +224,16 @@ acts as an OAuth 2.1 authorization server (e.g. for MCP clients). Presence of th
   `auth.request.mcp(http, tools, opts?)` (tools are plain `{ description, scope, args, handler }`
   objects; `args` inferred per tool). It mounts `POST /mcp`, the bearer challenge, and
   `/.well-known/oauth-protected-resource`. See §8a-mcp.
-- **Server surface:** `auth.oauth.client.{create,get,list,revoke,verify,update,verifyRegistrationToken}`
-  (the OAuth client registry; `update`/`verifyRegistrationToken` back RFC 7592 management, `create`
-  also returns the one-time `registrationAccessToken` and, for confidential clients, the secret), `auth.oauth.code.{authorize,accept}` (`authorize` records a user's approval and
-  mints a single-use code — the consent page calls this; `userId` MUST be the authenticated
-  caller, never request input; `accept` consumes it at the token endpoint), and
-  `auth.oauth.refresh.{create,exchange,revoke}` (rotating refresh tokens; `exchange` is the
-  refresh-rotation verb per §1, and emits `oauth.refresh.reuse_detected` when a replayed token
-  trips theft detection; `revoke` emits `oauth.refresh.revoked`). `auth.oauth.authorize(ctx, args)` is the documented alias of
-  `code.authorize`. The shared client-grant predicate (`checkOAuthGrant`, `oauth/grant.ts`) is
-  the single source of truth used by the authorize handler, the `code.authorize` mutation, and
-  the token endpoint — each formats denials for its own boundary.
+- **App-facing server surface:** `auth.oauth.authorize(ctx, args)` records the
+  authenticated user's consent and `auth.oauth.client.{create,get,list,update,revoke}`
+  manages first-party clients. Client-secret verification, registration-token
+  verification, authorization-code acceptance, and refresh-token minting/exchange
+  are wire-protocol internals owned by `auth.http()`; they are not exposed by
+  `defineAuth()`.
+- **Internal runtime surface:** the HTTP implementation uses the complete
+  `oauth.client`, `oauth.code`, and `oauth.refresh` domains. The shared
+  client-grant predicate (`checkOAuthGrant`, `oauth/grant.ts`) remains the single
+  source of truth used by consent and token endpoint boundaries.
 - **Component surface:** `component.oauth.client.*`, `component.oauth.code.*`, and
   `component.oauth.refresh.*`. The client doc's allowed flows are `grantTypes` (not `grants`);
   its `tokenEndpointAuthMethod` is `client_secret_post` | `client_secret_basic` | `none`

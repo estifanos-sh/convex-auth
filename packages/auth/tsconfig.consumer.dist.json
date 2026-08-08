@@ -10,15 +10,16 @@
     "noEmit": true,
     "paths": {
       "@convex/*": ["../../convex/*"],
-      "@robelest/convex-auth/permissions": ["./dist/permissions/index.d.ts"],
-      "@robelest/convex-auth/browser": ["./dist/browser/index.d.ts"],
-      "@robelest/convex-auth/client": ["./dist/client/index.d.ts"],
-      "@robelest/convex-auth/component": ["./dist/component/index.d.ts"],
-      "@robelest/convex-auth/convex.config": ["./dist/component/convex.config.d.ts"],
-      "@robelest/convex-auth/expo": ["./dist/expo/index.d.ts"],
-      "@robelest/convex-auth/server": ["./dist/server/index.d.ts"],
-      "@robelest/convex-auth/providers": ["./dist/providers/index.d.ts"],
-      "@robelest/convex-auth/providers/*": ["./dist/providers/*.d.ts"]
+      "@estifanos-sh/convex-auth/permissions": ["./dist/permissions/index.d.ts"],
+      "@estifanos-sh/convex-auth/browser": ["./dist/browser/index.d.ts"],
+      "@estifanos-sh/convex-auth/client": ["./dist/client/index.d.ts"],
+      "@estifanos-sh/convex-auth/component": ["./dist/component/index.d.ts"],
+      "@estifanos-sh/convex-auth/core": ["./dist/core/index.d.ts"],
+      "@estifanos-sh/convex-auth/convex.config": ["./dist/component/convex.config.d.ts"],
+      "@estifanos-sh/convex-auth/expo": ["./dist/expo/index.d.ts"],
+      "@estifanos-sh/convex-auth/server": ["./dist/server/index.d.ts"],
+      "@estifanos-sh/convex-auth/providers": ["./dist/providers/index.d.ts"],
+      "@estifanos-sh/convex-auth/providers/*": ["./dist/providers/*.d.ts"]
     }
   },
   "include": ["consumer/**/*.ts"]
