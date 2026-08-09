@@ -284,9 +284,4 @@ registerStaticRoutes(http, components.staticHosting, {
   spaFallback: true,
 });
 
-registerStaticRoutes(http, components.docsHosting, {
-  pathPrefix: "/",
-  spaFallback: true,
-});
-
 export default http;
