@@ -445,6 +445,7 @@ async function handleCredentials(
           callSignIn(ctx, {
             userId: result.userId,
             sessionId: result.sessionId,
+            provider: provider.id,
             generateTokens: options.generateTokens,
           }),
       );

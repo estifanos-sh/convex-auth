@@ -15,6 +15,7 @@ import { AUTH_STORE_REF } from "./store/refs";
 export const vSignInArgs = v.object({
   userId: v.string(),
   sessionId: v.optional(v.string()),
+  provider: v.string(),
   generateTokens: v.boolean(),
 });
 
@@ -27,12 +28,13 @@ export async function signInSessionImpl(
     "convex-auth.mutations.signIn",
     {
       "auth.flow": "signIn",
+      provider: args.provider,
       hasExistingSession: args.sessionId !== undefined,
       generateTokens: args.generateTokens,
     },
     async () => {
       log(LOG_LEVELS.DEBUG, "signInSessionImpl args:", args);
-      const { userId, sessionId: existingSessionId, generateTokens } = args;
+      const { userId, sessionId: existingSessionId, provider, generateTokens } = args;
       const typedUserId = userId as GenericId<"User">;
       const replaceSessionId =
         existingSessionId === undefined ? ((await getAuthSessionId(ctx)) ?? undefined) : undefined;
@@ -62,7 +64,7 @@ export async function signInSessionImpl(
           { kind: "session", id: issuance.sessionId },
         ],
         outcome: "success",
-        data: { provider: "session" },
+        data: { provider },
       });
       return issuance;
     },

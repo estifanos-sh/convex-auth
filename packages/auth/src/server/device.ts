@@ -160,6 +160,7 @@ async function handlePoll(ctx: EnrichedActionCtx, params: DeviceParams): Promise
   const signInResult = await callSignIn(ctx, {
     userId: accepted.userId,
     sessionId: accepted.sessionId,
+    provider: "device",
     generateTokens: true,
   });
   return { kind: "signedIn" as const, session: signInResult };
