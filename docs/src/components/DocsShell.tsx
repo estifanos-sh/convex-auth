@@ -15,6 +15,18 @@ function sectionFor(url: string) {
   return sidebar.find((group) => group.items.some((item) => item.slug === clean))?.label || "";
 }
 
+const navigationItems = sidebar.flatMap((group) =>
+  group.items.map((item) => ({ ...item, section: group.label })),
+);
+
+function adjacentPages(slug: string) {
+  const currentIndex = navigationItems.findIndex((item) => item.slug === slug);
+  return {
+    next: currentIndex >= 0 ? navigationItems[currentIndex + 1] : undefined,
+    previous: currentIndex > 0 ? navigationItems[currentIndex - 1] : undefined,
+  };
+}
+
 function mountTabs(root: HTMLElement) {
   for (const tabs of root.querySelectorAll<HTMLElement>("[data-tabs]")) {
     const panels = [...tabs.querySelectorAll<HTMLElement>("[data-tab]")];
@@ -56,6 +68,8 @@ export function DocsShell(props: { page: DocumentationPage }) {
   const [query, setQuery] = createSignal("");
   const [results, setResults] = createSignal<SearchResult[]>([]);
   const [activeIndex, setActiveIndex] = createSignal(0);
+  const section = () => sectionFor(`/convex-auth${props.page.slug}`);
+  const adjacent = () => adjacentPages(props.page.slug);
   let pagefind:
     | {
         init: () => Promise<void>;
@@ -141,11 +155,11 @@ export function DocsShell(props: { page: DocumentationPage }) {
       </a>
       <header class="docs-header">
         <div class="docs-header-inner">
-          <div class="docs-brand" aria-label="estifanos.sh convex-auth documentation">
+          <a class="docs-brand" href="/" aria-label="estifanos.sh home">
             <span class="site-mark" aria-hidden="true" />
             <span class="docs-site-context">estifanos.sh / </span>
             <span>convex-auth</span>
-          </div>
+          </a>
           <div class="docs-actions">
             <button class="header-action" onClick={openSearch}>
               Search
@@ -184,6 +198,13 @@ export function DocsShell(props: { page: DocumentationPage }) {
           </div>
         </Show>
         <main class="docs-main" id="main-content">
+          <header class="doc-header">
+            <Show when={section()}>
+              <p class="doc-section">{section()}</p>
+            </Show>
+            <h1>{props.page.title}</h1>
+            <p class="doc-description">{props.page.description}</p>
+          </header>
           <article
             class="doc-content"
             data-pagefind-body
@@ -193,6 +214,30 @@ export function DocsShell(props: { page: DocumentationPage }) {
             tabindex="-1"
             innerHTML={props.page.html}
           />
+          <nav class="doc-pagination" aria-label="Adjacent documentation pages">
+            <Show when={adjacent().previous}>
+              {(previous) => (
+                <a
+                  class="doc-pagination-link doc-pagination-previous"
+                  href={`/convex-auth${previous().slug}/`}
+                >
+                  <span>{previous().section}</span>
+                  <strong>{previous().title}</strong>
+                </a>
+              )}
+            </Show>
+            <Show when={adjacent().next}>
+              {(next) => (
+                <a
+                  class="doc-pagination-link doc-pagination-next"
+                  href={`/convex-auth${next().slug}/`}
+                >
+                  <span>{next().section}</span>
+                  <strong>{next().title}</strong>
+                </a>
+              )}
+            </Show>
+          </nav>
         </main>
       </div>
       <Show when={searchOpen()}>
