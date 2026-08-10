@@ -48,6 +48,12 @@ for (const font of fonts) {
 const llms = readFileSync(path.join(build, "llms.txt"), "utf8");
 if (!llms.includes("@estifanos-sh/convex-auth") || !llms.includes("/ai/agent-skills.md"))
   throw new Error("llms.txt is incomplete");
+const environment = readFileSync(
+  path.join(build, "getting-started", "environment", "index.html"),
+  "utf8",
+);
+if (!environment.includes("<table>") || environment.includes("| Variable | Purpose |"))
+  throw new Error("Environment variable tables were not compiled as GFM tables");
 if (!readFileSync(path.join(build, "404.html"), "utf8").includes('name="robots" content="noindex"'))
   throw new Error("404.html must be noindex");
 
