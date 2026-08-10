@@ -308,17 +308,30 @@ input {
 
 .doc-content table {
   display: block;
+  width: 100%;
   max-width: 100%;
+  margin: 1.5rem 0;
   overflow: auto;
   border-collapse: collapse;
+  font-size: 0.875rem;
+  line-height: 1.5;
 }
 
 .doc-content th,
 .doc-content td {
-  padding: 0.55rem 0.7rem;
+  padding: 0.65rem 0.75rem;
   border: 1px solid var(--line);
   text-align: left;
   vertical-align: top;
+}
+
+.doc-content th {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.doc-content td code {
+  white-space: nowrap;
 }
 
 .doc-content blockquote {
