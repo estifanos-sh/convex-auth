@@ -19,7 +19,8 @@
   --layout-gutter: calc(var(--grid-size) * 2);
   --layout-width: calc(100vw - var(--layout-gutter) * 2);
   --header-height: calc(var(--grid-size) * 3);
-  --sidebar-width: calc(var(--grid-size) * 7);
+  --sidebar-width: calc(var(--grid-size) * 8);
+  --article-width: min(calc(var(--grid-size) * 24), 52rem);
   --font-sans: "Figtree", system-ui, sans-serif;
   color-scheme: dark;
   background: var(--bg);
@@ -113,6 +114,7 @@ input {
   gap: 0;
   color: var(--muted);
   white-space: nowrap;
+  text-decoration: none;
 }
 
 .site-mark {
@@ -170,14 +172,14 @@ input {
 }
 
 .nav-group {
-  margin: 0 0 calc(var(--grid-size) * 0.75);
+  margin: 0 0 var(--grid-size);
 }
 
 .nav-group h2,
 .search-results small {
-  margin: 0 0 0.35rem;
+  margin: 0 0 0.45rem;
   color: var(--faint);
-  font-size: 0.72rem;
+  font-size: 0.7rem;
   font-weight: 500;
   line-height: 1.4;
 }
@@ -189,12 +191,14 @@ input {
 }
 
 .nav-group a {
-  display: block;
+  display: flex;
   width: max-content;
   max-width: 100%;
-  padding: 0.22rem 0;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.24rem 0;
   color: var(--muted);
-  font-size: 0.84rem;
+  font-size: 0.86rem;
   line-height: 1.45;
   text-decoration-line: underline;
   text-decoration-color: transparent;
@@ -215,31 +219,65 @@ input {
   color: var(--ink);
 }
 
+.nav-group a::before {
+  width: 0.3rem;
+  height: 0.3rem;
+  flex: 0 0 auto;
+  background: transparent;
+  content: "";
+}
+
+.nav-group a.active::before {
+  background: var(--mark);
+}
+
 .docs-main {
   min-width: 0;
   padding: calc(var(--grid-size) * 2) 0 6rem calc(var(--grid-size) * 2);
 }
 
+.doc-header,
 .doc-content {
-  width: min(100%, calc(var(--grid-size) * 20));
+  width: min(100%, var(--article-width));
+}
+
+.doc-header {
+  margin-bottom: calc(var(--grid-size) * 2);
+  padding-bottom: calc(var(--grid-size) * 2);
+  border-bottom: 1px solid var(--line);
+}
+
+.doc-section {
+  margin: 0 0 0.65rem;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.doc-header h1 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 2.6rem;
+  font-weight: 500;
+  line-height: 1.08;
+}
+
+.doc-description {
+  max-width: 60ch;
+  margin: 0.85rem 0 0;
+  color: var(--ink-2);
+  font-size: 1.05rem;
+  line-height: 1.55;
 }
 
 .doc-content > :first-child {
   margin-top: 0;
 }
 
-.doc-content h1,
 .doc-content h2,
 .doc-content h3 {
   color: var(--ink);
   letter-spacing: 0;
   line-height: 1.2;
-}
-
-.doc-content h1 {
-  margin: 0 0 var(--grid-size);
-  font-size: 2.25rem;
-  font-weight: 500;
 }
 
 .doc-content h2 {
@@ -248,6 +286,12 @@ input {
   border-top: 1px solid var(--line);
   font-size: 1.5rem;
   font-weight: 500;
+}
+
+.doc-content > h2:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
 }
 
 .doc-content h3 {
@@ -339,6 +383,56 @@ input {
   padding: 0.8rem 1rem;
   border-left: 2px solid var(--mark);
   color: var(--ink-2);
+}
+
+.doc-pagination {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  width: min(100%, var(--article-width));
+  margin-top: calc(var(--grid-size) * 3);
+  padding-top: var(--grid-size);
+  border-top: 1px solid var(--line);
+}
+
+.doc-pagination-link {
+  display: grid;
+  gap: 0.2rem;
+  color: var(--ink-2);
+  text-decoration: none;
+}
+
+.doc-pagination-link span {
+  color: var(--faint);
+  font-size: 0.7rem;
+}
+
+.doc-pagination-link strong {
+  width: max-content;
+  max-width: 100%;
+  color: var(--ink-2);
+  font-size: 0.9rem;
+  font-weight: 500;
+  text-decoration-line: underline;
+  text-decoration-color: transparent;
+  text-underline-offset: 4px;
+  transition:
+    color 160ms ease,
+    text-decoration-color 160ms ease;
+}
+
+.doc-pagination-link:hover strong,
+.doc-pagination-link:focus-visible strong {
+  color: var(--ink);
+  text-decoration-color: currentColor;
+}
+
+.doc-pagination-next {
+  justify-items: end;
+  text-align: right;
+}
+
+.doc-pagination-next:only-child {
+  grid-column: 2;
 }
 
 .card-grid {
@@ -522,6 +616,10 @@ input {
     padding: calc(var(--grid-size) * 2) 0 4rem;
   }
 
+  .doc-header h1 {
+    font-size: 2.2rem;
+  }
+
   .card-grid {
     grid-template-columns: 1fr;
   }
@@ -538,6 +636,18 @@ input {
 
   .docs-header-inner {
     font-size: 0.8rem;
+  }
+
+  .doc-pagination {
+    grid-template-columns: 1fr;
+    gap: var(--grid-size);
+  }
+
+  .doc-pagination-next,
+  .doc-pagination-next:only-child {
+    grid-column: 1;
+    justify-items: start;
+    text-align: left;
   }
 }
 

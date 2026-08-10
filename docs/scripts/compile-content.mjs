@@ -139,6 +139,15 @@ function markdownComponents() {
   };
 }
 
+function removeDocumentTitle() {
+  return (tree) => {
+    const titleIndex = tree.children.findIndex(
+      (node) => node.type === "heading" && node.depth === 1,
+    );
+    if (titleIndex !== -1) tree.children.splice(titleIndex, 1);
+  };
+}
+
 function addHeadingIds() {
   const seen = new Map();
   return (tree) => {
@@ -173,6 +182,7 @@ const processor = unified()
   .use(remarkFrontmatter, ["yaml"])
   .use(remarkGfm)
   .use(remarkMdx)
+  .use(removeDocumentTitle)
   .use(markdownComponents)
   .use(remarkRehype, { allowDangerousHtml: true })
   .use(addHeadingIds)
