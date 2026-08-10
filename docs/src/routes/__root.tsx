@@ -14,13 +14,6 @@ export const Route = createRootRoute({
         rel: "preload",
         type: "font/woff2",
       },
-      {
-        as: "font",
-        crossorigin: "anonymous",
-        href: "/convex-auth/fonts/martianmono.woff2",
-        rel: "preload",
-        type: "font/woff2",
-      },
     ],
     meta: [
       { charSet: "utf-8" },
