@@ -1,5 +1,5 @@
 import { For, Show, createEffect, createSignal, on, onCleanup, onMount } from "solid-js";
-import { Link, useRouterState } from "@tanstack/solid-router";
+import { useRouterState } from "@tanstack/solid-router";
 import type { DocumentationPage } from "../generated/docs";
 import { sidebar } from "../config/sidebar";
 
@@ -140,21 +140,29 @@ export function DocsShell(props: { page: DocumentationPage }) {
         Skip to documentation
       </a>
       <header class="docs-header">
-        <Link class="docs-brand" to="/">
-          convex-auth
-        </Link>
-        <button aria-label="Search documentation" class="icon-button" onClick={openSearch}>
-          ⌕
-        </button>
-        <button
-          aria-controls="mobile-docs-nav"
-          aria-expanded={menuOpen()}
-          aria-label="Open documentation menu"
-          class="icon-button menu-button"
-          onClick={() => setMenuOpen(!menuOpen())}
-        >
-          ☰
-        </button>
+        <div class="docs-header-inner">
+          <div class="docs-brand" aria-label="estifanos.sh convex-auth documentation">
+            <span class="site-mark" aria-hidden="true" />
+            <span class="docs-site-context">estifanos.sh / </span>
+            <span>convex-auth</span>
+          </div>
+          <div class="docs-actions">
+            <button class="header-action" onClick={openSearch}>
+              Search
+            </button>
+            <button
+              aria-controls="mobile-docs-nav"
+              aria-expanded={menuOpen()}
+              class="header-action menu-button"
+              onClick={() => setMenuOpen(!menuOpen())}
+            >
+              Menu
+            </button>
+            <a class="site-switch" href="https://estifanos.com/">
+              com
+            </a>
+          </div>
+        </div>
       </header>
       <div class="docs-layout">
         <aside class="sidebar">
@@ -168,7 +176,7 @@ export function DocsShell(props: { page: DocumentationPage }) {
               onClick={() => setMenuOpen(false)}
             />
             <nav class="mobile-nav" id="mobile-docs-nav">
-              <button class="close-button" onClick={() => setMenuOpen(false)}>
+              <button class="header-action close-button" onClick={() => setMenuOpen(false)}>
                 Close
               </button>
               <Nav current={pathname()} onNavigate={() => setMenuOpen(false)} />
@@ -197,7 +205,6 @@ export function DocsShell(props: { page: DocumentationPage }) {
             role="dialog"
           >
             <div class="search-input">
-              <span aria-hidden="true">⌕</span>
               <input
                 ref={(element) => {
                   input = element;
