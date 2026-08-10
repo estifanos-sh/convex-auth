@@ -48,13 +48,6 @@ export default defineSchema({
     phoneVerificationTime: v.optional(v.number()),
     isAnonymous: v.optional(v.boolean()),
     lastActiveGroup: v.optional(v.id("Group")),
-    /**
-     * @deprecated Retained so pre-existing rows still validate after the
-     * denormalized-cache removal. Still accepted on the `user.patch` validator
-     * (`vUserPatchData`) until the major-version removal — nothing writes a
-     * meaningful value; strip existing data via the `dropHasTotp` migration.
-     */
-    hasTotp: v.optional(v.boolean()),
     extend: v.optional(v.any()),
   })
     .index("email", ["email"])
@@ -288,14 +281,6 @@ export default defineSchema({
     isRoot: v.optional(v.boolean()),
     policy: v.optional(vGroupConnectionPolicy),
     extend: v.optional(v.any()),
-    /**
-     * @deprecated Removed faceted classification tags (was
-     * `v.array(v.object({ key, value }))`). Retained as `v.any()` so
-     * pre-existing rows still validate on deploy — do NOT re-narrow it here.
-     * Clear existing data via the `dropGroupTags` migration, then drop this
-     * field in a later major release.
-     */
-    tags: v.optional(v.any()),
   })
     .index("name", ["name"])
     .index("slug", ["slug"])
@@ -554,17 +539,6 @@ export default defineSchema({
    * Durable, queryable auth-event projection rows.
    *
    * Each target owns one immutable copy of the fields needed for indexed reads.
-   * Legacy stream fields remain temporarily so existing deployments can
-   * migrate in place.
-   *
-   * NOTE (0.1 upgrade): this table REPLACES the removed `GroupAuditEvent` table.
-   * Dropping a table is not deploy-blocking (Convex simply orphans its rows), so
-   * there is intentionally NO data-copy migration: the old audit rows used a
-   * different taxonomy (`eventType`/`actorType`/`status` vs the event
-   * `kind`/`actorType`/`outcome` here) and cannot be projected without lossy
-   * guesswork. Pre-0.1 `GroupAuditEvent` history is therefore not carried
-   * forward; consumers that need it must export it from the old deployment
-   * before upgrading. See `migrations.ts` for the runnable upgrade sequence.
    */
   AuthEventProjection: defineTable({
     eventId: v.string(),
@@ -583,10 +557,6 @@ export default defineSchema({
     ip: v.optional(v.string()),
     userAgent: v.optional(v.string()),
     data: v.optional(vAuthEventData),
-    /** @deprecated Retained only for stored-row compatibility. */
-    streamId: v.optional(v.string()),
-    /** @deprecated Retained only for stored-row compatibility. */
-    streamIndex: v.optional(v.number()),
   })
     .index("target_time", ["targetKind", "targetId", "occurredAt"])
     .index("target_kind_time", ["targetKind", "targetId", "kind", "occurredAt"])
@@ -609,34 +579,9 @@ export default defineSchema({
     groupId: v.id("Group"),
     url: v.string(),
     status: vWebhookEndpointStatus,
-    /**
-     * Endpoint signing secret encrypted with `AUTH_SECRET_ENCRYPTION_KEY`.
-     * Decrypted at emit time to HMAC-SHA256 each outbound payload; the
-     * dispatch action forwards the precomputed signature in
-     * `X-Auth-Signature`.
-     *
-     * Optional for the 0.1 two-phase upgrade: pre-existing rows carry the
-     * one-way `secretHash` and have no `secretCiphertext` yet. The
-     * `disableLegacyWebhookEndpoints` migration disables those rows and erases
-     * the hash; an operator must provide a new secret before re-enabling them.
-     * Tighten back to required in a later release once every live row is
-     * encrypted.
-     */
-    secretCiphertext: v.optional(v.string()),
-    /**
-     * @deprecated One-way SHA-256 hash from the pre-encryption signing scheme.
-     * Retained only so pre-existing rows validate on deploy; the endpoint
-     * migration disables hash-only rows and clears this field. It cannot be
-     * converted into the original secret. Removed in a later release.
-     */
-    secretHash: v.optional(v.string()),
-    /**
-     * Kept permissive (`v.array(v.string())`, not `v.array(vAuthEventKind)`) so
-     * rows holding pre-rename kind strings validate on deploy. The
-     * `renameWebhookEndpointSubscriptions` migration remaps them; re-narrow in a
-     * later release.
-     */
-    subscriptions: v.array(v.string()),
+    /** Endpoint signing secret encrypted with `AUTH_SECRET_ENCRYPTION_KEY`. */
+    secretCiphertext: v.string(),
+    subscriptions: v.array(vAuthEventKind),
     createdByUserId: v.optional(v.id("User")),
     lastSuccessAt: v.optional(v.number()),
     lastFailureAt: v.optional(v.number()),
@@ -653,16 +598,8 @@ export default defineSchema({
   GroupWebhookDelivery: defineTable({
     connectionId: v.id("GroupConnection"),
     endpointId: v.id("GroupWebhookEndpoint"),
-    /**
-     * `eventId`/`kind`/`signature`/`signedAt` became required after the
-     * audit→event migration. Relaxed to optional for the 0.1 two-phase upgrade
-     * so pre-existing rows (which instead carry `eventType`/`auditEventId`, and
-     * may predate `signature`/`signedAt`) validate on deploy. The
-     * `renameWebhookDeliveryKinds` migration backfills them from the legacy
-     * fields; tighten back to required in a later release.
-     */
-    eventId: v.optional(v.string()),
-    kind: v.optional(vAuthEventKind),
+    eventId: v.string(),
+    kind: vAuthEventKind,
     status: vWebhookDeliveryStatus,
     attemptCount: v.number(),
     nextAttemptAt: v.number(),
@@ -671,19 +608,9 @@ export default defineSchema({
     lastError: v.optional(v.string()),
     payload: v.any(),
     /** HMAC-SHA256 hex of `${signedAt}.${body}` using the endpoint secret. */
-    signature: v.optional(v.string()),
+    signature: v.string(),
     /** Epoch ms used in the signature pre-image. */
-    signedAt: v.optional(v.number()),
-    /**
-     * @deprecated Legacy pre-`event` audit fields. `eventType` held the old
-     * audit event-type string; `auditEventId` referenced the dropped
-     * `GroupAuditEvent` table (kept as `v.string()` since that table no longer
-     * exists). Retained so pre-existing rows validate on deploy; the
-     * `renameWebhookDeliveryKinds` migration reads them to backfill
-     * `kind`/`eventId`, then clears them. Removed in a later release.
-     */
-    eventType: v.optional(v.string()),
-    auditEventId: v.optional(v.string()),
+    signedAt: v.number(),
   })
     .index("group_connection_id", ["connectionId"])
     .index("status_next_attempt_at", ["status", "nextAttemptAt"])
@@ -727,12 +654,6 @@ export default defineSchema({
     revoked: v.boolean(),
     /** Arbitrary app-specific metadata attached to the key. */
     extend: v.optional(v.any()),
-    /**
-     * @deprecated Renamed to `extend`. Retained so pre-existing rows validate on
-     * deploy; the `backfillApiKeyExtend` migration copies it into `extend` (when
-     * `extend` is unset) and clears this. Removed in a later release.
-     */
-    metadata: v.optional(v.any()),
   })
     .index("user_id", ["userId"])
     .index("hashed_key", ["hashedKey"]),
@@ -744,14 +665,13 @@ export default defineSchema({
     redirectUris: v.array(v.string()),
     scopes: v.array(v.string()),
     grantTypes: v.array(v.string()),
-    /** RFC 7591 token-endpoint auth method; `none` = public client. Optional
-     *  so pre-existing rows validate before the backfill migration runs. */
-    tokenEndpointAuthMethod: v.optional(vTokenEndpointAuthMethod),
+    /** RFC 7591 token-endpoint auth method; `none` = public client. */
+    tokenEndpointAuthMethod: vTokenEndpointAuthMethod,
     /** SHA-256 of the RFC 7592 registration access token (management bearer). */
     registrationAccessTokenHash: v.optional(v.string()),
     createdBy: v.optional(v.id("User")),
     revoked: v.boolean(),
-    /** Set when revoked; optional until the compatibility backfill runs. */
+    /** Set when the client is revoked. */
     revokedAt: v.optional(v.number()),
     extend: v.optional(v.any()),
   })

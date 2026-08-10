@@ -574,7 +574,6 @@ test("group connection component stores scim config, audit events, and webhook d
   expect(webhookList.length).toBeGreaterThan(0);
   for (const endpoint of webhookList) {
     expect(endpoint).not.toHaveProperty("secretCiphertext");
-    expect(endpoint.hasSecret).toBe(true);
   }
 });
 

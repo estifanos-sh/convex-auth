@@ -1,51 +1,25 @@
 import { components } from "@convex/_generated/api";
 import { auth } from "@convex/auth";
 import schema from "@convex/schema";
-import { getLegacyWebhookEndpointPatch } from "@estifanos-sh/convex-auth/component/migrations";
 import { getPublicWebhookEndpoint } from "@estifanos-sh/convex-auth/server/connection/webhook";
 import { decryptSecret } from "@estifanos-sh/convex-auth/server/secret";
 import { expect, test } from "vite-plus/test";
 
 import { convexTest } from "../convex/setup";
 
-test("legacy webhook migration disables hash-only endpoints and erases the hash", () => {
-  expect(
-    getLegacyWebhookEndpointPatch({
-      status: "active",
-      secretHash: "irreversible-sha256-hash",
-    }),
-  ).toEqual({ status: "disabled", secretHash: undefined });
-
-  expect(
-    getLegacyWebhookEndpointPatch({
-      status: "disabled",
-      secretHash: "irreversible-sha256-hash",
-    }),
-  ).toEqual({ secretHash: undefined });
-
-  expect(
-    getLegacyWebhookEndpointPatch({
-      status: "active",
-      secretCiphertext: "encrypted-secret",
-    }),
-  ).toBeUndefined();
-});
-
-test("public webhook projection strips all credential material and makes legacy rows inert", () => {
+test("public webhook projection strips encrypted credential material", () => {
   const endpoint = getPublicWebhookEndpoint({
     _id: "endpoint-id",
     status: "active" as const,
-    secretHash: "irreversible-sha256-hash",
-    subscriptions: ["user.created", "removed.legacy.kind"],
+    secretCiphertext: "encrypted-secret",
+    subscriptions: ["user.created" as const],
   });
 
   expect(endpoint).toEqual({
     _id: "endpoint-id",
-    status: "disabled",
+    status: "active",
     subscriptions: ["user.created"],
-    hasSecret: false,
   });
-  expect(endpoint).not.toHaveProperty("secretHash");
   expect(endpoint).not.toHaveProperty("secretCiphertext");
 });
 
@@ -112,10 +86,7 @@ test("webhook endpoint update rotates the secret without exposing it", async () 
   });
 
   expect(raw?.secretCiphertext).not.toBe(before?.secretCiphertext);
-  expect(await decryptSecret(raw!.secretCiphertext!)).toBe("new-secret");
-  expect(raw).not.toHaveProperty("secretHash");
-  expect(publicEndpoint).not.toHaveProperty("secretHash");
+  expect(await decryptSecret(raw!.secretCiphertext)).toBe("new-secret");
   expect(publicEndpoint).not.toHaveProperty("secretCiphertext");
-  expect(publicEndpoint?.hasSecret).toBe(true);
   expect(publicEndpoint?.subscriptions).toEqual(["user.updated"]);
 });

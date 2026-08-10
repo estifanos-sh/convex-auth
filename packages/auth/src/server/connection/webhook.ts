@@ -1,6 +1,5 @@
 import type { EncryptedSecret } from "../../shared/brand";
 import { ErrorCode } from "../../shared/codes";
-import { EVENT_KINDS } from "../../shared/event/kinds";
 import { unsafeFetchUrlReason } from "../../shared/fetch/guard";
 import type { ComponentCtx, ComponentReadCtx } from "../component/context";
 import {
@@ -58,39 +57,20 @@ type WebhookDeps = {
  * Webhook endpoint doc with all stored credential material stripped for the
  * public/admin read facade (`endpoint.get`/`endpoint.list`). The raw ciphertext
  * stays internal to delivery signing, which reads the component doc directly.
- * Hash-only legacy rows are reported as disabled until a new secret is stored.
- *
  * @internal
  */
 export function getPublicWebhookEndpoint<
   T extends {
-    secretCiphertext?: unknown;
-    secretHash?: unknown;
+    secretCiphertext: unknown;
     status: "active" | "disabled";
-    subscriptions: string[];
+    subscriptions: AuthEventKind[];
   },
->(
-  endpoint: T | null | undefined,
-):
-  | (Omit<T, "secretCiphertext" | "secretHash" | "status" | "subscriptions"> & {
-      status: "active" | "disabled";
-      subscriptions: AuthEventKind[];
-      hasSecret: boolean;
-    })
-  | null {
+>(endpoint: T | null | undefined): Omit<T, "secretCiphertext"> | null {
   if (!endpoint) {
     return null;
   }
-  const { secretCiphertext, secretHash: _secretHash, status, subscriptions, ...rest } = endpoint;
-  const hasSecret = typeof secretCiphertext === "string" && secretCiphertext.length > 0;
-  return {
-    ...rest,
-    status: hasSecret ? status : "disabled",
-    subscriptions: subscriptions.filter((kind): kind is AuthEventKind =>
-      Object.prototype.hasOwnProperty.call(EVENT_KINDS, kind),
-    ),
-    hasSecret,
-  };
+  const { secretCiphertext: _secretCiphertext, ...rest } = endpoint;
+  return rest;
 }
 
 export function createGroupWebhookDomain(deps: WebhookDeps) {
@@ -150,11 +130,7 @@ export function createGroupWebhookDomain(deps: WebhookDeps) {
         );
         return endpoints.map((endpoint) => getPublicWebhookEndpoint(endpoint)!);
       },
-      /**
-       * Update webhook delivery settings and optionally rotate its signing
-       * secret. A hash-only legacy endpoint must supply a new secret before it
-       * can be reactivated.
-       */
+      /** Update webhook delivery settings and optionally rotate its signing secret. */
       update: async (
         ctx: ComponentCtx,
         args: {
@@ -176,16 +152,6 @@ export function createGroupWebhookDomain(deps: WebhookDeps) {
         }
         if (args.patch.secret !== undefined && args.patch.secret.length === 0) {
           throw convexError(ErrorCode.INVALID_PARAMETERS, "Webhook secret must not be empty.");
-        }
-        if (
-          args.patch.status === "active" &&
-          args.patch.secret === undefined &&
-          !endpoint.secretCiphertext
-        ) {
-          throw convexError(
-            ErrorCode.INVALID_PARAMETERS,
-            "A new webhook secret is required before this endpoint can be enabled.",
-          );
         }
         const secretCiphertext =
           args.patch.secret === undefined ? undefined : await encryptSecret(args.patch.secret);

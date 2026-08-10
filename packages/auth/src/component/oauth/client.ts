@@ -58,7 +58,7 @@ export const create = mutation({
     redirectUris: v.array(v.string()),
     scopes: v.array(v.string()),
     grantTypes: v.array(v.string()),
-    tokenEndpointAuthMethod: v.optional(vTokenEndpointAuthMethod),
+    tokenEndpointAuthMethod: vTokenEndpointAuthMethod,
     registrationAccessTokenHash: v.optional(v.string()),
     createdBy: v.optional(v.id("User")),
     extend: v.optional(v.any()),

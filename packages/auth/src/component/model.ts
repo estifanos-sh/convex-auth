@@ -461,7 +461,6 @@ export const userFields = <F extends IdValidatorFn>(vId: F) => ({
   phoneVerificationTime: v.optional(v.number()),
   isAnonymous: v.optional(v.boolean()),
   lastActiveGroup: v.optional(vId(TABLES.Group)),
-  hasTotp: v.optional(v.boolean()),
   extend: v.optional(v.any()),
 });
 
@@ -666,7 +665,7 @@ export const vOAuthClientDoc = v.object({
   redirectUris: v.array(v.string()),
   scopes: v.array(v.string()),
   grantTypes: v.array(v.string()),
-  tokenEndpointAuthMethod: v.optional(vTokenEndpointAuthMethod),
+  tokenEndpointAuthMethod: vTokenEndpointAuthMethod,
   registrationAccessTokenHash: v.optional(v.string()),
   createdBy: v.optional(v.id(TABLES.User)),
   revoked: v.boolean(),
@@ -839,14 +838,8 @@ export const vGroupWebhookEndpointDoc = v.object({
   groupId: v.id(TABLES.Group),
   url: v.string(),
   status: vWebhookEndpointStatus,
-  // Two-phase (0.1): `secretCiphertext` optional and legacy `secretHash`
-  // retained until `disableLegacyWebhookEndpoints` disables hash-only rows and
-  // clears the one-way hash; `subscriptions` is widened to `string[]` so legacy
-  // subscription strings validate. Mirrors `schema.ts` GroupWebhookEndpoint;
-  // tighten in a later release.
-  secretCiphertext: v.optional(v.string()),
-  secretHash: v.optional(v.string()),
-  subscriptions: v.array(v.string()),
+  secretCiphertext: v.string(),
+  subscriptions: v.array(vAuthEventKind),
   createdByUserId: v.optional(v.id(TABLES.User)),
   lastSuccessAt: v.optional(v.number()),
   lastFailureAt: v.optional(v.number()),
@@ -859,11 +852,8 @@ export const vGroupWebhookDeliveryDoc = v.object({
   ...vDocMeta(TABLES.GroupWebhookDelivery),
   connectionId: v.id(TABLES.GroupConnection),
   endpointId: v.id(TABLES.GroupWebhookEndpoint),
-  // Two-phase (0.1): `eventId`/`kind`/`signature`/`signedAt` optional and legacy
-  // `eventType`/`auditEventId` retained until `renameWebhookDeliveryKinds`
-  // backfills them. Mirrors `schema.ts` GroupWebhookDelivery; tighten later.
-  eventId: v.optional(v.string()),
-  kind: v.optional(vAuthEventKind),
+  eventId: v.string(),
+  kind: vAuthEventKind,
   status: vWebhookDeliveryStatus,
   attemptCount: v.number(),
   nextAttemptAt: v.number(),
@@ -871,10 +861,8 @@ export const vGroupWebhookDeliveryDoc = v.object({
   lastResponseStatus: v.optional(v.number()),
   lastError: v.optional(v.string()),
   payload: v.any(),
-  signature: v.optional(v.string()),
-  signedAt: v.optional(v.number()),
-  eventType: v.optional(v.string()),
-  auditEventId: v.optional(v.string()),
+  signature: v.string(),
+  signedAt: v.number(),
 });
 
 /** Validator for the public (redacted) projection of a `GroupWebhookDelivery` document. */
@@ -882,17 +870,15 @@ export const vGroupWebhookDeliveryPublicDoc = v.object({
   ...vDocMeta(TABLES.GroupWebhookDelivery),
   connectionId: v.id(TABLES.GroupConnection),
   endpointId: v.id(TABLES.GroupWebhookEndpoint),
-  // Two-phase (0.1): mirror the relaxed source doc so the public projection of a
-  // pre-backfill delivery row still validates.
-  eventId: v.optional(v.string()),
-  kind: v.optional(vAuthEventKind),
+  eventId: v.string(),
+  kind: vAuthEventKind,
   status: vWebhookDeliveryStatus,
   attemptCount: v.number(),
   nextAttemptAt: v.number(),
   lastAttemptAt: v.optional(v.number()),
   lastResponseStatus: v.optional(v.number()),
   lastError: v.optional(v.string()),
-  signedAt: v.optional(v.number()),
+  signedAt: v.number(),
 });
 
 /** Summary returned after accepting an invite token: the invite plus resulting group/membership state. */

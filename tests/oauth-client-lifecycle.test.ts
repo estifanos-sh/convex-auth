@@ -21,6 +21,7 @@ async function createClient(t: any, args: Record<string, unknown>) {
     return await ctx.runMutation(clientApi().create, {
       redirectUris: ["https://app.example.com/cb"],
       grantTypes: ["authorization_code"],
+      tokenEndpointAuthMethod: "none",
       ...args,
     });
   });

@@ -68,7 +68,6 @@ type GroupWebhookEndpoint = {
   url?: string;
   status?: string;
   subscriptions?: string[];
-  secretHash?: string;
 };
 
 type GroupWebhookDelivery = {
@@ -245,7 +244,6 @@ test("SCIM → Convex: direct SCIM server protocol validation", async () => {
   })) as GroupWebhookEndpoint;
   expect(webhookCreated._id).toBeTruthy();
   expect(webhookCreated.url).toBe(`https://example.com/webhooks/${runId}`);
-  expect(webhookCreated.secretHash).toBeUndefined();
 
   const scimConfigured = await groupConnectionScimConfigureRpc(convexClient, convexUserToken, {
     connectionId,
@@ -592,8 +590,6 @@ test("SCIM → Convex: direct SCIM server protocol validation", async () => {
   expect(
     webhookEndpoints.some((endpoint) => endpoint.url === `https://example.com/webhooks/${runId}`),
   ).toBe(true);
-  expect(webhookEndpoints.every((endpoint) => endpoint.secretHash === undefined)).toBe(true);
-
   const webhookDeliveries = (
     await groupWebhookDeliveryListRpc(convexClient, convexUserToken, {
       connectionId,

@@ -25,7 +25,7 @@ SSO-related events.
 | ----------------- | ----------------------------------------------------------------------- | ---------------- | ----------------------------------------------------------------------------------------- |
 | `endpoint.create` | `(ctx, { connectionId, url, secret, subscriptions, createdByUserId? })` | `{ endpointId }` | Creates a webhook endpoint that listens for specific events.                              |
 | `endpoint.list`   | `(ctx, { connectionId })`                                               | Endpoint[]       | Lists all webhook endpoints for a connection.                                             |
-| `endpoint.update` | `(ctx, { id, patch: { url?, status?, secret?, subscriptions? } })`      | `{ endpointId }` | Updates an endpoint. A disabled legacy endpoint needs a new `secret` before activation.   |
+| `endpoint.update` | `(ctx, { id, patch: { url?, status?, secret?, subscriptions? } })`      | `{ endpointId }` | Updates an endpoint and optionally rotates its signing secret.                            |
 | `endpoint.revoke` | `(ctx, { id })`                                                         | `{ endpointId }` | Disables a webhook endpoint (stops delivery). Throws `ConvexError` if endpoint not found. |
 
 ## Example
@@ -47,7 +47,7 @@ const { endpointId } = await auth.connection.webhook.endpoint.create(ctx, {
 await auth.connection.webhook.endpoint.revoke(ctx, { id: endpointId });
 ```
 
-### Rotate a secret or restore a legacy endpoint
+### Rotate a secret
 
 ```ts
 await auth.connection.webhook.endpoint.update(ctx, {
@@ -59,11 +59,8 @@ await auth.connection.webhook.endpoint.update(ctx, {
 });
 ```
 
-Endpoint reads never return `secretCiphertext` or the deprecated `secretHash`;
-they expose only `hasSecret`. During the 0.1 compatibility migration, a legacy
-hash-only endpoint is reported as disabled and cannot enqueue new deliveries.
-Run the webhook endpoint migration, then supply a new secret before explicitly
-re-enabling it.
+Endpoint reads never return `secretCiphertext`; signing material stays inside
+the component.
 
 ## Delivery worker
 

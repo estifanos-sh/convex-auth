@@ -53,9 +53,14 @@ const confidentialClient = {
   redirectUris: [REDIRECT_URI],
   scopes: ["workspace:read", "workspace:write"],
   grantTypes: ["authorization_code", "client_credentials"],
+  tokenEndpointAuthMethod: "client_secret_post" as const,
   isArchived: false,
 };
-const publicClient = { ...confidentialClient, clientSecretHash: undefined };
+const publicClient = {
+  ...confidentialClient,
+  clientSecretHash: undefined,
+  tokenEndpointAuthMethod: "none" as const,
+};
 
 const ctxWithUser = { auth: { getUserIdentity: async () => ({ subject: "user1" }) } } as never;
 

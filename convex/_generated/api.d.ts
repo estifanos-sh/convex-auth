@@ -78,5 +78,4 @@ export declare const components: {
   auth: import("@estifanos-sh/convex-auth/_generated/component.js").ComponentApi<"auth">;
   resend: import("@convex-dev/resend/_generated/component.js").ComponentApi<"resend">;
   staticHosting: import("@convex-dev/static-hosting/_generated/component.js").ComponentApi<"staticHosting">;
-  docsHosting: import("@convex-dev/static-hosting/_generated/component.js").ComponentApi<"docsHosting">;
 };

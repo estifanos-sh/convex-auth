@@ -86,7 +86,6 @@ export const sidebar: SidebarGroup[] = [
       { title: "Typed returns", slug: "/reference/typed-returns" },
       { title: "Error codes", slug: "/reference/errors" },
       { title: "CLI", slug: "/reference/cli" },
-      { title: "Data migrations", slug: "/reference/migrations" },
       { title: "Architecture", slug: "/reference/architecture" },
       { title: ".well-known", slug: "/reference/well-known" },
     ],

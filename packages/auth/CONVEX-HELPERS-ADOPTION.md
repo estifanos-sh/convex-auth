@@ -50,8 +50,6 @@ Net result: ~50 LOC saved across 13 files. The win is real but smaller than the 
 | `crud`                                      | large    | medium  | **adopt later** (Pass 2D-3)                                                              |
 | `retries`                                   | moderate | low     | **decline** (current `retryWithBackoff` is fit-for-purpose, no scheduled-retry need yet) |
 | `stream`                                    | large    | low     | **decline** (no multi-source pagination use case in auth)                                |
-| `migrations`                                | n/a      | n/a     | **decline** (already on official `@convex-dev/migrations`)                               |
-| `rateLimit`                                 | n/a      | n/a     | **decline** (already on official `@convex-dev/rate-limiter`)                             |
 
 ---
 
@@ -173,12 +171,6 @@ Auth lifecycle, SSO/SCIM audit, and webhook source events now use
 `@convex-dev/stream` plus `AuthEventProjection` for Convex-native reads.
 `GroupWebhookDelivery` remains as the retry/projection layer for outbound HTTP
 delivery.
-
-### `migrations`, `rateLimit` — already on the official components
-
-`@convex-dev/migrations` and `@convex-dev/rate-limiter` are the maintained-by-Convex versions; `convex-helpers` exposes older / community variants. Stay put.
-
----
 
 ## Convex platform features
 
