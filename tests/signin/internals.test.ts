@@ -1,7 +1,10 @@
 import { password } from "@estifanos-sh/convex-auth/providers/password";
+import * as events from "@estifanos-sh/convex-auth/server/events";
 import { credentialsSignInImpl } from "@estifanos-sh/convex-auth/server/mutations/credentials/signin";
 import * as mutations from "@estifanos-sh/convex-auth/server/mutations/calls";
+import { signInSessionImpl } from "@estifanos-sh/convex-auth/server/mutations/signin";
 import { enrichActionCtx } from "@estifanos-sh/convex-auth/server/runtime";
+import * as lifecycle from "@estifanos-sh/convex-auth/server/session/lifecycle";
 import { signInImpl } from "@estifanos-sh/convex-auth/server/signin/flow";
 import type { GenericActionCtx, GenericDataModel } from "convex/server";
 import { afterEach, expect, test, vi } from "vite-plus/test";
@@ -369,6 +372,118 @@ test("credentials sign-in keeps the no-token contract when authorize pre-issues 
       tokens: null,
     },
   });
+});
+
+test("custom credentials preserve the provider when provisioning a user session", async () => {
+  const provider = {
+    id: "invite",
+    type: "credentials",
+    authorize: vi.fn(async () => ({
+      provision: {
+        account: { id: "invite-1" },
+        profile: { email: "invited@example.com" },
+      },
+      hasTotp: false,
+    })),
+  } as any;
+  const createAccount = vi.fn(async () => ({
+    account: { userId: "new-user" },
+  }));
+  const callSignIn = vi.spyOn(mutations, "callSignIn").mockResolvedValue({
+    userId: "new-user",
+    sessionId: "new-session",
+    tokens: null,
+  } as any);
+
+  const result = await signInImpl(
+    {
+      auth: { account: { create: createAccount }, config: {} },
+      runQuery: vi.fn(),
+      runMutation: vi.fn(),
+    } as any,
+    provider,
+    { params: { code: "invite-code" } },
+    { generateTokens: false, allowExtraProviders: false },
+  );
+
+  expect(result.kind).toBe("signedIn");
+  expect(createAccount).toHaveBeenCalledWith(
+    expect.anything(),
+    expect.objectContaining({ provider: "invite" }),
+  );
+  expect(callSignIn).toHaveBeenCalledWith(
+    expect.anything(),
+    expect.objectContaining({
+      userId: "new-user",
+      provider: "invite",
+      generateTokens: false,
+    }),
+  );
+});
+
+test("custom credentials preserve the provider when signing in an existing user", async () => {
+  const provider = {
+    id: "recovery",
+    type: "credentials",
+    authorize: vi.fn(async () => ({
+      userId: "existing-user",
+      hasTotp: false,
+    })),
+  } as any;
+  const callSignIn = vi.spyOn(mutations, "callSignIn").mockResolvedValue({
+    userId: "existing-user",
+    sessionId: "existing-session",
+    tokens: null,
+  } as any);
+
+  const result = await signInImpl(
+    {
+      auth: { config: {} },
+      runQuery: vi.fn(),
+      runMutation: vi.fn(),
+    } as any,
+    provider,
+    { params: { code: "recovery-code" } },
+    { generateTokens: false, allowExtraProviders: false },
+  );
+
+  expect(result.kind).toBe("signedIn");
+  expect(callSignIn).toHaveBeenCalledWith(expect.anything(), {
+    userId: "existing-user",
+    sessionId: undefined,
+    provider: "recovery",
+    generateTokens: false,
+  });
+});
+
+test("session issuance emits the originating credentials provider", async () => {
+  vi.spyOn(lifecycle, "issueSession").mockResolvedValue({
+    userId: "user1",
+    sessionId: "session1",
+    identity: { subject: "user1" },
+    refreshToken: null,
+  } as any);
+  const queueAuthEvent = vi.spyOn(events, "queueAuthEvent").mockResolvedValue(undefined);
+
+  await signInSessionImpl(
+    {} as any,
+    {
+      userId: "user1",
+      sessionId: "session1",
+      provider: "invite",
+      generateTokens: false,
+    },
+    {} as any,
+  );
+
+  expect(queueAuthEvent).toHaveBeenCalledWith(
+    expect.anything(),
+    expect.anything(),
+    expect.objectContaining({
+      kind: "session.signed_in",
+      data: { provider: "invite" },
+    }),
+  );
 });
 
 test("credentialsSignIn verifies against a dummy hash when the account is missing (enumeration timing)", async () => {
