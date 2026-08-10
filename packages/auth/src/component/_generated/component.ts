@@ -56,7 +56,6 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
             emailVerificationTime?: number;
             extend?: any;
             firstName?: string;
-            hasTotp?: boolean;
             image?: string;
             isAnonymous?: boolean;
             lastActiveGroup?: string;
@@ -93,7 +92,6 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
             emailVerificationTime?: number;
             extend?: any;
             firstName?: string;
-            hasTotp?: boolean;
             image?: string;
             isAnonymous?: boolean;
             lastActiveGroup?: string;
@@ -839,7 +837,6 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
               emailVerificationTime?: number;
               extend?: any;
               firstName?: string;
-              hasTotp?: boolean;
               image?: string;
               isAnonymous?: boolean;
               lastActiveGroup?: string;
@@ -1003,12 +1000,10 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
             _creationTime: number;
             _id: string;
             attemptCount: number;
-            auditEventId?: string;
             connectionId: string;
             endpointId: string;
-            eventId?: string;
-            eventType?: string;
-            kind?:
+            eventId: string;
+            kind:
               | "user.created"
               | "user.updated"
               | "session.signed_in"
@@ -1066,8 +1061,8 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
             lastResponseStatus?: number;
             nextAttemptAt: number;
             payload: any;
-            signature?: string;
-            signedAt?: number;
+            signature: string;
+            signedAt: number;
             status: "pending" | "processing" | "delivered" | "failed";
           }>,
           Name
@@ -1095,8 +1090,8 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
               attemptCount: number;
               connectionId: string;
               endpointId: string;
-              eventId?: string;
-              kind?:
+              eventId: string;
+              kind:
                 | "user.created"
                 | "user.updated"
                 | "session.signed_in"
@@ -1153,7 +1148,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
               lastError?: string;
               lastResponseStatus?: number;
               nextAttemptAt: number;
-              signedAt?: number;
+              signedAt: number;
               status: "pending" | "processing" | "delivered" | "failed";
             }>;
             pageStatus?: "SplitRecommended" | "SplitRequired" | null;
@@ -1263,10 +1258,62 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
             groupId: string;
             lastFailureAt?: number;
             lastSuccessAt?: number;
-            secretCiphertext?: string;
-            secretHash?: string;
+            secretCiphertext: string;
             status: "active" | "disabled";
-            subscriptions: Array<string>;
+            subscriptions: Array<
+              | "user.created"
+              | "user.updated"
+              | "session.signed_in"
+              | "session.signed_out"
+              | "session.invalidated"
+              | "session.refresh_exchanged"
+              | "session.refresh_reuse_detected"
+              | "account.linked"
+              | "account.unlinked"
+              | "password.changed"
+              | "passkey.added"
+              | "passkey.removed"
+              | "totp.enrolled"
+              | "totp.removed"
+              | "email.verified"
+              | "phone.verified"
+              | "api_key.created"
+              | "api_key.revoked"
+              | "oauth.client.created"
+              | "oauth.client.revoked"
+              | "oauth.code.created"
+              | "oauth.token.created"
+              | "oauth.token.exchanged"
+              | "oauth.refresh.reuse_detected"
+              | "oauth.refresh.revoked"
+              | "connection.created"
+              | "connection.updated"
+              | "connection.removed"
+              | "connection.login.succeeded"
+              | "connection.login.failed"
+              | "connection.domain.verification_requested"
+              | "connection.domain.verified"
+              | "connection.policy.updated"
+              | "connection.saml.set"
+              | "connection.saml.refreshed"
+              | "connection.oidc.set"
+              | "connection.scim.set"
+              | "connection.scim.read"
+              | "connection.scim.user.provisioned"
+              | "connection.scim.user.updated"
+              | "connection.scim.user.deactivated"
+              | "connection.scim.user.reactivated"
+              | "connection.scim.group.provisioned"
+              | "connection.scim.group.updated"
+              | "connection.scim.group.deactivated"
+              | "connection.scim.group.reactivated"
+              | "webhook.endpoint.created"
+              | "webhook.endpoint.disabled"
+              | "webhook.delivery.created"
+              | "webhook.delivery.attempted"
+              | "webhook.delivery.succeeded"
+              | "webhook.delivery.failed"
+            >;
             url: string;
           } | null,
           Name
@@ -1285,10 +1332,62 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
             groupId: string;
             lastFailureAt?: number;
             lastSuccessAt?: number;
-            secretCiphertext?: string;
-            secretHash?: string;
+            secretCiphertext: string;
             status: "active" | "disabled";
-            subscriptions: Array<string>;
+            subscriptions: Array<
+              | "user.created"
+              | "user.updated"
+              | "session.signed_in"
+              | "session.signed_out"
+              | "session.invalidated"
+              | "session.refresh_exchanged"
+              | "session.refresh_reuse_detected"
+              | "account.linked"
+              | "account.unlinked"
+              | "password.changed"
+              | "passkey.added"
+              | "passkey.removed"
+              | "totp.enrolled"
+              | "totp.removed"
+              | "email.verified"
+              | "phone.verified"
+              | "api_key.created"
+              | "api_key.revoked"
+              | "oauth.client.created"
+              | "oauth.client.revoked"
+              | "oauth.code.created"
+              | "oauth.token.created"
+              | "oauth.token.exchanged"
+              | "oauth.refresh.reuse_detected"
+              | "oauth.refresh.revoked"
+              | "connection.created"
+              | "connection.updated"
+              | "connection.removed"
+              | "connection.login.succeeded"
+              | "connection.login.failed"
+              | "connection.domain.verification_requested"
+              | "connection.domain.verified"
+              | "connection.policy.updated"
+              | "connection.saml.set"
+              | "connection.saml.refreshed"
+              | "connection.oidc.set"
+              | "connection.scim.set"
+              | "connection.scim.read"
+              | "connection.scim.user.provisioned"
+              | "connection.scim.user.updated"
+              | "connection.scim.user.deactivated"
+              | "connection.scim.user.reactivated"
+              | "connection.scim.group.provisioned"
+              | "connection.scim.group.updated"
+              | "connection.scim.group.deactivated"
+              | "connection.scim.group.reactivated"
+              | "webhook.endpoint.created"
+              | "webhook.endpoint.disabled"
+              | "webhook.delivery.created"
+              | "webhook.delivery.attempted"
+              | "webhook.delivery.succeeded"
+              | "webhook.delivery.failed"
+            >;
             url: string;
           }>,
           Name
@@ -2672,7 +2771,6 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
               emailVerificationTime?: number;
               extend?: any;
               firstName?: string;
-              hasTotp?: boolean;
               image?: string;
               isAnonymous?: boolean;
               lastActiveGroup?: string;
@@ -2722,7 +2820,6 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
             emailVerificationTime?: number;
             extend?: any;
             firstName?: string;
-            hasTotp?: boolean;
             image?: string;
             isAnonymous?: boolean;
             lastActiveGroup?: string;
@@ -2903,7 +3000,6 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
               emailVerificationTime?: number;
               extend?: any;
               firstName?: string;
-              hasTotp?: boolean;
               image?: string;
               isAnonymous?: boolean;
               lastActiveGroup?: string;
@@ -2950,7 +3046,6 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
             emailVerificationTime?: number;
             extend?: any;
             firstName?: string;
-            hasTotp?: boolean;
             image?: string;
             isAnonymous?: boolean;
             lastActiveGroup?: string;
@@ -3646,7 +3741,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           redirectUris: Array<string>;
           registrationAccessTokenHash?: string;
           scopes: Array<string>;
-          tokenEndpointAuthMethod?: "client_secret_basic" | "client_secret_post" | "none";
+          tokenEndpointAuthMethod: "client_secret_basic" | "client_secret_post" | "none";
         },
         string,
         Name
@@ -3669,7 +3764,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           revoked: boolean;
           revokedAt?: number;
           scopes: Array<string>;
-          tokenEndpointAuthMethod?: "client_secret_basic" | "client_secret_post" | "none";
+          tokenEndpointAuthMethod: "client_secret_basic" | "client_secret_post" | "none";
         } | null,
         Name
       >;
@@ -3704,7 +3799,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
             revoked: boolean;
             revokedAt?: number;
             scopes: Array<string>;
-            tokenEndpointAuthMethod?: "client_secret_basic" | "client_secret_post" | "none";
+            tokenEndpointAuthMethod: "client_secret_basic" | "client_secret_post" | "none";
           }>;
           pageStatus?: "SplitRecommended" | "SplitRequired" | null;
           splitCursor?: string | null;
@@ -3876,7 +3971,6 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           emailVerificationTime?: number;
           extend?: any;
           firstName?: string;
-          hasTotp?: boolean;
           image?: string;
           isAnonymous?: boolean;
           lastActiveGroup?: string;
@@ -4006,7 +4100,6 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
               emailVerificationTime?: number;
               extend?: any;
               firstName?: string;
-              hasTotp?: boolean;
               image?: string;
               isAnonymous?: boolean;
               lastActiveGroup?: string;
@@ -4127,7 +4220,6 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
               emailVerificationTime?: number;
               extend?: any;
               firstName?: string;
-              hasTotp?: boolean;
               image?: string;
               isAnonymous?: boolean;
               lastActiveGroup?: string;
@@ -4191,7 +4283,6 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           emailVerificationTime?: number;
           extend?: any;
           firstName?: string;
-          hasTotp?: boolean;
           image?: string;
           isAnonymous?: boolean;
           lastActiveGroup?: string;
@@ -4270,7 +4361,6 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           emailVerificationTime?: number;
           extend?: any;
           firstName?: string;
-          hasTotp?: boolean;
           image?: string;
           isAnonymous?: boolean;
           lastActiveGroup?: string;
@@ -4287,7 +4377,6 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           emailVerificationTime?: number;
           extend?: any;
           firstName?: string;
-          hasTotp?: boolean;
           image?: string;
           isAnonymous?: boolean;
           lastActiveGroup?: string;
@@ -4470,7 +4559,6 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           emailVerificationTime?: number;
           extend?: any;
           firstName?: string;
-          hasTotp?: boolean;
           image?: string;
           isAnonymous?: boolean;
           lastActiveGroup?: string;
@@ -4495,7 +4583,6 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           emailVerificationTime?: number;
           extend?: any;
           firstName?: string;
-          hasTotp?: boolean;
           image?: string;
           isAnonymous?: boolean;
           lastActiveGroup?: string;
@@ -4517,7 +4604,6 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           emailVerificationTime?: number;
           extend?: any;
           firstName?: string;
-          hasTotp?: boolean;
           image?: string;
           isAnonymous?: boolean;
           lastActiveGroup?: string;

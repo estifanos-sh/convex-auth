@@ -191,11 +191,6 @@ export const documentationPages: DocumentationPageMeta[] = [
     title: "Error Codes",
   },
   {
-    description: "Run convex-auth's built-in data migrations after upgrading.",
-    slug: "/reference/migrations",
-    title: "Data Migrations",
-  },
-  {
     description: "Convex returns validators and extend-aware types for the auth read surface.",
     slug: "/reference/typed-returns",
     title: "Typed Returns (auth.v)",
@@ -281,14 +276,12 @@ export const documentationLoaders: Record<string, () => Promise<DocumentationPag
   "/reference/cli": () => import("./pages/32-reference-cli").then((module) => module.default),
   "/reference/config": () => import("./pages/33-reference-config").then((module) => module.default),
   "/reference/errors": () => import("./pages/34-reference-errors").then((module) => module.default),
-  "/reference/migrations": () =>
-    import("./pages/35-reference-migrations").then((module) => module.default),
   "/reference/typed-returns": () =>
-    import("./pages/36-reference-typed-returns").then((module) => module.default),
+    import("./pages/35-reference-typed-returns").then((module) => module.default),
   "/reference/well-known": () =>
-    import("./pages/37-reference-well-known").then((module) => module.default),
-  "/ssr/nextjs": () => import("./pages/38-ssr-nextjs").then((module) => module.default),
-  "/ssr/overview": () => import("./pages/39-ssr-overview").then((module) => module.default),
-  "/ssr/sveltekit": () => import("./pages/40-ssr-sveltekit").then((module) => module.default),
-  "/ssr/tanstack": () => import("./pages/41-ssr-tanstack").then((module) => module.default),
+    import("./pages/36-reference-well-known").then((module) => module.default),
+  "/ssr/nextjs": () => import("./pages/37-ssr-nextjs").then((module) => module.default),
+  "/ssr/overview": () => import("./pages/38-ssr-overview").then((module) => module.default),
+  "/ssr/sveltekit": () => import("./pages/39-ssr-sveltekit").then((module) => module.default),
+  "/ssr/tanstack": () => import("./pages/40-ssr-tanstack").then((module) => module.default),
 };

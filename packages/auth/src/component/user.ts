@@ -212,7 +212,7 @@ const remove = mutation({
     ) {
       throw new ConvexError({
         code: ErrorCode.CASCADE_TOO_LARGE,
-        message: `User has more than ${CASCADE_MAX} child rows in one or more tables; cascade delete is not safe in a single mutation. Drain child rows with the migrations component, then retry.`,
+        message: `User has more than ${CASCADE_MAX} child rows in one or more tables; cascade delete is not safe in a single mutation. Delete child rows in bounded batches, then retry.`,
       });
     }
     const refreshTokens =

@@ -101,10 +101,8 @@ type WebhookEndpointRecord = {
   groupId: string;
   url: string;
   status: "active" | "disabled";
-  secretCiphertext?: string;
-  /** @deprecated One-way legacy hash; never expose through a public facade. */
-  secretHash?: string;
-  subscriptions: string[];
+  secretCiphertext: string;
+  subscriptions: AuthEventKind[];
   createdByUserId?: string;
   lastSuccessAt?: number;
   lastFailureAt?: number;

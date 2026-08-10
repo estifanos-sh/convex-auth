@@ -301,7 +301,6 @@ const vConnectionWebhookEndpoint = v.object({
   lastFailureAt: v.optional(v.number()),
   failureCount: v.number(),
   extend: v.optional(v.any()),
-  hasSecret: v.boolean(),
 });
 
 const vConnectionWebhookDelivery = v.object({

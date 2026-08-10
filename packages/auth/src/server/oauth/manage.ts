@@ -36,13 +36,6 @@ export interface OAuthManageDeps {
   registrationClientUri: (clientId: string) => string;
 }
 
-/** The client's effective auth method, falling back for un-backfilled rows. */
-function effectiveMethod(client: OAuthClientDoc): OAuthTokenEndpointAuthMethod {
-  return (
-    client.tokenEndpointAuthMethod ?? (client.clientSecretHash ? "client_secret_post" : "none")
-  );
-}
-
 /**
  * Pull the trailing `<client_id>` segment from a `.../oauth2/register/<id>`
  * path. Returns `null` for any deeper or differently-shaped path so the
@@ -95,7 +88,7 @@ async function handlePut(
   if (!validated.ok) return validated.response;
   const { name, redirectUris, scopes, tokenEndpointAuthMethod } = validated.value;
 
-  if (effectiveMethod(client) === "none" && tokenEndpointAuthMethod !== "none") {
+  if (client.tokenEndpointAuthMethod === "none" && tokenEndpointAuthMethod !== "none") {
     return jsonError(
       400,
       "invalid_client_metadata",
@@ -157,7 +150,7 @@ export function createClientManagementHandler(deps: OAuthManageDeps) {
 
     switch (request.method) {
       case "GET":
-        return metadataResponse(client, deps, effectiveMethod(client));
+        return metadataResponse(client, deps, client.tokenEndpointAuthMethod);
       case "PUT":
         return handlePut(ctx, request, deps, client);
       case "DELETE":

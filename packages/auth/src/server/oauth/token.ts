@@ -173,9 +173,6 @@ function applyBasicAuthCredentials(request: Request, params: URLSearchParams): v
  * strictly between basic and post. Returns `null` on success, or the error
  * `Response` to return.
  *
- * The fallback keeps un-backfilled rows safe: a row with a stored secret hash
- * behaves confidential and one without behaves public — identical to the prior
- * "secret exists" behavior until the backfill migration runs.
  */
 async function authenticateClient(
   ctx: GenericActionCtx<GenericDataModel>,
@@ -184,8 +181,7 @@ async function authenticateClient(
   clientSecret: string | null,
   deps: OAuthTokenDeps,
 ): Promise<Response | null> {
-  const method =
-    client.tokenEndpointAuthMethod ?? (client.clientSecretHash ? "client_secret_post" : "none");
+  const method = client.tokenEndpointAuthMethod;
   if (method === "none") {
     return clientSecret
       ? jsonError(401, "invalid_client", "Public client must not present a client secret.")

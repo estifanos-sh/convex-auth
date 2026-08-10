@@ -35,7 +35,6 @@ import type * as http from "../http.js";
 import type * as index from "../index.js";
 import type * as limits from "../limits.js";
 import type * as maintenance from "../maintenance.js";
-import type * as migrations from "../migrations.js";
 import type * as model from "../model.js";
 import type * as modules from "../modules.js";
 import type * as oauth_client from "../oauth/client.js";
@@ -80,7 +79,6 @@ const fullApi: ApiFromModules<{
   index: typeof index;
   limits: typeof limits;
   maintenance: typeof maintenance;
-  migrations: typeof migrations;
   model: typeof model;
   modules: typeof modules;
   "oauth/client": typeof oauth_client;
@@ -119,7 +117,6 @@ export const internal: FilterApi<
 > = anyApi as any;
 
 export const components = componentsGeneric() as unknown as {
-  migrations: import("@convex-dev/migrations/_generated/component.js").ComponentApi<"migrations">;
   webhookWorkpool: import("@convex-dev/workpool/_generated/component.js").ComponentApi<"webhookWorkpool">;
   connectionFetchCache: import("@convex-dev/action-cache/_generated/component.js").ComponentApi<"connectionFetchCache">;
 };

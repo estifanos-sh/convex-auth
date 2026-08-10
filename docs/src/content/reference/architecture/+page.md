@@ -53,13 +53,12 @@ The component owns its own isolated tables:
 | `Totp`             | TOTP enrollments                             |
 | `Group Connection` | SSO connections (OIDC/SAML/SCIM config)      |
 
-The auth component also installs three Convex subcomponents internally:
+The auth component also installs two Convex subcomponents internally:
 
-| Subcomponent               | Role                                                               |
-| -------------------------- | ------------------------------------------------------------------ |
-| `@convex-dev/migrations`   | Versioned data migrations against the component's own tables       |
-| `@convex-dev/rate-limiter` | Sign-in throttle (token-bucket; backs `auth.signIn` rate limiting) |
-| `@convex-dev/workpool`     | Webhook delivery worker — drives retries with exponential backoff  |
+| Subcomponent               | Role                                                              |
+| -------------------------- | ----------------------------------------------------------------- |
+| `@convex-dev/action-cache` | Cached OIDC discovery and SAML metadata fetches                   |
+| `@convex-dev/workpool`     | Webhook delivery worker — drives retries with exponential backoff |
 
 These are mounted by `component.use(...)` inside `convex.config.ts`; the
 parent app doesn't install or configure them.

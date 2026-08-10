@@ -72,12 +72,7 @@ export const update = mutation({
   },
   returns: v.null(),
   handler: async (ctx, { id: endpointId, patch }) => {
-    await ctx.db.patch("GroupWebhookEndpoint", endpointId, {
-      ...patch,
-      // Replacing the signing credential completes the legacy transition. A
-      // one-way hash is never carried forward beside the encrypted new secret.
-      ...(patch.secretCiphertext !== undefined ? { secretHash: undefined } : {}),
-    });
+    await ctx.db.patch("GroupWebhookEndpoint", endpointId, patch);
     return null;
   },
 });

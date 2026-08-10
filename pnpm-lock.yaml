@@ -371,9 +371,6 @@ importers:
       '@convex-dev/action-cache':
         specifier: ^0.3.0
         version: 0.3.0(convex@1.43.0(react@19.2.5))
-      '@convex-dev/migrations':
-        specifier: ^0.3.5
-        version: 0.3.5(convex-helpers@0.1.118(@standard-schema/spec@1.1.0)(convex@1.43.0(react@19.2.5))(react@19.2.5)(typescript@6.0.2)(zod@4.4.3))(convex@1.43.0(react@19.2.5))
       '@convex-dev/workpool':
         specifier: ^0.4.9
         version: 0.4.9(convex-helpers@0.1.118(@standard-schema/spec@1.1.0)(convex@1.43.0(react@19.2.5))(react@19.2.5)(typescript@6.0.2)(zod@4.4.3))(convex@1.43.0(react@19.2.5))(react@19.2.5)
@@ -1420,12 +1417,6 @@ packages:
     peerDependencies:
       convex: ^1.36.1
       react: ^18.3.1 || ^19.0.0
-
-  '@convex-dev/migrations@0.3.5':
-    resolution: {integrity: sha512-vj5qjY5XB8laX9WvvxeIFZe8sNW8DGvJ5cPo1zvpjJzYnPLqs5C+VG9HP6sSkEW2QGhsfYOZv56FUNkHiLe1wA==}
-    peerDependencies:
-      convex: ^1.35.0
-      convex-helpers: ^0.1.115
 
   '@convex-dev/rate-limiter@0.3.2':
     resolution: {integrity: sha512-+oBPsBfFbzdxiF/9XaaTQmVnvDlvEfg/c69/v8LxTbw4VLuiflIKlfnPQL8OS0azXQQ11hcPWHmU8ytFmHKDXA==}
@@ -10646,11 +10637,6 @@ snapshots:
     dependencies:
       convex: 1.43.0(react@19.2.5)
       react: 19.2.5
-
-  '@convex-dev/migrations@0.3.5(convex-helpers@0.1.118(@standard-schema/spec@1.1.0)(convex@1.43.0(react@19.2.5))(react@19.2.5)(typescript@6.0.2)(zod@4.4.3))(convex@1.43.0(react@19.2.5))':
-    dependencies:
-      convex: 1.43.0(react@19.2.5)
-      convex-helpers: 0.1.118(@standard-schema/spec@1.1.0)(convex@1.43.0(react@19.2.5))(react@19.2.5)(typescript@6.0.2)(zod@4.4.3)
 
   '@convex-dev/rate-limiter@0.3.2(convex@1.43.0(react@19.2.5))(react@19.2.5)':
     dependencies:

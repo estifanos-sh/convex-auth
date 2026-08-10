@@ -58,7 +58,7 @@ export const create = mutation({
     redirectUris: v.array(v.string()),
     scopes: v.array(v.string()),
     grantTypes: v.array(v.string()),
-    tokenEndpointAuthMethod: v.optional(vTokenEndpointAuthMethod),
+    tokenEndpointAuthMethod: vTokenEndpointAuthMethod,
     registrationAccessTokenHash: v.optional(v.string()),
     createdBy: v.optional(v.id("User")),
     extend: v.optional(v.any()),
@@ -201,8 +201,8 @@ const OAUTH_CLIENT_RETENTION_MS = 90 * 24 * 60 * 60 * 1000;
  * Internal (cron-driven): kept off the public component surface so a mounting
  * app cannot invoke a bulk delete, mirroring `maintenance.pruneExpired`.
  *
- * Legacy revoked rows without `revokedAt` fail closed (they are retained) until
- * `backfillOAuthClientRevokedAt` stamps them, starting their retention clock.
+ * Rows without `revokedAt` are not eligible for deletion. Current revoke paths
+ * always set it before the retention window begins.
  */
 export const prune = internalMutation({
   args: {
