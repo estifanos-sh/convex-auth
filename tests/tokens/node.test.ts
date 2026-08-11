@@ -6,13 +6,10 @@ import { generateKeys } from "@estifanos-sh/convex-auth/cli/keys";
 const ORIGINAL_ENV = {
   AUTH_KEYS: process.env.AUTH_KEYS,
   CONVEX_SITE_URL: process.env.CONVEX_SITE_URL,
-  JWKS: process.env.JWKS,
-  JWT_PRIVATE_KEY: process.env.JWT_PRIVATE_KEY,
 };
 
 beforeEach(() => {
   delete process.env.AUTH_KEYS;
-  delete process.env.JWKS;
 });
 
 afterEach(() => {
@@ -26,11 +23,15 @@ afterEach(() => {
   }
 });
 
+async function keyringWithPrivateKey(jwtPrivateKey: string) {
+  const keyring = JSON.parse((await generateKeys()).AUTH_KEYS) as { jwtPrivateKey: string };
+  keyring.jwtPrivateKey = jwtPrivateKey;
+  return JSON.stringify(keyring);
+}
+
 test("AUTH_KEYS signs and verifies OAuth tokens without legacy key variables", async () => {
   process.env.CONVEX_SITE_URL = "https://example.convex.site";
   process.env.AUTH_KEYS = (await generateKeys()).AUTH_KEYS;
-  delete process.env.JWT_PRIVATE_KEY;
-  delete process.env.JWKS;
 
   const tokens = await import("@estifanos-sh/convex-auth/server/tokens");
   const token = await tokens.generateOAuthToken({
@@ -48,7 +49,7 @@ test("AUTH_KEYS signs and verifies OAuth tokens without legacy key variables", a
 
 test("generateToken retries private-key import after an invalid warmup", async () => {
   process.env.CONVEX_SITE_URL = "http://127.0.0.1:3211";
-  process.env.JWT_PRIVATE_KEY = "not-a-valid-private-key";
+  process.env.AUTH_KEYS = await keyringWithPrivateKey("not-a-valid-private-key");
 
   const tokens = await import("@estifanos-sh/convex-auth/server/tokens");
   await expect(
@@ -62,7 +63,7 @@ test("generateToken retries private-key import after an invalid warmup", async (
     crv: "Ed25519",
     extractable: true,
   });
-  process.env.JWT_PRIVATE_KEY = await exportPKCS8(keys.privateKey);
+  process.env.AUTH_KEYS = await keyringWithPrivateKey(await exportPKCS8(keys.privateKey));
 
   const token = await tokens.generateToken(
     {
@@ -97,7 +98,7 @@ test("generateToken accepts flattened PKCS#8 private keys", async () => {
     extractable: true,
   });
   const pem = await exportPKCS8(keys.privateKey);
-  process.env.JWT_PRIVATE_KEY = pem.trimEnd().replace(/\n/g, " ");
+  process.env.AUTH_KEYS = await keyringWithPrivateKey(pem.trimEnd().replace(/\n/g, " "));
 
   const tokens = await import("@estifanos-sh/convex-auth/server/tokens");
   const token = await tokens.generateToken(
@@ -117,7 +118,7 @@ test("generateToken uses the mounted auth route as issuer", async () => {
     crv: "Ed25519",
     extractable: true,
   });
-  process.env.JWT_PRIVATE_KEY = await exportPKCS8(keys.privateKey);
+  process.env.AUTH_KEYS = await keyringWithPrivateKey(await exportPKCS8(keys.privateKey));
 
   const tokens = await import("@estifanos-sh/convex-auth/server/tokens");
   const token = await tokens.generateToken(
@@ -137,7 +138,7 @@ test("generateToken defaults to the /auth issuer", async () => {
     crv: "Ed25519",
     extractable: true,
   });
-  process.env.JWT_PRIVATE_KEY = await exportPKCS8(keys.privateKey);
+  process.env.AUTH_KEYS = await keyringWithPrivateKey(await exportPKCS8(keys.privateKey));
 
   const tokens = await import("@estifanos-sh/convex-auth/server/tokens");
   const token = await tokens.generateToken(

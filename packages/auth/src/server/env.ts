@@ -2,7 +2,7 @@ import type { EnvFromDefinition } from "convex/server";
 import { ConvexError, v } from "convex/values";
 
 import { ErrorCode } from "../shared/codes";
-import { AuthKeyringError, parseAuthKeyring } from "../shared/keyring";
+import { AuthKeyringError, parseAuthKeyring, type AuthKeyring } from "../shared/keyring";
 
 const vOptionalBooleanString = v.optional(v.union(v.literal("true"), v.literal("false")));
 
@@ -33,18 +33,12 @@ export const authEnv = {
   AUTH_MICROSOFT_SECRET: v.optional(v.string()),
   AUTH_MICROSOFT_TENANT_ID: v.optional(v.string()),
   AUTH_PASSWORD_EMAIL_VERIFICATION: vOptionalBooleanString,
-  /** @deprecated Use the versioned `AUTH_KEYS` keyring. */
-  AUTH_SECRET_ENCRYPTION_KEY: v.optional(v.string()),
   AUTH_SESSION_INACTIVE_DURATION_MS: v.optional(v.string()),
   AUTH_SESSION_TOTAL_DURATION_MS: v.optional(v.string()),
   CHANGE_PASSWORD_URL: v.optional(v.string()),
   CONVEX_SITE_URL: v.optional(v.string()),
   IOS_APP_IDS: v.optional(v.string()),
   IOS_APPLINK_PATHS: v.optional(v.string()),
-  /** @deprecated Use the versioned `AUTH_KEYS` keyring. */
-  JWKS: v.optional(v.string()),
-  /** @deprecated Use the versioned `AUTH_KEYS` keyring. */
-  JWT_PRIVATE_KEY: v.optional(v.string()),
   RESEND_API_KEY: v.optional(v.string()),
   SECURITY_CONTACT: v.optional(v.string()),
   SECURITY_TXT_EXPIRES_DAYS: v.optional(v.string()),
@@ -53,35 +47,13 @@ export const authEnv = {
 /** Inferred type of the validated auth environment from {@link authEnv}. */
 export type AuthEnv = EnvFromDefinition<typeof authEnv>;
 
-function readEnv(name: string): string | undefined {
-  const keyringValue = readRawEnv("AUTH_KEYS");
-  if (keyringValue !== undefined) {
-    const keyring = parseAuthKeyring(keyringValue);
-    if (name === "JWT_PRIVATE_KEY") {
-      return keyring.jwtPrivateKey;
-    }
-    if (name === "JWKS") {
-      return JSON.stringify(keyring.jwks);
-    }
-    if (name === "AUTH_SECRET_ENCRYPTION_KEY") {
-      return keyring.secretEncryptionKey;
-    }
-  }
-  return readRawEnv(name);
-}
-
 function readRawEnv(name: string): string | undefined {
   const value = typeof process === "undefined" ? undefined : process.env?.[name];
   return typeof value === "string" && value.length > 0 ? value : undefined;
 }
 
 /** Env vars whose absence points the user at the setup wizard rather than a bare miss. */
-const SETUP_WIZARD_ENV = new Set([
-  "AUTH_KEYS",
-  "JWT_PRIVATE_KEY",
-  "JWKS",
-  "AUTH_SECRET_ENCRYPTION_KEY",
-]);
+const SETUP_WIZARD_ENV = new Set(["AUTH_KEYS"]);
 
 function missingEnvMessage(name: string) {
   return SETUP_WIZARD_ENV.has(name)
@@ -94,7 +66,7 @@ export const readConfigSync = <A>(value: A) => value;
 
 /** @internal */
 export const envString = (name: string) => {
-  const value = readEnv(name);
+  const value = readRawEnv(name);
   if (value === undefined) {
     throw new Error(missingEnvMessage(name));
   }
@@ -102,11 +74,11 @@ export const envString = (name: string) => {
 };
 
 /** @internal */
-export const envOptionalString = (name: string) => readEnv(name);
+export const envOptionalString = (name: string) => readRawEnv(name);
 
 /** @internal */
 export const envOptionalNumber = (name: string) => {
-  const value = readEnv(name);
+  const value = readRawEnv(name);
   if (value === undefined) {
     return undefined;
   }
@@ -119,7 +91,7 @@ export const envOptionalNumber = (name: string) => {
 
 /** @internal */
 export const envBoolean = (name: string) => {
-  const value = readEnv(name);
+  const value = readRawEnv(name);
   if (value === undefined) {
     return undefined;
   }
@@ -132,23 +104,24 @@ export const envBoolean = (name: string) => {
   throw new Error(`Invalid boolean environment variable \`${name}\``);
 };
 
-/** @internal */
-export function requireWebAuthnMaskingKey(): string {
-  const keyringValue = readRawEnv("AUTH_KEYS");
-  if (keyringValue !== undefined) {
-    try {
-      return parseAuthKeyring(keyringValue).webauthnMaskingKey;
-    } catch (error) {
-      throw new ConvexError({
-        code: ErrorCode.MISSING_ENV_VAR,
-        message: error instanceof AuthKeyringError ? error.message : missingEnvMessage("AUTH_KEYS"),
-      });
-    }
-  }
+type AuthKeyPurpose = Exclude<keyof AuthKeyring, "version">;
 
-  // Legacy deployments used the JWT private key for deterministic masking.
-  // Preserve that behavior until they migrate to the purpose-separated keyring.
-  return requireEnv("JWT_PRIVATE_KEY");
+/** @internal */
+export function requireAuthKey<Purpose extends AuthKeyPurpose>(
+  purpose: Purpose,
+): AuthKeyring[Purpose] {
+  try {
+    const value = readRawEnv("AUTH_KEYS");
+    if (value === undefined) {
+      throw new Error(missingEnvMessage("AUTH_KEYS"));
+    }
+    return parseAuthKeyring(value)[purpose];
+  } catch (error) {
+    throw new ConvexError({
+      code: ErrorCode.MISSING_ENV_VAR,
+      message: error instanceof AuthKeyringError ? error.message : missingEnvMessage("AUTH_KEYS"),
+    });
+  }
 }
 
 /** @internal */

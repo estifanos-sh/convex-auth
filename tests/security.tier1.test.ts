@@ -29,12 +29,10 @@ test("safeParseXml accepts ordinary XML", () => {
 });
 
 test("decryptSecret rejects ciphertext with more than two parts", async () => {
-  process.env.AUTH_SECRET_ENCRYPTION_KEY = "test-key-for-tier1-regression";
   await expect(decryptSecret("a.b.c")).rejects.toThrow(/malformed/i);
 });
 
 test("decryptSecret rejects ciphertext with empty payload after dot", async () => {
-  process.env.AUTH_SECRET_ENCRYPTION_KEY = "test-key-for-tier1-regression";
   await expect(decryptSecret("a.")).rejects.toThrow(/malformed/i);
 });
 

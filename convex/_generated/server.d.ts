@@ -43,15 +43,12 @@ type Env = {
   readonly AUTH_MICROSOFT_SECRET: string | undefined;
   readonly AUTH_MICROSOFT_TENANT_ID: string | undefined;
   readonly AUTH_PASSWORD_EMAIL_VERIFICATION: "true" | "false" | undefined;
-  readonly AUTH_SECRET_ENCRYPTION_KEY: string | undefined;
   readonly AUTH_SESSION_INACTIVE_DURATION_MS: string | undefined;
   readonly AUTH_SESSION_TOTAL_DURATION_MS: string | undefined;
   readonly CHANGE_PASSWORD_URL: string | undefined;
   readonly CONVEX_SITE_URL: string | undefined;
   readonly IOS_APPLINK_PATHS: string | undefined;
   readonly IOS_APP_IDS: string | undefined;
-  readonly JWKS: string | undefined;
-  readonly JWT_PRIVATE_KEY: string | undefined;
   readonly RESEND_API_KEY: string | undefined;
   readonly SECURITY_CONTACT: string | undefined;
   readonly SECURITY_TXT_EXPIRES_DAYS: string | undefined;

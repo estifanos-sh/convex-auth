@@ -524,7 +524,7 @@ async function configureKeys(config: ProjectConfig) {
     );
     s.stop("Keys migrated without rotation.");
     p.log.info(
-      "AUTH_KEYS now takes precedence. The legacy JWT_PRIVATE_KEY, JWKS, and AUTH_SECRET_ENCRYPTION_KEY values can be removed after verification.",
+      "AUTH_KEYS is configured. The legacy JWT_PRIVATE_KEY, JWKS, and AUTH_SECRET_ENCRYPTION_KEY values can be removed after verification.",
     );
     return;
   }
@@ -552,7 +552,7 @@ async function configureKeys(config: ProjectConfig) {
 
   if (hasLegacyKeys) {
     p.log.info(
-      "AUTH_KEYS now takes precedence. The legacy JWT_PRIVATE_KEY, JWKS, and AUTH_SECRET_ENCRYPTION_KEY values can be removed after verification.",
+      "AUTH_KEYS is configured. The legacy JWT_PRIVATE_KEY, JWKS, and AUTH_SECRET_ENCRYPTION_KEY values can be removed after verification.",
     );
   }
 }

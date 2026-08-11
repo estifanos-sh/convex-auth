@@ -24,11 +24,11 @@ response-masking keys in one CLI-managed JSON value. Combining their
 configuration does not reuse key material across cryptographic purposes. Treat
 the whole value as a secret and do not edit it by hand.
 
-Deployments configured with the legacy `JWT_PRIVATE_KEY`, `JWKS`, and
-`AUTH_SECRET_ENCRYPTION_KEY` variables continue to work. Rerun the setup wizard
-to bundle those existing values into `AUTH_KEYS` without rotating their
-cryptographic material. `AUTH_KEYS` then takes precedence, so you can verify the
-migrated deployment before removing the legacy values.
+Before deploying this version to an existing installation, rerun the setup
+wizard. It detects a complete legacy `JWT_PRIVATE_KEY`, `JWKS`, and
+`AUTH_SECRET_ENCRYPTION_KEY` set and bundles those exact values into `AUTH_KEYS`
+without rotating their cryptographic material. The server reads only
+`AUTH_KEYS`; remove the legacy values after verifying the migrated deployment.
 
 ## System (auto-provided by Convex)
 
