@@ -8,7 +8,10 @@ import {
   assertTrustedMetadataEntry,
 } from "../packages/auth/src/providers/webauthn/attestation";
 import { ErrorCode } from "../packages/auth/src/shared/codes";
-import { assertStoredAttestationTrusted } from "../packages/auth/src/server/webauthn";
+import {
+  assertStoredAttestationTrusted,
+  validateCredentialId,
+} from "../packages/auth/src/server/webauthn";
 import type {
   WebAuthnAttestationEvidence,
   WebAuthnAttestationPolicy,
@@ -73,7 +76,23 @@ test("strict metadata policy requires certification and rejects revoked or compr
       statusReports: [{ status: "ATTESTATION_KEY_COMPROMISE" }],
     } as never),
   ).toThrow("ATTESTATION_KEY_COMPROMISE");
+  expect(() =>
+    assertTrustedMetadataEntry({
+      ...TRUSTED_ENTRY,
+      statusReports: [{ status: "FIDO_CERTIFIED_L2" }, { status: "RETIRED" }],
+    } as never),
+  ).toThrow("RETIRED");
   expect(() => assertTrustedMetadataEntry(TRUSTED_ENTRY as never)).not.toThrow();
+});
+
+test("assertion credential IDs are bounded before lookup", () => {
+  const maximum = encoded(Array.from({ length: 1023 }, () => 1));
+  expect(validateCredentialId(maximum)).toBe(maximum);
+  expect(() => validateCredentialId("")).toThrow("between 1 and 1023 bytes");
+  expect(() => validateCredentialId("*")).toThrow("valid unpadded base64url");
+  expect(() => validateCredentialId(encoded(Array.from({ length: 1024 }, () => 1)))).toThrow(
+    "between 1 and 1023 bytes",
+  );
 });
 
 test("strict sign-in rejects legacy credentials without attestation evidence", async () => {

@@ -137,6 +137,47 @@ const requireStringParam = (value: unknown, name: string) => {
 const convexError = (code: ErrorCode, message: string) =>
   toConvexError(authFlowError(code, message));
 
+const MAX_ENCODED_WEBAUTHN_CREDENTIAL_ID_LENGTH = Math.ceil(
+  (MAX_WEBAUTHN_CREDENTIAL_ID_LENGTH * 4) / 3,
+);
+
+/** @internal */
+export function validateCredentialId(value: unknown): string {
+  const credentialId = requireStringParam(value, "credentialId");
+  if (
+    credentialId.length === 0 ||
+    credentialId.length > MAX_ENCODED_WEBAUTHN_CREDENTIAL_ID_LENGTH
+  ) {
+    throw convexError(
+      ErrorCode.PASSKEY_INVALID_CLIENT_DATA,
+      `Credential ID must be between 1 and ${MAX_WEBAUTHN_CREDENTIAL_ID_LENGTH} bytes.`,
+    );
+  }
+  if (!/^[A-Za-z0-9_-]+$/.test(credentialId)) {
+    throw convexError(
+      ErrorCode.PASSKEY_INVALID_CLIENT_DATA,
+      "Credential ID must be valid unpadded base64url.",
+    );
+  }
+
+  let decoded: Uint8Array;
+  try {
+    decoded = decodeBase64urlIgnorePadding(credentialId);
+  } catch {
+    throw convexError(
+      ErrorCode.PASSKEY_INVALID_CLIENT_DATA,
+      "Credential ID must be valid unpadded base64url.",
+    );
+  }
+  if (decoded.byteLength < 1 || decoded.byteLength > MAX_WEBAUTHN_CREDENTIAL_ID_LENGTH) {
+    throw convexError(
+      ErrorCode.PASSKEY_INVALID_CLIENT_DATA,
+      `Credential ID must be between 1 and ${MAX_WEBAUTHN_CREDENTIAL_ID_LENGTH} bytes.`,
+    );
+  }
+  return credentialId;
+}
+
 const asConvexError = (
   error: unknown,
   code: ErrorCode,
@@ -885,7 +926,7 @@ export async function handleWebAuthn(
     verifyClientDataType(clientData, ClientDataType.Get, "webauthn.get");
     verifySameOrigin(clientData);
     verifyOrigin(clientData, rp);
-    const credentialId = requireStringParam(params.credentialId, "credentialId");
+    const credentialId = validateCredentialId(params.credentialId);
     const challengeHash = encodeBase64urlNoPadding(new Uint8Array(sha256(clientData.challenge)));
     let assertion;
     try {
