@@ -12,14 +12,23 @@ description: Required and optional environment variables for convex-auth.
 
 ## Required
 
-| Variable                     | Purpose                                                                       |
-| ---------------------------- | ----------------------------------------------------------------------------- |
-| `JWT_PRIVATE_KEY`            | Signs session JWTs                                                            |
-| `JWKS`                       | JSON Web Key Set for verification                                             |
-| `AUTH_SECRET_ENCRYPTION_KEY` | Encrypts stored OIDC client secrets and group webhook signing secrets at rest |
-| `APP_URL`                    | Frontend URL for OAuth, email, device, and passkey defaults                   |
+| Variable    | Purpose                                                                                     |
+| ----------- | ------------------------------------------------------------------------------------------- |
+| `AUTH_KEYS` | Versioned keyring for JWT signing, verification, and encrypting stored auth secrets at rest |
+| `APP_URL`   | Frontend URL for OAuth, email, device, and passkey defaults                                 |
 
 These are set automatically by the CLI setup wizard.
+
+`AUTH_KEYS` contains independent signing and secret-encryption keys in one
+CLI-managed JSON value. Combining their configuration does not reuse key
+material across cryptographic purposes. Treat the whole value as a secret and
+do not edit it by hand.
+
+Deployments configured with the legacy `JWT_PRIVATE_KEY`, `JWKS`, and
+`AUTH_SECRET_ENCRYPTION_KEY` variables continue to work. Rerun the setup wizard
+to bundle those existing values into `AUTH_KEYS` without rotating their
+cryptographic material. `AUTH_KEYS` then takes precedence, so you can verify the
+migrated deployment before removing the legacy values.
 
 ## System (auto-provided by Convex)
 

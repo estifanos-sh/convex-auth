@@ -47,13 +47,13 @@ export const { auth } = defineAuth(components.auth, {
 });
 ```
 
-The AS signs tokens with EdDSA, so two environment variables are required
-(see [Environment Variables](/getting-started/environment)):
+The AS signs tokens with EdDSA. The CLI stores the required signing and public
+verification material in the versioned `AUTH_KEYS` keyring (see
+[Environment Variables](/getting-started/environment)):
 
-| Variable          | Purpose                                            |
-| ----------------- | -------------------------------------------------- |
-| `JWT_PRIVATE_KEY` | PKCS8 EdDSA private key used to sign access tokens |
-| `JWKS`            | Public JWKS (`{"keys":[…]}`) served at `jwks_uri`  |
+| Variable    | Purpose                                                             |
+| ----------- | ------------------------------------------------------------------- |
+| `AUTH_KEYS` | Contains the private EdDSA key and public JWKS served at `jwks_uri` |
 
 The issuer is `CONVEX_SITE_URL` plus the auth path, which defaults to `/auth`.
 

@@ -18,7 +18,7 @@ import figlet from "figlet";
 import ansiShadow from "figlet/importable-fonts/ANSI Shadow.js";
 import gradientString from "gradient-string";
 
-import { generateKeys } from "./keys";
+import { bundleLegacyKeys, generateKeys } from "./keys";
 
 figlet.parseFont("ANSI Shadow", ansiShadow);
 
@@ -492,17 +492,46 @@ async function configureEnvVar(
 
 async function configureKeys(config: ProjectConfig) {
   logStep(config, "Configure signing and encryption keys");
-  const s = p.spinner();
-  s.start("Generating keys...");
-  const { JWT_PRIVATE_KEY, JWKS, AUTH_SECRET_ENCRYPTION_KEY } = await generateKeys();
-  s.stop("Keys generated.");
-
+  const existingKeyring = backendEnvVar(config, "AUTH_KEYS");
   const existingPrivateKey = backendEnvVar(config, "JWT_PRIVATE_KEY");
   const existingJwks = backendEnvVar(config, "JWKS");
   const existingSecretEncryptionKey = backendEnvVar(config, "AUTH_SECRET_ENCRYPTION_KEY");
-  if (existingPrivateKey !== "" || existingJwks !== "" || existingSecretEncryptionKey !== "") {
+  const hasLegacyKeys =
+    existingPrivateKey !== "" || existingJwks !== "" || existingSecretEncryptionKey !== "";
+  const hasCompleteLegacyKeys =
+    existingPrivateKey !== "" && existingJwks !== "" && existingSecretEncryptionKey !== "";
+
+  if (existingKeyring === "" && hasCompleteLegacyKeys) {
+    const shouldMigrate = await p.confirm({
+      message: `${printDeployment(config)} uses the three legacy auth key variables. Migrate them to AUTH_KEYS without rotating cryptographic material?`,
+      initialValue: true,
+    });
+    handleCancel(shouldMigrate);
+    if (!shouldMigrate) {
+      return;
+    }
+
+    const s = p.spinner();
+    s.start("Migrating existing keys...");
+    await setEnvVarFromFile(
+      config,
+      "AUTH_KEYS",
+      bundleLegacyKeys({
+        JWT_PRIVATE_KEY: existingPrivateKey,
+        JWKS: existingJwks,
+        AUTH_SECRET_ENCRYPTION_KEY: existingSecretEncryptionKey,
+      }),
+    );
+    s.stop("Keys migrated without rotation.");
+    p.log.info(
+      "AUTH_KEYS now takes precedence. The legacy JWT_PRIVATE_KEY, JWKS, and AUTH_SECRET_ENCRYPTION_KEY values can be removed after verification.",
+    );
+    return;
+  }
+
+  if (existingKeyring !== "" || hasLegacyKeys) {
     const shouldOverwrite = await p.confirm({
-      message: `${printDeployment(config)} already has auth keys configured. Overwrite them?`,
+      message: `${printDeployment(config)} already has ${existingKeyring !== "" ? "AUTH_KEYS" : "an incomplete legacy key set"}. Replace it? Existing encrypted auth secrets may need to be reconfigured.`,
       initialValue: false,
     });
     handleCancel(shouldOverwrite);
@@ -511,14 +540,21 @@ async function configureKeys(config: ProjectConfig) {
     }
   }
 
+  const s = p.spinner();
+  s.start("Generating keys...");
+  const { AUTH_KEYS } = await generateKeys();
+  s.stop("Keys generated.");
+
   const s2 = p.spinner();
   s2.start("Setting keys on deployment...");
-  await setEnvVarFromFile(config, "JWT_PRIVATE_KEY", JWT_PRIVATE_KEY);
-  await setEnvVarFromFile(config, "JWKS", JWKS);
-  await setEnvVar(config, "AUTH_SECRET_ENCRYPTION_KEY", AUTH_SECRET_ENCRYPTION_KEY, {
-    hideValue: true,
-  });
+  await setEnvVarFromFile(config, "AUTH_KEYS", AUTH_KEYS);
   s2.stop("Keys configured.");
+
+  if (hasLegacyKeys) {
+    p.log.info(
+      "AUTH_KEYS now takes precedence. The legacy JWT_PRIVATE_KEY, JWKS, and AUTH_SECRET_ENCRYPTION_KEY values can be removed after verification.",
+    );
+  }
 }
 
 function backendEnvVar(config: ProjectConfig, name: string): string {

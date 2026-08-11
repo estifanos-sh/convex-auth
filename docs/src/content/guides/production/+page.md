@@ -87,8 +87,8 @@ yarn convex deploy --cmd 'yarn build'
 ## Checklist
 
 - `APP_URL` is set to your production domain (not `localhost`)
-- `JWT_PRIVATE_KEY`, `JWKS`, and `AUTH_SECRET_ENCRYPTION_KEY` are set (the CLI
-  handles this)
+- `AUTH_KEYS` is set (the CLI generates its independent signing and encryption
+  key material)
 - Provider secrets (`AUTH_*_ID`, `AUTH_*_SECRET`) are configured
 - `CONVEX_SITE_URL` is auto-provided by Convex
 - `convex/auth.config.ts` trusts `env.CONVEX_SITE_URL` with

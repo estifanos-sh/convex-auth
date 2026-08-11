@@ -1,23 +1,49 @@
 import { decodeJwt, exportPKCS8, generateKeyPair } from "jose";
-import { afterEach, expect, test, vi } from "vite-plus/test";
+import { afterEach, beforeEach, expect, test, vi } from "vite-plus/test";
+
+import { generateKeys } from "@estifanos-sh/convex-auth/cli/keys";
 
 const ORIGINAL_ENV = {
+  AUTH_KEYS: process.env.AUTH_KEYS,
   CONVEX_SITE_URL: process.env.CONVEX_SITE_URL,
+  JWKS: process.env.JWKS,
   JWT_PRIVATE_KEY: process.env.JWT_PRIVATE_KEY,
 };
 
+beforeEach(() => {
+  delete process.env.AUTH_KEYS;
+  delete process.env.JWKS;
+});
+
 afterEach(() => {
   vi.resetModules();
-  if (ORIGINAL_ENV.CONVEX_SITE_URL === undefined) {
-    delete process.env.CONVEX_SITE_URL;
-  } else {
-    process.env.CONVEX_SITE_URL = ORIGINAL_ENV.CONVEX_SITE_URL;
+  for (const [name, value] of Object.entries(ORIGINAL_ENV)) {
+    if (value === undefined) {
+      delete process.env[name];
+    } else {
+      process.env[name] = value;
+    }
   }
-  if (ORIGINAL_ENV.JWT_PRIVATE_KEY === undefined) {
-    delete process.env.JWT_PRIVATE_KEY;
-  } else {
-    process.env.JWT_PRIVATE_KEY = ORIGINAL_ENV.JWT_PRIVATE_KEY;
-  }
+});
+
+test("AUTH_KEYS signs and verifies OAuth tokens without legacy key variables", async () => {
+  process.env.CONVEX_SITE_URL = "https://example.convex.site";
+  process.env.AUTH_KEYS = (await generateKeys()).AUTH_KEYS;
+  delete process.env.JWT_PRIVATE_KEY;
+  delete process.env.JWKS;
+
+  const tokens = await import("@estifanos-sh/convex-auth/server/tokens");
+  const token = await tokens.generateOAuthToken({
+    userId: "user-keyring",
+    clientId: "client-keyring",
+    scopes: ["openid"],
+  });
+
+  await expect(tokens.verifyOAuthToken(token)).resolves.toMatchObject({
+    userId: "user-keyring",
+    clientId: "client-keyring",
+    scopes: ["openid"],
+  });
 });
 
 test("generateToken retries private-key import after an invalid warmup", async () => {
