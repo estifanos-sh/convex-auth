@@ -1,7 +1,7 @@
 import { SignJWT, createLocalJWKSet, importPKCS8, jwtVerify } from "jose";
 
 import type { AccessToken } from "../shared/brand";
-import { envOptionalString, requireEnv } from "./env";
+import { envOptionalString, requireAuthKey } from "./env";
 import { generateRandomString } from "./random";
 import { ConvexAuthConfig } from "./types";
 import type { SessionTokenIdentityClaims } from "./types";
@@ -43,7 +43,7 @@ function normalizePkcs8Pem(value: string) {
 const getPrivateKey = () => {
   if (cachedPrivateKeyPromise === null) {
     try {
-      const pem = normalizePkcs8Pem(requireEnv("JWT_PRIVATE_KEY"));
+      const pem = normalizePkcs8Pem(requireAuthKey("jwtPrivateKey"));
       cachedPrivateKeyPromise = importPKCS8(pem, JWT_ALG).catch((error) => {
         cachedPrivateKeyPromise = null;
         throw error;
@@ -66,7 +66,7 @@ const getIssuer = (path?: string) => {
   return issuer;
 };
 
-if (envOptionalString("JWT_PRIVATE_KEY")) {
+if (envOptionalString("AUTH_KEYS")) {
   try {
     void getPrivateKey().catch((err) => {
       console.error("[auth] JWT private key pre-warm failed", { err });
@@ -137,14 +137,13 @@ export async function generateOAuthToken(args: {
 let cachedKeySet: ReturnType<typeof createLocalJWKSet> | null = null;
 
 /**
- * The local JWKS keyset, built once and reused. The `JWKS` env is static per
+ * The local JWKS keyset, built once and reused. `AUTH_KEYS` is static per
  * deployment, so caching also preserves jose's internal imported-key cache
  * across requests rather than re-importing keys on every verification.
  */
 function getJwkSet(): ReturnType<typeof createLocalJWKSet> {
   if (cachedKeySet === null) {
-    const jwksJson = JSON.parse(requireEnv("JWKS")) as { keys: object[] };
-    cachedKeySet = createLocalJWKSet(jwksJson);
+    cachedKeySet = createLocalJWKSet(requireAuthKey("jwks"));
   }
   return cachedKeySet;
 }

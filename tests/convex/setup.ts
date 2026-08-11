@@ -5,7 +5,8 @@ import staticHostingTest from "@convex-dev/static-hosting/test";
 import authTest from "@estifanos-sh/convex-auth/test";
 import { convexTest as baseConvexTest } from "convex-test";
 import type { FunctionReference } from "convex/server";
-import { exportJWK, exportPKCS8, generateKeyPair } from "jose";
+
+import { generateKeys } from "@estifanos-sh/convex-auth/cli/keys";
 
 /**
  * A typed handle for the auth component's `maintenance.pruneExpired`, which is an internal
@@ -53,18 +54,8 @@ if (!process.env.AUTH_GOOGLE_SECRET) {
   process.env.AUTH_GOOGLE_SECRET = "test-google-client-secret";
 }
 
-if (!process.env.AUTH_SECRET_ENCRYPTION_KEY) {
-  process.env.AUTH_SECRET_ENCRYPTION_KEY = "test-auth-secret-encryption-key";
-}
-
-if (!process.env.JWT_PRIVATE_KEY || !process.env.JWKS) {
-  const keys = await generateKeyPair("EdDSA", {
-    crv: "Ed25519",
-    extractable: true,
-  });
-  process.env.JWT_PRIVATE_KEY = await exportPKCS8(keys.privateKey);
-  const publicKey = await exportJWK(keys.publicKey);
-  process.env.JWKS = JSON.stringify({ keys: [{ use: "sig", ...publicKey }] });
+if (!process.env.AUTH_KEYS) {
+  process.env.AUTH_KEYS = (await generateKeys()).AUTH_KEYS;
 }
 
 export * from "convex-test";

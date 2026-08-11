@@ -28,6 +28,12 @@ declare const secret: string;
 declare const authEnvironment: AuthEnv;
 
 const optionalKeyring: string | undefined = authEnvironment.AUTH_KEYS;
+// @ts-expect-error Legacy signing material is no longer part of the public environment contract.
+void authEnvironment.JWT_PRIVATE_KEY;
+// @ts-expect-error Legacy JWKS material is no longer part of the public environment contract.
+void authEnvironment.JWKS;
+// @ts-expect-error Legacy secret encryption material is no longer public configuration.
+void authEnvironment.AUTH_SECRET_ENCRYPTION_KEY;
 const optionalProviderEnvironment: string | undefined = authEnvironment.AUTH_GITHUB_ID;
 declare const authComponent: Parameters<typeof defineAuth>[0];
 declare const authUserId: GenericId<"User">;

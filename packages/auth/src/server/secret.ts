@@ -5,9 +5,8 @@ import { ConvexError } from "convex/values";
 import type { EncryptedSecret } from "../shared/brand";
 import { ErrorCode } from "../shared/codes";
 
-import { requireEnv } from "./env";
+import { requireAuthKey } from "./env";
 
-const SECRET_KEY_ENV = "AUTH_SECRET_ENCRYPTION_KEY";
 const SECRET_IV_LENGTH = 12;
 
 function toArrayBuffer(bytes: Uint8Array) {
@@ -15,7 +14,7 @@ function toArrayBuffer(bytes: Uint8Array) {
 }
 
 async function getSecretCryptoKey() {
-  const material = requireEnv(SECRET_KEY_ENV);
+  const material = requireAuthKey("secretEncryptionKey");
   const rawKey = rawSha256(new TextEncoder().encode(material));
   return await crypto.subtle.importKey("raw", toArrayBuffer(rawKey), { name: "AES-GCM" }, false, [
     "encrypt",

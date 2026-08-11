@@ -12,7 +12,7 @@ import { v } from "convex/values";
 import type { AuthTokens, SignInFlowResult } from "../shared/results";
 import { createCoreDomains } from "./core";
 import { GetProviderOrThrowFunc } from "./crypto";
-import { requireEnv } from "./env";
+import { requireAuthKey, requireEnv } from "./env";
 import { createAuthEventDomain, emitAuthEvent } from "./events";
 import {
   addAuthRoutes,
@@ -317,7 +317,7 @@ export function Auth(config_: ConvexAuthConfig) {
       addOpenIdRoutes(http, {
         routeBase: routePrefix,
         getIssuer: authSiteUrl,
-        getJwks: () => requireEnv("JWKS"),
+        getJwks: () => JSON.stringify(requireAuthKey("jwks")),
         oauth: config.oauth ? { scopes: delegatableGrants } : undefined,
       });
 

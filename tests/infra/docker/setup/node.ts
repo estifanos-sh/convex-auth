@@ -51,9 +51,7 @@ export default async function setupNodeInterop(project: {
   const generated = await generateKeys();
   const env = {
     ...baseEnv(),
-    AUTH_SECRET_ENCRYPTION_KEY: "test-auth-secret-encryption-key",
-    JWT_PRIVATE_KEY: generated.jwtPrivateKey,
-    JWKS: generated.jwks,
+    AUTH_KEYS: generated.authKeys,
   };
 
   await rm(runtimeDir, { recursive: true, force: true });
@@ -88,7 +86,7 @@ export default async function setupNodeInterop(project: {
     const buildEnv: NodeJS.ProcessEnv = { ...env, ...convexEnv };
     delete buildEnv.CONVEX_DEPLOYMENT;
     const envLocalWasHidden = await hideEnvLocalForSelfHostedCommands();
-    const pemPath = path.join(runtimeDir, "jwt-private-key.pem");
+    const authKeysPath = path.join(runtimeDir, "auth-keys.json");
     try {
       if (!(await fileExists(buildReadyFile))) {
         await run("vp", ["run", "cache:build:convex-codegen"], buildEnv, {
@@ -103,25 +101,12 @@ export default async function setupNodeInterop(project: {
       });
       await run("vp", ["exec", "convex", "env", "set", "APP_URL", env.APP_URL], convexEnv);
       await run("vp", ["exec", "convex", "env", "set", "AUTH_EMAIL", env.AUTH_EMAIL], convexEnv);
+      await writeFile(authKeysPath, generated.authKeys + "\n");
       await run(
         "vp",
-        [
-          "exec",
-          "convex",
-          "env",
-          "set",
-          "AUTH_SECRET_ENCRYPTION_KEY",
-          env.AUTH_SECRET_ENCRYPTION_KEY,
-        ],
+        ["exec", "convex", "env", "set", "AUTH_KEYS", "--from-file", authKeysPath],
         convexEnv,
       );
-      await writeFile(pemPath, generated.jwtPrivateKey + "\n");
-      await run(
-        "vp",
-        ["exec", "convex", "env", "set", "JWT_PRIVATE_KEY", "--from-file", pemPath],
-        convexEnv,
-      );
-      await run("vp", ["exec", "convex", "env", "set", "JWKS", generated.jwks], convexEnv);
       await run(
         "vp",
         ["exec", "convex", "env", "set", "AUTH_GOOGLE_ID", env.AUTH_GOOGLE_ID],
@@ -139,7 +124,7 @@ export default async function setupNodeInterop(project: {
       );
       await warmUpAnonymousSignIn(env.TEST_TARGET_BASE_URL, convexTimeoutMs);
     } finally {
-      await rm(pemPath, { force: true });
+      await rm(authKeysPath, { force: true });
       await restoreEnvLocalAfterSelfHostedCommands(envLocalWasHidden);
     }
 
@@ -290,7 +275,13 @@ async function generateKeys() {
   const publicKey = await exportJWK(keys.publicKey);
   return {
     jwtPrivateKey: privateKey.trim(),
-    jwks: JSON.stringify({ keys: [{ use: "sig", ...publicKey }] }),
+    authKeys: JSON.stringify({
+      version: 1,
+      jwtPrivateKey: privateKey.trim(),
+      jwks: { keys: [{ use: "sig", ...publicKey }] },
+      secretEncryptionKey: "test-auth-secret-encryption-key",
+      webauthnMaskingKey: "test-webauthn-masking-key",
+    }),
   };
 }
 

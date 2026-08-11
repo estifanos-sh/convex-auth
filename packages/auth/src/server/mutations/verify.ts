@@ -3,7 +3,7 @@ import { GenericId, Infer, v } from "convex/values";
 
 import type { Hashed } from "../../shared/brand";
 import * as Provider from "../crypto";
-import { requireEnv } from "../env";
+import { requireAuthKey, requireEnv } from "../env";
 import { queueAuthEvent } from "../events";
 import { maxSignInAttempts } from "../limits";
 import { LOG_LEVELS, log } from "../log";
@@ -83,8 +83,8 @@ async function verifyCodeAndSignInImplInner(
       allowExtraProviders: args.allowExtraProviders,
     });
     if (generateTokens) {
-      requireEnv("JWT_PRIVATE_KEY");
-      requireEnv("JWKS");
+      requireAuthKey("jwtPrivateKey");
+      requireAuthKey("jwks");
       requireEnv("CONVEX_SITE_URL");
     }
 

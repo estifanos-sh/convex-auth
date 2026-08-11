@@ -23,13 +23,18 @@ let createAuthorizeHandler: AuthorizeFactory;
 let createTokenHandler: TokenFactory;
 let generateOAuthToken: GenerateOAuthToken;
 let verifyOAuthToken: VerifyOAuthToken;
+let jwtPrivateKey: string;
 
 beforeAll(async () => {
   process.env.CONVEX_SITE_URL = "https://example.convex.site";
   const keys = await generateKeyPair("EdDSA", { crv: "Ed25519", extractable: true });
-  process.env.JWT_PRIVATE_KEY = await exportPKCS8(keys.privateKey);
-  process.env.JWKS = JSON.stringify({
-    keys: [{ use: "sig", ...(await exportJWK(keys.publicKey)) }],
+  jwtPrivateKey = await exportPKCS8(keys.privateKey);
+  process.env.AUTH_KEYS = JSON.stringify({
+    version: 1,
+    jwtPrivateKey,
+    jwks: { keys: [{ use: "sig", ...(await exportJWK(keys.publicKey)) }] },
+    secretEncryptionKey: "test-secret-encryption-key",
+    webauthnMaskingKey: "test-webauthn-masking-key",
   });
   vi.resetModules();
   ({ createAuthorizeHandler } = await import("@estifanos-sh/convex-auth/server/oauth/authorize"));
@@ -609,7 +614,7 @@ test("access tokens carry token_use and no at+jwt typ header (Convex-identity co
 });
 
 test("verifyOAuthToken rejects a session-shaped token (no token_use / client_id)", async () => {
-  const privateKey = await importPKCS8(process.env.JWT_PRIVATE_KEY!, "EdDSA");
+  const privateKey = await importPKCS8(jwtPrivateKey, "EdDSA");
   const sessionToken = await new SignJWT({ sub: "user1", aud: "convex" })
     .setProtectedHeader({ alg: "EdDSA" })
     .setIssuedAt()

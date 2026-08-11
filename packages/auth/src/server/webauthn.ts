@@ -52,7 +52,7 @@ import {
   MAX_WEBAUTHN_CREDENTIALS_PER_USER,
 } from "../shared/webauthn";
 import { authFlowError } from "../shared/errors";
-import { requireWebAuthnMaskingKey } from "./env";
+import { requireAuthKey } from "./env";
 import type { AuthErrorData } from "./errors";
 import { toConvexError } from "./errors";
 import { queueAuthEvent } from "./events";
@@ -654,7 +654,7 @@ async function deriveEmailAllowCredentials(
   rpId: string,
   realCredentialIds: readonly string[],
 ): Promise<AllowCredential[]> {
-  const secret = requireWebAuthnMaskingKey();
+  const secret = requireAuthKey("webauthnMaskingKey");
   const emailSeed = encodeBase64urlNoPadding(
     new Uint8Array(sha256(new TextEncoder().encode(normalizedEmail))),
   );

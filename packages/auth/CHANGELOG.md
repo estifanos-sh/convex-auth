@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+## 0.0.1-preview.2
+
+### Breaking
+
+- **Require the versioned auth keyring.** `AUTH_KEYS` is now the sole runtime
+  source for signing, verification, secret encryption, and WebAuthn masking
+  material. The legacy `JWT_PRIVATE_KEY`, `JWKS`, and
+  `AUTH_SECRET_ENCRYPTION_KEY` fields are no longer declared by `authEnv` or
+  read by the server. Run the setup wizard once to bundle an existing complete
+  legacy key set without rotating it before deploying this version.
+
+### Fixed
+
+- Include every source map referenced by published JavaScript and declaration
+  files, and fail package validation if a future build leaves a dangling map
+  reference.
+
 ## 0.0.1-preview.1
 
 ### Breaking
