@@ -124,6 +124,7 @@ test("generateKeys produces signing and secret-encryption keys", async () => {
     jwtPrivateKey: string;
     jwks: { keys: Array<Record<string, unknown>> };
     secretEncryptionKey: string;
+    webauthnMaskingKey: string;
   };
 
   expect(keys.version).toBe(1);
@@ -142,6 +143,9 @@ test("generateKeys produces signing and secret-encryption keys", async () => {
 
   expect(typeof keys.secretEncryptionKey).toBe("string");
   expect(keys.secretEncryptionKey.length).toBeGreaterThan(20);
+  expect(typeof keys.webauthnMaskingKey).toBe("string");
+  expect(keys.webauthnMaskingKey.length).toBeGreaterThan(20);
+  expect(keys.webauthnMaskingKey).not.toBe(keys.secretEncryptionKey);
 });
 
 test("bundleLegacyKeys preserves existing cryptographic material", () => {
@@ -153,10 +157,12 @@ test("bundleLegacyKeys preserves existing cryptographic material", () => {
     }),
   );
 
-  expect(bundled).toEqual({
+  expect(bundled).toMatchObject({
     version: 1,
     jwtPrivateKey: "existing-private-key",
     jwks: { keys: [{ kty: "OKP", x: "existing-public-key" }] },
     secretEncryptionKey: "existing-secret-encryption-key",
   });
+  expect(typeof bundled.webauthnMaskingKey).toBe("string");
+  expect(bundled.webauthnMaskingKey.length).toBeGreaterThan(20);
 });

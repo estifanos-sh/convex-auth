@@ -36,6 +36,7 @@ type Env = {
   readonly AUTH_GITHUB_SECRET: string | undefined;
   readonly AUTH_GOOGLE_ID: string | undefined;
   readonly AUTH_GOOGLE_SECRET: string | undefined;
+  readonly AUTH_KEYS: string | undefined;
   readonly AUTH_LOG_LEVEL: "DEBUG" | "INFO" | "WARN" | "ERROR" | undefined;
   readonly AUTH_LOG_SECRETS: "true" | "false" | undefined;
   readonly AUTH_MICROSOFT_ID: string | undefined;

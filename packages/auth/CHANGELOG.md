@@ -33,8 +33,8 @@
 ### New
 
 - **One versioned auth keyring.** New deployments store independent JWT signing,
-  public verification, and secret-encryption material in one CLI-managed
-  `AUTH_KEYS` value. Existing `JWT_PRIVATE_KEY`, `JWKS`, and
+  public verification, secret-encryption, and WebAuthn response-masking material
+  in one CLI-managed `AUTH_KEYS` value. Existing `JWT_PRIVATE_KEY`, `JWKS`, and
   `AUTH_SECRET_ENCRYPTION_KEY` deployments remain supported as a deprecated
   fallback.
 - **Restore deliberate extension points.** `auth.provider.signIn` and

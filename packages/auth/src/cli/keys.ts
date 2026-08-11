@@ -30,6 +30,7 @@ export function bundleLegacyKeys(keys: LegacyAuthKeys): string {
     jwtPrivateKey: keys.JWT_PRIVATE_KEY,
     jwks,
     secretEncryptionKey: keys.AUTH_SECRET_ENCRYPTION_KEY,
+    webauthnMaskingKey: randomBytes(32).toString("base64url"),
   });
   return serializeAuthKeyring(parseAuthKeyring(candidate));
 }
@@ -57,6 +58,7 @@ export async function generateKeys() {
       jwtPrivateKey: privateKey.trimEnd(),
       jwks: { keys: [{ use: "sig", ...publicKey }] },
       secretEncryptionKey: randomBytes(32).toString("base64url"),
+      webauthnMaskingKey: randomBytes(32).toString("base64url"),
     };
     return {
       AUTH_KEYS: serializeAuthKeyring(keyring),

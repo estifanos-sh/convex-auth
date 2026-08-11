@@ -7,6 +7,7 @@ export type AuthKeyring = {
   jwtPrivateKey: string;
   jwks: { keys: Array<Record<string, unknown>> };
   secretEncryptionKey: string;
+  webauthnMaskingKey: string;
 };
 
 /** Error thrown when `AUTH_KEYS` cannot be decoded safely. */
@@ -53,11 +54,15 @@ export function parseAuthKeyring(value: string): AuthKeyring {
   if (typeof parsed.secretEncryptionKey !== "string" || parsed.secretEncryptionKey.length === 0) {
     throw new AuthKeyringError("missing non-empty `secretEncryptionKey`");
   }
+  if (typeof parsed.webauthnMaskingKey !== "string" || parsed.webauthnMaskingKey.length === 0) {
+    throw new AuthKeyringError("missing non-empty `webauthnMaskingKey`");
+  }
 
   return {
     version: AUTH_KEYS_VERSION,
     jwtPrivateKey: parsed.jwtPrivateKey,
     jwks: { keys: parsed.jwks.keys },
     secretEncryptionKey: parsed.secretEncryptionKey,
+    webauthnMaskingKey: parsed.webauthnMaskingKey,
   };
 }

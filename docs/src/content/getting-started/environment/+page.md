@@ -19,10 +19,10 @@ description: Required and optional environment variables for convex-auth.
 
 These are set automatically by the CLI setup wizard.
 
-`AUTH_KEYS` contains independent signing and secret-encryption keys in one
-CLI-managed JSON value. Combining their configuration does not reuse key
-material across cryptographic purposes. Treat the whole value as a secret and
-do not edit it by hand.
+`AUTH_KEYS` contains independent signing, secret-encryption, and WebAuthn
+response-masking keys in one CLI-managed JSON value. Combining their
+configuration does not reuse key material across cryptographic purposes. Treat
+the whole value as a secret and do not edit it by hand.
 
 Deployments configured with the legacy `JWT_PRIVATE_KEY`, `JWKS`, and
 `AUTH_SECRET_ENCRYPTION_KEY` variables continue to work. Rerun the setup wizard

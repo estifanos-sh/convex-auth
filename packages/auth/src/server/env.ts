@@ -133,6 +133,25 @@ export const envBoolean = (name: string) => {
 };
 
 /** @internal */
+export function requireWebAuthnMaskingKey(): string {
+  const keyringValue = readRawEnv("AUTH_KEYS");
+  if (keyringValue !== undefined) {
+    try {
+      return parseAuthKeyring(keyringValue).webauthnMaskingKey;
+    } catch (error) {
+      throw new ConvexError({
+        code: ErrorCode.MISSING_ENV_VAR,
+        message: error instanceof AuthKeyringError ? error.message : missingEnvMessage("AUTH_KEYS"),
+      });
+    }
+  }
+
+  // Legacy deployments used the JWT private key for deterministic masking.
+  // Preserve that behavior until they migrate to the purpose-separated keyring.
+  return requireEnv("JWT_PRIVATE_KEY");
+}
+
+/** @internal */
 export function requireEnv(name: string) {
   try {
     return readConfigSync(envString(name));
