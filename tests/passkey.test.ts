@@ -77,6 +77,7 @@ async function invalidAssertionCode(
 
 test("WebAuthn does not inherit the guessable-secret sign-in limiter", async () => {
   const t = convexTest(schema);
+  const credentialId = base64url("rl-credential");
 
   // Seed a user + a resolvable passkey credential.
   await t.run(async (ctx) => {
@@ -85,7 +86,7 @@ test("WebAuthn does not inherit the guessable-secret sign-in limiter", async () 
     })) as string;
     await ctx.runMutation(components.auth.factor.passkey.create, {
       userId: userId as never,
-      credentialId: "rl-credential",
+      credentialId,
       publicKey: new ArrayBuffer(32),
       algorithm: -7,
       counter: 0,
@@ -96,7 +97,7 @@ test("WebAuthn does not inherit the guessable-secret sign-in limiter", async () 
   });
 
   // Exhaust the per-credential sign-in rate limit (token bucket capacity 10).
-  const identifier = await credentialRateLimitIdentifier("rl-credential");
+  const identifier = await credentialRateLimitIdentifier(credentialId);
   await t.run(async (ctx) => {
     for (let i = 0; i < DEFAULT_MAX_ATTEMPTS + 2; i++) {
       await ctx.runMutation(components.auth.limits.signInRecord, {
@@ -124,7 +125,7 @@ test("WebAuthn does not inherit the guessable-secret sign-in limiter", async () 
       provider: "webauthn",
       params: {
         flow: "verify",
-        credentialId: "rl-credential",
+        credentialId,
         clientDataJSON,
         signature: "AA",
         authenticatorData: await assertionAuthenticatorData(0x0d),
@@ -157,7 +158,7 @@ test("passkey verify against an unknown credential uses the public signature err
       provider: "webauthn",
       params: {
         flow: "verify",
-        credentialId: "does-not-exist",
+        credentialId: base64url("does-not-exist"),
         clientDataJSON,
         signature: "AA",
         authenticatorData: await assertionAuthenticatorData(),
@@ -174,8 +175,8 @@ test("passkey verify against an unknown credential uses the public signature err
 
 test("WebAuthn does not reveal whether an invalid assertion names a stored credential", async () => {
   const t = convexTest(schema);
-  const knownCredentialId = "known-invalid-signature";
-  const knownRsaCredentialId = "known-rsa-invalid-signature";
+  const knownCredentialId = base64url("known-invalid-signature");
+  const knownRsaCredentialId = base64url("known-rsa-invalid-signature");
   await t.run(async (ctx) => {
     const userId = await ctx.runMutation(components.auth.user.create, {
       data: { email: "known-invalid@example.com" },
@@ -202,7 +203,7 @@ test("WebAuthn does not reveal whether an invalid assertion names a stored crede
     });
   });
 
-  expect(await invalidAssertionCode(t, "unknown-invalid-signature")).toBe(
+  expect(await invalidAssertionCode(t, base64url("unknown-invalid-signature"))).toBe(
     "PASSKEY_INVALID_SIGNATURE",
   );
   expect(await invalidAssertionCode(t, knownCredentialId)).toBe("PASSKEY_INVALID_SIGNATURE");
