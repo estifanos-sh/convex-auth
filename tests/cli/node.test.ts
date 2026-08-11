@@ -6,7 +6,7 @@ import {
   stripDeploymentTypePrefix,
   templateToSource,
 } from "@estifanos-sh/convex-auth/cli/index";
-import { generateKeys } from "@estifanos-sh/convex-auth/cli/keys";
+import { bundleLegacyKeys, generateKeys } from "@estifanos-sh/convex-auth/cli/keys";
 import { expect, test, vi } from "vite-plus/test";
 
 function expectProcessExitSilently(fn: () => unknown) {
@@ -118,24 +118,51 @@ test("isPreviewDeployKey returns false for keys without pipe separator", () => {
 });
 
 test("generateKeys produces signing and secret-encryption keys", async () => {
-  const keys = await generateKeys();
-
-  expect(keys.JWT_PRIVATE_KEY).toContain("-----BEGIN PRIVATE KEY-----");
-  expect(keys.JWT_PRIVATE_KEY).toContain("-----END PRIVATE KEY-----");
-  expect(keys.JWT_PRIVATE_KEY).toContain("\n");
-
-  const jwks = JSON.parse(keys.JWKS) as {
-    keys: Array<Record<string, unknown>>;
+  const generated = await generateKeys();
+  const keys = JSON.parse(generated.AUTH_KEYS) as {
+    version: number;
+    jwtPrivateKey: string;
+    jwks: { keys: Array<Record<string, unknown>> };
+    secretEncryptionKey: string;
+    webauthnMaskingKey: string;
   };
-  expect(jwks.keys).toBeInstanceOf(Array);
-  expect(jwks.keys.length).toBe(1);
 
-  const jwk = jwks.keys[0];
+  expect(keys.version).toBe(1);
+  expect(keys.jwtPrivateKey).toContain("-----BEGIN PRIVATE KEY-----");
+  expect(keys.jwtPrivateKey).toContain("-----END PRIVATE KEY-----");
+  expect(keys.jwtPrivateKey).toContain("\n");
+
+  expect(keys.jwks.keys).toBeInstanceOf(Array);
+  expect(keys.jwks.keys.length).toBe(1);
+
+  const jwk = keys.jwks.keys[0];
   expect(jwk.use).toBe("sig");
   expect(jwk.kty).toBe("OKP");
   expect(jwk.crv).toBe("Ed25519");
   expect(typeof jwk.x).toBe("string");
 
-  expect(typeof keys.AUTH_SECRET_ENCRYPTION_KEY).toBe("string");
-  expect(keys.AUTH_SECRET_ENCRYPTION_KEY.length).toBeGreaterThan(20);
+  expect(typeof keys.secretEncryptionKey).toBe("string");
+  expect(keys.secretEncryptionKey.length).toBeGreaterThan(20);
+  expect(typeof keys.webauthnMaskingKey).toBe("string");
+  expect(keys.webauthnMaskingKey.length).toBeGreaterThan(20);
+  expect(keys.webauthnMaskingKey).not.toBe(keys.secretEncryptionKey);
+});
+
+test("bundleLegacyKeys preserves existing cryptographic material", () => {
+  const bundled = JSON.parse(
+    bundleLegacyKeys({
+      JWT_PRIVATE_KEY: "existing-private-key",
+      JWKS: JSON.stringify({ keys: [{ kty: "OKP", x: "existing-public-key" }] }),
+      AUTH_SECRET_ENCRYPTION_KEY: "existing-secret-encryption-key",
+    }),
+  );
+
+  expect(bundled).toMatchObject({
+    version: 1,
+    jwtPrivateKey: "existing-private-key",
+    jwks: { keys: [{ kty: "OKP", x: "existing-public-key" }] },
+    secretEncryptionKey: "existing-secret-encryption-key",
+  });
+  expect(typeof bundled.webauthnMaskingKey).toBe("string");
+  expect(bundled.webauthnMaskingKey.length).toBeGreaterThan(20);
 });

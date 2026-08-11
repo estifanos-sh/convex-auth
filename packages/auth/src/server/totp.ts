@@ -79,7 +79,7 @@ const asConvexError = (
  * and sealed with the server's {@link encryptSecret} (AES-GCM); the resulting
  * ciphertext string is stored UTF-8-encoded in the `TotpFactor.secret` bytes
  * field. Runs server-side because component functions cannot read
- * `AUTH_SECRET_ENCRYPTION_KEY`.
+ * the secret-encryption key from `AUTH_KEYS`.
  */
 async function encryptTotpSecret(secret: Uint8Array): Promise<ArrayBuffer> {
   const ciphertext = await encryptSecret(encodeBase64urlNoPadding(secret));

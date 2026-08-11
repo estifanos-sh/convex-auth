@@ -2,6 +2,7 @@ import type { EnvFromDefinition } from "convex/server";
 import { ConvexError, v } from "convex/values";
 
 import { ErrorCode } from "../shared/codes";
+import { AuthKeyringError, parseAuthKeyring } from "../shared/keyring";
 
 const vOptionalBooleanString = v.optional(v.union(v.literal("true"), v.literal("false")));
 
@@ -23,6 +24,7 @@ export const authEnv = {
   AUTH_GITHUB_SECRET: v.optional(v.string()),
   AUTH_GOOGLE_ID: v.optional(v.string()),
   AUTH_GOOGLE_SECRET: v.optional(v.string()),
+  AUTH_KEYS: v.optional(v.string()),
   AUTH_LOG_LEVEL: v.optional(
     v.union(v.literal("DEBUG"), v.literal("INFO"), v.literal("WARN"), v.literal("ERROR")),
   ),
@@ -31,6 +33,7 @@ export const authEnv = {
   AUTH_MICROSOFT_SECRET: v.optional(v.string()),
   AUTH_MICROSOFT_TENANT_ID: v.optional(v.string()),
   AUTH_PASSWORD_EMAIL_VERIFICATION: vOptionalBooleanString,
+  /** @deprecated Use the versioned `AUTH_KEYS` keyring. */
   AUTH_SECRET_ENCRYPTION_KEY: v.optional(v.string()),
   AUTH_SESSION_INACTIVE_DURATION_MS: v.optional(v.string()),
   AUTH_SESSION_TOTAL_DURATION_MS: v.optional(v.string()),
@@ -38,7 +41,9 @@ export const authEnv = {
   CONVEX_SITE_URL: v.optional(v.string()),
   IOS_APP_IDS: v.optional(v.string()),
   IOS_APPLINK_PATHS: v.optional(v.string()),
+  /** @deprecated Use the versioned `AUTH_KEYS` keyring. */
   JWKS: v.optional(v.string()),
+  /** @deprecated Use the versioned `AUTH_KEYS` keyring. */
   JWT_PRIVATE_KEY: v.optional(v.string()),
   RESEND_API_KEY: v.optional(v.string()),
   SECURITY_CONTACT: v.optional(v.string()),
@@ -49,12 +54,34 @@ export const authEnv = {
 export type AuthEnv = EnvFromDefinition<typeof authEnv>;
 
 function readEnv(name: string): string | undefined {
+  const keyringValue = readRawEnv("AUTH_KEYS");
+  if (keyringValue !== undefined) {
+    const keyring = parseAuthKeyring(keyringValue);
+    if (name === "JWT_PRIVATE_KEY") {
+      return keyring.jwtPrivateKey;
+    }
+    if (name === "JWKS") {
+      return JSON.stringify(keyring.jwks);
+    }
+    if (name === "AUTH_SECRET_ENCRYPTION_KEY") {
+      return keyring.secretEncryptionKey;
+    }
+  }
+  return readRawEnv(name);
+}
+
+function readRawEnv(name: string): string | undefined {
   const value = typeof process === "undefined" ? undefined : process.env?.[name];
   return typeof value === "string" && value.length > 0 ? value : undefined;
 }
 
 /** Env vars whose absence points the user at the setup wizard rather than a bare miss. */
-const SETUP_WIZARD_ENV = new Set(["JWT_PRIVATE_KEY", "JWKS", "AUTH_SECRET_ENCRYPTION_KEY"]);
+const SETUP_WIZARD_ENV = new Set([
+  "AUTH_KEYS",
+  "JWT_PRIVATE_KEY",
+  "JWKS",
+  "AUTH_SECRET_ENCRYPTION_KEY",
+]);
 
 function missingEnvMessage(name: string) {
   return SETUP_WIZARD_ENV.has(name)
@@ -106,13 +133,32 @@ export const envBoolean = (name: string) => {
 };
 
 /** @internal */
+export function requireWebAuthnMaskingKey(): string {
+  const keyringValue = readRawEnv("AUTH_KEYS");
+  if (keyringValue !== undefined) {
+    try {
+      return parseAuthKeyring(keyringValue).webauthnMaskingKey;
+    } catch (error) {
+      throw new ConvexError({
+        code: ErrorCode.MISSING_ENV_VAR,
+        message: error instanceof AuthKeyringError ? error.message : missingEnvMessage("AUTH_KEYS"),
+      });
+    }
+  }
+
+  // Legacy deployments used the JWT private key for deterministic masking.
+  // Preserve that behavior until they migrate to the purpose-separated keyring.
+  return requireEnv("JWT_PRIVATE_KEY");
+}
+
+/** @internal */
 export function requireEnv(name: string) {
   try {
     return readConfigSync(envString(name));
-  } catch {
+  } catch (error) {
     throw new ConvexError({
       code: ErrorCode.MISSING_ENV_VAR,
-      message: missingEnvMessage(name),
+      message: error instanceof AuthKeyringError ? error.message : missingEnvMessage(name),
     });
   }
 }

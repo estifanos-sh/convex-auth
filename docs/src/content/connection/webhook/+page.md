@@ -103,7 +103,7 @@ Body:
 
 Endpoints store the signing secret encrypted at rest
 (`GroupWebhookEndpoint.secretCiphertext`, AES-GCM via
-`AUTH_SECRET_ENCRYPTION_KEY`). The lib decrypts it at emit time, computes
+the secret-encryption key inside `AUTH_KEYS`). The lib decrypts it at emit time, computes
 the HMAC, and persists `signature` + `signedAt` on the delivery row so
 retries reuse the same signature.
 

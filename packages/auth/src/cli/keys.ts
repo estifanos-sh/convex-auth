@@ -2,13 +2,47 @@ import { randomBytes } from "node:crypto";
 
 import { exportJWK, exportPKCS8, generateKeyPair } from "jose";
 
+import {
+  AUTH_KEYS_VERSION,
+  parseAuthKeyring,
+  serializeAuthKeyring,
+  type AuthKeyring,
+} from "../shared/keyring";
+
+/** Legacy key variables accepted when bundling an existing deployment. */
+export type LegacyAuthKeys = {
+  JWT_PRIVATE_KEY: string;
+  JWKS: string;
+  AUTH_SECRET_ENCRYPTION_KEY: string;
+};
+
+/** Bundle existing legacy key variables without rotating their cryptographic material. */
+export function bundleLegacyKeys(keys: LegacyAuthKeys): string {
+  let jwks: unknown;
+  try {
+    jwks = JSON.parse(keys.JWKS);
+  } catch {
+    throw new Error("Cannot migrate auth keys because the existing `JWKS` value is invalid JSON.");
+  }
+
+  const candidate = JSON.stringify({
+    version: AUTH_KEYS_VERSION,
+    jwtPrivateKey: keys.JWT_PRIVATE_KEY,
+    jwks,
+    secretEncryptionKey: keys.AUTH_SECRET_ENCRYPTION_KEY,
+    webauthnMaskingKey: randomBytes(32).toString("base64url"),
+  });
+  return serializeAuthKeyring(parseAuthKeyring(candidate));
+}
+
 /**
- * Generate a fresh JWT signing keypair, JWKS payload, and secret-encryption key.
+ * Generate a fresh versioned auth keyring.
  *
  * Used by the Convex Auth setup wizard to provision required environment
- * variables on a target Convex deployment.
+ * material in one `AUTH_KEYS` value on a target Convex deployment. Signing and
+ * at-rest encryption still use independent cryptographic keys.
  *
- * @returns Generated `JWT_PRIVATE_KEY`, `JWKS`, and `AUTH_SECRET_ENCRYPTION_KEY` values.
+ * @returns A serialized `AUTH_KEYS` value.
  * @internal
  */
 export async function generateKeys() {
@@ -19,11 +53,15 @@ export async function generateKeys() {
     });
     const privateKey = await exportPKCS8(keys.privateKey);
     const publicKey = await exportJWK(keys.publicKey);
-    const jwks = JSON.stringify({ keys: [{ use: "sig", ...publicKey }] });
+    const keyring: AuthKeyring = {
+      version: AUTH_KEYS_VERSION,
+      jwtPrivateKey: privateKey.trimEnd(),
+      jwks: { keys: [{ use: "sig", ...publicKey }] },
+      secretEncryptionKey: randomBytes(32).toString("base64url"),
+      webauthnMaskingKey: randomBytes(32).toString("base64url"),
+    };
     return {
-      JWT_PRIVATE_KEY: privateKey.trimEnd(),
-      JWKS: jwks,
-      AUTH_SECRET_ENCRYPTION_KEY: randomBytes(32).toString("base64url"),
+      AUTH_KEYS: serializeAuthKeyring(keyring),
     };
   } catch (error) {
     console.error(

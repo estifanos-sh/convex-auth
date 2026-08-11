@@ -579,7 +579,7 @@ export default defineSchema({
     groupId: v.id("Group"),
     url: v.string(),
     status: vWebhookEndpointStatus,
-    /** Endpoint signing secret encrypted with `AUTH_SECRET_ENCRYPTION_KEY`. */
+    /** Endpoint signing secret encrypted with the secret key in `AUTH_KEYS`. */
     secretCiphertext: v.string(),
     subscriptions: v.array(vAuthEventKind),
     createdByUserId: v.optional(v.id("User")),
