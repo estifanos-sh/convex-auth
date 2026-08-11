@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.0.1-preview.1
+
 ### Breaking
 
 - **Make expensive and privileged behavior explicit.** `auth.member.get` and
