@@ -1,7 +1,11 @@
 name: Package Preview
 
 concurrency:
-  group: package-preview-${{ github.event.pull_request.number || inputs.ref || github.ref }}
+  group: >-
+    package-preview-${{ github.event.pull_request.number || inputs.ref || github.ref }}-${{
+      github.event.action == 'labeled' && github.event.label.name != 'preview'
+      && github.event.label.name || 'preview'
+    }}
   cancel-in-progress: true
 
 on:
