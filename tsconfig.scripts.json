@@ -17,6 +17,7 @@
     "scripts/**/*.ts",
     "docs/scripts/**/*.ts",
     "packages/auth/scripts/**/*.ts",
+    "demos/expo/app.config.ts",
     "demos/expo/scripts/**/*.ts"
   ]
 }

@@ -14,5 +14,6 @@
     "expo-env.d.ts",
     "../../convex/**/*.ts",
     "../../convex/**/*.d.ts"
-  ]
+  ],
+  "exclude": ["app.config.ts", "scripts"]
 }
