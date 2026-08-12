@@ -22,14 +22,14 @@ import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const repoRoot = join(here, "..");
+const repoRoot = join(here, "../..");
 const componentDir = process.argv[2]
   ? resolve(process.cwd(), process.argv[2])
   : join(repoRoot, "packages", "auth", "src", "component");
 
 /** Recursively collect `.ts` files under `dir`, skipping generated output. */
-function collectTsFiles(dir) {
-  const out = [];
+function collectTsFiles(dir: string): string[] {
+  const out: string[] = [];
   for (const entry of readdirSync(dir)) {
     const full = join(dir, entry);
     const info = statSync(full);
@@ -50,11 +50,11 @@ function collectTsFiles(dir) {
  * equal length so byte offsets and line numbers are preserved while textual
  * matches inside strings/comments are neutralised.
  */
-function stripStringsAndComments(src) {
+function stripStringsAndComments(src: string): string {
   const out = src.split("");
   let i = 0;
   const n = src.length;
-  const blank = (start, end) => {
+  const blank = (start: number, end: number): void => {
     for (let k = start; k < end; k++) {
       if (out[k] !== "\n") {
         out[k] = " ";
@@ -94,18 +94,19 @@ function stripStringsAndComments(src) {
   return out.join("");
 }
 
-const offsetToLine = (src, offset) => src.slice(0, offset).split("\n").length;
+const offsetToLine = (src: string, offset: number): number =>
+  src.slice(0, offset).split("\n").length;
 
 /**
  * Identifiers bound (via `=`) to a `ctx.db.query(...)` chain that does NOT pass
  * through `paginator(`/`stream(`. These are the variables that, when later
  * paginated, hit the forbidden built-in paginate.
  */
-function collectDbQueryVars(code) {
-  const vars = new Set();
+function collectDbQueryVars(code: string): Set<string> {
+  const vars = new Set<string>();
   const assign =
     /(?:^|[;{}\n)])\s*(?:const|let|var\s+)?\s*([A-Za-z_$][\w$]*)\s*=\s*([^;]*?ctx\.db\s*\.\s*query\b[^;]*)/g;
-  let m;
+  let m: RegExpExecArray | null;
   while ((m = assign.exec(code)) !== null) {
     const name = m[1];
     const rhs = m[2];
@@ -122,7 +123,7 @@ function collectDbQueryVars(code) {
  * of the receiver chain. Returns `{ root, chain }` where `root` is the leading
  * identifier/`)` and `chain` is the raw receiver text.
  */
-function receiverChain(code, dotIndex) {
+function receiverChain(code: string, dotIndex: number): { root: string; chain: string } {
   let depth = 0;
   let i = dotIndex - 1;
   let rootStart = dotIndex;
@@ -162,7 +163,7 @@ function receiverChain(code, dotIndex) {
   return { root: rootMatch ? rootMatch[0] : "", chain };
 }
 
-let violations = [];
+const violations: Array<{ file: string; line: number; root: string }> = [];
 const files = collectTsFiles(componentDir).sort();
 
 for (const file of files) {
@@ -171,7 +172,7 @@ for (const file of files) {
   const dbVars = collectDbQueryVars(code);
 
   const paginate = /\.\s*paginate\s*\(/g;
-  let pm;
+  let pm: RegExpExecArray | null;
   while ((pm = paginate.exec(code)) !== null) {
     const dotIndex = pm.index;
     const { root, chain } = receiverChain(code, dotIndex);

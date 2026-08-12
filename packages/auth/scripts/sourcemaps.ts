@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 const packageRoot = fileURLToPath(new URL("../", import.meta.url));
 const sourceMapPattern = /[#@]\s*sourceMappingURL=([^\s*]+)/g;
 const cache = mkdtempSync(path.join(tmpdir(), "convex-auth-npm-cache-"));
-let pack;
+let pack: Array<{ files?: Array<{ path: string }> }>;
 try {
   pack = JSON.parse(
     execFileSync("npm", ["pack", "--dry-run", "--json", "--ignore-scripts"], {
@@ -16,12 +16,12 @@ try {
       encoding: "utf8",
       env: { ...process.env, npm_config_cache: cache },
     }),
-  );
+  ) as Array<{ files?: Array<{ path: string }> }>;
 } finally {
   rmSync(cache, { force: true, recursive: true });
 }
 const published = new Set(pack[0]?.files?.map((file) => file.path) ?? []);
-const missing = [];
+const missing: string[] = [];
 
 for (const file of published) {
   if (!file.endsWith(".js") && !file.endsWith(".d.ts")) {

@@ -1,13 +1,20 @@
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
-const root = path.resolve(import.meta.dirname, "..");
+const root = path.resolve(import.meta.dirname, "../..");
 const publicDir = path.join(root, "dist", "client");
 const target = path.join(root, "dist", "client", "convex-auth");
 const staging = path.join(root, ".docs-static");
 const source = existsSync(path.join(publicDir, "convex-auth"))
   ? path.join(publicDir, "convex-auth")
   : publicDir;
+
+interface DocumentationPage {
+  description: string;
+  markdown: string;
+  slug: string;
+  title: string;
+}
 
 if (!existsSync(source)) throw new Error(`TanStack static output is missing: ${source}`);
 rmSync(staging, { force: true, recursive: true });
@@ -19,7 +26,7 @@ rmSync(staging, { force: true, recursive: true });
 
 const documentationPages = JSON.parse(
   readFileSync(path.join(root, "src", "generated", "docs.json"), "utf8"),
-);
+) as DocumentationPage[];
 for (const page of documentationPages) {
   const pathname = page.slug.slice(1);
   const file = path.join(target, `${pathname}.md`);

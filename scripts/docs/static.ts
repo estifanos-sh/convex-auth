@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 
-const root = path.resolve(import.meta.dirname, "..");
+const root = path.resolve(import.meta.dirname, "../..");
 const build = path.join(root, "docs", "dist", "client", "convex-auth");
 const fonts = ["figtree.woff2"];
 const required = [
@@ -14,7 +14,7 @@ const required = [
   "pagefind/pagefind.js",
 ];
 
-function collectHtml(directory) {
+function collectHtml(directory: string): string[] {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
     const file = path.join(directory, entry.name);
     return entry.isDirectory() ? collectHtml(file) : entry.name.endsWith(".html") ? [file] : [];

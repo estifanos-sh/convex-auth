@@ -10,15 +10,15 @@ const expectedSkills = [
   "estifanos-sh-convex-auth-setup",
 ];
 
-function fail(message) {
+function fail(message: string): never {
   throw new Error(`Agent Skills validation failed: ${message}`);
 }
 
-function frontmatter(source, file) {
+function frontmatter(source: string, file: string): Map<string, string> {
   const match = source.match(/^---\n([\s\S]*?)\n---\n/u);
   if (!match) fail(`${file} must start with YAML frontmatter`);
 
-  const fields = new Map();
+  const fields = new Map<string, string>();
   for (const line of match[1].split("\n")) {
     const separator = line.indexOf(":");
     if (separator < 1) fail(`${file} has invalid frontmatter: ${line}`);
@@ -27,7 +27,7 @@ function frontmatter(source, file) {
   return fields;
 }
 
-function validateLinks(source, directory, file) {
+function validateLinks(source: string, directory: string, file: string): void {
   for (const match of source.matchAll(/\[[^\]]+\]\(([^)]+)\)/gu)) {
     const link = match[1];
     if (/^(?:https?:|#|\/)/u.test(link)) continue;
