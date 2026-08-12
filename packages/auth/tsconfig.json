@@ -8,7 +8,7 @@
     "stripInternal": true,
     "sourceMap": true,
     "outDir": "dist",
-    "allowJs": true,
+    "allowJs": false,
     "skipLibCheck": true,
     "strict": true,
     "esModuleInterop": true,
@@ -24,6 +24,6 @@
       "@estifanos-sh/convex-auth/server": ["./src/server/index"]
     }
   },
-  "include": ["**/*.ts", "**/*.tsx", "*.mjs"],
+  "include": ["**/*.ts", "**/*.tsx"],
   "exclude": ["node_modules", "dist", "docs", "consumer"]
 }

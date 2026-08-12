@@ -171,6 +171,13 @@ use options objects.
 - SSR guards: `typeof window !== "undefined"`.
 - Discriminated unions for state management.
 
+### Script Sources
+
+- Write authored scripts in TypeScript and execute them directly with Node 24.
+- Do not add `.js` or `.mjs` source files. Framework configuration files may
+  keep a JavaScript filename only when their loader requires that convention;
+  `vp run check:sources` owns the explicit exception list.
+
 ### JSDoc
 
 - Add `/** JSDoc */` with `@param`, `@returns`, `@example` on all **public API**

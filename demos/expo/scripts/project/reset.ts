@@ -6,9 +6,9 @@
  * You can remove the `reset-project` script from package.json and safely delete this file after running it.
  */
 
-const fs = require("fs");
-const path = require("path");
-const readline = require("readline");
+import fs from "node:fs";
+import path from "node:path";
+import readline from "node:readline";
 
 const root = process.cwd();
 const oldDirs = ["app", "components", "hooks", "constants", "scripts"];
@@ -45,7 +45,7 @@ const rl = readline.createInterface({
   output: process.stdout,
 });
 
-const moveDirectories = async (userInput) => {
+const moveDirectories = async (userInput: "y" | "n"): Promise<void> => {
   try {
     if (userInput === "y") {
       await fs.promises.mkdir(exampleDirPath, { recursive: true });
@@ -89,7 +89,9 @@ const moveDirectories = async (userInput) => {
       }`,
     );
   } catch (error) {
-    console.error(`❌ Error during script execution: ${error.message}`);
+    console.error(
+      `❌ Error during script execution: ${error instanceof Error ? error.message : String(error)}`,
+    );
   }
 };
 

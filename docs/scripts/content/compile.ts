@@ -11,11 +11,32 @@ import { createHighlighter } from "shiki";
 import { unified } from "unified";
 import { visit } from "unist-util-visit";
 
-const root = path.resolve(import.meta.dirname, "..");
+const root = path.resolve(import.meta.dirname, "../..");
 const source = path.join(root, "src", "content");
 const generated = path.join(root, "src", "generated", "docs.ts");
 const generatedJson = path.join(root, "src", "generated", "docs.json");
 const generatedPages = path.join(root, "src", "generated", "pages");
+
+interface DocumentationPage {
+  description: string;
+  html: string;
+  markdown: string;
+  slug: string;
+  title: string;
+}
+
+interface MutableNode {
+  attributes?: Array<{ name: string; type: string; value?: unknown }>;
+  children?: MutableNode[];
+  depth?: number;
+  lang?: string;
+  meta?: string;
+  name?: string;
+  properties?: Record<string, unknown>;
+  tagName?: string;
+  type: string;
+  value?: string;
+}
 const highlighter = await createHighlighter({
   themes: ["github-dark-dimmed", "github-light"],
   langs: [
@@ -36,32 +57,32 @@ const highlighter = await createHighlighter({
   ],
 });
 
-function walk(directory) {
+function walk(directory: string): string[] {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
     const entryPath = path.join(directory, entry.name);
     return entry.isDirectory() ? walk(entryPath) : [entryPath];
   });
 }
 
-function textContent(node) {
-  if (node.type === "text") return node.value;
-  return "children" in node ? node.children.map(textContent).join("") : "";
+function textContent(node: MutableNode): string {
+  if (node.type === "text") return node.value ?? "";
+  return node.children?.map(textContent).join("") ?? "";
 }
 
-function slugify(value) {
+function slugify(value: string): string {
   return value
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");
 }
 
-function removeSveltePrelude(source) {
+function removeSveltePrelude(source: string): string {
   return source
     .replace(/^\s*<script[\s\S]*?<\/script>\s*/u, "")
     .replace(/^\s*<svelte:head>[\s\S]*?<\/svelte:head>\s*/u, "");
 }
 
-function componentAttributes(attributes) {
+function componentAttributes(attributes: MutableNode["attributes"] = []): Record<string, unknown> {
   return Object.fromEntries(
     attributes
       .filter((attribute) => attribute.type === "mdxJsxAttribute")
@@ -70,11 +91,11 @@ function componentAttributes(attributes) {
 }
 
 function markdownComponents() {
-  return (tree) => {
-    visit(tree, (node) => {
+  return (tree: MutableNode): void => {
+    visit(tree, (node: MutableNode) => {
       if (node.type === "code") {
         node.type = "html";
-        node.value = highlighter.codeToHtml(node.value, {
+        node.value = highlighter.codeToHtml(node.value ?? "", {
           lang: node.lang || "text",
           themes: { light: "github-light", dark: "github-dark-dimmed" },
         });
@@ -102,7 +123,11 @@ function markdownComponents() {
           properties: { className: ["tab-panel"], dataTab: attributes.label || "Tab" },
         },
       };
-      const definition = definitions[node.name];
+      const definition = node.name
+        ? (definitions as Record<string, { properties: Record<string, unknown>; tagName: string }>)[
+            node.name
+          ]
+        : undefined;
 
       if (node.name === "Card") {
         node.type = "element";
@@ -113,13 +138,18 @@ function markdownComponents() {
             type: "element",
             tagName: "p",
             properties: { className: ["card-title"] },
-            children: [{ type: "text", value: attributes.title || "" }],
+            children: [
+              {
+                type: "text",
+                value: typeof attributes.title === "string" ? attributes.title : "",
+              },
+            ],
           },
           {
             type: "element",
             tagName: "div",
             properties: { className: ["card-body"] },
-            children: node.children,
+            children: node.children ?? [],
           },
         ];
         return;
@@ -140,30 +170,31 @@ function markdownComponents() {
 }
 
 function removeDocumentTitle() {
-  return (tree) => {
-    const titleIndex = tree.children.findIndex(
-      (node) => node.type === "heading" && node.depth === 1,
+  return (tree: MutableNode): void => {
+    const titleIndex = (tree.children ?? []).findIndex(
+      (node: MutableNode) => node.type === "heading" && node.depth === 1,
     );
-    if (titleIndex !== -1) tree.children.splice(titleIndex, 1);
+    if (titleIndex !== -1) tree.children?.splice(titleIndex, 1);
   };
 }
 
 function addHeadingIds() {
-  const seen = new Map();
-  return (tree) => {
-    visit(tree, "element", (node) => {
-      if (!/^h[1-6]$/.test(node.tagName)) return;
+  const seen = new Map<string, number>();
+  return (tree: MutableNode): void => {
+    visit(tree, "element", (node: MutableNode) => {
+      if (!node.tagName || !/^h[1-6]$/.test(node.tagName)) return;
       const base = slugify(textContent(node)) || "section";
       const suffix = seen.get(base) || 0;
       seen.set(base, suffix + 1);
+      node.properties ??= {};
       node.properties.id = suffix ? `${base}-${suffix + 1}` : base;
     });
   };
 }
 
 function prefixInternalLinks() {
-  return (tree) => {
-    visit(tree, "element", (node) => {
+  return (tree: MutableNode): void => {
+    visit(tree, "element", (node: MutableNode) => {
       if (node.tagName !== "a" || typeof node.properties?.href !== "string") return;
       const href = node.properties.href;
       if (href.startsWith("/") && !href.startsWith("/convex-auth/")) {
@@ -189,7 +220,7 @@ const processor = unified()
   .use(prefixInternalLinks)
   .use(rehypeStringify, { allowDangerousHtml: true });
 
-const pages = await Promise.all(
+const pages: DocumentationPage[] = await Promise.all(
   walk(source)
     .filter((file) => file.endsWith("+page.md"))
     .sort()
@@ -197,8 +228,8 @@ const pages = await Promise.all(
       const parsed = matter(readFileSync(file, "utf8"));
       const relative = path.relative(source, file).replace(/\/\\/g, "/");
       const slug = `/${relative.slice(0, -"/+page.md".length)}`;
-      const title = parsed.data.title || slug.split("/").at(-1) || "convex-auth";
-      const description = parsed.data.description || "";
+      const title = String(parsed.data.title || slug.split("/").at(-1) || "convex-auth");
+      const description = String(parsed.data.description || "");
       const content = removeSveltePrelude(parsed.content);
       const html = String(await processor.process(content));
       return { description, html, markdown: content.trim(), slug, title };
@@ -223,7 +254,7 @@ const pageEntries = pages.map((page, index) => {
 
 writeFileSync(
   generated,
-  `/* This file is generated by scripts/compile-content.mjs. */\n` +
+  `/* This file is generated by scripts/content/compile.ts. */\n` +
     `export interface DocumentationPage { title: string; description: string; slug: string; html: string; }\n` +
     `export interface DocumentationPageMeta { title: string; description: string; slug: string; }\n` +
     `export const documentationPages: DocumentationPageMeta[] = ${JSON.stringify(pages.map(({ html: _html, markdown: _markdown, ...page }) => page))};\n` +

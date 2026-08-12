@@ -5,8 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vp dev",
-    "generate:content": "node ./scripts/compile-content.mjs && vp fmt src/generated",
-    "build": "pnpm run generate:content && vp build && vp fmt src/routeTree.gen.ts && node ./scripts/assemble-static.mjs && pnpx pagefind --site dist/client/convex-auth",
+    "generate:content": "node ./scripts/content/compile.ts && vp fmt src/generated",
+    "build": "pnpm run generate:content && vp build && vp fmt src/routeTree.gen.ts && node ./scripts/static/assemble.ts && pnpx pagefind --site dist/client/convex-auth",
     "preview": "vp preview",
     "check": "pnpm run generate:content && vp exec tsc --noEmit --project ./tsconfig.json"
   },

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.0.1
+
+First stable release under the `@estifanos-sh/convex-auth` package name. It
+includes the changes tested in `0.0.1-preview.1` and `0.0.1-preview.2`.
+
 ## 0.0.1-preview.2
 
 ### Breaking

@@ -53,13 +53,13 @@ entrypoint falls back to the browser client automatically when running on web.
 ### 1. Get your Team ID and Bundle ID
 
 - **Team ID**: Apple Developer → Membership → Team ID (10-character string).
-- **Bundle ID**: From `app.config.js` / `app.json` → `ios.bundleIdentifier`.
+- **Bundle ID**: From `app.config.ts` / `app.json` → `ios.bundleIdentifier`.
   Combined as `TEAMID.com.example.app`.
 
 ### 2. Add the Associated Domain to your Expo config
 
-```js
-// app.config.js
+```ts
+// app.config.ts
 const passkeyDomain = process.env.APP_URL ? new URL(process.env.APP_URL).hostname : null;
 
 module.exports = {
@@ -75,7 +75,7 @@ module.exports = {
 For local development, append `?mode=developer` to bypass AASA verification
 (iOS 17.4+):
 
-```js
+```ts
 associatedDomains: [`webcredentials:${passkeyDomain}?mode=developer`],
 ```
 
@@ -134,8 +134,8 @@ App signing.
 
 ### 2. Add intent filters to Expo config
 
-```js
-// app.config.js
+```ts
+// app.config.ts
 module.exports = {
   expo: {
     android: {

@@ -1,6 +1,6 @@
 {
   "name": "@estifanos-sh/convex-auth",
-  "version": "0.0.1-preview.2",
+  "version": "0.0.1",
   "description": "Authentication for Convex",
   "keywords": [
     "auth",
@@ -115,9 +115,9 @@
     "typecheck:consumer:dist": "vp exec tsc --project tsconfig.consumer.dist.json --noEmit",
     "check:attw": "vp exec attw --pack . --profile esm-only --exclude-entrypoints ./test ./_generated/component.js ./svelte",
     "check:publint": "vp exec publint --strict",
-    "check:sourcemaps": "node scripts/sourcemaps.mjs",
+    "check:sourcemaps": "node scripts/sourcemaps.ts",
     "check:packaging": "vp run check:sourcemaps && vp run check:attw && vp run check:publint",
-    "check:component-paginate": "node ../../scripts/check-component-paginate.mjs",
+    "check:component-paginate": "node ../../scripts/component/paginate.ts",
     "docs": "vp run --cwd ../../docs dev",
     "lint": "vp run typecheck",
     "spellcheck": "cspell \"../../docs/src/content/**/*.md*\" \"../../skills/**/*.md\"",

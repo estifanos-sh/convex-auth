@@ -2,7 +2,7 @@
 
 This package is a TanStack Start + SolidJS static documentation application for
 `@estifanos-sh/convex-auth`. Markdown under `src/content/` is the canonical
-source; `scripts/compile-content.mjs` parses it with Unified/Remark MDX and
+source; `scripts/content/compile.ts` parses it with Unified/Remark MDX and
 builds Shiki-highlighted HTML before the app is compiled.
 
 ```sh
