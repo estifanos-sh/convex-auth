@@ -626,6 +626,7 @@ type AllowCredential = { type: "public-key"; id: string; transports?: string[] }
 type StoredCredential = { id: string; transports?: string[] };
 
 const ROAMING_AUTHENTICATOR_TRANSPORTS = new Set(["usb", "nfc", "ble"]);
+const ROAMING_CEREMONY_TRANSPORTS = ["ble", "nfc", "usb"];
 
 /**
  * Preserve only transports that unambiguously identify a roaming authenticator.
@@ -708,6 +709,9 @@ async function deriveEmailAllowCredentials(
       }
     })
     .slice(0, EMAIL_ALLOW_REAL_CREDENTIALS);
+  const ceremonyTransports = credentialAuthenticationHints(realCredentials)
+    ? ROAMING_CEREMONY_TRANSPORTS
+    : undefined;
   const key = await crypto.subtle.importKey(
     "raw",
     new TextEncoder().encode(secret),
@@ -740,14 +744,19 @@ async function deriveEmailAllowCredentials(
         (((lengthSeed[pairIndex * 2] << 8) | lengthSeed[pairIndex * 2 + 1]) %
           MAX_WEBAUTHN_CREDENTIAL_ID_LENGTH);
       const byteLength = real?.byteLength ?? derivedLength;
+      const pairTransports = ceremonyTransports ?? real?.transports;
       const first = real
-        ? await makeCredential(real.id, `real:${pairIndex}`, real.transports)
+        ? await makeCredential(real.id, `real:${pairIndex}`, pairTransports)
         : await keyedBytes(
             key,
             `convex-auth:webauthn-decoy:v2:${rpId}:${emailSeed}:pair:${pairIndex}:first`,
             byteLength,
           ).then((bytes) =>
-            makeCredential(encodeBase64urlNoPadding(bytes), `pair:${pairIndex}:first`),
+            makeCredential(
+              encodeBase64urlNoPadding(bytes),
+              `pair:${pairIndex}:first`,
+              pairTransports,
+            ),
           );
       const companion = await keyedBytes(
         key,
@@ -757,7 +766,7 @@ async function deriveEmailAllowCredentials(
         makeCredential(
           encodeBase64urlNoPadding(bytes),
           `pair:${pairIndex}:companion`,
-          real?.transports,
+          pairTransports,
         ),
       );
       return [first, companion];

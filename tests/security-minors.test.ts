@@ -240,7 +240,11 @@ test("WebAuthn email signIn prefers the native security-key ceremony for roaming
     params: { flow: "signIn", email: "security-key@example.com" },
   });
   expect(authenticationHints(result)).toEqual(["security-key"]);
+  expect(
+    allowCredentials(result)?.every(({ transports }) => transports?.join(",") === "ble,nfc,usb"),
+  ).toBe(true);
   expect(allowCredentials(result)?.find(({ id }) => id === credentialId)?.transports).toEqual([
+    "ble",
     "nfc",
     "usb",
   ]);
