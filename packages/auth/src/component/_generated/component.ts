@@ -2743,7 +2743,10 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           signature: string;
           verifiedEmail?: string;
         },
-        { credentialIds: Array<string>; verifierId: string },
+        {
+          credentials: Array<{ id: string; transports?: Array<string> }>;
+          verifierId: string;
+        },
         Name
       >;
       completeAssertion: FunctionReference<

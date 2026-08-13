@@ -72,16 +72,20 @@ function credentialLengthCounts(ids: readonly string[]): Map<number, number> {
 test("passkey signIn returns deterministic decoy allowCredentials for an unknown email", async () => {
   const t = convexTest(schema);
 
-  const first = allowCredentialIds(
-    await t.action(api.auth.signIn, {
-      provider: "webauthn",
-      params: { flow: "signIn", email: "ghost@example.com" },
-    }),
-  );
+  const firstResult = await t.action(api.auth.signIn, {
+    provider: "webauthn",
+    params: { flow: "signIn", email: "ghost@example.com" },
+  });
+  const first = allowCredentialIds(firstResult);
   // Unknown email still yields a non-empty, paired allowCredentials list. This
   // removes the immediate empty/non-empty response-shape oracle.
   expect(first).toBeDefined();
   expect(first).toHaveLength(32);
+  expect(
+    allowCredentials(firstResult)?.every(
+      (descriptor) => descriptor.transports !== undefined && descriptor.transports.length > 0,
+    ),
+  ).toBe(true);
   expect([...credentialLengthCounts(first!).values()].every((count) => count % 2 === 0)).toBe(true);
 
   // Same email → same decoys (derived from a hash of the email).
@@ -125,6 +129,7 @@ test("passkey signIn returns the real credential for a known email (not a decoy)
       publicKey: new ArrayBuffer(32),
       algorithm: -7,
       counter: 0,
+      transports: ["internal", "hybrid"],
       deviceType: "multiDevice",
       backedUp: true,
       createdAt: Date.now(),
@@ -138,7 +143,16 @@ test("passkey signIn returns the real credential for a known email (not a decoy)
   const descriptors = allowCredentials(result);
   expect(descriptors).toHaveLength(32);
   expect(descriptors?.map(({ id }) => id)).toContain(credentialId);
-  expect(descriptors?.every((descriptor) => descriptor.transports === undefined)).toBe(true);
+  expect(descriptors?.find(({ id }) => id === credentialId)?.transports).toEqual([
+    "internal",
+    "hybrid",
+  ]);
+  expect(
+    descriptors?.filter(
+      ({ id, transports }) =>
+        decodeBase64url(id).byteLength === 21 && transports?.join(",") === "internal,hybrid",
+    ).length,
+  ).toBeGreaterThanOrEqual(2);
   const matchingLength = descriptors?.filter(
     ({ id }) => decodeBase64url(id).byteLength === 21,
   ).length;
@@ -154,18 +168,25 @@ test("passkey signIn returns the real credential for a known email (not a decoy)
 test("WebAuthn email signIn includes stored credentials without policy filtering", async () => {
   const t = convexTest(schema);
   const userId = await createVerifiedUser(t, "mixed-passkeys@example.com");
-  const credentialIds = [
-    encodeBase64url(new Uint8Array(18).fill(1)),
-    encodeBase64url(new Uint8Array(27).fill(2)),
+  const credentials = [
+    {
+      id: encodeBase64url(new Uint8Array(18).fill(1)),
+      transports: ["usb", "nfc"],
+    },
+    {
+      id: encodeBase64url(new Uint8Array(27).fill(2)),
+      transports: ["internal", "hybrid"],
+    },
   ];
   await t.run(async (ctx) => {
-    for (const credentialId of credentialIds) {
+    for (const credential of credentials) {
       await ctx.runMutation(components.auth.factor.passkey.create, {
         userId: userId as never,
-        credentialId,
+        credentialId: credential.id,
         publicKey: new ArrayBuffer(32),
         algorithm: -7,
         counter: 0,
+        transports: credential.transports,
         deviceType: "singleDevice",
         backedUp: false,
         createdAt: Date.now(),
@@ -173,14 +194,18 @@ test("WebAuthn email signIn includes stored credentials without policy filtering
     }
   });
 
-  const ids = allowCredentialIds(
+  const descriptors = allowCredentials(
     await t.action(api.auth.signIn, {
       provider: "webauthn",
       params: { flow: "signIn", email: "mixed-passkeys@example.com" },
     }),
   );
-  expect(ids).toHaveLength(32);
-  expect(ids).toEqual(expect.arrayContaining(credentialIds));
+  expect(descriptors).toHaveLength(32);
+  for (const credential of credentials) {
+    expect(descriptors?.find(({ id }) => id === credential.id)?.transports).toEqual(
+      credential.transports,
+    );
+  }
 });
 
 test("WebAuthn email signIn normalizes email before lookup and decoy derivation", async () => {

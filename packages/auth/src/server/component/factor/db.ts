@@ -195,11 +195,11 @@ export async function mutatePasskeyBeginSignIn(
   },
 ): Promise<{
   verifierId: string;
-  credentialIds: string[];
+  credentials: Array<{ id: string; transports?: string[] }>;
 }> {
   return (await ctx.runMutation(ctx.auth.config.component.factor.passkey.beginSignIn, args)) as {
     verifierId: string;
-    credentialIds: string[];
+    credentials: Array<{ id: string; transports?: string[] }>;
   };
 }
 

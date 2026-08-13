@@ -598,8 +598,8 @@ export async function assertStoredAttestationTrusted(
 
 /**
  * Build a constant-size, secret-keyed `allowCredentials` list for an email-first
- * sign-in. Real credential IDs are mixed with deterministic decoys, all without
- * transport metadata, then ordered by a secret-keyed digest.
+ * sign-in. Real credential IDs are mixed with deterministic decoys, carry their
+ * stored authenticator transports, then are ordered by a secret-keyed digest.
  *
  * A known email with passkeys returns a populated `allowCredentials`, so an
  * absent/empty list for every other email would be an immediate
@@ -621,7 +621,26 @@ const EMAIL_ALLOW_CREDENTIALS_SIZE = 32;
 const EMAIL_ALLOW_REAL_CREDENTIALS = EMAIL_ALLOW_CREDENTIALS_SIZE / 2;
 const MAX_EMAIL_LENGTH = 254;
 
-type AllowCredential = { type: "public-key"; id: string };
+type AllowCredential = { type: "public-key"; id: string; transports: string[] };
+
+type StoredCredential = { id: string; transports?: readonly string[] };
+
+const MASKED_TRANSPORT_PROFILES = [
+  ["internal", "hybrid"],
+  ["usb", "nfc", "ble", "smart-card"],
+  ["hybrid"],
+  ["usb", "nfc"],
+] as const;
+
+const WEBAUTHN_TRANSPORTS = new Set(["ble", "hybrid", "internal", "nfc", "smart-card", "usb"]);
+
+function normalizeCredentialTransports(transports: readonly string[] | undefined): string[] | null {
+  if (transports === undefined) return null;
+  const normalized = [
+    ...new Set(transports.filter((transport) => WEBAUTHN_TRANSPORTS.has(transport))),
+  ];
+  return normalized.length === 0 ? null : normalized;
+}
 
 async function keyedDigest(key: CryptoKey, value: string): Promise<Uint8Array> {
   const encoder = new TextEncoder();
@@ -652,18 +671,24 @@ function normalizeEmail(value: unknown): string {
 async function deriveEmailAllowCredentials(
   normalizedEmail: string,
   rpId: string,
-  realCredentialIds: readonly string[],
+  realCredentials: readonly StoredCredential[],
 ): Promise<AllowCredential[]> {
   const secret = requireAuthKey("webauthnMaskingKey");
   const emailSeed = encodeBase64urlNoPadding(
     new Uint8Array(sha256(new TextEncoder().encode(normalizedEmail))),
   );
-  const realIds = realCredentialIds
-    .flatMap((id) => {
+  const realIds = realCredentials
+    .flatMap((credential) => {
       try {
-        const byteLength = decodeBase64urlIgnorePadding(id).byteLength;
+        const byteLength = decodeBase64urlIgnorePadding(credential.id).byteLength;
         return byteLength >= 1 && byteLength <= MAX_WEBAUTHN_CREDENTIAL_ID_LENGTH
-          ? [{ id, byteLength }]
+          ? [
+              {
+                id: credential.id,
+                byteLength,
+                transports: normalizeCredentialTransports(credential.transports),
+              },
+            ]
           : [];
       } catch {
         return [];
@@ -680,9 +705,11 @@ async function deriveEmailAllowCredentials(
   const makeCredential = async (
     id: string,
     discriminator: string,
+    transports: string[],
   ): Promise<AllowCredential & { order: string }> => ({
     type: "public-key",
     id,
+    transports,
     order: encodeBase64urlNoPadding(
       await keyedDigest(
         key,
@@ -695,33 +722,45 @@ async function deriveEmailAllowCredentials(
   const credentialPairs = await Promise.all(
     Array.from({ length: EMAIL_ALLOW_REAL_CREDENTIALS }, async (_, pairIndex) => {
       const real = realIds[pairIndex];
+      const maskedTransports = [
+        ...(real?.transports ??
+          MASKED_TRANSPORT_PROFILES[lengthSeed[pairIndex] % MASKED_TRANSPORT_PROFILES.length]),
+      ];
       const derivedLength =
         1 +
         (((lengthSeed[pairIndex * 2] << 8) | lengthSeed[pairIndex * 2 + 1]) %
           MAX_WEBAUTHN_CREDENTIAL_ID_LENGTH);
       const byteLength = real?.byteLength ?? derivedLength;
       const first = real
-        ? await makeCredential(real.id, `real:${pairIndex}`)
+        ? await makeCredential(real.id, `real:${pairIndex}`, maskedTransports)
         : await keyedBytes(
             key,
             `convex-auth:webauthn-decoy:v2:${rpId}:${emailSeed}:pair:${pairIndex}:first`,
             byteLength,
           ).then((bytes) =>
-            makeCredential(encodeBase64urlNoPadding(bytes), `pair:${pairIndex}:first`),
+            makeCredential(
+              encodeBase64urlNoPadding(bytes),
+              `pair:${pairIndex}:first`,
+              maskedTransports,
+            ),
           );
       const companion = await keyedBytes(
         key,
         `convex-auth:webauthn-decoy:v2:${rpId}:${emailSeed}:pair:${pairIndex}:companion`,
         byteLength,
       ).then((bytes) =>
-        makeCredential(encodeBase64urlNoPadding(bytes), `pair:${pairIndex}:companion`),
+        makeCredential(
+          encodeBase64urlNoPadding(bytes),
+          `pair:${pairIndex}:companion`,
+          maskedTransports,
+        ),
       );
       return [first, companion];
     }),
   );
   const credentials = credentialPairs.flat();
   credentials.sort((a, b) => a.order.localeCompare(b.order));
-  return credentials.map(({ type, id }) => ({ type, id }));
+  return credentials.map(({ type, id, transports }) => ({ type, id, transports }));
 }
 
 /**
@@ -1150,7 +1189,7 @@ export async function handleWebAuthn(
       }
 
       if (email !== undefined) {
-        allowCredentials = await deriveEmailAllowCredentials(email, rp.rpId, signIn.credentialIds);
+        allowCredentials = await deriveEmailAllowCredentials(email, rp.rpId, signIn.credentials);
       }
 
       const options: {
@@ -1162,6 +1201,7 @@ export async function handleWebAuthn(
         allowCredentials?: Array<{
           type: "public-key";
           id: string;
+          transports: string[];
         }>;
       } = {
         challenge: encodeBase64urlNoPadding(challenge),

@@ -120,7 +120,12 @@ export const beginSignIn = mutation({
   },
   returns: v.object({
     verifierId: v.id("AuthVerifier"),
-    credentialIds: v.array(v.string()),
+    credentials: v.array(
+      v.object({
+        id: v.string(),
+        transports: v.optional(v.array(v.string())),
+      }),
+    ),
   }),
   handler: async (ctx, args) => {
     let user: Infer<typeof vUserDoc> | null = null;
@@ -140,7 +145,10 @@ export const beginSignIn = mutation({
     const verifierId = await createVerifier(ctx, args);
     return {
       verifierId,
-      credentialIds: passkeys.map((passkey) => passkey.credentialId),
+      credentials: passkeys.map((passkey) => ({
+        id: passkey.credentialId,
+        ...(passkey.transports === undefined ? {} : { transports: passkey.transports }),
+      })),
     };
   },
 });
