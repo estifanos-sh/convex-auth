@@ -621,15 +621,39 @@ const EMAIL_ALLOW_CREDENTIALS_SIZE = 32;
 const EMAIL_ALLOW_REAL_CREDENTIALS = EMAIL_ALLOW_CREDENTIALS_SIZE / 2;
 const MAX_EMAIL_LENGTH = 254;
 
-type AllowCredential = { type: "public-key"; id: string };
+type AllowCredential = { type: "public-key"; id: string; transports?: string[] };
 
-type StoredCredential = { id: string };
+type StoredCredential = { id: string; transports?: string[] };
 
-// Authenticator transports are browser hints, not durable credential capabilities.
-// Password-manager extensions can report `internal` / `hybrid` at registration but
-// become unreachable when those hints are replayed during authentication. The
-// credential IDs already constrain the ceremony, so omitting transports lets the
-// user agent route each known credential to its available authenticator.
+const ROAMING_AUTHENTICATOR_TRANSPORTS = new Set(["usb", "nfc", "ble"]);
+
+/**
+ * Preserve only transports that unambiguously identify a roaming authenticator.
+ *
+ * Password-manager extensions can report `internal` / `hybrid` at registration,
+ * then become unreachable when those hints are replayed during authentication.
+ * USB/NFC/BLE hints are useful in the opposite direction: Safari uses them to
+ * route a credential to the native security-key ceremony instead of its generic
+ * passkey picker. Unknown and mixed transport sets stay unconstrained.
+ */
+function roamingTransports(transports: readonly string[] | undefined): string[] | undefined {
+  if (
+    !transports?.length ||
+    !transports.every((value) => ROAMING_AUTHENTICATOR_TRANSPORTS.has(value))
+  ) {
+    return undefined;
+  }
+  return [...new Set(transports)].sort();
+}
+
+function credentialAuthenticationHints(
+  credentials: readonly StoredCredential[],
+): string[] | undefined {
+  return credentials.length > 0 &&
+    credentials.every((credential) => roamingTransports(credential.transports) !== undefined)
+    ? ["security-key"]
+    : undefined;
+}
 
 async function keyedDigest(key: CryptoKey, value: string): Promise<Uint8Array> {
   const encoder = new TextEncoder();
@@ -675,6 +699,7 @@ async function deriveEmailAllowCredentials(
               {
                 id: credential.id,
                 byteLength,
+                transports: roamingTransports(credential.transports),
               },
             ]
           : [];
@@ -693,9 +718,11 @@ async function deriveEmailAllowCredentials(
   const makeCredential = async (
     id: string,
     discriminator: string,
+    transports?: string[],
   ): Promise<AllowCredential & { order: string }> => ({
     type: "public-key",
     id,
+    ...(transports === undefined ? {} : { transports }),
     order: encodeBase64urlNoPadding(
       await keyedDigest(
         key,
@@ -714,7 +741,7 @@ async function deriveEmailAllowCredentials(
           MAX_WEBAUTHN_CREDENTIAL_ID_LENGTH);
       const byteLength = real?.byteLength ?? derivedLength;
       const first = real
-        ? await makeCredential(real.id, `real:${pairIndex}`)
+        ? await makeCredential(real.id, `real:${pairIndex}`, real.transports)
         : await keyedBytes(
             key,
             `convex-auth:webauthn-decoy:v2:${rpId}:${emailSeed}:pair:${pairIndex}:first`,
@@ -727,14 +754,22 @@ async function deriveEmailAllowCredentials(
         `convex-auth:webauthn-decoy:v2:${rpId}:${emailSeed}:pair:${pairIndex}:companion`,
         byteLength,
       ).then((bytes) =>
-        makeCredential(encodeBase64urlNoPadding(bytes), `pair:${pairIndex}:companion`),
+        makeCredential(
+          encodeBase64urlNoPadding(bytes),
+          `pair:${pairIndex}:companion`,
+          real?.transports,
+        ),
       );
       return [first, companion];
     }),
   );
   const credentials = credentialPairs.flat();
   credentials.sort((a, b) => a.order.localeCompare(b.order));
-  return credentials.map(({ type, id }) => ({ type, id }));
+  return credentials.map(({ type, id, transports }) => ({
+    type,
+    id,
+    ...(transports === undefined ? {} : { transports }),
+  }));
 }
 
 /**
@@ -1147,6 +1182,7 @@ export async function handleWebAuthn(
       const challengeHash = encodeBase64urlNoPadding(new Uint8Array(sha256(challenge)));
 
       let allowCredentials: AllowCredential[] | undefined;
+      let credentialHints: string[] | undefined;
       const email = params.email === undefined ? undefined : normalizeEmail(params.email);
       const sessionId = (await getAuthSessionId(ctx)) ?? undefined;
       let signIn;
@@ -1164,6 +1200,7 @@ export async function handleWebAuthn(
 
       if (email !== undefined) {
         allowCredentials = await deriveEmailAllowCredentials(email, rp.rpId, signIn.credentials);
+        credentialHints = credentialAuthenticationHints(signIn.credentials);
       }
 
       const options: {
@@ -1182,7 +1219,9 @@ export async function handleWebAuthn(
         timeout: rp.challengeExpirationMs,
         rpId: rp.rpId,
         userVerification: rp.authentication.userVerification,
-        ...(rp.authentication.hints ? { hints: rp.authentication.hints } : {}),
+        ...((rp.authentication.hints ?? credentialHints)
+          ? { hints: rp.authentication.hints ?? credentialHints }
+          : {}),
       };
 
       if (allowCredentials) {

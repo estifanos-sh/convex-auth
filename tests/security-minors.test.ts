@@ -50,6 +50,11 @@ function allowCredentials(result: {
   ).allowCredentials;
 }
 
+function authenticationHints(result: { kind: string; options?: unknown }): string[] | undefined {
+  if (result.kind !== "webauthnOptions") throw new Error("expected webauthnOptions");
+  return (result.options as { hints?: string[] }).hints;
+}
+
 function encodeBase64url(bytes: Uint8Array): string {
   return Buffer.from(bytes).toString("base64url");
 }
@@ -160,7 +165,7 @@ test("passkey signIn returns the real credential for a known email (not a decoy)
   ).toBe(true);
 });
 
-test("WebAuthn email signIn includes stored credentials without transport filtering", async () => {
+test("WebAuthn email signIn routes roaming credentials without constraining passkeys", async () => {
   const t = convexTest(schema);
   const userId = await createVerifiedUser(t, "mixed-passkeys@example.com");
   const credentials = [
@@ -196,10 +201,76 @@ test("WebAuthn email signIn includes stored credentials without transport filter
     }),
   );
   expect(descriptors).toHaveLength(32);
-  expect(descriptors?.every(({ transports }) => transports === undefined)).toBe(true);
-  for (const credential of credentials) {
-    expect(descriptors?.find(({ id }) => id === credential.id)?.transports).toBeUndefined();
-  }
+  expect(descriptors?.find(({ id }) => id === credentials[0].id)?.transports).toEqual([
+    "nfc",
+    "usb",
+  ]);
+  expect(descriptors?.find(({ id }) => id === credentials[1].id)?.transports).toBeUndefined();
+
+  // The roaming credential's same-length companion has the same descriptor
+  // shape, so adding routing information does not create a unique real entry.
+  expect(
+    descriptors?.filter(
+      ({ id, transports }) =>
+        decodeBase64url(id).byteLength === 18 && transports?.join(",") === "nfc,usb",
+    ),
+  ).toHaveLength(2);
+});
+
+test("WebAuthn email signIn prefers the native security-key ceremony for roaming credentials", async () => {
+  const t = convexTest(schema);
+  const userId = await createVerifiedUser(t, "security-key@example.com");
+  const credentialId = encodeBase64url(new Uint8Array(20).fill(3));
+  await t.run((ctx) =>
+    ctx.runMutation(components.auth.factor.passkey.create, {
+      userId: userId as never,
+      credentialId,
+      publicKey: new ArrayBuffer(32),
+      algorithm: -7,
+      counter: 0,
+      transports: ["usb", "nfc"],
+      deviceType: "singleDevice",
+      backedUp: false,
+      createdAt: Date.now(),
+    }),
+  );
+
+  const result = await t.action(api.auth.signIn, {
+    provider: "webauthn",
+    params: { flow: "signIn", email: "security-key@example.com" },
+  });
+  expect(authenticationHints(result)).toEqual(["security-key"]);
+  expect(allowCredentials(result)?.find(({ id }) => id === credentialId)?.transports).toEqual([
+    "nfc",
+    "usb",
+  ]);
+});
+
+test("WebAuthn email signIn omits ambiguous mixed transport hints", async () => {
+  const t = convexTest(schema);
+  const userId = await createVerifiedUser(t, "ambiguous-passkey@example.com");
+  const credentialId = encodeBase64url(new Uint8Array(19).fill(4));
+  await t.run((ctx) =>
+    ctx.runMutation(components.auth.factor.passkey.create, {
+      userId: userId as never,
+      credentialId,
+      publicKey: new ArrayBuffer(32),
+      algorithm: -7,
+      counter: 0,
+      transports: ["usb", "hybrid"],
+      deviceType: "singleDevice",
+      backedUp: false,
+      createdAt: Date.now(),
+    }),
+  );
+
+  const result = await t.action(api.auth.signIn, {
+    provider: "webauthn",
+    params: { flow: "signIn", email: "ambiguous-passkey@example.com" },
+  });
+  const descriptors = allowCredentials(result);
+  expect(descriptors?.find(({ id }) => id === credentialId)?.transports).toBeUndefined();
+  expect(authenticationHints(result)).toBeUndefined();
 });
 
 test("WebAuthn email signIn normalizes email before lookup and decoy derivation", async () => {
