@@ -82,9 +82,7 @@ test("passkey signIn returns deterministic decoy allowCredentials for an unknown
   expect(first).toBeDefined();
   expect(first).toHaveLength(32);
   expect(
-    allowCredentials(firstResult)?.every(
-      (descriptor) => descriptor.transports !== undefined && descriptor.transports.length > 0,
-    ),
+    allowCredentials(firstResult)?.every((descriptor) => descriptor.transports === undefined),
   ).toBe(true);
   expect([...credentialLengthCounts(first!).values()].every((count) => count % 2 === 0)).toBe(true);
 
@@ -143,17 +141,11 @@ test("passkey signIn returns the real credential for a known email (not a decoy)
   const descriptors = allowCredentials(result);
   expect(descriptors).toHaveLength(32);
   expect(descriptors?.map(({ id }) => id)).toContain(credentialId);
-  expect(descriptors?.find(({ id }) => id === credentialId)?.transports).toEqual([
-    "internal",
-    "hybrid",
-  ]);
-  expect(descriptors?.every(({ transports }) => transports?.join(",") === "internal,hybrid")).toBe(
-    true,
-  );
+  expect(descriptors?.find(({ id }) => id === credentialId)?.transports).toBeUndefined();
+  expect(descriptors?.every(({ transports }) => transports === undefined)).toBe(true);
   expect(
     descriptors?.filter(
-      ({ id, transports }) =>
-        decodeBase64url(id).byteLength === 21 && transports?.join(",") === "internal,hybrid",
+      ({ id, transports }) => decodeBase64url(id).byteLength === 21 && transports === undefined,
     ).length,
   ).toBeGreaterThanOrEqual(2);
   const matchingLength = descriptors?.filter(
@@ -168,7 +160,7 @@ test("passkey signIn returns the real credential for a known email (not a decoy)
   ).toBe(true);
 });
 
-test("WebAuthn email signIn includes stored credentials without policy filtering", async () => {
+test("WebAuthn email signIn includes stored credentials without transport filtering", async () => {
   const t = convexTest(schema);
   const userId = await createVerifiedUser(t, "mixed-passkeys@example.com");
   const credentials = [
@@ -204,14 +196,9 @@ test("WebAuthn email signIn includes stored credentials without policy filtering
     }),
   );
   expect(descriptors).toHaveLength(32);
-  const expectedTransports = ["usb", "nfc", "internal", "hybrid"];
-  expect(
-    descriptors?.every(({ transports }) => transports?.join(",") === expectedTransports.join(",")),
-  ).toBe(true);
+  expect(descriptors?.every(({ transports }) => transports === undefined)).toBe(true);
   for (const credential of credentials) {
-    expect(descriptors?.find(({ id }) => id === credential.id)?.transports).toEqual(
-      expectedTransports,
-    );
+    expect(descriptors?.find(({ id }) => id === credential.id)?.transports).toBeUndefined();
   }
 });
 
