@@ -634,6 +634,8 @@ const MASKED_TRANSPORT_PROFILES = [
 
 const WEBAUTHN_TRANSPORTS = new Set(["ble", "hybrid", "internal", "nfc", "smart-card", "usb"]);
 
+const ALL_WEBAUTHN_TRANSPORTS = [...WEBAUTHN_TRANSPORTS];
+
 function normalizeCredentialTransports(transports: readonly string[] | undefined): string[] | null {
   if (transports === undefined) return null;
   const normalized = [
@@ -719,13 +721,18 @@ async function deriveEmailAllowCredentials(
   });
 
   const lengthSeed = await keyedDigest(key, `convex-auth:webauthn-lengths:v2:${rpId}:${emailSeed}`);
+  const storedTransports = [
+    ...new Set(realIds.flatMap((credential) => credential.transports ?? [])),
+  ];
+  const maskedTransports =
+    storedTransports.length > 0
+      ? storedTransports
+      : realIds.length > 0
+        ? ALL_WEBAUTHN_TRANSPORTS
+        : [...MASKED_TRANSPORT_PROFILES[lengthSeed[0] % MASKED_TRANSPORT_PROFILES.length]];
   const credentialPairs = await Promise.all(
     Array.from({ length: EMAIL_ALLOW_REAL_CREDENTIALS }, async (_, pairIndex) => {
       const real = realIds[pairIndex];
-      const maskedTransports = [
-        ...(real?.transports ??
-          MASKED_TRANSPORT_PROFILES[lengthSeed[pairIndex] % MASKED_TRANSPORT_PROFILES.length]),
-      ];
       const derivedLength =
         1 +
         (((lengthSeed[pairIndex * 2] << 8) | lengthSeed[pairIndex * 2 + 1]) %

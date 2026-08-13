@@ -147,6 +147,9 @@ test("passkey signIn returns the real credential for a known email (not a decoy)
     "internal",
     "hybrid",
   ]);
+  expect(descriptors?.every(({ transports }) => transports?.join(",") === "internal,hybrid")).toBe(
+    true,
+  );
   expect(
     descriptors?.filter(
       ({ id, transports }) =>
@@ -201,9 +204,13 @@ test("WebAuthn email signIn includes stored credentials without policy filtering
     }),
   );
   expect(descriptors).toHaveLength(32);
+  const expectedTransports = ["usb", "nfc", "internal", "hybrid"];
+  expect(
+    descriptors?.every(({ transports }) => transports?.join(",") === expectedTransports.join(",")),
+  ).toBe(true);
   for (const credential of credentials) {
     expect(descriptors?.find(({ id }) => id === credential.id)?.transports).toEqual(
-      credential.transports,
+      expectedTransports,
     );
   }
 });
