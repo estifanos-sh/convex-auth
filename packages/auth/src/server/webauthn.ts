@@ -628,6 +628,12 @@ type StoredCredential = { id: string; transports?: string[] };
 const ROAMING_AUTHENTICATOR_TRANSPORTS = new Set(["usb", "nfc", "ble"]);
 const ROAMING_CEREMONY_TRANSPORTS = ["ble", "nfc", "usb"];
 
+type SecurityKeyCredential = {
+  transports?: readonly string[];
+  deviceType?: string;
+  backedUp?: boolean;
+};
+
 /**
  * Preserve only transports that unambiguously identify a roaming authenticator.
  *
@@ -645,6 +651,32 @@ function roamingTransports(transports: readonly string[] | undefined): string[] 
     return undefined;
   }
   return [...new Set(transports)].sort();
+}
+
+/** @internal */
+export function isSecurityKeyCredential(credential: SecurityKeyCredential): boolean {
+  return (
+    roamingTransports(credential.transports) !== undefined &&
+    (credential.deviceType === undefined || credential.deviceType === "singleDevice") &&
+    (credential.backedUp === undefined || credential.backedUp === false)
+  );
+}
+
+/** @internal */
+export function selectAuthenticationCredentials<T extends StoredCredential>(
+  credentials: readonly T[],
+  securityKeysOnly: boolean | undefined,
+): T[] {
+  return securityKeysOnly ? credentials.filter(isSecurityKeyCredential) : [...credentials];
+}
+
+function requireSecurityKeyCredential(credential: SecurityKeyCredential): void {
+  if (!isSecurityKeyCredential(credential)) {
+    throw convexError(
+      ErrorCode.PASSKEY_SECURITY_KEY_REQUIRED,
+      "A roaming hardware security key is required.",
+    );
+  }
 }
 
 function credentialAuthenticationHints(
@@ -686,6 +718,7 @@ async function deriveEmailAllowCredentials(
   normalizedEmail: string,
   rpId: string,
   realCredentials: readonly StoredCredential[],
+  forceRoamingCeremony = false,
 ): Promise<AllowCredential[]> {
   const secret = requireAuthKey("webauthnMaskingKey");
   const emailSeed = encodeBase64urlNoPadding(
@@ -709,9 +742,10 @@ async function deriveEmailAllowCredentials(
       }
     })
     .slice(0, EMAIL_ALLOW_REAL_CREDENTIALS);
-  const ceremonyTransports = credentialAuthenticationHints(realCredentials)
-    ? ROAMING_CEREMONY_TRANSPORTS
-    : undefined;
+  const ceremonyTransports =
+    forceRoamingCeremony || credentialAuthenticationHints(realCredentials)
+      ? ROAMING_CEREMONY_TRANSPORTS
+      : undefined;
   const key = await crypto.subtle.importKey(
     "raw",
     new TextEncoder().encode(secret),
@@ -853,6 +887,13 @@ export async function handleWebAuthn(
     validateCredentialAlgorithm(algorithm, rp.registration.algorithms);
     const publicKeyBytes = resolveRegistrationPublicKeyBytes(publicKey, algorithm);
     const backupState = parseBackupState(rawAuthenticatorData);
+    if (provider.options.securityKeysOnly) {
+      requireSecurityKeyCredential({
+        transports: params.transports,
+        deviceType: backupState.deviceType,
+        backedUp: backupState.backedUp,
+      });
+    }
     let attestationEvidence: WebAuthnAttestationEvidence | undefined;
     if (rp.registration.attestation) {
       const { verifier: attestationVerifier } = rp.registration.attestation;
@@ -1026,6 +1067,14 @@ export async function handleWebAuthn(
     const passkey = assertion.passkey;
 
     verifyAssertionSignatureUniformly(passkey, signatureBytes, messageHash);
+    if (provider.options.securityKeysOnly) {
+      requireSecurityKeyCredential(passkey);
+      requireSecurityKeyCredential({
+        transports: passkey.transports,
+        deviceType: backupState.deviceType,
+        backedUp: backupState.backedUp,
+      });
+    }
     validateBackupEligibility(passkey.deviceType, backupState.deviceType);
 
     if (rp.registration.attestation) {
@@ -1208,8 +1257,20 @@ export async function handleWebAuthn(
       }
 
       if (email !== undefined) {
-        allowCredentials = await deriveEmailAllowCredentials(email, rp.rpId, signIn.credentials);
-        credentialHints = credentialAuthenticationHints(signIn.credentials);
+        const securityKeysOnly = provider.options.securityKeysOnly === true;
+        const eligibleCredentials = selectAuthenticationCredentials(
+          signIn.credentials,
+          securityKeysOnly,
+        );
+        allowCredentials = await deriveEmailAllowCredentials(
+          email,
+          rp.rpId,
+          eligibleCredentials,
+          securityKeysOnly,
+        );
+        credentialHints = securityKeysOnly
+          ? ["security-key"]
+          : credentialAuthenticationHints(eligibleCredentials);
       }
 
       const options: {

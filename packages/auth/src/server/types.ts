@@ -713,6 +713,8 @@ export interface WebAuthnProviderConfig {
      * @defaultValue 300_000
      */
     challengeExpirationMs?: number;
+    /** Reject platform and synced passkeys at registration and sign-in. */
+    securityKeysOnly?: boolean;
     registration: {
       userVerification: "required" | "preferred" | "discouraged";
       residentKey: "required" | "preferred" | "discouraged";

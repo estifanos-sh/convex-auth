@@ -12,7 +12,9 @@ import { ConvexError } from "convex/values";
 import { expect, test } from "vite-plus/test";
 
 import {
+  isSecurityKeyCredential,
   parseBackupState,
+  selectAuthenticationCredentials,
   validateBackupEligibility,
   validateCredentialAlgorithm,
 } from "../packages/auth/src/server/webauthn";
@@ -20,6 +22,49 @@ import { convexTest } from "./convex/setup";
 
 const RP_ORIGIN = "http://localhost:5173";
 const DEFAULT_MAX_ATTEMPTS = 10;
+
+test("strict security-key policy rejects platform, hybrid, and backed-up credentials", () => {
+  expect(
+    isSecurityKeyCredential({
+      transports: ["usb", "nfc"],
+      deviceType: "singleDevice",
+      backedUp: false,
+    }),
+  ).toBe(true);
+  expect(
+    isSecurityKeyCredential({
+      transports: ["internal"],
+      deviceType: "singleDevice",
+      backedUp: false,
+    }),
+  ).toBe(false);
+  expect(
+    isSecurityKeyCredential({
+      transports: ["hybrid"],
+      deviceType: "singleDevice",
+      backedUp: false,
+    }),
+  ).toBe(false);
+  expect(
+    isSecurityKeyCredential({
+      transports: ["usb"],
+      deviceType: "multiDevice",
+      backedUp: true,
+    }),
+  ).toBe(false);
+  expect(isSecurityKeyCredential({ deviceType: "singleDevice", backedUp: false })).toBe(false);
+});
+
+test("strict security-key policy removes mixed password-manager credentials from sign-in", () => {
+  const credentials = [
+    { id: "yubikey", transports: ["usb", "nfc"] },
+    { id: "proton", transports: ["internal", "hybrid"] },
+    { id: "legacy-unknown" },
+  ];
+
+  expect(selectAuthenticationCredentials(credentials, true)).toEqual([credentials[0]]);
+  expect(selectAuthenticationCredentials(credentials, false)).toEqual(credentials);
+});
 
 /** base64url-encode a UTF-8 string with no padding (WebAuthn clientDataJSON). */
 function base64url(input: string) {

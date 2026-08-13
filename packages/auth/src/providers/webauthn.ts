@@ -51,6 +51,13 @@ export interface WebAuthnConfig {
   origin?: string | readonly string[];
   /** Challenge lifetime in milliseconds before a ceremony expires. */
   challengeExpirationMs?: number;
+  /**
+   * Accept only non-backed-up roaming security keys (USB, NFC, or BLE).
+   *
+   * This is an enforced server policy, not only a browser hint. Existing
+   * platform or synced passkeys are neither offered nor accepted.
+   */
+  securityKeysOnly?: boolean;
   /** Credential-creation ceremony options. */
   registration?: WebAuthnRegistrationConfig;
   /** Credential-authentication ceremony options. */
@@ -98,21 +105,32 @@ export const webauthn = Object.assign(
               ? [...config.origin]
               : undefined,
         challengeExpirationMs: config.challengeExpirationMs ?? 300_000,
+        securityKeysOnly: config.securityKeysOnly ?? false,
         registration: {
           residentKey: config.registration?.residentKey ?? "preferred",
           userVerification: config.registration?.userVerification ?? "required",
           algorithms: [...(config.registration?.algorithms ?? [-7, -257])],
-          ...(config.registration?.authenticatorAttachment
-            ? { authenticatorAttachment: config.registration.authenticatorAttachment }
-            : {}),
-          ...(config.registration?.hints ? { hints: [...config.registration.hints] } : {}),
+          ...(config.securityKeysOnly
+            ? { authenticatorAttachment: "cross-platform" as const }
+            : config.registration?.authenticatorAttachment
+              ? { authenticatorAttachment: config.registration.authenticatorAttachment }
+              : {}),
+          ...(config.securityKeysOnly
+            ? { hints: ["security-key" as const] }
+            : config.registration?.hints
+              ? { hints: [...config.registration.hints] }
+              : {}),
           ...(config.registration?.attestation
             ? { attestation: config.registration.attestation }
             : {}),
         },
         authentication: {
           userVerification: config.authentication?.userVerification ?? "required",
-          ...(config.authentication?.hints ? { hints: [...config.authentication.hints] } : {}),
+          ...(config.securityKeysOnly
+            ? { hints: ["security-key" as const] }
+            : config.authentication?.hints
+              ? { hints: [...config.authentication.hints] }
+              : {}),
         },
       },
     };
