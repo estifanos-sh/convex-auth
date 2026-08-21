@@ -63,6 +63,7 @@ import { createGroupConnectionDomain } from "./connection/domain";
 import { addGroupHttpRuntime } from "./connection/http";
 import { normalizeGroupConnectionPolicy } from "./connection/policy";
 import type {
+  AuthProviderMaterializedConfig,
   AuthProviderContinueArgs,
   ConvexAuthConfig,
   FunctionReferenceFromExport,
@@ -165,6 +166,37 @@ export type SignInActionResult = SignInFlowResult<AuthTokens | null>;
  * @internal
  */
 export type SignOutAction = FunctionReferenceFromExport<ReturnType<typeof Auth>["signOut"]>;
+
+/**
+ * Build the public sign-in validator from the resolved provider registry.
+ *
+ * Credential providers own their parameter schema, including whether params
+ * are optional. Built-in ceremony providers retain their phase-specific payload
+ * records.
+ */
+function createSignInArgsValidator(
+  providers: readonly AuthProviderMaterializedConfig[],
+): GenericValidator {
+  const shared = {
+    verifier: v.optional(v.string()),
+    continuation: v.optional(v.string()),
+    refreshToken: v.optional(v.string()),
+    calledBy: v.optional(v.string()),
+  };
+  const withoutProvider = v.object({
+    params: v.optional(vPayloadRecord),
+    ...shared,
+  });
+  const withProvider = providers.map((provider) =>
+    v.object({
+      provider: v.literal(provider.id),
+      params: provider.type === "credentials" ? provider.params : v.optional(vPayloadRecord),
+      ...shared,
+    }),
+  );
+
+  return withProvider.length === 0 ? withoutProvider : v.union(withoutProvider, ...withProvider);
+}
 
 /**
  * Configure the Convex Auth library. Returns an object with
@@ -646,14 +678,7 @@ export function Auth(config_: ConvexAuthConfig<any>) {
      * Also used for refreshing the session.
      */
     signIn: actionGeneric({
-      args: {
-        provider: v.optional(v.string()),
-        params: v.optional(vPayloadRecord),
-        verifier: v.optional(v.string()),
-        continuation: v.optional(v.string()),
-        refreshToken: v.optional(v.string()),
-        calledBy: v.optional(v.string()),
-      },
+      args: createSignInArgsValidator(config.providers),
       handler: async (ctx, args): Promise<SignInActionResult> => {
         if (args.calledBy !== undefined) {
           log("INFO", `\`auth:signIn\` called by ${args.calledBy}`);

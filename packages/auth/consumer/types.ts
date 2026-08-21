@@ -1,22 +1,17 @@
 import { definePermissions } from "@estifanos-sh/convex-auth/permissions";
-import type {
-  AuthApiRefs,
-  ParamsForProvider,
-  PlatformAuthClient,
-} from "@estifanos-sh/convex-auth/client";
+import { client } from "@estifanos-sh/convex-auth/browser";
+import { useAuth as useReactAuth } from "@estifanos-sh/convex-auth/react";
+import { useConvexAuth as useSvelteAuth } from "@estifanos-sh/convex-auth/svelte";
+import type { ClientOptions } from "@estifanos-sh/convex-auth/client";
+import { credentials } from "@estifanos-sh/convex-auth/providers";
 import { webauthn } from "@estifanos-sh/convex-auth/providers/webauthn";
 // @ts-expect-error createAuth was hard-cut from the vNext public server API.
 import { createAuth } from "@estifanos-sh/convex-auth/server";
-import {
-  authEnv,
-  authEvents,
-  defineAuth,
-  type AuthEnv,
-  type InferClientApi,
-} from "@estifanos-sh/convex-auth/server";
-import { defineApp, type HttpRouter } from "convex/server";
+import { authEnv, authEvents, defineAuth, type AuthEnv } from "@estifanos-sh/convex-auth/server";
+import { type ApiFromModules, defineApp, type FunctionArgs, type HttpRouter } from "convex/server";
 import { v, type GenericId } from "convex/values";
 
+import { api } from "../../../convex/_generated/api";
 import { auth } from "../../../convex/auth";
 
 declare const readCtx: Parameters<typeof auth.user.get>[0];
@@ -45,30 +40,133 @@ void authEnvironment.AUTH_GITHUB_ID;
 declare const authComponent: Parameters<typeof defineAuth>[0];
 declare const authUserId: GenericId<"User">;
 declare const authGroupId: GenericId<"Group">;
-declare const webauthnClient: PlatformAuthClient<AuthApiRefs<true, false, false>>;
+declare const convex: ClientOptions["convex"];
 
-void webauthnClient.webauthn.register({ name: "Security key" });
-void webauthnClient.webauthn.signIn();
+const generatedClient = client({ convex, api: api.auth });
+
+void generatedClient.webauthn.register({ name: "Security key" });
+void generatedClient.webauthn.signIn();
+void generatedClient.totp.setup();
+void generatedClient.device.verify({ code: "ABCD-EFGH" });
+void generatedClient.signIn("password", {
+  flow: "signIn",
+  email: "person@example.com",
+  password: "correct horse battery staple",
+});
+// @ts-expect-error provider IDs come from the configured generated action.
+void generatedClient.signIn("invented-provider");
+// @ts-expect-error password sign-in requires the password flow parameters.
+void generatedClient.signIn("password", { email: "person@example.com" });
 
 type Assert<T extends true> = T;
-type IsNever<T> = [T] extends [never] ? true : false;
-type _DirectWebAuthnSignInIsDisabled = Assert<IsNever<ParamsForProvider<"webauthn">>>;
+type Equal<Left, Right> =
+  (<Value>() => Value extends Left ? 1 : 2) extends <Value>() => Value extends Right ? 1 : 2
+    ? true
+    : false;
+type ProviderFromArgs<Args> = Args extends unknown
+  ? "provider" extends keyof Args
+    ? Exclude<Args[keyof Args & "provider"], undefined>
+    : never
+  : never;
+type GeneratedProvider = ProviderFromArgs<FunctionArgs<typeof api.auth.signIn>>;
+type _GeneratedProvidersAreExact = Assert<string extends GeneratedProvider ? false : true>;
+type GeneratedPasswordArgs = Extract<
+  FunctionArgs<typeof api.auth.signIn>,
+  { provider: "password" }
+>;
+const generatedPasswordArgs: GeneratedPasswordArgs = {
+  provider: "password",
+  params: {
+    flow: "signIn",
+    email: "person@example.com",
+    password: "correct horse battery staple",
+  },
+};
+void generatedPasswordArgs;
+// @ts-expect-error Raw WebAuthn ceremonies belong to `generatedClient.webauthn`.
+void generatedClient.signIn("webauthn", {});
 type _PasskeyClientWasRemoved = Assert<
-  "passkey" extends keyof typeof webauthnClient ? false : true
+  "passkey" extends keyof typeof generatedClient ? false : true
 >;
-const inferredWebAuthnAuth = defineAuth(authComponent, { providers: [webauthn()] });
-type InferredWebAuthnApi = InferClientApi<typeof inferredWebAuthnAuth>;
-type _WebAuthnProviderInference = Assert<
-  InferredWebAuthnApi extends AuthApiRefs<true, false, false> ? true : false
+
+const accessProvider = credentials({
+  id: "access",
+  params: v.object({ email: v.string(), pin: v.string() }),
+  authorize: async ({ email, pin }) => {
+    void email;
+    void pin;
+    return null;
+  },
+});
+const optionalProvider = credentials({
+  id: "optional",
+  params: v.optional(v.object({ redirectTo: v.optional(v.string()) })),
+  authorize: async () => null,
+});
+type OptionalAuthorizeParams = Parameters<typeof optionalProvider.authorize>[0];
+type _OptionalAuthorizeReceivesUndefined = Assert<
+  Equal<OptionalAuthorizeParams, { redirectTo?: string } | undefined>
 >;
-type UnknownFactorClient = Pick<
-  PlatformAuthClient<AuthApiRefs<boolean, boolean, boolean>>,
-  "webauthn" | "totp" | "device"
+const optionalAuth = defineAuth(authComponent, { providers: [optionalProvider] });
+type OptionalApi = ApiFromModules<{
+  auth: { signIn: typeof optionalAuth.signIn; signOut: typeof optionalAuth.signOut };
+}>["auth"];
+declare const optionalApi: OptionalApi;
+const optionalClient = client({ convex, api: optionalApi });
+void optionalClient.signIn("optional");
+void optionalClient.signIn("optional", { redirectTo: "/welcome" });
+// @ts-expect-error optional provider parameters still use their validator shape.
+void optionalClient.signIn("optional", { redirectTo: 1234 });
+
+const accessProviderId: "access" = accessProvider.id;
+void accessProviderId;
+type AccessAuthorizeParams = Parameters<typeof accessProvider.authorize>[0];
+type _AccessAuthorizeUsesValidatorShape = Assert<
+  Equal<AccessAuthorizeParams, { email: string; pin: string }>
 >;
-const optionalFactors: UnknownFactorClient = {};
-void optionalFactors.webauthn?.signIn();
-void optionalFactors.totp?.setup();
-void optionalFactors.device?.verify({ code: "ABCD-EFGH" });
+const accessAuth = defineAuth(authComponent, { providers: [accessProvider] });
+type AccessApi = ApiFromModules<{
+  auth: { signIn: typeof accessAuth.signIn; signOut: typeof accessAuth.signOut };
+}>["auth"];
+type AccessProvider = ProviderFromArgs<FunctionArgs<AccessApi["signIn"]>>;
+type _AccessProviderIsExact = Assert<string extends AccessProvider ? false : true>;
+declare const accessApi: AccessApi;
+const accessClient = client({ convex, api: accessApi });
+void accessClient.signIn("access", { email: "person@example.com", pin: "1234" });
+// @ts-expect-error required validator parameters cannot be omitted.
+void accessClient.signIn("access");
+// @ts-expect-error validator-derived fields retain their exact types.
+void accessClient.signIn("access", { email: "person@example.com", pin: 1234 });
+// @ts-expect-error only the configured custom provider is accepted.
+void accessClient.signIn("password", {
+  flow: "signIn",
+  email: "person@example.com",
+  password: "secret",
+});
+
+void useReactAuth(accessClient);
+void accessClient.signIn("access", {
+  email: "person@example.com",
+  // @ts-expect-error React bindings retain custom provider fields.
+  pin: 1234,
+});
+// @ts-expect-error Client typing retains the configured provider union.
+void accessClient.signIn("password", {
+  flow: "signIn",
+  email: "person@example.com",
+  password: "secret",
+});
+
+const svelteBoundAuth = useSvelteAuth(accessClient);
+void svelteBoundAuth.signIn("access", { email: "person@example.com", pin: "1234" });
+// @ts-expect-error Svelte bindings retain custom provider fields.
+void svelteBoundAuth.signIn("access", { email: "person@example.com", pin: 1234 });
+// @ts-expect-error Svelte bindings retain the configured provider union.
+void svelteBoundAuth.client.signIn("password", {
+  flow: "signIn",
+  email: "person@example.com",
+  password: "secret",
+});
 
 const readonlyOrigins = ["https://app.example.com"] as const;
 const readonlyWebAuthnHints = ["security-key"] as const;

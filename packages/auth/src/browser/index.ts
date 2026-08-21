@@ -13,14 +13,14 @@ import { ConvexHttpClient } from "convex/browser";
 import {
   client as createClient,
   resolveUrl,
-  type AuthApiRefs,
   type ClientOptions,
   type PlatformAuthClient,
 } from "../client/index";
+import type { AuthApiRefs } from "../client/core/types";
 import { createWebAuthnClient } from "./webauthn";
 import { createBrowserRuntime } from "./runtime";
 
-export type { AuthApiRefs, PlatformAuthClient as AuthClient, ClientOptions } from "../client/index";
+export type { PlatformAuthClient as AuthClient, ClientOptions } from "../client/index";
 
 /**
  * Create a browser-configured auth client.
@@ -36,7 +36,7 @@ export type { AuthApiRefs, PlatformAuthClient as AuthClient, ClientOptions } fro
  *   available on the returned client.
  * @returns A browser auth client with the configured auth helpers.
  */
-export function client<Api extends AuthApiRefs<boolean, boolean, boolean> = AuthApiRefs>(
+export function client<Api extends AuthApiRefs = AuthApiRefs>(
   options: ClientOptions<Api>,
 ): PlatformAuthClient<Api> {
   const proxyMode = options.proxyPath !== undefined;

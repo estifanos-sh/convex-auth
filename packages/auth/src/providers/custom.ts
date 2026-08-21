@@ -60,9 +60,9 @@ export interface CustomOAuthTokenConfig {
 }
 
 /** Configuration for the {@link custom} provider. */
-export interface CustomOAuthConfig {
+export interface CustomOAuthConfig<Id extends string = string> {
   /** Stable provider identifier used in `signIn("<id>")`. */
-  id: string;
+  id: Id;
   /** OAuth client identifier. */
   clientId: string;
   /** Optional OAuth client secret. */
@@ -210,7 +210,7 @@ function createRuntimeClient(config: CustomOAuthConfig): OAuthRuntimeClient {
  * })
  * ```
  */
-export function custom(config: CustomOAuthConfig) {
+export function custom<const Id extends string>(config: CustomOAuthConfig<Id>) {
   return createOAuthProvider({
     id: config.id,
     provider: createRuntimeClient(config),

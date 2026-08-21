@@ -1,17 +1,16 @@
 import { api } from "$convex/_generated/api";
 import { client as createAuthClient, type AuthClient } from "@estifanos-sh/convex-auth/expo";
-import type { AuthState, SignInResult } from "@estifanos-sh/convex-auth/client";
+import type { AuthState } from "@estifanos-sh/convex-auth/client";
 import React from "react";
 
 import { getClient } from "./client";
 
 type DemoAuthClient = AuthClient<typeof api.auth>;
-type AuthParameters = Record<string, string | number | boolean | undefined>;
 
 type DemoAuthContextValue = {
   auth: DemoAuthClient;
   state: AuthState;
-  signIn: (provider: string, params?: AuthParameters) => Promise<SignInResult>;
+  signIn: DemoAuthClient["signIn"];
   signOut: () => Promise<void>;
 };
 

@@ -8,27 +8,25 @@ context.
 
 ```tsx
 import { client as createAuthClient } from "@estifanos-sh/convex-auth/browser";
-import { ConvexAuthProvider } from "@estifanos-sh/convex-auth/react";
+import { AuthLoading, SignedIn, SignedOut, useAuth } from "@estifanos-sh/convex-auth/react";
 import { ConvexProvider, ConvexReactClient } from "convex/react";
 import { api } from "../convex/_generated/api";
 
 const convex = new ConvexReactClient(import.meta.env.VITE_CONVEX_URL);
-const auth = createAuthClient({ convex, api: api.auth });
+const authClient = createAuthClient({ convex, api: api.auth });
 
 export function Root() {
   return (
     <ConvexProvider client={convex}>
-      <ConvexAuthProvider auth={auth}>
-        <App />
-      </ConvexAuthProvider>
+      <App authClient={authClient} />
     </ConvexProvider>
   );
 }
 ```
 
-Use `SignedIn`, `SignedOut`, `AuthLoading`, and `useAuthActions` for normal UI.
-Use `useConvexAuthClient` only for factor-specific flows such as passkey or TOTP
-enrollment. Do not create a new client during render.
+Pass `authClient` to `SignedIn`, `SignedOut`, `AuthLoading`, and `useAuth`.
+Call `signIn`, `signOut`, and configured factor helpers directly on that
+app-owned client. Do not create a new client during render.
 
 ## Svelte 5
 
@@ -36,7 +34,7 @@ enrollment. Do not create a new client during render.
 <script lang="ts">
   import { page } from "$app/state";
   import { client as createAuthClient } from "@estifanos-sh/convex-auth/browser";
-  import { setupConvexAuth } from "@estifanos-sh/convex-auth/svelte";
+  import { useConvexAuth } from "@estifanos-sh/convex-auth/svelte";
   import { setupConvex } from "convex-svelte";
   import { onDestroy } from "svelte";
   import { api } from "$convex/_generated/api.js";
@@ -44,7 +42,7 @@ enrollment. Do not create a new client during render.
   let { children } = $props();
   const convex = setupConvex(import.meta.env.VITE_CONVEX_URL);
   const authClient = createAuthClient({ convex, api: api.auth, location: () => page.url });
-  const auth = setupConvexAuth(authClient);
+  const auth = useConvexAuth(authClient);
   onDestroy(() => authClient.destroy());
 </script>
 
@@ -56,7 +54,9 @@ enrollment. Do not create a new client during render.
 ```
 
 Do not also call `setupAuth` from `convex-svelte`; the Robelest browser client
-owns the Convex `setAuth` lifecycle. Use `useConvexAuth()` in descendants.
+owns the Convex `setAuth` lifecycle. Pass the same `authClient` to
+`useConvexAuth(authClient)` in descendants. Prefer reactive `{#if}`
+conditionals to global gate components.
 
 ## Expo and native apps
 

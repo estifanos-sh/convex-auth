@@ -36,7 +36,7 @@ export async function hash(
     );
   }
   try {
-    return await hashSecret(secret);
+    return (await hashSecret(secret)) as Hashed<"Password">;
   } catch (error) {
     throw credentialsError("INTERNAL_ERROR", `Hash failed: ${errorMessage(error)}`);
   }

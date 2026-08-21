@@ -24,7 +24,7 @@
 import { scryptAsync } from "@noble/hashes/scrypt.js";
 import { bytesToHex } from "@noble/hashes/utils.js";
 import { DocumentByName, GenericDataModel, WithoutSystemFields } from "convex/server";
-import { ConvexError, Value } from "convex/values";
+import { ConvexError, v } from "convex/values";
 
 import { emitAuthEvent } from "../server/events";
 import { getAuthenticatedUserIdOrNull } from "../server/identity/claims";
@@ -33,6 +33,7 @@ import { callCredentialsSignIn } from "../server/mutations/calls";
 import { callVerifyCodeAndSignIn } from "../server/mutations/verify";
 import type { Hashed } from "../shared/brand";
 import { ErrorCode } from "../shared/codes";
+import type { PasswordParams } from "../shared/params";
 import type {
   EmailConfig,
   GenericActionCtxWithAuthConfig,
@@ -43,11 +44,14 @@ import type {
 import { credentials, type CredentialsConfig } from "./credentials";
 
 /** Configuration for the {@link password} provider. */
-export interface PasswordConfig<DataModel extends GenericDataModel> {
+export interface PasswordConfig<
+  DataModel extends GenericDataModel,
+  Id extends string = "password",
+> {
   /**
    * Uniquely identifies the provider, allowing multiple password providers.
    */
-  id?: string;
+  id?: Id;
   /**
    * Perform checks on provided params and customize the user information
    * stored after sign up, including email normalization.
@@ -55,7 +59,7 @@ export interface PasswordConfig<DataModel extends GenericDataModel> {
    * Called for every flow.
    */
   profile?: (
-    params: Record<string, Value | undefined>,
+    params: PasswordParams,
     ctx: GenericActionCtxWithAuthConfig<DataModel>,
   ) => WithoutSystemFields<DocumentByName<DataModel, "User">> & {
     email: string;
@@ -76,7 +80,7 @@ export interface PasswordConfig<DataModel extends GenericDataModel> {
   /**
    * Email provider for the `reset` flow. Issues OTPs accepted by `recover`.
    */
-  reset?: EmailConfig | PasswordEmailProviderFactory;
+  reset?: EmailConfig<any> | PasswordEmailProviderFactory;
   /**
    * Continue reset recovery with a typed provider operation before a session
    * is issued. The password is committed only when that operation succeeds.
@@ -86,7 +90,7 @@ export interface PasswordConfig<DataModel extends GenericDataModel> {
    * Email provider for post-signup email confirmation. Issues OTPs that the
    * `verify` flow accepts.
    */
-  verify?: EmailConfig | PasswordEmailProviderFactory;
+  verify?: EmailConfig<any> | PasswordEmailProviderFactory;
 }
 
 const PASSWORD_FLOWS = ["signUp", "signIn", "reset", "recover", "verify", "change"] as const;
@@ -94,13 +98,38 @@ type PasswordFlow = (typeof PASSWORD_FLOWS)[number];
 
 type PasswordFlowDispatch = { tag: PasswordFlow } | { tag: "invalid"; flow: unknown };
 
-type PasswordEmailProviderFactory = () => EmailConfig;
+type PasswordEmailProviderFactory = () => EmailConfig<any>;
 
 type PasswordAuthorizeResult<DataModel extends GenericDataModel> = Awaited<
-  ReturnType<CredentialsConfig<DataModel>["authorize"]>
+  ReturnType<CredentialsConfig<typeof vPasswordParams, DataModel>["authorize"]>
 >;
 
-type PasswordParams = Parameters<CredentialsConfig["authorize"]>[0];
+const vRedirectTo = { redirectTo: v.optional(v.string()) };
+const vPasswordParams = v.union(
+  v.object({ flow: v.literal("signUp"), email: v.string(), password: v.string(), ...vRedirectTo }),
+  v.object({ flow: v.literal("signIn"), email: v.string(), password: v.string(), ...vRedirectTo }),
+  v.object({ flow: v.literal("reset"), email: v.string(), ...vRedirectTo }),
+  v.object({
+    flow: v.literal("recover"),
+    email: v.string(),
+    code: v.string(),
+    newPassword: v.string(),
+    ...vRedirectTo,
+  }),
+  v.object({
+    flow: v.literal("verify"),
+    email: v.string(),
+    code: v.optional(v.string()),
+    ...vRedirectTo,
+  }),
+  v.object({
+    flow: v.literal("change"),
+    email: v.string(),
+    currentPassword: v.string(),
+    newPassword: v.string(),
+    ...vRedirectTo,
+  }),
+);
 
 function decodePasswordFlow(flow: unknown): PasswordFlowDispatch {
   if (typeof flow === "string" && (PASSWORD_FLOWS as readonly string[]).includes(flow)) {
@@ -127,10 +156,13 @@ function decodePasswordFlow(flow: unknown): PasswordFlowDispatch {
  * @param config - Password flow hooks and optional verification providers.
  * @returns A configured password provider for `defineAuth`.
  */
-export function password<DataModel extends GenericDataModel = GenericDataModel>(
-  config: PasswordConfig<DataModel> = {} as PasswordConfig<DataModel>,
-): ConvexCredentialsConfig {
-  const provider = config.id ?? "password";
+export function password<
+  DataModel extends GenericDataModel = GenericDataModel,
+  const Id extends string = "password",
+>(
+  config: PasswordConfig<DataModel, Id> = {} as PasswordConfig<DataModel, Id>,
+): ConvexCredentialsConfig<DataModel, typeof vPasswordParams, Id> {
+  const provider = (config.id ?? "password") as Id;
   const resetProvider = typeof config.reset === "function" ? config.reset() : config.reset;
   const verifyProvider = typeof config.verify === "function" ? config.verify() : config.verify;
   const afterReset = config.afterReset;
@@ -144,13 +176,14 @@ export function password<DataModel extends GenericDataModel = GenericDataModel>(
     async hashSecret(password: string) {
       return await hashPassword(password);
     },
-    async verifySecret(password: string, hash: Hashed<"Password">) {
+    async verifySecret(password: string, hash: string) {
       return await verifyPassword(password, hash);
     },
   };
 
-  return credentials<DataModel>({
+  return credentials<typeof vPasswordParams, DataModel, Id>({
     id: provider,
+    params: vPasswordParams,
     authorize: async (params, ctx) => {
       const flowDispatch = decodePasswordFlow(params.flow);
 
@@ -188,7 +221,11 @@ export function password<DataModel extends GenericDataModel = GenericDataModel>(
 
       const flowHandlers = {
         signUp: async () => {
-          const secret = requireStringParam(params.password, "password", "signUp");
+          const secret = requireStringParam(
+            "password" in params ? params.password : undefined,
+            "password",
+            "signUp",
+          );
           validatePasswordRequirements(secret);
           const created = await ctx.auth.account.create(ctx, {
             provider,
@@ -201,7 +238,11 @@ export function password<DataModel extends GenericDataModel = GenericDataModel>(
         },
 
         signIn: async () => {
-          const secret = requireStringParam(params.password, "password", "signIn");
+          const secret = requireStringParam(
+            "password" in params ? params.password : undefined,
+            "password",
+            "signIn",
+          );
           const result = await callCredentialsSignIn(ctx, {
             provider,
             account: { id: email, secret },
@@ -261,7 +302,11 @@ export function password<DataModel extends GenericDataModel = GenericDataModel>(
         },
 
         recover: async () => {
-          const newPassword = requireStringParam(params.newPassword, "newPassword", "recover");
+          const newPassword = requireStringParam(
+            "newPassword" in params ? params.newPassword : undefined,
+            "newPassword",
+            "recover",
+          );
           if (!resetProvider) {
             throw new Error(`Password reset is not enabled for ${provider}`);
           }
@@ -271,7 +316,7 @@ export function password<DataModel extends GenericDataModel = GenericDataModel>(
             if (typeof params.email === "string") {
               verificationParams.email = params.email;
             }
-            if (typeof params.code === "string") {
+            if ("code" in params && typeof params.code === "string") {
               verificationParams.code = params.code;
             }
             const verified = await callVerifyCodeAndSignIn(ctx, {
@@ -367,11 +412,15 @@ export function password<DataModel extends GenericDataModel = GenericDataModel>(
             });
           }
           const currentPassword = requireStringParam(
-            params.currentPassword,
+            "currentPassword" in params ? params.currentPassword : undefined,
             "currentPassword",
             "change",
           );
-          const newPassword = requireStringParam(params.newPassword, "newPassword", "change");
+          const newPassword = requireStringParam(
+            "newPassword" in params ? params.newPassword : undefined,
+            "newPassword",
+            "change",
+          );
           validatePasswordRequirements(newPassword);
 
           const result = await callCredentialsSignIn(ctx, {
@@ -468,7 +517,7 @@ async function hashPassword(password: string): Promise<Hashed<"Password">> {
   return `${PASSWORD_HASH_PREFIX}$${bytesToHex(salt)}$${bytesToHex(hash)}` as Hashed<"Password">;
 }
 
-async function verifyPassword(password: string, storedHash: Hashed<"Password">) {
+async function verifyPassword(password: string, storedHash: string) {
   const [prefix, saltHex, hashHex] = storedHash.split("$");
   if (prefix !== PASSWORD_HASH_PREFIX || saltHex === undefined || hashHex === undefined) {
     return false;

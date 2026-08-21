@@ -8,7 +8,7 @@
 	import { setupConvex, useQuery } from "convex-svelte";
 	import { onDestroy, setContext } from "svelte";
 	import { client as createAuthClient } from "@estifanos-sh/convex-auth/browser";
-	import { setupConvexAuth } from "@estifanos-sh/convex-auth/svelte";
+	import { useConvexAuth } from "@estifanos-sh/convex-auth/svelte";
 	import { api } from "$convex/_generated/api.js";
 	import AppLoading from "$lib/components/AppLoading.svelte";
 
@@ -31,7 +31,7 @@
 		location: () => page.url,
 		oauthRedirectTo: `${page.url.origin}${base}/`,
 	});
-	const auth = setupConvexAuth(authClient);
+	const auth = useConvexAuth(authClient);
 	onDestroy(() => authClient.destroy());
 
 	setContext("auth", auth.client);

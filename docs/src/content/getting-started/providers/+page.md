@@ -246,22 +246,26 @@ provider's typed continuation operation. Calling component internals from
 `authorize`, issuing an intermediate session, or coordinating the flow with
 application tables splits one security protocol across two owners.
 
-Import `credentials` from `@estifanos-sh/convex-auth/providers`. Its default ID
-is `"credentials"`; choose another ID only when the application deliberately
-has more than one custom credential protocol. `authorize` is the required
-boundary. The optional crypto hooks define secret handling, and
-`extraProviders` lets one custom entry point participate in other configured
-provider ceremonies.
+Import `credentials` from `@estifanos-sh/convex-auth/providers` and declare its
+input with a Convex validator. The validator is the contract for this provider:
+it validates requests at runtime, types `authorize`, and becomes the parameter
+shape of `auth.signIn("api-token", ...)` in the generated `api.auth` object.
+Its default ID is `"credentials"`; choose another ID only when the application
+deliberately has more than one custom credential protocol. The optional crypto
+hooks define secret handling, and `extraProviders` lets one custom entry point
+participate in other configured provider ceremonies.
 
 ```ts
+import { v } from "convex/values";
 import { credentials } from "@estifanos-sh/convex-auth/providers";
 
 defineAuth(components.auth, {
   providers: [
     credentials({
       id: "api-token",
+      params: v.object({ token: v.string() }),
       authorize: async (params, ctx) => {
-        const user = await lookupUserByToken(ctx, params.token as string);
+        const user = await lookupUserByToken(ctx, params.token);
         return user ? { userId: user._id } : null;
       },
     }),
@@ -269,11 +273,11 @@ defineAuth(components.auth, {
 });
 ```
 
-`authorize` receives the raw `params` passed to `signIn` and the action `ctx`.
-Return `{ userId }` (optionally `sessionId`) to complete sign-in, a deferred
-`SignInFlowResult` for multi-step flows, or `null` to reject. Pass `crypto`
-(`hashSecret`/`verifySecret`) for password-style secret verification, and
-`extraProviders` to register additional providers alongside it.
+`authorize` receives validated parameters and the action `ctx`. Return
+`{ userId }` (optionally `sessionId`) to complete sign-in, or `null` to reject.
+Pass `crypto` (`hashSecret`/`verifySecret`) for password-style secret
+verification, and `extraProviders` to register additional providers alongside
+it.
 
 ## Password
 

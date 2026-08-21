@@ -37,8 +37,11 @@ by provider ceremonies. Custom credentials providers can return a verified
 identity for the runtime to provision:
 
 ```ts
+import { v } from "convex/values";
+
 credentials({
   id: "invite",
+  params: v.object({ token: v.string() }),
   authorize: async (params) => {
     const invite = await verifyInvite(params.token);
     if (!invite) return null;

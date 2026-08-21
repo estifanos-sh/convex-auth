@@ -57,12 +57,12 @@ export const documentationPages: DocumentationPageMeta[] = [
     title: "auth.user",
   },
   {
-    description: "Gate components and useAuthActions for React apps.",
+    description: "Reactive auth state and gates for React apps.",
     slug: "/client/react",
     title: "React",
   },
   {
-    description: "Reactive auth state and gate components for Svelte 5 apps.",
+    description: "Reactive auth state for Svelte 5 apps.",
     slug: "/client/svelte",
     title: "Svelte",
   },

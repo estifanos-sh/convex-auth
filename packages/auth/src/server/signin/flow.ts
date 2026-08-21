@@ -1,4 +1,6 @@
+import type { GenericDataModel } from "convex/server";
 import { GenericId, ConvexError } from "convex/values";
+import type { GenericValidator } from "convex/values";
 import type { CredentialsAuthorizeResult } from "../../providers/credentials";
 
 import { assertNever } from "../../shared/brand";
@@ -325,7 +327,7 @@ async function handleEmailAndPhoneProvider(
 
 async function handleCredentials(
   ctx: EnrichedActionCtx,
-  provider: ConvexCredentialsConfig,
+  provider: ConvexCredentialsConfig<GenericDataModel, GenericValidator, string>,
   args: {
     params?: SignInParams;
   },
@@ -339,7 +341,7 @@ async function handleCredentials(
       result = await withSpan(
         "convex-auth.signin.credentials.authorize",
         { providerId: provider.id },
-        () => provider.authorize(args.params ?? {}, ctx),
+        () => provider.authorize(args.params, ctx),
       );
     } catch (error) {
       throw asCredentialsError(error);

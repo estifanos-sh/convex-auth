@@ -1,19 +1,24 @@
 import { getContext, onDestroy, setContext } from "svelte";
 
-import type { AuthApiRefs, AuthClient } from "../browser/index";
-import type { AuthState, SignInOverloads } from "../client/core/types";
+import type { AuthState, AuthSubscriber } from "../client/core/types";
 
-type AnyAuthClient = AuthClient<AuthApiRefs<boolean, boolean, boolean>>;
+/** The lifecycle methods every client binding needs, without widening `signIn`. */
+type AuthClient = {
+  subscribe: (handler: AuthSubscriber) => () => void;
+  getSnapshot: () => AuthState;
+  signIn: unknown;
+  signOut: () => Promise<void>;
+};
 
-const AUTH_KEY = Symbol("convex-auth");
+const AUTH_CONTEXT = Symbol("convex-auth");
 
 /** Reactive auth state bridged from the client's `subscribe`. Read its fields in markup. */
-export class ConvexAuth {
-  #client: AnyAuthClient;
+class ConvexAuth<Client extends AuthClient> {
+  #client: Client;
   #unsubscribe: () => void;
   #state = $state<AuthState>({ status: "loading", token: null });
 
-  constructor(client: AnyAuthClient) {
+  constructor(client: Client) {
     this.#client = client;
     this.#unsubscribe = client.subscribe((state) => {
       this.#state = state;
@@ -39,14 +44,14 @@ export class ConvexAuth {
   get token(): string | null {
     return this.#state.token;
   }
-  get signIn(): SignInOverloads {
+  get signIn(): Client["signIn"] {
     return this.#client.signIn;
   }
-  get signOut(): () => Promise<void> {
+  get signOut(): Client["signOut"] {
     return this.#client.signOut;
   }
   /** The underlying imperative client, for factor flows (`totp`, `webauthn`, `device`). */
-  get client(): AnyAuthClient {
+  get client(): Client {
     return this.#client;
   }
 
@@ -55,21 +60,26 @@ export class ConvexAuth {
   }
 }
 
-/** Expose an app-owned auth client as reactive `ConvexAuth` and share it via context. */
-export function setupConvexAuth(client: AnyAuthClient): ConvexAuth {
+/**
+ * Read reactive auth state for an inferred client.
+ *
+ * Call this with the same client in the root layout and in descendants. The
+ * first call creates the tree's subscription; later calls reuse it.
+ *
+ * @param client - The client returned by `client({ api: api.auth, ... })`.
+ * @returns Reactive state and exact provider-specific client methods.
+ */
+export function useConvexAuth<const Client extends AuthClient>(client: Client): ConvexAuth<Client> {
+  const existing = getContext<ConvexAuth<AuthClient> | undefined>(AUTH_CONTEXT);
+  if (existing !== undefined) {
+    if (existing.client !== client) {
+      throw new Error("Every useConvexAuth() call in one tree must use the same client.");
+    }
+    return existing as ConvexAuth<Client>;
+  }
+
   const auth = new ConvexAuth(client);
   onDestroy(() => auth.dispose());
-  setContext(AUTH_KEY, auth);
-  return auth;
-}
-
-/** Read the reactive auth shared by {@link setupConvexAuth} from a descendant component. */
-export function useConvexAuth(): ConvexAuth {
-  const auth = getContext<ConvexAuth | undefined>(AUTH_KEY);
-  if (auth === undefined) {
-    throw new Error(
-      "useConvexAuth() must be called under a component tree that ran setupConvexAuth().",
-    );
-  }
+  setContext(AUTH_CONTEXT, auth);
   return auth;
 }

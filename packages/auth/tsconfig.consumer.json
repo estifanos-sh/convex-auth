@@ -14,6 +14,8 @@
       "@estifanos-sh/convex-auth/permissions": ["./src/permissions/index"],
       "@estifanos-sh/convex-auth/browser": ["./src/browser/index"],
       "@estifanos-sh/convex-auth/client": ["./src/client/index"],
+      "@estifanos-sh/convex-auth/react": ["./src/react/index"],
+      "@estifanos-sh/convex-auth/svelte": ["./src/svelte/index"],
       "@estifanos-sh/convex-auth/component": ["./src/component/index"],
       "@estifanos-sh/convex-auth/core": ["./src/core/index"],
       "@estifanos-sh/convex-auth/convex.config": ["./src/component/convex.config"],

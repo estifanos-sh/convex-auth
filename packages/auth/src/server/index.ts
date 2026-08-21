@@ -20,7 +20,6 @@ export type {
   AuthValidators,
   ConvexAuthResult,
   InferAuth,
-  InferClientApi,
   OptionalAuthContext,
   UserDoc,
 } from "./auth";

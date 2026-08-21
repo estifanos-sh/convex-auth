@@ -4,12 +4,12 @@
  * @module
  */
 
-import type { HttpRouter } from "convex/server";
+import type { HttpRouter, RegisteredAction } from "convex/server";
 import { ConvexError } from "convex/values";
 import type { GenericValidator, Value } from "convex/values";
 
 import { ErrorCode } from "../shared/codes";
-import type { AuthApiRefs } from "../client/index";
+import type { AuthTokens, SignInFlowResult } from "../shared/results";
 import { createAuthContextFacade } from "./facade";
 import type { McpToolDef } from "./mcp";
 import type {
@@ -29,11 +29,10 @@ import { createAuthValidators } from "./validators";
 import type { AuthExtendValidators, AuthValidators } from "./validators";
 import type {
   AuthProviderConfig,
+  AuthSignInArgs,
+  AuthSignInAction,
   ConvexAuthConfig,
   Grant,
-  HasDeviceProvider,
-  HasWebAuthnProvider,
-  HasTotpProvider,
   PermissionsConfig,
   RoleId,
 } from "./types";
@@ -412,8 +411,6 @@ export type AuthApi<
   TExtend extends AuthExtendValidators = {},
 > = AuthApiBase<TPermissions, TExtend>;
 
-declare const providerConfigs: unique symbol;
-
 /**
  * The return type of {@link defineAuth}.
  *
@@ -425,35 +422,37 @@ declare const providerConfigs: unique symbol;
  * @typeParam TPermissions - Optional permissions config for typed roles/grants.
  */
 export type ConvexAuthResult<
-  P extends AuthProviderConfig[],
+  P extends readonly AuthProviderConfig[],
   TPermissions extends PermissionsConfig | undefined = undefined,
   TExtend extends AuthExtendValidators = {},
-> = AuthApi<TPermissions, TExtend> & {
-  /** Provider tuple retained solely for {@link InferClientApi}. */
-  readonly [providerConfigs]?: P;
+> = Omit<AuthApi<TPermissions, TExtend>, "signIn"> & {
+  /** Provider-derived action contract preserved by Convex code generation. */
+  signIn: RegisteredAction<
+    "public",
+    AuthSignInArgs<P>,
+    Promise<SignInFlowResult<AuthTokens | null>>
+  >;
 };
 
-/**
- * Infer the typed `AuthApiRefs` for the client SDK from a `defineAuth` call.
- *
- * Use this as the generic parameter for `client()` on the frontend:
- *
- * ```ts
- * // convex/auth.ts
- * export const auth = defineAuth(components.auth, { providers: [...] });
- *
- * // Frontend
- * import type { auth } from "../convex/auth";
- * import type { InferClientApi } from "@estifanos-sh/convex-auth/server";
- * const c = client<InferClientApi<typeof auth>>({ convex, api: api.auth });
- * ```
- *
- * @typeParam T - A ConvexAuthResult to extract the client API from.
- */
-export type InferClientApi<T> =
-  T extends ConvexAuthResult<infer P>
-    ? AuthApiRefs<HasWebAuthnProvider<P>, HasTotpProvider<P>, HasDeviceProvider<P>>
-    : AuthApiRefs;
+type DefineAuthRest = Omit<
+  AuthConfig<AuthExtendValidators>,
+  "providers" | "permissions" | "extend"
+> & {
+  permissions?: PermissionsConfig;
+  extend?: AuthExtendValidators;
+};
+
+type ConfigPermissions<Config extends DefineAuthRest> = Config extends {
+  permissions: infer TPermissions extends PermissionsConfig;
+}
+  ? TPermissions
+  : undefined;
+
+type ConfigExtend<Config extends DefineAuthRest> = Config extends {
+  extend: infer TExtend extends AuthExtendValidators;
+}
+  ? TExtend
+  : {};
 
 /**
  * Define an auth API object.
@@ -481,34 +480,16 @@ export type InferClientApi<T> =
  * @see {@link AuthContextConfig}
  */
 export function defineAuth<
-  P extends AuthProviderConfig[],
-  TPermissions extends PermissionsConfig | undefined = undefined,
-  TExtend extends AuthExtendValidators = {},
+  const Providers extends readonly AuthProviderConfig[],
+  const Rest extends DefineAuthRest,
 >(
-  component: ConvexAuthConfig<TExtend>["component"],
-  config: Omit<AuthConfig<TExtend>, "providers" | "permissions"> & {
-    providers: P;
-    permissions?: TPermissions;
-    /**
-     * Validators for the `extend` field of each table. Drives both the
-     * inferred type of `auth.v.*` (so `viewer.extend.<field>` is typed)
-     * and runtime validation of consumer return shapes.
-     *
-     * @example
-     * ```ts
-     * defineAuth(components.auth, {
-     *   providers: [password()],
-     *   extend: { User: v.object({ stripeCustomerId: v.optional(v.string()) }) },
-     * });
-     * ```
-     */
-    extend?: TExtend;
-  },
-): ConvexAuthResult<P, TPermissions, TExtend> {
+  component: ConvexAuthConfig<ConfigExtend<Rest>>["component"],
+  config: { providers: readonly [...Providers] } & Rest,
+): ConvexAuthResult<Providers, ConfigPermissions<Rest>, ConfigExtend<Rest>> {
   const authResult = AuthFactory({
     ...config,
     component,
-    providers: [...config.providers],
+    providers: [...(config.providers as readonly AuthProviderConfig[])],
   });
   const {
     domain: domainApi,
@@ -672,7 +653,7 @@ export function defineAuth<
 
   const accountApi: PublicAccountApi = authResult.auth.accountManagement;
 
-  const memberApi = authResult.auth.member as MemberApiWithPermissions<TPermissions>;
+  const memberApi = authResult.auth.member as MemberApiWithPermissions<ConfigPermissions<Rest>>;
 
   const oauthApi: PublicOAuthApi = {
     authorize: authResult.auth.oauth.authorize,
@@ -687,9 +668,9 @@ export function defineAuth<
 
   const eventApi: PublicEventApi = authResult.auth.event;
 
-  const api: ConvexAuthResult<P, TPermissions, TExtend> = {
-    v: createAuthValidators<TExtend>(config.extend),
-    signIn: authResult.signIn,
+  const api: ConvexAuthResult<Providers, ConfigPermissions<Rest>, ConfigExtend<Rest>> = {
+    v: createAuthValidators<ConfigExtend<Rest>>(config.extend as ConfigExtend<Rest> | undefined),
+    signIn: authResult.signIn as AuthSignInAction<Providers>,
     signOut: authResult.signOut,
     store: authResult.store,
     http: authResult.http,

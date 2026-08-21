@@ -55,7 +55,6 @@ import { createStorageHelpers } from "./runtime/storage";
 
 export type {
   AnonymousParams,
-  AuthApiRefs,
   AuthClient,
   AuthState,
   ClientOptions,
@@ -68,14 +67,12 @@ export type {
   EmailInitiateParams,
   OAuthCompletionResult,
   OAuthSignInParams,
-  ParamsForProvider,
   WebAuthnClient,
   WebAuthnRegisterOptions,
   WebAuthnSignInOptions,
   PasswordParams,
   PendingInvite,
   PlatformAuthClient,
-  SignInOverloads,
   SignInResult,
   ConnectionParams,
   Storage,
@@ -260,7 +257,7 @@ function decodeJwtSubject(jwt: string): string | null {
  * @throws {Error} When `token` has leading or trailing whitespace. An empty or
  *   whitespace-only string is treated as an explicit signed-out seed, not an error.
  */
-export function client<Api extends AuthApiRefs<boolean, boolean, boolean> = AuthApiRefs>(
+export function client<Api extends AuthApiRefs = AuthApiRefs>(
   options: ClientOptions<Api>,
 ): AuthClient<Api> {
   const { convex, proxyPath, api: apiRefs } = options;
