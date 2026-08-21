@@ -116,22 +116,15 @@ export function Chrome(props: { children: JSX.Element; landing?: boolean; withSi
       </a>
       <header class="masthead">
         <div class="masthead-inner">
-          <a class="lockup" href="/convex-auth/">
-            <img
-              alt=""
-              class="lockup-symbol lockup-dark"
-              height="28"
-              src="/convex-auth/brand/symbol-white.svg"
-              width="28"
-            />
+          <a class="brand-lockup" href="/convex-auth/">
             <img
               alt="Convex"
-              class="lockup-word lockup-dark"
-              height="18"
-              src="/convex-auth/brand/wordmark-white-tight.svg"
-              width="108"
+              class="brand-wordmark"
+              height="36"
+              src="/convex-auth/brand/convex-logo-white.svg"
+              width="92"
             />
-            <span class="lockup-chip">Auth</span>
+            <span class="brand-title">convex-auth</span>
           </a>
           <nav aria-label="Site" class="masthead-links">
             <a href="/convex-auth/getting-started/installation/">Docs</a>
@@ -207,11 +200,11 @@ export function Chrome(props: { children: JSX.Element; landing?: boolean; withSi
         <div class="site-foot-inner">
           <div class="site-foot-brand">
             <img
-              alt=""
-              class="lockup-symbol lockup-dark"
-              height="22"
-              src="/convex-auth/brand/symbol-white.svg"
-              width="22"
+              alt="Convex"
+              class="brand-wordmark"
+              height="36"
+              src="/convex-auth/brand/convex-logo-white.svg"
+              width="92"
             />
             <p>Authentication infrastructure for Convex applications.</p>
           </div>

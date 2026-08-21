@@ -38,44 +38,42 @@ export function HomePage() {
   return (
     <Chrome landing>
       <main class="home" id="main-content">
-        <section class="home-hero">
-          <div class="home-hero-inner">
-            <div class="home-copy">
-              <p class="hero-eyebrow">
-                <span>Friends of Convex</span>
-                <span>Auth</span>
-              </p>
-              <h1>
-                Convex-Auth
-                <span>By Estifanos</span>
-              </h1>
-              <p class="lede">the unofficial auth solution for convex</p>
-              <div class="home-actions">
-                <a class="cta-ghost" href="/convex-auth/getting-started/installation/">
-                  Read the docs
-                </a>
-                <a class="cta-solid" href="/convex-auth/getting-started/installation/">
-                  Start building
-                </a>
-              </div>
+        <section aria-labelledby="hero-title" class="home-hero">
+          <div class="home-copy">
+            <p class="hero-eyebrow">
+              <span>Friends of Convex</span>
+              <span>Auth</span>
+            </p>
+            <h1 id="hero-title">
+              Convex-Auth
+              <span>By Estifanos</span>
+            </h1>
+            <p class="hero-deck">the unofficial auth solution for convex</p>
+            <div class="home-actions">
+              <a class="cta-ghost" href="/convex-auth/getting-started/installation/">
+                Read the docs
+              </a>
+              <a class="cta-solid" href="/convex-auth/getting-started/installation/">
+                Start building
+              </a>
             </div>
-            <aside aria-label="Install convex-auth" class="palette">
-              <div class="palette-row">
-                <p class="palette-label">Start a new Convex Auth project</p>
-                <button class="palette-command" onClick={() => void copy()} type="button">
-                  <code>{installCommand}</code>
-                  <span>{copied() ? "Copied" : <CopyIcon />}</span>
-                </button>
-              </div>
-              <div class="palette-row">
-                <p class="palette-label">Build anything with Convex</p>
-                <a class="palette-command" href="/convex-auth/getting-started/providers/">
-                  <code>providers · sso · passkeys · keys</code>
-                  <span>→</span>
-                </a>
-              </div>
-            </aside>
           </div>
+          <aside aria-label="Install convex-auth" class="signal-panel">
+            <div class="palette-row">
+              <p class="palette-label">Start a new Convex Auth project</p>
+              <button class="palette-command" onClick={() => void copy()} type="button">
+                <code>{installCommand}</code>
+                <span>{copied() ? "Copied" : <CopyIcon />}</span>
+              </button>
+            </div>
+            <div class="palette-row">
+              <p class="palette-label">Build anything with Convex</p>
+              <a class="palette-command" href="/convex-auth/getting-started/providers/">
+                <code>providers · sso · passkeys · keys</code>
+                <span>→</span>
+              </a>
+            </div>
+          </aside>
         </section>
         <section class="home-rest">
           <div class="home-paths">

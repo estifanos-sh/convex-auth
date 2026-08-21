@@ -1,3 +1,6 @@
+/* Convex theme copied from waynesutton/friendsofconvex-yapper-leaderboard
+   (src/globals.css html[data-theme="convex"], public/brand/*, index.html fonts). */
+
 @font-face {
   font-family: Inter;
   font-display: swap;
@@ -15,9 +18,9 @@
 }
 
 :root {
-  --font-body: Inter, "GT America", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Inter Tight", Inter, "neue-haas-grotesk-display", sans-serif;
-  --font-mono: ui-monospace, "SFMono-Regular", "Menlo", "Consolas", monospace;
+  --font-body: Geist, Inter, ui-sans-serif, system-ui, sans-serif;
+  --font-display: Inter, ui-sans-serif, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, "SFMono-Regular", "Menlo", "Consolas", monospace;
   --studio-paper: #f7eedb;
   --studio-paper-deep: #eadfc7;
   --studio-sheet: #fffaf0;
@@ -154,41 +157,29 @@ html.dark ::selection {
   gap: 18px;
 }
 
-.lockup {
+.brand-lockup {
   display: inline-flex;
   min-width: 0;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   color: #fffaf0;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 13px;
+  font-weight: 650;
   letter-spacing: 0.06em;
   text-decoration: none;
-}
-
-.lockup-symbol {
-  width: 28px;
-  height: 28px;
-  flex: 0 0 auto;
-}
-
-.lockup-word {
-  height: 18px;
-  width: auto;
-}
-
-.lockup-light {
-  display: none;
-}
-
-.lockup-dark {
-  display: inline;
-}
-
-.lockup-chip {
-  color: #fffaf0;
-  font-size: 12px;
-  font-weight: 650;
-  letter-spacing: 0.12em;
   text-transform: uppercase;
+}
+
+.brand-wordmark {
+  width: 92px;
+  height: 36px;
+  display: block;
+  object-fit: contain;
+}
+
+.brand-title {
+  color: #fffaf0;
 }
 
 .masthead-links {
@@ -418,9 +409,10 @@ html.dark .rail-group a.active {
 .not-found h1 {
   margin: 0;
   color: var(--broadcast-ink);
-  font-family: var(--font-display);
-  font-weight: 720;
-  letter-spacing: -0.06em;
+  font-family: "neue-haas-grotesk-display", "Inter Tight", Inter, sans-serif;
+  font-weight: 900;
+  font-style: normal;
+  letter-spacing: -0.02em;
   line-height: 0.98;
 }
 
@@ -806,27 +798,30 @@ html.dark .rail-group a.active {
 .home-hero {
   position: relative;
   isolation: isolate;
-  overflow: hidden;
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(260px, 0.55fr);
+  align-items: end;
+  gap: clamp(32px, 6vw, 80px);
   min-height: 280px;
   padding: clamp(28px, 3.5vw, 40px)
-    max(var(--page-gutter), calc((100vw - var(--page-width)) / 2 + var(--page-gutter))) 36px;
+    max(var(--page-gutter), calc((100vw - var(--page-width)) / 2 + var(--page-gutter))) 28px;
+  overflow: hidden;
   background-color: #211718;
-  background-image: url("/convex-auth/brand/racing-lines.png");
+  background-image: url("/convex-auth/brand/convex-racing-lines.png");
   background-position: right bottom;
   background-repeat: no-repeat;
   background-size: min(72vw, 1140px) auto;
   color: #fffaf0;
 }
 
-.home-hero-inner {
-  display: grid;
-  grid-template-columns: minmax(0, 1.6fr) minmax(260px, 0.55fr);
-  align-items: end;
-  gap: clamp(32px, 6vw, 80px);
-  width: min(100%, var(--page-width));
-  margin: 0 auto;
+.home-copy,
+.signal-panel {
   position: relative;
   z-index: 1;
+}
+
+.home-copy {
+  max-width: 990px;
 }
 
 .hero-eyebrow {
@@ -851,28 +846,28 @@ html.dark .rail-group a.active {
   margin: 0;
   max-width: 820px;
   color: #fffaf0;
-  font-family: var(--font-display);
+  font-family: "neue-haas-grotesk-display", "Inter Tight", Inter, sans-serif;
   font-size: clamp(48px, 5vw, 74px);
-  font-weight: 750;
-  letter-spacing: -0.065em;
+  font-weight: 900;
+  font-style: normal;
+  letter-spacing: -0.02em;
   line-height: 0.94;
   text-transform: uppercase;
 }
 
 .home-copy h1 span {
   display: block;
-  color: var(--signal-coral);
+  color: #f26b1d;
 }
 
-.home-copy .lede {
+.hero-deck {
   max-width: 620px;
-  margin-top: 20px;
+  margin: 20px 0 0;
   color: rgba(255, 250, 240, 0.7);
   font-size: clamp(17px, 1.5vw, 20px);
   font-weight: 400;
   letter-spacing: 0;
   line-height: 1.45;
-  text-transform: none;
 }
 
 .home-actions {
@@ -883,9 +878,9 @@ html.dark .rail-group a.active {
   align-items: center;
 }
 
-.palette {
-  position: relative;
+.signal-panel {
   display: grid;
+  align-content: end;
   gap: 18px;
   min-height: 250px;
   padding: 28px;
@@ -896,7 +891,7 @@ html.dark .rail-group a.active {
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.28);
 }
 
-.palette::before {
+.signal-panel::before {
   content: "";
   position: absolute;
   top: 0;
@@ -1011,7 +1006,7 @@ html.dark .rail-group a.active {
     padding: 28px 20px 64px;
   }
 
-  .home-hero-inner,
+  .home-hero,
   .home-paths,
   .site-foot-inner {
     grid-template-columns: 1fr;
@@ -1027,23 +1022,48 @@ html.dark .rail-group a.active {
   .gh-pill span {
     display: none;
   }
+}
 
-  .lockup-word {
+@media (max-width: 1000px) {
+  .home-hero {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+
+  .signal-panel {
+    min-height: 220px;
+    max-width: 520px;
+  }
+}
+
+@media (max-width: 760px) {
+  .brand-wordmark {
+    width: 78px;
+    height: 30px;
+  }
+
+  .brand-title {
     display: none;
+  }
+
+  .home-hero {
+    min-height: auto;
+    padding-top: 48px;
+    padding-bottom: 76px;
+    background-size: auto 100px;
+  }
+
+  .home-copy h1 {
+    font-size: clamp(46px, 14vw, 66px);
   }
 }
 
 @media (max-width: 34rem) {
   .masthead-inner,
-  .home-hero,
   .home-rest,
   .site-foot-inner {
     padding-left: 16px;
     padding-right: 16px;
-  }
-
-  .home-copy h1 {
-    font-size: clamp(36px, 12vw, 52px);
   }
 
   .pager,

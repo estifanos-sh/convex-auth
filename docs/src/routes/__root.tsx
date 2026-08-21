@@ -9,6 +9,15 @@ export const Route = createRootRoute({
   head: () => ({
     links: [
       { href: "/convex-auth/favicon.svg", rel: "icon", type: "image/svg+xml" },
+      { href: "https://use.typekit.net", rel: "preconnect" },
+      { href: "https://p.typekit.net", rel: "preconnect" },
+      { href: "https://fonts.googleapis.com", rel: "preconnect" },
+      { crossorigin: "anonymous", href: "https://fonts.gstatic.com", rel: "preconnect" },
+      { href: "https://use.typekit.net/xmd6bow.css", rel: "stylesheet" },
+      {
+        href: "https://fonts.googleapis.com/css2?family=Geist:wght@300..800&family=Geist+Mono:wght@400..700&display=swap",
+        rel: "stylesheet",
+      },
       {
         as: "font",
         crossorigin: "anonymous",
