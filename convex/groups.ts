@@ -3,6 +3,15 @@ import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api";
 import { env, query, internalMutation } from "./_generated/server";
 import { auth } from "./auth/core";
+import {
+  type AuthGroupId,
+  type AuthGroupInviteId,
+  type AuthUserId,
+  vAuthGroupId,
+  vAuthGroupInviteId,
+  vAuthGroupMemberId,
+  vAuthUserId,
+} from "./auth/ids";
 import { ErrorCode } from "./errors";
 import { authAction, authMutation, authQuery } from "./functions";
 import { roles } from "./roles";
@@ -44,21 +53,21 @@ function getPermissions(grants: string[]) {
 }
 
 const vUser = v.object({
-  userId: v.string(),
+  userId: vAuthUserId,
   name: v.string(),
   email: v.union(v.string(), v.null()),
 });
 
 const vGroup = v.object({
-  groupId: v.string(),
+  groupId: vAuthGroupId,
   name: v.string(),
   roleIds: v.array(v.string()),
   grants: v.array(v.string()),
 });
 
 const vMember = v.object({
-  memberId: v.string(),
-  userId: v.string(),
+  memberId: vAuthGroupMemberId,
+  userId: vAuthUserId,
   name: v.string(),
   email: v.union(v.string(), v.null()),
   roleIds: v.array(v.string()),
@@ -66,7 +75,7 @@ const vMember = v.object({
 });
 
 const vInvite = v.object({
-  inviteId: v.string(),
+  inviteId: vAuthGroupInviteId,
   email: v.union(v.string(), v.null()),
   roleIds: v.array(v.string()),
   createdAt: v.number(),
@@ -100,7 +109,7 @@ const vProject = v.object({
 });
 
 type GroupRow = {
-  groupId: string;
+  groupId: AuthGroupId;
   name: string;
   roleIds: string[];
   grants: string[];
@@ -130,7 +139,7 @@ export const list = authQuery({
   args: {},
   returns: v.array(
     v.object({
-      groupId: v.string(),
+      groupId: vAuthGroupId,
       name: v.string(),
       roleIds: v.array(v.string()),
       userRoleLabel: v.string(),
@@ -144,7 +153,9 @@ export const list = authQuery({
       orderBy: "_creationTime",
       order: "asc",
     });
-    const groupIds: readonly string[] = memberships.page.map((m) => m.groupId);
+    const groupIds: readonly AuthGroupId[] = memberships.page.map(
+      (membership) => membership.groupId,
+    );
     const groupDocs = await auth.group.get(ctx, { ids: groupIds });
     return memberships.page.flatMap((m, i) => {
       const group = groupDocs[i];
@@ -162,13 +173,13 @@ export const list = authQuery({
 });
 
 export const get = authQuery({
-  args: { groupId: v.optional(v.string()) },
+  args: { groupId: v.optional(vAuthGroupId) },
   returns: v.object({
     user: v.union(vUser, v.null()),
     groups: v.array(vGroup),
     selectedGroup: v.union(
       v.object({
-        groupId: v.string(),
+        groupId: vAuthGroupId,
         name: v.string(),
         roleIds: v.array(v.string()),
         grants: v.array(v.string()),
@@ -226,7 +237,7 @@ export const get = authQuery({
       }),
     ]);
 
-    const memberUserIds: readonly string[] = members.page.map((m) => m.userId);
+    const memberUserIds: readonly AuthUserId[] = members.page.map((member) => member.userId);
     const memberUsers = await auth.user.get(ctx, { ids: memberUserIds });
 
     return {
@@ -266,7 +277,7 @@ export const get = authQuery({
 });
 
 export const listInvites = authQuery({
-  args: { groupId: v.string() },
+  args: { groupId: vAuthGroupId },
   returns: v.array(vInvite),
   handler: async (ctx, args) => {
     const userId = ctx.auth.userId;
@@ -292,7 +303,7 @@ export const listInvites = authQuery({
 
 export const create = authMutation({
   args: { name: v.string() },
-  returns: v.object({ groupId: v.string() }),
+  returns: v.object({ groupId: vAuthGroupId }),
   handler: async (ctx, { name: rawName }) => {
     const name = rawName.trim();
     if (name.length < 3) {
@@ -321,8 +332,8 @@ export const acceptInvite = authMutation({
 
 export const updateMemberRole = authMutation({
   args: {
-    groupId: v.string(),
-    memberId: v.string(),
+    groupId: vAuthGroupId,
+    memberId: vAuthGroupMemberId,
     roleId: v.string(),
   },
   returns: v.null(),
@@ -358,7 +369,7 @@ export const updateMemberRole = authMutation({
 });
 
 export const revokeInvite = authMutation({
-  args: { groupId: v.string(), inviteId: v.string() },
+  args: { groupId: vAuthGroupId, inviteId: vAuthGroupInviteId },
   returns: v.null(),
   handler: async (ctx, args) => {
     const userId = ctx.auth.userId;
@@ -374,12 +385,12 @@ export const revokeInvite = authMutation({
 
 export const createInviteInternal = internalMutation({
   args: {
-    groupId: v.string(),
+    groupId: vAuthGroupId,
     email: v.string(),
     roleId: v.string(),
-    invitedByUserId: v.string(),
+    invitedByUserId: vAuthUserId,
   },
-  returns: v.object({ inviteId: v.string(), token: v.string() }),
+  returns: v.object({ inviteId: vAuthGroupInviteId, token: v.string() }),
   handler: async (ctx, args) => {
     await auth.member.assert(ctx, {
       userId: args.invitedByUserId,
@@ -404,7 +415,7 @@ export const createInviteInternal = internalMutation({
 
 export const inviteMember = authAction({
   args: {
-    groupId: v.string(),
+    groupId: vAuthGroupId,
     email: v.string(),
     roleId: v.string(),
   },
@@ -412,7 +423,7 @@ export const inviteMember = authAction({
   handler: async (ctx, args) => {
     const userId = ctx.auth.userId;
     const email = args.email.trim().toLowerCase();
-    const result: { inviteId: string; token: string } = await ctx.runMutation(
+    const result: { inviteId: AuthGroupInviteId; token: string } = await ctx.runMutation(
       internal.groups.createInviteInternal,
       { groupId: args.groupId, email, roleId: args.roleId, invitedByUserId: userId },
     );

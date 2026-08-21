@@ -1,5 +1,6 @@
 <script lang="ts">
   import { getConvexClient, useQuery } from "convex-svelte";
+  import type { GenericId } from "convex/values";
   import { api } from "$convex/_generated/api.js";
   import ConnectionListItem from "$lib/components/sso/ConnectionListItem.svelte";
   import PolicySection from "$lib/components/sso/PolicySection.svelte";
@@ -9,7 +10,7 @@
   import { page } from "$app/state";
   import { base } from "$app/paths";
 
-  const groupId = $derived(page.params.groupId!);
+  const groupId = $derived(page.params.groupId! as GenericId<"Group">);
   const client = getConvexClient();
 
   type Tab = "connections" | "policy" | "audit";

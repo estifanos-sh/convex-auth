@@ -1,6 +1,8 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
+import { vAuthGroupId, vAuthUserId } from "./auth/ids";
+
 export const projectStatus = v.union(v.literal("active"), v.literal("archived"));
 
 export const issueStatus = v.union(
@@ -21,13 +23,13 @@ export const issuePriority = v.union(
 
 export default defineSchema({
   projects: defineTable({
-    groupId: v.string(),
+    groupId: vAuthGroupId,
     name: v.string(),
     identifier: v.string(),
     slug: v.string(),
     description: v.string(),
     status: projectStatus,
-    createdByUserId: v.string(),
+    createdByUserId: vAuthUserId,
     issueCounter: v.number(),
     openIssueCount: v.optional(v.number()),
   })
@@ -37,15 +39,15 @@ export default defineSchema({
 
   issues: defineTable({
     projectId: v.id("projects"),
-    groupId: v.string(),
-    scopeGroupId: v.string(),
+    groupId: vAuthGroupId,
+    scopeGroupId: vAuthGroupId,
     number: v.number(),
     title: v.string(),
     description: v.optional(v.string()),
     status: issueStatus,
     priority: issuePriority,
-    assigneeUserId: v.optional(v.string()),
-    createdByUserId: v.string(),
+    assigneeUserId: v.optional(vAuthUserId),
+    createdByUserId: vAuthUserId,
     labels: v.optional(v.array(v.string())),
     position: v.number(),
   })
@@ -56,8 +58,8 @@ export default defineSchema({
 
   comments: defineTable({
     issueId: v.id("issues"),
-    groupId: v.string(),
-    authorUserId: v.string(),
+    groupId: vAuthGroupId,
+    authorUserId: vAuthUserId,
     body: v.string(),
   }).index("by_issueId", ["issueId"]),
 });

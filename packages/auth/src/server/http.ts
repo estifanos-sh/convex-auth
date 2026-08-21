@@ -5,7 +5,7 @@ import {
   UserIdentity,
   httpActionGeneric,
 } from "convex/server";
-import { ConvexError } from "convex/values";
+import { ConvexError, type GenericId } from "convex/values";
 import { parse as parseCookies } from "cookie";
 
 import { ErrorCode } from "../shared/codes";
@@ -43,8 +43,8 @@ type HttpContextAuthLike = AuthLike & {
       ctx: ComponentCtx,
       args: { secret: string },
     ) => Promise<{
-      userId: string;
-      keyId: string;
+      userId: GenericId<"User">;
+      keyId: GenericId<"ApiKey">;
       scopes: HttpKeyContext["key"]["scopes"];
     }>;
   };
@@ -413,8 +413,8 @@ export function createHttpAction(
         ctx: GenericActionCtx<GenericDataModel>,
         args: { secret: string },
       ) => Promise<{
-        userId: string;
-        keyId: string;
+        userId: GenericId<"User">;
+        keyId: GenericId<"ApiKey">;
         scopes: HttpKeyContext["key"]["scopes"];
       }>;
     };
@@ -451,8 +451,8 @@ export function createHttpAction(
           | {
               ok: true;
               value: {
-                userId: string;
-                keyId: string;
+                userId: GenericId<"User">;
+                keyId: GenericId<"ApiKey">;
                 scopes: HttpKeyContext["key"]["scopes"];
               };
             }

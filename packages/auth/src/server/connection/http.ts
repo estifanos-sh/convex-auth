@@ -1,5 +1,5 @@
 import type { GenericActionCtx, GenericDataModel, HttpRouter } from "convex/server";
-import { ConvexError } from "convex/values";
+import { ConvexError, type GenericId } from "convex/values";
 import { serialize as serializeCookie } from "cookie";
 
 import { configDefaults } from "../config";
@@ -1196,7 +1196,7 @@ export function addGroupHttpRuntime(deps: GroupHttpRuntimeDeps) {
             protocol: "scim",
             connectionId: state.connection._id,
             profile: provisionProfile as Record<string, unknown>,
-            userId,
+            userId: userId as GenericId<"User">,
           }),
         );
         const location = `${state.url.origin}${state.url.pathname}/${userId}`;
@@ -1226,7 +1226,7 @@ export function addGroupHttpRuntime(deps: GroupHttpRuntimeDeps) {
           config.component.connection,
           {
             connectionId: state.connection._id,
-            userId,
+            userId: userId as GenericId<"User">,
           },
         );
         if (!existingIdentity) {
@@ -1346,7 +1346,7 @@ export function addGroupHttpRuntime(deps: GroupHttpRuntimeDeps) {
             protocol: "scim",
             connectionId: state.connection._id,
             profile: provisionProfile as Record<string, unknown>,
-            userId,
+            userId: userId as GenericId<"User">,
           }),
         );
         const location = `${state.url.origin}${state.url.pathname}`;

@@ -4,10 +4,11 @@
   import { page } from "$app/state";
   import { getContext } from "svelte";
   import { getConvexClient } from "convex-svelte";
+  import type { GenericId } from "convex/values";
   import type { AppContext } from "$lib/app";
   import NewConnectionForm from "$lib/components/sso/NewConnectionForm.svelte";
 
-  const groupId = $derived(page.params.groupId!);
+  const groupId = $derived(page.params.groupId! as GenericId<"Group">);
   const client = getConvexClient();
   const siteUrl = getContext<AppContext>("app").siteUrl;
 </script>

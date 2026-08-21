@@ -1,10 +1,10 @@
 import { paginationOptsValidator } from "convex/server";
-import { ConvexError, v } from "convex/values";
+import { ConvexError, v, type GenericId } from "convex/values";
 
-import { api } from "../_generated/api";
 import { query } from "../_generated/server";
 import { auth } from "../auth";
 import { auth as authCore } from "../auth/core";
+import { vAuthGroupConnectionId, vAuthGroupId, vAuthGroupWebhookEndpointId } from "./ids";
 import { ErrorCode } from "../errors";
 import { authAction, authMutation, authQuery } from "../functions";
 import { roles } from "../roles";
@@ -66,7 +66,7 @@ const vAuthEventKind = v.union(
 );
 
 const vConnectionWhere = v.object({
-  groupId: v.optional(v.string()),
+  groupId: v.optional(vAuthGroupId),
   slug: v.optional(v.string()),
   status: v.optional(vConnectionStatus),
 });
@@ -77,7 +77,7 @@ const vDomainInput = v.object({
 });
 
 const vDomainVerificationInput = {
-  connectionId: v.string(),
+  connectionId: vAuthGroupConnectionId,
   domain: v.string(),
 };
 
@@ -178,7 +178,7 @@ const vPolicyPatch = v.object({
 });
 
 const vOidcConfigure = {
-  connectionId: v.string(),
+  connectionId: vAuthGroupConnectionId,
   discovery: v.object({
     issuer: v.optional(v.string()),
     discoveryUrl: v.optional(v.string()),
@@ -224,7 +224,7 @@ const vOidcConfigure = {
 };
 
 const vSamlConfigure = {
-  connectionId: v.string(),
+  connectionId: vAuthGroupConnectionId,
   metadata: v.object({
     xml: v.optional(v.string()),
     url: v.optional(v.string()),
@@ -249,7 +249,7 @@ const vSamlConfigure = {
 };
 
 const vScimConfigure = {
-  connectionId: v.string(),
+  connectionId: vAuthGroupConnectionId,
   status: v.optional(vConnectionStatus),
   security: v.optional(
     v.object({
@@ -278,8 +278,8 @@ const vScimConfigure = {
 };
 
 async function requireGroupAdmin(
-  ctx: Parameters<typeof authCore.member.assert>[0] & { auth: { userId: string } },
-  groupId: string,
+  ctx: Parameters<typeof authCore.member.assert>[0] & { auth: { userId: GenericId<"User"> } },
+  groupId: GenericId<"Group">,
 ) {
   await authCore.member.assert(ctx, {
     userId: ctx.auth.userId,
@@ -290,8 +290,8 @@ async function requireGroupAdmin(
 
 async function resolveConnectionGroup(
   ctx: Parameters<typeof auth.connection.get>[0],
-  connectionId: string,
-): Promise<string> {
+  connectionId: GenericId<"GroupConnection">,
+): Promise<GenericId<"Group">> {
   const connection = await auth.connection.get(ctx, { id: connectionId });
   if (connection === null) {
     throw new ConvexError({
@@ -304,7 +304,7 @@ async function resolveConnectionGroup(
 
 export const createConnection = authMutation({
   args: {
-    groupId: v.string(),
+    groupId: vAuthGroupId,
     name: v.optional(v.string()),
     slug: v.optional(v.string()),
     protocol: v.union(v.literal("oidc"), v.literal("saml")),
@@ -332,12 +332,18 @@ export const createConnection = authMutation({
 });
 
 export const getConnection = authQuery({
-  args: { id: v.string() },
+  args: { id: vAuthGroupConnectionId },
   returns: v.union(auth.v.connection.doc, v.null()),
   handler: async (ctx, args) => {
-    const groupId = await resolveConnectionGroup(ctx, args.id);
-    await requireGroupAdmin(ctx, groupId);
-    return auth.connection.get(ctx, { id: args.id });
+    const connection = await auth.connection.get(ctx, { id: args.id });
+    if (connection === null) {
+      throw new ConvexError({
+        code: ErrorCode.INVALID_PARAMETERS,
+        message: "Connection not found.",
+      });
+    }
+    await requireGroupAdmin(ctx, connection.groupId);
+    return connection;
   },
 });
 
@@ -391,7 +397,7 @@ export const listConnections = authQuery({
 
 export const updateConnection = authMutation({
   args: {
-    id: v.string(),
+    id: vAuthGroupConnectionId,
     patch: v.object({
       name: v.optional(v.string()),
       slug: v.optional(v.string()),
@@ -407,7 +413,7 @@ export const updateConnection = authMutation({
 });
 
 export const removeConnection = authMutation({
-  args: { id: v.string() },
+  args: { id: vAuthGroupConnectionId },
   returns: auth.v.connection.id,
   handler: async (ctx, args) => {
     const groupId = await resolveConnectionGroup(ctx, args.id);
@@ -417,7 +423,7 @@ export const removeConnection = authMutation({
 });
 
 export const getConnectionStatus = authQuery({
-  args: { id: v.string() },
+  args: { id: vAuthGroupConnectionId },
   returns: auth.v.connection.status,
   handler: async (ctx, args) => {
     const groupId = await resolveConnectionGroup(ctx, args.id);
@@ -427,7 +433,7 @@ export const getConnectionStatus = authQuery({
 });
 
 export const listDomains = authQuery({
-  args: { connectionId: v.string() },
+  args: { connectionId: vAuthGroupConnectionId },
   returns: v.array(auth.v.connection.domain.doc),
   handler: async (ctx, args) => {
     const groupId = await resolveConnectionGroup(ctx, args.connectionId);
@@ -437,7 +443,7 @@ export const listDomains = authQuery({
 });
 
 export const validateDomains = authQuery({
-  args: { connectionId: v.string() },
+  args: { connectionId: vAuthGroupConnectionId },
   returns: auth.v.connection.domain.validation,
   handler: async (ctx, args) => {
     const groupId = await resolveConnectionGroup(ctx, args.connectionId);
@@ -448,7 +454,7 @@ export const validateDomains = authQuery({
 
 export const setDomains = authMutation({
   args: {
-    connectionId: v.string(),
+    connectionId: vAuthGroupConnectionId,
     domains: v.array(vDomainInput),
   },
   returns: auth.v.connection.domain.upsert,
@@ -493,7 +499,7 @@ export const setOidc = authMutation({
 });
 
 export const getOidc = authQuery({
-  args: { connectionId: v.string() },
+  args: { connectionId: vAuthGroupConnectionId },
   returns: auth.v.connection.oidc.config,
   handler: async (ctx, args) => {
     const groupId = await resolveConnectionGroup(ctx, args.connectionId);
@@ -503,7 +509,7 @@ export const getOidc = authQuery({
 });
 
 export const validateOidc = authAction({
-  args: { connectionId: v.string() },
+  args: { connectionId: vAuthGroupConnectionId },
   returns: auth.v.connection.oidc.validation,
   handler: async (ctx, args) => {
     const groupId = await resolveConnectionGroup(ctx, args.connectionId);
@@ -523,7 +529,7 @@ export const setSaml = authAction({
 });
 
 export const validateSaml = authQuery({
-  args: { connectionId: v.string() },
+  args: { connectionId: vAuthGroupConnectionId },
   returns: auth.v.connection.saml.validation,
   handler: async (ctx, args) => {
     const groupId = await resolveConnectionGroup(ctx, args.connectionId);
@@ -533,7 +539,7 @@ export const validateSaml = authQuery({
 });
 
 export const getPolicy = authQuery({
-  args: { groupId: v.string() },
+  args: { groupId: vAuthGroupId },
   returns: auth.v.connection.policy.config,
   handler: async (ctx, args) => {
     await requireGroupAdmin(ctx, args.groupId);
@@ -543,7 +549,7 @@ export const getPolicy = authQuery({
 
 export const updatePolicy = authMutation({
   args: {
-    groupId: v.string(),
+    groupId: vAuthGroupId,
     patch: vPolicyPatch,
   },
   returns: auth.v.connection.policy.config,
@@ -554,7 +560,7 @@ export const updatePolicy = authMutation({
 });
 
 export const validatePolicy = authQuery({
-  args: { groupId: v.string() },
+  args: { groupId: vAuthGroupId },
   returns: auth.v.connection.policy.validation,
   handler: async (ctx, args) => {
     await requireGroupAdmin(ctx, args.groupId);
@@ -564,8 +570,8 @@ export const validatePolicy = authQuery({
 
 export const listAudit = authQuery({
   args: {
-    groupId: v.optional(v.string()),
-    connectionId: v.optional(v.string()),
+    groupId: v.optional(vAuthGroupId),
+    connectionId: v.optional(vAuthGroupConnectionId),
     paginationOpts: paginationOptsValidator,
   },
   returns: auth.v.list(auth.v.connection.audit.event),
@@ -590,7 +596,7 @@ export const listAudit = authQuery({
 
 export const createWebhookEndpoint = authMutation({
   args: {
-    connectionId: v.string(),
+    connectionId: vAuthGroupConnectionId,
     url: v.string(),
     secret: v.string(),
     subscriptions: v.array(vAuthEventKind),
@@ -621,7 +627,7 @@ export const createWebhookEndpoint = authMutation({
 });
 
 export const listWebhookEndpoints = authQuery({
-  args: { connectionId: v.string() },
+  args: { connectionId: vAuthGroupConnectionId },
   returns: v.array(auth.v.connection.webhook.endpoint),
   handler: async (ctx, args) => {
     const groupId = await resolveConnectionGroup(ctx, args.connectionId);
@@ -634,7 +640,7 @@ export const listWebhookEndpoints = authQuery({
 
 export const listWebhookDeliveries = authQuery({
   args: {
-    connectionId: v.string(),
+    connectionId: vAuthGroupConnectionId,
     paginationOpts: paginationOptsValidator,
   },
   returns: auth.v.list(auth.v.connection.webhook.delivery),
@@ -649,7 +655,7 @@ export const listWebhookDeliveries = authQuery({
 });
 
 export const disableWebhookEndpoint = authMutation({
-  args: { id: v.string() },
+  args: { id: vAuthGroupWebhookEndpointId },
   returns: auth.v.connection.webhook.disabled,
   handler: async (ctx, args) => {
     const endpoint = await auth.connection.webhook.endpoint.get(ctx, { id: args.id });
@@ -675,7 +681,7 @@ export const setScim = authMutation({
 });
 
 export const getScim = authQuery({
-  args: { connectionId: v.string() },
+  args: { connectionId: vAuthGroupConnectionId },
   returns: v.union(auth.v.connection.scim.config, v.null()),
   handler: async (ctx, args) => {
     const groupId = await resolveConnectionGroup(ctx, args.connectionId);
@@ -685,7 +691,7 @@ export const getScim = authQuery({
 });
 
 export const validateScim = authQuery({
-  args: { connectionId: v.string() },
+  args: { connectionId: vAuthGroupConnectionId },
   returns: auth.v.connection.scim.validation,
   handler: async (ctx, args) => {
     const groupId = await resolveConnectionGroup(ctx, args.connectionId);
@@ -696,7 +702,7 @@ export const validateScim = authQuery({
 
 export const signIn = query({
   args: {
-    connectionId: v.optional(v.string()),
+    connectionId: v.optional(vAuthGroupConnectionId),
     email: v.optional(v.string()),
     domain: v.optional(v.string()),
     redirectTo: v.optional(v.string()),
@@ -710,7 +716,7 @@ export const signIn = query({
 
 export const metadata = query({
   args: {
-    connectionId: v.string(),
+    connectionId: vAuthGroupConnectionId,
     entityId: v.optional(v.string()),
     acsUrl: v.optional(v.string()),
     sloUrl: v.optional(v.string()),
@@ -728,37 +734,10 @@ export const signInLookup = query({
     redirectTo: v.optional(v.string()),
     loginHint: v.optional(v.string()),
   },
-  returns: v.union(
-    v.object({
-      connectionId: v.string(),
-      providerId: v.string(),
-      protocol: v.union(v.literal("oidc"), v.literal("saml")),
-      signInPath: v.string(),
-      callbackPath: v.string(),
-      redirectTo: v.optional(v.string()),
-    }),
-    v.null(),
-  ),
-  handler: async (
-    ctx,
-    args,
-  ): Promise<{
-    connectionId: string;
-    providerId: string;
-    protocol: "oidc" | "saml";
-    signInPath: string;
-    callbackPath: string;
-    redirectTo?: string;
-  } | null> => {
+  returns: v.union(auth.v.connection.signIn, v.null()),
+  handler: async (ctx, args) => {
     try {
-      return (await ctx.runQuery(api.auth.group.signIn, args)) as {
-        connectionId: string;
-        providerId: string;
-        protocol: "oidc" | "saml";
-        signInPath: string;
-        callbackPath: string;
-        redirectTo?: string;
-      } | null;
+      return await auth.connection.signIn(ctx, args);
     } catch (error) {
       if (
         error instanceof ConvexError &&

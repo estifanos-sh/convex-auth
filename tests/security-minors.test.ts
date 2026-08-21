@@ -15,17 +15,21 @@
 import { api, components } from "@convex/_generated/api";
 import { auth } from "@convex/auth";
 import schema from "@convex/schema";
+import type { GenericId } from "convex/values";
 import { decodeJwt } from "jose";
 import { expect, test } from "vite-plus/test";
 
 import { convexTest } from "./convex/setup";
 import { expectSignInSession, TEST_EMAIL, TEST_PASSWORD } from "./helpers";
 
-async function createVerifiedUser(t: ReturnType<typeof convexTest>, email: string) {
+async function createVerifiedUser(
+  t: ReturnType<typeof convexTest>,
+  email: string,
+): Promise<GenericId<"User">> {
   return await t.run(async (ctx) => {
     return (await ctx.runMutation(components.auth.user.create, {
       data: { email, emailVerificationTime: Date.now() },
-    })) as string;
+    })) as GenericId<"User">;
   });
 }
 

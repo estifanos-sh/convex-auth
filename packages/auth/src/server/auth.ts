@@ -6,7 +6,7 @@
 
 import type { HttpRouter, RegisteredAction } from "convex/server";
 import { ConvexError } from "convex/values";
-import type { GenericValidator, Value } from "convex/values";
+import type { GenericId, GenericValidator, Infer, Value } from "convex/values";
 
 import { ErrorCode } from "../shared/codes";
 import type { AuthTokens, SignInFlowResult } from "../shared/results";
@@ -44,23 +44,105 @@ export type { AuthExtendValidators, AuthValidators };
  * `member.get`/`member.assert` result with `roleIds`/`grants` narrowed
  * from `string[]` to the permission-typed literal unions.
  */
-type MemberAccessResult<TPermissions extends PermissionsConfig | undefined> = Omit<
+type PageWithItem<TPage, Item> = Omit<TPage, "page"> & { page: Item[] };
+
+type AuthUser<TExtend extends AuthExtendValidators> = Infer<AuthValidators<TExtend>["user"]>;
+type AuthGroup<TExtend extends AuthExtendValidators> = Infer<AuthValidators<TExtend>["group"]>;
+type AuthMember<TExtend extends AuthExtendValidators> = Infer<AuthValidators<TExtend>["member"]>;
+
+type MemberAccessResult<
+  TPermissions extends PermissionsConfig | undefined,
+  TExtend extends AuthExtendValidators,
+> = Omit<
   Awaited<ReturnType<RuntimeAuthApi["member"]["assert"]>>,
-  "roleIds" | "grants"
+  "membership" | "roleIds" | "grants"
 > & {
+  membership: AuthMember<TExtend> | null;
   roleIds: RoleId<TPermissions>[];
   grants: Grant<TPermissions>[];
 };
 
-type MemberResolutionResult<TPermissions extends PermissionsConfig | undefined> = Omit<
+type MemberResolutionResult<
+  TPermissions extends PermissionsConfig | undefined,
+  TExtend extends AuthExtendValidators,
+> = Omit<
   Awaited<ReturnType<RuntimeAuthApi["member"]["resolve"]>>,
-  "roleIds" | "grants"
+  "membership" | "roleIds" | "grants"
 > & {
+  membership: AuthMember<TExtend> | null;
   roleIds: RoleId<TPermissions>[];
   grants: Grant<TPermissions>[];
 };
 
-type MemberApiWithPermissions<TPermissions extends PermissionsConfig | undefined> = Omit<
+/**
+ * Runtime component APIs are generated without this config's `extend`
+ * validators. Keep that one unavoidable generic projection at the facade
+ * boundary, after every public shape has been derived from those validators.
+ *
+ * @internal
+ */
+function projectPublicApi<T>(value: unknown): T {
+  return value as T;
+}
+
+type UserApiWithExtend<TExtend extends AuthExtendValidators> = Omit<
+  RuntimeAuthApi["user"],
+  "get" | "list" | "viewer"
+> & {
+  get: {
+    (
+      ctx: Parameters<RuntimeAuthApi["user"]["list"]>[0],
+      args: { id: GenericId<"User"> },
+    ): Promise<AuthUser<TExtend> | null>;
+    (
+      ctx: Parameters<RuntimeAuthApi["user"]["list"]>[0],
+      args: { ids: readonly GenericId<"User">[] },
+    ): Promise<Array<AuthUser<TExtend> | null>>;
+  };
+  list: (
+    ...args: Parameters<RuntimeAuthApi["user"]["list"]>
+  ) => Promise<
+    PageWithItem<Awaited<ReturnType<RuntimeAuthApi["user"]["list"]>>, AuthUser<TExtend>>
+  >;
+  viewer: (
+    ctx: Parameters<RuntimeAuthApi["user"]["viewer"]>[0],
+  ) => Promise<AuthUser<TExtend> | null>;
+};
+
+type GroupApiWithExtend<TExtend extends AuthExtendValidators> = Omit<
+  RuntimeAuthApi["group"],
+  "get" | "list" | "ancestors"
+> & {
+  get: {
+    (
+      ctx: Parameters<RuntimeAuthApi["group"]["list"]>[0],
+      args: { id: GenericId<"Group"> },
+    ): Promise<AuthGroup<TExtend> | null>;
+    (
+      ctx: Parameters<RuntimeAuthApi["group"]["list"]>[0],
+      args: { ids: readonly GenericId<"Group">[] },
+    ): Promise<Array<AuthGroup<TExtend> | null>>;
+    (
+      ctx: Parameters<RuntimeAuthApi["group"]["list"]>[0],
+      args: { slug: string },
+    ): Promise<AuthGroup<TExtend> | null>;
+  };
+  list: (
+    ...args: Parameters<RuntimeAuthApi["group"]["list"]>
+  ) => Promise<
+    PageWithItem<Awaited<ReturnType<RuntimeAuthApi["group"]["list"]>>, AuthGroup<TExtend>>
+  >;
+  ancestors: (...args: Parameters<RuntimeAuthApi["group"]["ancestors"]>) => Promise<
+    Omit<Awaited<ReturnType<RuntimeAuthApi["group"]["ancestors"]>>, "ancestors"> & {
+      ancestors: AuthGroup<TExtend>[];
+    }
+  >;
+};
+
+type MemberApiWithPermissions<
+  TPermissions extends PermissionsConfig | undefined,
+  TExtend extends AuthExtendValidators,
+> = Omit<
   ReturnType<typeof AuthFactory>["auth"]["member"],
   "create" | "list" | "update" | "get" | "resolve" | "assert"
 > & {
@@ -68,45 +150,49 @@ type MemberApiWithPermissions<TPermissions extends PermissionsConfig | undefined
     ctx: Parameters<ReturnType<typeof AuthFactory>["auth"]["member"]["create"]>[0],
     args: {
       data: {
-        groupId: string;
-        userId: string;
+        groupId: GenericId<"Group">;
+        userId: GenericId<"User">;
         roleIds?: RoleId<TPermissions>[];
         status?: string;
         extend?: Record<string, Value>;
       };
     },
-  ) => Promise<string>;
-  list: ReturnType<typeof AuthFactory>["auth"]["member"]["list"];
+  ) => Promise<GenericId<"GroupMember">>;
+  list: (
+    ...args: Parameters<RuntimeAuthApi["member"]["list"]>
+  ) => Promise<
+    PageWithItem<Awaited<ReturnType<RuntimeAuthApi["member"]["list"]>>, AuthMember<TExtend>>
+  >;
   update: (
     ctx: Parameters<ReturnType<typeof AuthFactory>["auth"]["member"]["update"]>[0],
     args: {
-      id: string;
+      id: GenericId<"GroupMember">;
       patch: Record<string, Value> & { roleIds?: RoleId<TPermissions>[] };
     },
   ) => Promise<null>;
   get: {
     (
       ctx: Parameters<ReturnType<typeof AuthFactory>["auth"]["member"]["get"]>[0],
-      args: { userId: string; groupId: string },
-    ): Promise<MemberAccessResult<TPermissions>>;
+      args: { userId: GenericId<"User">; groupId: GenericId<"Group"> },
+    ): Promise<MemberAccessResult<TPermissions, TExtend>>;
     (
       ctx: Parameters<ReturnType<typeof AuthFactory>["auth"]["member"]["get"]>[0],
-      args: { userId: string; groupIds: readonly string[] },
-    ): Promise<MemberAccessResult<TPermissions>[]>;
+      args: { userId: GenericId<"User">; groupIds: readonly GenericId<"Group">[] },
+    ): Promise<MemberAccessResult<TPermissions, TExtend>[]>;
   };
   resolve: (
     ctx: Parameters<ReturnType<typeof AuthFactory>["auth"]["member"]["resolve"]>[0],
-    args: { userId: string; groupId: string; maxDepth?: number },
-  ) => Promise<MemberResolutionResult<TPermissions>>;
+    args: { userId: GenericId<"User">; groupId: GenericId<"Group">; maxDepth?: number },
+  ) => Promise<MemberResolutionResult<TPermissions, TExtend>>;
   assert: (
     ctx: Parameters<ReturnType<typeof AuthFactory>["auth"]["member"]["assert"]>[0],
     opts: {
-      userId: string;
-      groupId: string;
+      userId: GenericId<"User">;
+      groupId: GenericId<"Group">;
       roleIds?: RoleId<TPermissions>[];
       grants?: Grant<TPermissions>[];
     },
-  ) => Promise<MemberAccessResult<TPermissions>>;
+  ) => Promise<MemberAccessResult<TPermissions, TExtend>>;
 };
 
 type RuntimeAuthApi = ReturnType<typeof AuthFactory>["auth"];
@@ -211,15 +297,15 @@ export type AuthApiBase<
   signOut: ReturnType<typeof AuthFactory>["signOut"];
   store: ReturnType<typeof AuthFactory>["store"];
   http: ReturnType<typeof AuthFactory>["http"];
-  user: ReturnType<typeof AuthFactory>["auth"]["user"];
+  user: UserApiWithExtend<TExtend>;
   session: ReturnType<typeof AuthFactory>["auth"]["session"];
   account: PublicAccountApi;
   factor: RuntimeAuthApi["factor"];
-  group: ReturnType<typeof AuthFactory>["auth"]["group"] & {
+  group: GroupApiWithExtend<TExtend> & {
     /** Current user's active-group selection (`get` / `update` / `reset`). */
     active: ReturnType<typeof AuthFactory>["auth"]["active"];
   };
-  member: MemberApiWithPermissions<TPermissions>;
+  member: MemberApiWithPermissions<TPermissions, TExtend>;
   invite: ReturnType<typeof AuthFactory>["auth"]["invite"];
   key: ReturnType<typeof AuthFactory>["auth"]["key"];
   provider: ReturnType<typeof AuthFactory>["auth"]["provider"];
@@ -317,7 +403,84 @@ export type AuthApiBase<
 
 type InternalConnectionApi = ReturnType<typeof AuthFactory>["auth"]["connection"];
 
-type PublicGroupConnectionApi = InternalConnectionApi["connection"] & {
+type ConnectionValidators = AuthValidators["connection"];
+type PublicGroupConnection = Infer<ConnectionValidators["doc"]>;
+type PublicConnectionLookup = Infer<ConnectionValidators["lookup"]>;
+type PublicConnectionId = Infer<ConnectionValidators["id"]>;
+type PublicConnectionCreated = Infer<ConnectionValidators["created"]>;
+type PublicConnectionStatus = Infer<ConnectionValidators["status"]>;
+type PublicConnectionValidation = Infer<ConnectionValidators["validation"]>;
+type PublicConnectionSignIn = Infer<ConnectionValidators["signIn"]>;
+type PublicConnectionDomain = Infer<ConnectionValidators["domain"]["doc"]>;
+type PublicConnectionDomainValidation = Infer<ConnectionValidators["domain"]["validation"]>;
+type PublicConnectionDomainSet = Infer<ConnectionValidators["domain"]["upsert"]>;
+type PublicConnectionDomainVerificationRequest = Infer<
+  ConnectionValidators["domain"]["verificationRequest"]
+>;
+type PublicConnectionDomainVerificationConfirm = Infer<
+  ConnectionValidators["domain"]["verificationConfirm"]
+>;
+type PublicConnectionPolicyValidation = Infer<ConnectionValidators["policy"]["validation"]>;
+type PublicConnectionScimConfig = Infer<ConnectionValidators["scim"]["config"]>;
+type PublicConnectionScimSet = Infer<ConnectionValidators["scim"]["upsert"]>;
+type PublicConnectionScimValidation = Infer<ConnectionValidators["scim"]["validation"]>;
+type PublicConnectionAuditEvent = Infer<ConnectionValidators["audit"]["event"]>;
+type PublicWebhookEndpoint = Infer<ConnectionValidators["webhook"]["endpoint"]>;
+type PublicWebhookDelivery = Infer<ConnectionValidators["webhook"]["delivery"]>;
+type PublicWebhookDisabled = Infer<ConnectionValidators["webhook"]["disabled"]>;
+
+type WithResult<TFunction, TResult> = TFunction extends (...args: infer TArgs) => unknown
+  ? (...args: TArgs) => Promise<TResult>
+  : never;
+
+type InternalGroupConnectionApi = InternalConnectionApi["connection"];
+
+type GroupConnectionApiWithExactIds = Omit<
+  InternalGroupConnectionApi,
+  "create" | "get" | "list" | "update" | "remove" | "status"
+> & {
+  create: WithResult<InternalGroupConnectionApi["create"], PublicConnectionCreated>;
+  get: {
+    (
+      ctx: Parameters<InternalConnectionApi["connection"]["get"]>[0],
+      args: { id: GenericId<"GroupConnection"> },
+    ): Promise<PublicGroupConnection | null>;
+    (
+      ctx: Parameters<InternalConnectionApi["connection"]["get"]>[0],
+      args: { domain: string },
+    ): Promise<PublicConnectionLookup>;
+  };
+  list: WithResult<
+    InternalGroupConnectionApi["list"],
+    PageWithItem<Awaited<ReturnType<InternalGroupConnectionApi["list"]>>, PublicGroupConnection>
+  >;
+  update: WithResult<InternalGroupConnectionApi["update"], PublicConnectionId>;
+  remove: WithResult<InternalGroupConnectionApi["remove"], PublicConnectionId>;
+  status: WithResult<InternalGroupConnectionApi["status"], PublicConnectionStatus>;
+};
+
+type InternalWebhookEndpointApi = InternalConnectionApi["webhook"]["endpoint"];
+type PublicWebhookEndpointApi = Omit<
+  InternalWebhookEndpointApi,
+  "create" | "get" | "list" | "update" | "revoke"
+> & {
+  create: WithResult<InternalWebhookEndpointApi["create"], PublicWebhookDisabled>;
+  get: (
+    ctx: Parameters<InternalWebhookEndpointApi["get"]>[0],
+    args: { id: GenericId<"GroupWebhookEndpoint"> },
+  ) => Promise<PublicWebhookEndpoint | null>;
+  list: (
+    ctx: Parameters<InternalWebhookEndpointApi["list"]>[0],
+    args: { connectionId: GenericId<"GroupConnection"> },
+  ) => Promise<PublicWebhookEndpoint[]>;
+  update: WithResult<InternalWebhookEndpointApi["update"], PublicWebhookDisabled>;
+  revoke: (
+    ctx: Parameters<InternalWebhookEndpointApi["revoke"]>[0],
+    args: { id: GenericId<"GroupWebhookEndpoint"> },
+  ) => Promise<PublicWebhookDisabled>;
+};
+
+type PublicGroupConnectionApi = GroupConnectionApiWithExactIds & {
   signIn: (
     ctx: Parameters<InternalConnectionApi["oidc"]["signIn"]>[0],
     data: {
@@ -327,18 +490,14 @@ type PublicGroupConnectionApi = InternalConnectionApi["connection"] & {
       redirectTo?: string;
       loginHint?: string;
     },
-  ) => Promise<{
-    connectionId: string;
-    protocol: "oidc" | "saml";
-    providerId: string;
-    signInPath: string;
-    callbackPath: string;
-    redirectTo?: string;
-  }>;
+  ) => Promise<PublicConnectionSignIn>;
   metadata: InternalConnectionApi["saml"]["metadata"];
   domain: {
-    list: InternalConnectionApi["domain"]["list"];
-    validate: InternalConnectionApi["domain"]["validate"];
+    list: WithResult<InternalConnectionApi["domain"]["list"], PublicConnectionDomain[]>;
+    validate: WithResult<
+      InternalConnectionApi["domain"]["validate"],
+      PublicConnectionDomainValidation
+    >;
     status: InternalConnectionApi["domain"]["status"];
     upsert: (
       ctx: Parameters<InternalConnectionApi["connection"]["create"]>[0],
@@ -349,55 +508,60 @@ type PublicGroupConnectionApi = InternalConnectionApi["connection"] & {
           isPrimary?: boolean;
         }>;
       },
-    ) => Promise<{
-      connectionId: string;
-      domains: Array<{
-        domainId: string;
-        domain: string;
-        isPrimary: boolean;
-        verified: boolean;
-        verifiedAt: number | null;
-      }>;
-    }>;
+    ) => Promise<PublicConnectionDomainSet>;
     verification: {
       request: (
         ctx: Parameters<InternalConnectionApi["connection"]["create"]>[0],
         args: { connectionId: string; domain: string },
-      ) => Promise<{
-        connectionId: string;
-        domain: string;
-        requestedAt: number;
-        expiresAt: number;
-        challenge: {
-          recordType: "TXT";
-          recordName: string;
-          recordValue: string;
-        };
-      }>;
+      ) => Promise<PublicConnectionDomainVerificationRequest>;
       confirm: (
         ctx: Parameters<InternalConnectionApi["connection"]["create"]>[0],
         args: { connectionId: string; domain: string },
-      ) => Promise<{
-        connectionId: string;
-        domain: string;
-        verifiedAt?: number;
-        checks: Array<{ name: string; ok: boolean; message?: string }>;
-      }>;
+      ) => Promise<PublicConnectionDomainVerificationConfirm>;
     };
   };
-  oidc: Omit<InternalConnectionApi["oidc"], "signIn">;
-  saml: InternalConnectionApi["saml"];
-  policy: InternalConnectionApi["policy"];
+  oidc: Omit<InternalConnectionApi["oidc"], "signIn" | "validate"> & {
+    validate: WithResult<InternalConnectionApi["oidc"]["validate"], PublicConnectionValidation>;
+  };
+  saml: Omit<InternalConnectionApi["saml"], "upsert" | "validate"> & {
+    upsert: WithResult<InternalConnectionApi["saml"]["upsert"], PublicConnectionCreated>;
+    validate: WithResult<InternalConnectionApi["saml"]["validate"], PublicConnectionValidation>;
+  };
+  policy: Omit<InternalConnectionApi["policy"], "validate"> & {
+    validate: WithResult<
+      InternalConnectionApi["policy"]["validate"],
+      PublicConnectionPolicyValidation
+    >;
+  };
   audit: {
-    list: InternalConnectionApi["audit"]["list"];
+    list: WithResult<
+      InternalConnectionApi["audit"]["list"],
+      PageWithItem<
+        Awaited<ReturnType<InternalConnectionApi["audit"]["list"]>>,
+        PublicConnectionAuditEvent
+      >
+    >;
   };
   webhook: {
-    endpoint: InternalConnectionApi["webhook"]["endpoint"];
+    endpoint: PublicWebhookEndpointApi;
     delivery: {
-      list: InternalConnectionApi["webhook"]["delivery"]["list"];
+      list: WithResult<
+        InternalConnectionApi["webhook"]["delivery"]["list"],
+        PageWithItem<
+          Awaited<ReturnType<InternalConnectionApi["webhook"]["delivery"]["list"]>>,
+          PublicWebhookDelivery
+        >
+      >;
     };
   };
-  scim: Omit<InternalConnectionApi["scim"], "getConfigByToken" | "identity">;
+  scim: Omit<
+    InternalConnectionApi["scim"],
+    "getConfigByToken" | "identity" | "upsert" | "get" | "validate"
+  > & {
+    upsert: WithResult<InternalConnectionApi["scim"]["upsert"], PublicConnectionScimSet>;
+    get: WithResult<InternalConnectionApi["scim"]["get"], PublicConnectionScimConfig | null>;
+    validate: WithResult<InternalConnectionApi["scim"]["validate"], PublicConnectionScimValidation>;
+  };
 };
 
 /**
@@ -507,7 +671,7 @@ export function defineAuth<
     domain: string;
     isPrimary?: boolean;
   }>;
-  const setGroupConnectionDomains: PublicGroupConnectionApi["domain"]["upsert"] = async (
+  const setGroupConnectionDomains = async (
     ctx: Parameters<SetGroupConnectionDomains>[0],
     args: Parameters<SetGroupConnectionDomains>[1],
   ) => {
@@ -603,43 +767,60 @@ export function defineAuth<
     };
   };
 
+  const publicConnectionApi = projectPublicApi<GroupConnectionApiWithExactIds>(connectionApi);
+  const publicWebhookEndpointApi = projectPublicApi<PublicWebhookEndpointApi>(webhookApi.endpoint);
+  const publicConnectionSignIn = projectPublicApi<PublicGroupConnectionApi["signIn"]>(
+    oidcApi.signIn,
+  );
+  const publicDomainList = projectPublicApi<PublicGroupConnectionApi["domain"]["list"]>(
+    domainApi.list,
+  );
+  const publicDomainValidate = projectPublicApi<PublicGroupConnectionApi["domain"]["validate"]>(
+    domainApi.validate,
+  );
+  const publicDomainUpsert =
+    projectPublicApi<PublicGroupConnectionApi["domain"]["upsert"]>(setGroupConnectionDomains);
+  const publicDomainVerificationRequest = projectPublicApi<
+    PublicGroupConnectionApi["domain"]["verification"]["request"]
+  >(domainApi.verification.request);
+  const publicDomainVerificationConfirm = projectPublicApi<
+    PublicGroupConnectionApi["domain"]["verification"]["confirm"]
+  >(domainApi.verification.confirm);
+  const publicOidcApi = projectPublicApi<PublicGroupConnectionApi["oidc"]>(oidcApi);
+  const publicSamlApi = projectPublicApi<PublicGroupConnectionApi["saml"]>(samlApi);
+  const publicPolicyApi = projectPublicApi<PublicGroupConnectionApi["policy"]>(
+    restConnection.policy,
+  );
+  const publicAuditApi = projectPublicApi<PublicGroupConnectionApi["audit"]>(auditApi);
+  const publicWebhookDeliveryApi = projectPublicApi<
+    PublicGroupConnectionApi["webhook"]["delivery"]
+  >(webhookApi.delivery);
+  const publicScimApi = projectPublicApi<PublicGroupConnectionApi["scim"]>(scimApi);
+
   const publicGroupConnection: PublicGroupConnectionApi = {
     ...restConnection,
-    ...connectionApi,
-    signIn: oidcApi.signIn,
+    ...publicConnectionApi,
+    signIn: publicConnectionSignIn,
     metadata: samlApi.metadata,
-    oidc: {
-      ...oidcApi,
-    },
-    saml: {
-      ...samlApi,
-    },
+    oidc: publicOidcApi,
+    saml: publicSamlApi,
     domain: {
-      list: domainApi.list,
-      validate: domainApi.validate,
+      list: publicDomainList,
+      validate: publicDomainValidate,
       status: domainApi.status,
-      upsert: setGroupConnectionDomains,
+      upsert: publicDomainUpsert,
       verification: {
-        request: domainApi.verification.request,
-        confirm: domainApi.verification.confirm,
+        request: publicDomainVerificationRequest,
+        confirm: publicDomainVerificationConfirm,
       },
     },
-    policy: restConnection.policy,
-    audit: {
-      list: auditApi.list,
-    },
+    policy: publicPolicyApi,
+    audit: publicAuditApi,
     webhook: {
-      endpoint: webhookApi.endpoint,
-      delivery: {
-        list: webhookApi.delivery.list,
-      },
+      endpoint: publicWebhookEndpointApi,
+      delivery: publicWebhookDeliveryApi,
     },
-    scim: {
-      upsert: scimApi.upsert,
-      get: scimApi.get,
-      status: scimApi.status,
-      validate: scimApi.validate,
-    },
+    scim: publicScimApi,
   };
 
   const groupApi = {
@@ -653,7 +834,9 @@ export function defineAuth<
 
   const accountApi: PublicAccountApi = authResult.auth.accountManagement;
 
-  const memberApi = authResult.auth.member as MemberApiWithPermissions<ConfigPermissions<Rest>>;
+  const memberApi = projectPublicApi<
+    MemberApiWithPermissions<ConfigPermissions<Rest>, ConfigExtend<Rest>>
+  >(authResult.auth.member);
 
   const oauthApi: PublicOAuthApi = {
     authorize: authResult.auth.oauth.authorize,
@@ -674,11 +857,15 @@ export function defineAuth<
     signOut: authResult.signOut,
     store: authResult.store,
     http: authResult.http,
-    user: authResult.auth.user,
+    user: projectPublicApi<UserApiWithExtend<ConfigExtend<Rest>>>(authResult.auth.user),
     session: authResult.auth.session,
     account: accountApi,
     factor: authResult.auth.factor,
-    group: groupApi,
+    group: projectPublicApi<
+      GroupApiWithExtend<ConfigExtend<Rest>> & {
+        active: ReturnType<typeof AuthFactory>["auth"]["active"];
+      }
+    >(groupApi),
     member: memberApi,
     invite: authResult.auth.invite,
     key: authResult.auth.key,

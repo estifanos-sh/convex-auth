@@ -2,6 +2,7 @@ import { ConvexError, v } from "convex/values";
 import type { Doc } from "./_generated/dataModel";
 
 import { auth } from "./auth/core";
+import { vAuthGroupId, vAuthUserId } from "./auth/ids";
 import { ErrorCode } from "./errors";
 import { authMutation, authQuery } from "./functions";
 import { issuePriority, issueStatus, projectStatus } from "./schema";
@@ -11,7 +12,7 @@ type UserLookup = { name?: string; email?: string } | null;
 function toIssueView(
   project: Doc<"projects">,
   issue: Doc<"issues">,
-  userMap: Map<string, UserLookup>,
+  userMap: Map<Doc<"issues">["createdByUserId"], UserLookup>,
 ) {
   const assignee = issue.assigneeUserId ? userMap.get(issue.assigneeUserId) : null;
   const creator = userMap.get(issue.createdByUserId);
@@ -41,11 +42,11 @@ const vIssue = v.object({
   priority: issuePriority,
   labels: v.array(v.string()),
   assigneeName: v.union(v.string(), v.null()),
-  assigneeUserId: v.union(v.string(), v.null()),
+  assigneeUserId: v.union(vAuthUserId, v.null()),
   createdByName: v.string(),
-  createdByUserId: v.string(),
+  createdByUserId: vAuthUserId,
   projectId: v.id("projects"),
-  groupId: v.string(),
+  groupId: vAuthGroupId,
 });
 
 export const list = authQuery({
@@ -54,7 +55,7 @@ export const list = authQuery({
     project: v.union(
       v.object({
         _id: v.id("projects"),
-        groupId: v.string(),
+        groupId: vAuthGroupId,
         name: v.string(),
         identifier: v.string(),
         slug: v.string(),
@@ -85,11 +86,17 @@ export const list = authQuery({
 
     const allUserIds = Array.from(
       new Set(
-        issues.flatMap((i) => [i.createdByUserId, i.assigneeUserId].filter(Boolean) as string[]),
+        issues.flatMap((issue) =>
+          issue.assigneeUserId === undefined
+            ? [issue.createdByUserId]
+            : [issue.createdByUserId, issue.assigneeUserId],
+        ),
       ),
     );
     const userDocs = await auth.user.get(ctx, { ids: allUserIds });
-    const userMap = new Map<string, UserLookup>(allUserIds.map((id, i) => [id, userDocs[i]]));
+    const userMap = new Map<Doc<"issues">["createdByUserId"], UserLookup>(
+      allUserIds.map((id, i) => [id, userDocs[i]]),
+    );
 
     return {
       project: {
@@ -118,7 +125,10 @@ export const get = authQuery({
     if (!issue) return null;
     const userId = ctx.auth.userId;
 
-    const ids = [issue.createdByUserId, issue.assigneeUserId].filter(Boolean) as string[];
+    const ids =
+      issue.assigneeUserId === undefined
+        ? [issue.createdByUserId]
+        : [issue.createdByUserId, issue.assigneeUserId];
     const [project, userDocs] = await Promise.all([
       ctx.db.get(issue.projectId),
       auth.user.get(ctx, { ids }),
@@ -129,7 +139,9 @@ export const get = authQuery({
       }),
     ]);
     if (!project) return null;
-    const userMap = new Map<string, UserLookup>(ids.map((id, i) => [id, userDocs[i]]));
+    const userMap = new Map<Doc<"issues">["createdByUserId"], UserLookup>(
+      ids.map((id, i) => [id, userDocs[i]]),
+    );
 
     return toIssueView(project, issue, userMap);
   },
@@ -186,7 +198,7 @@ export const update = authMutation({
       title: v.optional(v.string()),
       status: v.optional(issueStatus),
       priority: v.optional(issuePriority),
-      assigneeUserId: v.optional(v.union(v.string(), v.null())),
+      assigneeUserId: v.optional(v.union(vAuthUserId, v.null())),
       labels: v.optional(v.array(v.string())),
     }),
   },

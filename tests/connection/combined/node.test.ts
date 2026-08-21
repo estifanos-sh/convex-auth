@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 
 import { api } from "@convex/_generated/api";
 import { ConvexHttpClient } from "convex/browser";
+import type { GenericId } from "convex/values";
 import { expect, test } from "vite-plus/test";
 
 import {
@@ -161,7 +162,7 @@ async function startGroupConnectionContext(prefix: string, protocol: "oidc" | "s
 
 async function startConnectionSignIn(
   convexClient: ConvexHttpClient,
-  connectionId: string,
+  connectionId: GenericId<"GroupConnection">,
   protocol?: "oidc" | "saml",
 ) {
   const ssoResult = (await convexClient.action(api.auth.signIn, {
@@ -178,7 +179,7 @@ async function configureScimAndProvisionUser(args: {
   convexClient: ConvexHttpClient;
   convexSiteUrl: string;
   convexUserToken: string;
-  connectionId: string;
+  connectionId: GenericId<"GroupConnection">;
   email: string;
   externalId: string;
 }) {

@@ -89,17 +89,17 @@ const vConnectionCheck = v.object({
   message: v.optional(v.string()),
 });
 
-const vConnectionIdResult = v.object({ connectionId: v.string() });
+const vConnectionIdResult = v.object({ connectionId: vIdString("GroupConnection") });
 
 const vConnectionGroupResult = v.object({
-  connectionId: v.string(),
-  groupId: v.string(),
+  connectionId: vIdString("GroupConnection"),
+  groupId: vIdString("Group"),
 });
 
 const vConnectionDoc = v.object({
-  _id: v.string(),
+  _id: vIdString("GroupConnection"),
   _creationTime: v.number(),
-  groupId: v.string(),
+  groupId: vIdString("Group"),
   slug: v.optional(v.string()),
   name: v.optional(v.string()),
   protocol: vGroupConnectionProtocol,
@@ -109,10 +109,10 @@ const vConnectionDoc = v.object({
 });
 
 const vConnectionDomainDoc = v.object({
-  _id: v.string(),
+  _id: vIdString("GroupConnectionDomain"),
   _creationTime: v.number(),
-  connectionId: v.string(),
-  groupId: v.string(),
+  connectionId: vIdString("GroupConnection"),
+  groupId: vIdString("Group"),
   domain: v.string(),
   isPrimary: v.boolean(),
   verifiedAt: v.optional(v.number()),
@@ -127,7 +127,7 @@ const vConnectionLookup = v.union(
 );
 
 const vConnectionDomainSummary = v.object({
-  domainId: v.string(),
+  domainId: vIdString("GroupConnectionDomain"),
   domain: v.string(),
   isPrimary: v.boolean(),
   verified: v.boolean(),
@@ -135,7 +135,7 @@ const vConnectionDomainSummary = v.object({
 });
 
 const vConnectionDomainValidation = v.object({
-  connectionId: v.string(),
+  connectionId: vIdString("GroupConnection"),
   ready: v.boolean(),
   summary: v.object({
     domainCount: v.number(),
@@ -147,12 +147,12 @@ const vConnectionDomainValidation = v.object({
 });
 
 const vConnectionDomainSet = v.object({
-  connectionId: v.string(),
+  connectionId: vIdString("GroupConnection"),
   domains: v.array(vConnectionDomainSummary),
 });
 
 const vConnectionDomainVerificationRequest = v.object({
-  connectionId: v.string(),
+  connectionId: vIdString("GroupConnection"),
   domain: v.string(),
   requestedAt: v.number(),
   expiresAt: v.number(),
@@ -164,14 +164,14 @@ const vConnectionDomainVerificationRequest = v.object({
 });
 
 const vConnectionDomainVerificationConfirm = v.object({
-  connectionId: v.string(),
+  connectionId: vIdString("GroupConnection"),
   domain: v.string(),
   verifiedAt: v.optional(v.number()),
   checks: v.array(vConnectionCheck),
 });
 
 const vConnectionStatus = v.object({
-  connectionId: v.string(),
+  connectionId: vIdString("GroupConnection"),
   status: vGroupConnectionStatus,
   ready: v.boolean(),
   domainCount: v.number(),
@@ -208,22 +208,22 @@ const vConnectionOidcConfig = v.object({
 
 const vConnectionValidation = v.object({
   ok: v.boolean(),
-  connectionId: v.string(),
+  connectionId: vIdString("GroupConnection"),
   checks: v.array(vConnectionCheck),
 });
 
 const vConnectionPolicyValidation = v.object({
   ok: v.boolean(),
-  groupId: v.string(),
+  groupId: vIdString("Group"),
   policy: v.optional(vGroupConnectionPolicy),
   checks: v.array(vConnectionCheck),
 });
 
 const vConnectionScimConfig = v.object({
-  _id: v.string(),
+  _id: vIdString("GroupConnectionScimConfig"),
   _creationTime: v.number(),
-  connectionId: v.string(),
-  groupId: v.string(),
+  connectionId: vIdString("GroupConnection"),
+  groupId: vIdString("Group"),
   status: vScimStatus,
   basePath: v.string(),
   lastRotatedAt: v.optional(v.number()),
@@ -234,15 +234,15 @@ const vConnectionScimConfig = v.object({
 });
 
 const vConnectionScimSet = v.object({
-  connectionId: v.string(),
-  configId: v.string(),
+  connectionId: vIdString("GroupConnection"),
+  configId: vIdString("GroupConnectionScimConfig"),
   basePath: v.string(),
   token: v.string(),
 });
 
 const vConnectionScimValidation = v.object({
   ok: v.boolean(),
-  connectionId: v.string(),
+  connectionId: vIdString("GroupConnection"),
   basePath: v.optional(v.string()),
   deprovisionMode: v.optional(v.union(v.literal("soft"), v.literal("hard"))),
   capabilities: v.optional(
@@ -260,7 +260,7 @@ const vConnectionScimValidation = v.object({
 });
 
 const vConnectionSignIn = v.object({
-  connectionId: v.string(),
+  connectionId: vIdString("GroupConnection"),
   providerId: v.string(),
   protocol: vGroupConnectionProtocol,
   signInPath: v.string(),
@@ -269,7 +269,7 @@ const vConnectionSignIn = v.object({
 });
 
 const vConnectionAuditEvent = v.object({
-  _id: v.string(),
+  _id: vIdString("AuthEventProjection"),
   _creationTime: v.number(),
   eventId: v.string(),
   targetKind: vAuthEventTargetKind,
@@ -289,14 +289,14 @@ const vConnectionAuditEvent = v.object({
 });
 
 const vConnectionWebhookEndpoint = v.object({
-  _id: v.string(),
+  _id: vIdString("GroupWebhookEndpoint"),
   _creationTime: v.number(),
-  connectionId: v.string(),
-  groupId: v.string(),
+  connectionId: vIdString("GroupConnection"),
+  groupId: vIdString("Group"),
   url: v.string(),
   status: vWebhookEndpointStatus,
   subscriptions: v.array(vAuthEventKind),
-  createdByUserId: v.optional(v.string()),
+  createdByUserId: v.optional(vIdString("User")),
   lastSuccessAt: v.optional(v.number()),
   lastFailureAt: v.optional(v.number()),
   failureCount: v.number(),
@@ -304,10 +304,10 @@ const vConnectionWebhookEndpoint = v.object({
 });
 
 const vConnectionWebhookDelivery = v.object({
-  _id: v.string(),
+  _id: vIdString("GroupWebhookDelivery"),
   _creationTime: v.number(),
-  connectionId: v.string(),
-  endpointId: v.string(),
+  connectionId: vIdString("GroupConnection"),
+  endpointId: vIdString("GroupWebhookEndpoint"),
   eventId: v.string(),
   kind: vAuthEventKind,
   status: vWebhookDeliveryStatus,
@@ -359,7 +359,7 @@ const connectionValidators = {
   webhook: {
     endpoint: vConnectionWebhookEndpoint,
     delivery: vConnectionWebhookDelivery,
-    disabled: v.object({ endpointId: v.string() }),
+    disabled: v.object({ endpointId: vIdString("GroupWebhookEndpoint") }),
   },
 };
 
@@ -402,6 +402,12 @@ export function createAuthValidators<TExtend extends AuthExtendValidators>(
   const viewer = v.union(user, v.null());
 
   return {
+    /**
+     * Typed component document IDs. They validate as strings because this
+     * application crosses a component boundary, while preserving the exact
+     * component table identity in TypeScript.
+     */
+    id: vIdString,
     /** Single User document validator (extend-aware). */
     user,
     /** Single Group document validator (extend-aware). */

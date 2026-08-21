@@ -1,4 +1,4 @@
-import { ConvexError } from "convex/values";
+import { ConvexError, type GenericId } from "convex/values";
 
 import { ErrorCode } from "../../shared/codes";
 import type { ComponentCtx, ComponentReadCtx } from "../component/context";
@@ -94,7 +94,7 @@ export function createKeyDomain(deps: KeyDeps) {
       ctx: ComponentCtx,
       opts: {
         data: {
-          userId: string;
+          userId: GenericId<"User">;
           name: string;
           scopes: KeyScope[];
           rateLimit?: { maxRequests: number; windowMs: number };
@@ -102,7 +102,7 @@ export function createKeyDomain(deps: KeyDeps) {
           extend?: Record<string, unknown>;
         };
       },
-    ): Promise<{ id: string; secret: string }> => {
+    ): Promise<{ id: GenericId<"ApiKey">; secret: string }> => {
       const data = opts.data;
       const { raw, hashedKey, displayPrefix } = await generateApiKey("sk_");
       const keyId = (await ctx.runMutation(config.component.user.key.create, {
@@ -114,7 +114,7 @@ export function createKeyDomain(deps: KeyDeps) {
         rateLimit: data.rateLimit,
         expiresAt: data.expiresAt,
         extend: data.extend,
-      })) as string;
+      })) as GenericId<"ApiKey">;
       await emitCommittedKeyEvent(ctx, {
         kind: "api_key.created",
         actor: { type: "user", id: data.userId },
@@ -151,7 +151,7 @@ export function createKeyDomain(deps: KeyDeps) {
     verify: async (
       ctx: ComponentCtx,
       opts: { secret: string },
-    ): Promise<{ userId: string; keyId: string; scopes: ScopeChecker }> => {
+    ): Promise<{ userId: GenericId<"User">; keyId: GenericId<"ApiKey">; scopes: ScopeChecker }> => {
       const hashedKey = await hashApiKey(opts.secret);
       const doc = (await ctx.runQuery(config.component.user.key.get, {
         hashedKey,
@@ -180,8 +180,8 @@ export function createKeyDomain(deps: KeyDeps) {
         | { status: "invalid" | "revoked" | "expired" | "limited" }
         | {
             status: "verified";
-            keyId: string;
-            userId: string;
+            keyId: GenericId<"ApiKey">;
+            userId: GenericId<"User">;
             scopes: KeyScope[];
           };
       switch (result.status) {
@@ -237,7 +237,7 @@ export function createKeyDomain(deps: KeyDeps) {
       ctx: ComponentReadCtx,
       opts?: {
         where?: {
-          userId?: string;
+          userId?: GenericId<"User">;
           revoked?: boolean;
           name?: string;
           prefix?: string;
@@ -273,7 +273,10 @@ export function createKeyDomain(deps: KeyDeps) {
      * console.log(key.name, key.prefix);
      * ```
      */
-    get: async (ctx: ComponentReadCtx, opts: { id: string }): Promise<KeyRecord | null> => {
+    get: async (
+      ctx: ComponentReadCtx,
+      opts: { id: GenericId<"ApiKey"> },
+    ): Promise<KeyRecord | null> => {
       const doc = (await ctx.runQuery(config.component.user.key.get, {
         id: opts.id,
       })) as KeyDoc | null;
@@ -304,7 +307,7 @@ export function createKeyDomain(deps: KeyDeps) {
     update: async (
       ctx: ComponentCtx,
       opts: {
-        id: string;
+        id: GenericId<"ApiKey">;
         patch: {
           name?: string;
           scopes?: KeyScope[];
@@ -334,7 +337,7 @@ export function createKeyDomain(deps: KeyDeps) {
      * await auth.key.revoke(ctx, { id: keyId });
      * ```
      */
-    revoke: async (ctx: ComponentCtx, opts: { id: string }) => {
+    revoke: async (ctx: ComponentCtx, opts: { id: GenericId<"ApiKey"> }) => {
       const key = (await ctx.runQuery(config.component.user.key.get, {
         id: opts.id,
       })) as KeyDoc | null;
@@ -373,7 +376,7 @@ export function createKeyDomain(deps: KeyDeps) {
      * await auth.key.remove(ctx, { id: keyId });
      * ```
      */
-    remove: async (ctx: ComponentCtx, opts: { id: string }) => {
+    remove: async (ctx: ComponentCtx, opts: { id: GenericId<"ApiKey"> }) => {
       await ctx.runMutation(config.component.user.key.remove, { id: opts.id });
       return null;
     },
@@ -401,20 +404,16 @@ export function createKeyDomain(deps: KeyDeps) {
      */
     rotate: async (
       ctx: ComponentCtx,
-      opts: { id: string; name?: string; expiresAt?: number },
-    ): Promise<{ id: string; secret: string }> => {
+      opts: { id: GenericId<"ApiKey">; name?: string; expiresAt?: number },
+    ): Promise<{ id: GenericId<"ApiKey">; secret: string }> => {
       const { raw, hashedKey, displayPrefix } = await generateApiKey("sk_");
-      const result = (await ctx.runMutation((config.component.user.key as any).rotate, {
+      const result = await ctx.runMutation(config.component.user.key.rotate, {
         id: opts.id,
         prefix: displayPrefix,
         hashedKey,
         name: opts.name,
         expiresAt: opts.expiresAt,
-      })) as
-        | { status: "invalid" }
-        | { status: "revoked" }
-        | { status: "invalid_rate_limit" }
-        | { status: "rotated"; id: string; userId: string; name: string };
+      });
       if (result.status === "invalid") {
         throw new ConvexError({
           code: ErrorCode.INVALID_PARAMETERS,
@@ -455,7 +454,7 @@ export function createKeyDomain(deps: KeyDeps) {
         outcome: "success",
         data: { keyId: result.id, name: result.name, prefix: displayPrefix },
       });
-      return { id: result.id, secret: raw };
+      return { id: result.id as GenericId<"ApiKey">, secret: raw };
     },
   };
 

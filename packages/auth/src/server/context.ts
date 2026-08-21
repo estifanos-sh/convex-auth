@@ -64,7 +64,7 @@ export type AuthContext = {
   /** The authenticated user's full document. */
   user: UserDoc;
   /** The user's active group ID, or `null` if none set. */
-  groupId: string | null;
+  groupId: GenericId<"Group"> | null;
   /** The user's primary role in the active group, or `null`. */
   role: string | null;
   /** Resolved grant strings from the user's role definitions. */
@@ -113,7 +113,7 @@ export type OptionalAuthContext = {
   /** The authenticated user's full document, or `null` when unauthenticated. */
   user: UserDoc | null;
   /** The user's active group ID, or `null` if none is set. */
-  groupId: string | null;
+  groupId: GenericId<"Group"> | null;
   /** The user's primary role in the active group, or `null`. */
   role: string | null;
   /** Resolved grant strings for the active membership, or `[]`. */
@@ -184,8 +184,11 @@ export type AuthContextConfig<
 };
 
 /** @internal */
-export async function getSessionUserId(ctx: AuthIdentityCtx): Promise<string | null> {
-  return await getAuthenticatedUserIdOrNull(ctx);
+export async function getSessionUserId(ctx: AuthIdentityCtx): Promise<GenericId<"User"> | null> {
+  // Convex identities carry component document IDs as strings. This is the
+  // single identity-to-component boundary; public auth helpers retain the
+  // table-specific ID type from here onward.
+  return (await getAuthenticatedUserIdOrNull(ctx)) as GenericId<"User"> | null;
 }
 
 /**
@@ -238,7 +241,7 @@ function authContextFromSnapshot(
       message: "The authenticated user no longer exists.",
     });
   }
-  const groupId = active?.groupId ?? null;
+  const groupId = (active?.groupId as GenericId<"Group"> | undefined) ?? null;
   const role = active?.roleIds[0] ?? null;
   const grants = active?.grants ?? [];
   const effectiveGrants =

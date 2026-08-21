@@ -1,6 +1,7 @@
 import { ConvexError, v } from "convex/values";
 
 import { internalMutation, internalQuery } from "../_generated/server";
+import { vAuthGroupId, vAuthUserId } from "../auth/ids";
 import { ErrorCode } from "../errors";
 import { issuePriority, issueStatus } from "../schema";
 
@@ -9,7 +10,7 @@ export const getProject = internalQuery({
   returns: v.union(
     v.object({
       projectId: v.id("projects"),
-      groupId: v.string(),
+      groupId: vAuthGroupId,
       name: v.string(),
       identifier: v.string(),
       openIssueCount: v.number(),
@@ -67,7 +68,7 @@ export const list = internalQuery({
 export const create = internalMutation({
   args: {
     projectId: v.string(),
-    userId: v.string(),
+    userId: vAuthUserId,
     title: v.string(),
   },
   returns: v.object({ issueId: v.id("issues"), number: v.number() }),

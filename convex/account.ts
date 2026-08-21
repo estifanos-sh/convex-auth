@@ -1,6 +1,7 @@
-import { ConvexError, v } from "convex/values";
+import { ConvexError, v, type GenericId } from "convex/values";
 
 import { auth } from "./auth/core";
+import { vAuthApiKeyId } from "./auth/ids";
 import { ErrorCode } from "./errors";
 import { authUserMutation, authUserQuery } from "./functions";
 
@@ -19,7 +20,7 @@ const vApiKeyScope = v.object({
 });
 
 const vApiKey = v.object({
-  keyId: v.string(),
+  keyId: vAuthApiKeyId,
   prefix: v.string(),
   name: v.string(),
   revoked: v.boolean(),
@@ -30,7 +31,11 @@ const vApiKey = v.object({
 
 type ApiKeyGetCtx = Parameters<typeof auth.key.get>[0];
 
-async function requireOwnedApiKey(ctx: ApiKeyGetCtx, userId: string, keyId: string) {
+async function requireOwnedApiKey(
+  ctx: ApiKeyGetCtx,
+  userId: GenericId<"User">,
+  keyId: GenericId<"ApiKey">,
+) {
   const key = await auth.key.get(ctx, { id: keyId });
   if (!key || key.userId !== userId) {
     throw new ConvexError({
@@ -108,7 +113,7 @@ export const createApiKey = authUserMutation({
     issueRead: v.boolean(),
     issueWrite: v.boolean(),
   },
-  returns: v.object({ keyId: v.string(), secret: v.string() }),
+  returns: v.object({ keyId: vAuthApiKeyId, secret: v.string() }),
   handler: async (ctx, args) => {
     const userId = ctx.auth.userId;
     const scopeActions = [
@@ -128,8 +133,8 @@ export const createApiKey = authUserMutation({
 });
 
 export const revokeApiKey = authUserMutation({
-  args: { keyId: v.string() },
-  returns: v.object({ keyId: v.string() }),
+  args: { keyId: vAuthApiKeyId },
+  returns: v.object({ keyId: vAuthApiKeyId }),
   handler: async (ctx, args) => {
     const userId = ctx.auth.userId;
     await requireOwnedApiKey(ctx, userId, args.keyId);

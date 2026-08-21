@@ -5,6 +5,7 @@ import { api, components, internal } from "./_generated/api";
 import { httpAction } from "./_generated/server";
 import type { ActionCtx } from "./_generated/server";
 import { auth } from "./auth";
+import { vAuthGroupId, vAuthGroupMemberId, vAuthUserId } from "./auth/ids";
 
 const status = v.union(
   v.literal("backlog"),
@@ -34,13 +35,13 @@ auth.request.mcp(
     get_workspace: {
       description: "Get a workspace's members, projects, permissions, and the user's role.",
       scope: "members.read",
-      args: v.object({ groupId: v.string() }),
+      args: v.object({ groupId: vAuthGroupId }),
       handler: (ctx, a) => ctx.runQuery(api.groups.get, { groupId: a.groupId }),
     },
     list_projects: {
       description: "List the projects in a workspace.",
       scope: "projects.read",
-      args: v.object({ groupId: v.string() }),
+      args: v.object({ groupId: vAuthGroupId }),
       handler: (ctx, a) => ctx.runQuery(api.projects.list, { groupId: a.groupId }),
     },
     list_issues: {
@@ -58,13 +59,13 @@ auth.request.mcp(
     list_invites: {
       description: "List the pending member invites for a workspace.",
       scope: "members.manage",
-      args: v.object({ groupId: v.string() }),
+      args: v.object({ groupId: vAuthGroupId }),
       handler: (ctx, a) => ctx.runQuery(api.groups.listInvites, { groupId: a.groupId }),
     },
     create_project: {
       description: "Create a project in a workspace. The identifier is derived from the name.",
       scope: "projects.create",
-      args: v.object({ groupId: v.string(), name: v.string() }),
+      args: v.object({ groupId: vAuthGroupId, name: v.string() }),
       handler: (ctx, a) =>
         ctx.runMutation(api.projects.create, { groupId: a.groupId, name: a.name }),
     },
@@ -83,7 +84,7 @@ auth.request.mcp(
         title: v.optional(v.string()),
         status: v.optional(status),
         priority: v.optional(priority),
-        assigneeUserId: v.optional(v.string()),
+        assigneeUserId: v.optional(vAuthUserId),
       }),
       handler: (ctx, a) =>
         ctx.runMutation(api.issues.update, {
@@ -119,7 +120,7 @@ auth.request.mcp(
       description:
         "Invite a member to a workspace by email with a role (orgAdmin, member, viewer).",
       scope: "members.manage",
-      args: v.object({ groupId: v.string(), email: v.string(), roleId: v.string() }),
+      args: v.object({ groupId: vAuthGroupId, email: v.string(), roleId: v.string() }),
       handler: (ctx, a) =>
         ctx.runAction(api.groups.inviteMember, {
           groupId: a.groupId,
@@ -130,7 +131,11 @@ auth.request.mcp(
     update_member_role: {
       description: "Change a member's role (orgAdmin, member, viewer) in a workspace.",
       scope: "members.manage",
-      args: v.object({ groupId: v.string(), memberId: v.string(), roleId: v.string() }),
+      args: v.object({
+        groupId: vAuthGroupId,
+        memberId: vAuthGroupMemberId,
+        roleId: v.string(),
+      }),
       handler: (ctx, a) =>
         ctx.runMutation(api.groups.updateMemberRole, {
           groupId: a.groupId,

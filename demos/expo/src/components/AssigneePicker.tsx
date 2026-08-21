@@ -1,3 +1,4 @@
+import type { GenericId } from "convex/values";
 import React, { useState } from "react";
 import { View, Text, Pressable } from "react-native";
 
@@ -5,7 +6,7 @@ import { colors, spacing, fontSize, radius } from "@/src/theme";
 import { ChevronRight } from "@/src/icons";
 
 interface Member {
-  userId: string;
+  userId: GenericId<"User">;
   name: string;
 }
 
@@ -15,10 +16,10 @@ export function AssigneePicker({
   members,
   onSelect,
 }: {
-  value: string | null;
+  value: GenericId<"User"> | null;
   assigneeName: string | null;
   members: Member[];
-  onSelect: (userId: string | null) => void;
+  onSelect: (userId: GenericId<"User"> | null) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
 

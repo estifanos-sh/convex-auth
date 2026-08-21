@@ -82,6 +82,8 @@ export type {
   TotpSetupResult,
   TotpVerifyParams,
 } from "./core/types";
+export { ErrorCode, HandshakeErrorCode } from "./errors";
+export type { ErrorCodeValue, HandshakeErrorCode as HandshakeErrorCodeValue } from "./errors";
 
 const VERIFIER_STORAGE_KEY = "__convexAuthOAuthVerifier";
 const JWT_STORAGE_KEY = "__convexAuthJWT";

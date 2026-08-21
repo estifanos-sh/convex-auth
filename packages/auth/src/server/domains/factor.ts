@@ -1,5 +1,5 @@
 import type { Auth } from "convex/server";
-import { ConvexError } from "convex/values";
+import { ConvexError, type GenericId } from "convex/values";
 
 import { ErrorCode } from "../../shared/codes";
 import type { ComponentCtx, ComponentReadCtx } from "../component/context";
@@ -11,7 +11,7 @@ import type { Doc } from "../types";
 export type FactorSummary =
   | {
       kind: "webauthn";
-      id: string;
+      id: GenericId<"Passkey">;
       name: string | null;
       createdAt: number;
       lastUsedAt: number | null;
@@ -22,7 +22,7 @@ export type FactorSummary =
     }
   | {
       kind: "totp";
-      id: string;
+      id: GenericId<"TotpFactor">;
       name: string | null;
       createdAt: number;
       lastUsedAt: number | null;
@@ -36,7 +36,7 @@ type FactorWriteCtx = ComponentCtx & { auth: Auth };
 
 export type FactorDeps = { config: ReturnType<typeof configDefaults> };
 
-async function currentUserId(ctx: FactorReadCtx): Promise<string> {
+async function currentUserId(ctx: FactorReadCtx): Promise<GenericId<"User">> {
   const userId = await getSessionUserId(ctx);
   if (userId === null) {
     throw new ConvexError({
@@ -44,7 +44,7 @@ async function currentUserId(ctx: FactorReadCtx): Promise<string> {
       message: "Authentication required.",
     });
   }
-  return userId;
+  return userId as GenericId<"User">;
 }
 
 /** Build the safe, current-user factor-management surface. */
