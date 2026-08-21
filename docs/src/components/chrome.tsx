@@ -174,14 +174,17 @@ export function Chrome(props: { children: JSX.Element; landing?: boolean; withSi
               onClick={() => setMenuOpen(false)}
             />
             <nav class="drawer" id="mobile-docs-nav">
-              <button
-                aria-label="Close navigation"
-                class="icon-btn drawer-close"
-                onClick={() => setMenuOpen(false)}
-                type="button"
-              >
-                <CloseIcon />
-              </button>
+              <div class="drawer-head">
+                <strong>Documentation</strong>
+                <button
+                  aria-label="Close navigation"
+                  class="drawer-close"
+                  onClick={() => setMenuOpen(false)}
+                  type="button"
+                >
+                  <CloseIcon />
+                </button>
+              </div>
               <Sidebar current={pathname()} onNavigate={() => setMenuOpen(false)} />
             </nav>
           </div>
@@ -235,9 +238,9 @@ export function Chrome(props: { children: JSX.Element; landing?: boolean; withSi
             <Show
               when={results().length}
               fallback={
-                <Show when={query()}>
-                  <p class="search-empty">No results for “{query()}”</p>
-                </Show>
+                <p class="search-empty">
+                  {query() ? `No results for “${query()}”` : "Search guides and API reference."}
+                </p>
               }
             >
               <ol class="search-hits">

@@ -879,11 +879,40 @@ input {
 }
 
 .drawer {
-  padding: 16px 0;
+  padding: 0 0 1rem;
+}
+
+.drawer-head {
+  display: flex;
+  min-height: 4rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.625rem 1rem;
+  border-bottom: 1px solid var(--line-whisper);
+}
+
+.drawer-head strong {
+  color: var(--broadcast-ink);
+  font-size: 0.9375rem;
 }
 
 .drawer-close {
-  margin: 0 16px 12px;
+  display: grid;
+  width: 2.75rem;
+  height: 2.75rem;
+  flex: 0 0 auto;
+  border: 1px solid var(--line-standard);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--broadcast-ink);
+  cursor: pointer;
+  place-items: center;
+}
+
+.drawer-close svg {
+  width: 1.125rem;
+  height: 1.125rem;
 }
 
 .drawer .rail-group {
@@ -1191,13 +1220,17 @@ input {
   }
 
   .search-overlay {
+    overflow: hidden;
     padding: 0;
+    background: var(--studio-sheet);
     place-items: stretch;
   }
 
   .search-sheet {
+    position: absolute;
+    inset: 0;
     width: 100%;
-    height: 100dvh;
+    height: 100%;
     max-height: none;
     margin: 0;
     border: 0;
@@ -1244,6 +1277,20 @@ input {
   .search-hits a {
     gap: 0.25rem;
     padding: 1rem 1.25rem;
+  }
+
+  .search-hits small {
+    margin: 0;
+    font-size: 0.6875rem;
+  }
+
+  .search-hits strong {
+    font-size: 1rem;
+    line-height: 1.3;
+  }
+
+  .search-hits a > span {
+    display: none;
   }
 
   .search-empty {
