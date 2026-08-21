@@ -41,14 +41,14 @@ export function HomePage() {
         <section aria-labelledby="hero-title" class="home-hero">
           <div class="home-copy">
             <p class="hero-eyebrow">
-              <span>Friends of Convex</span>
-              <span>Auth</span>
+              <span>Authentication for Convex</span>
+              <span>Open source</span>
             </p>
             <h1 id="hero-title">
-              Convex-Auth
+              Convex Auth
               <span>By Estifanos</span>
             </h1>
-            <p class="hero-deck">the unofficial auth solution for convex</p>
+            <p class="hero-deck">The unofficial Convex authentication solution.</p>
             <div class="home-actions">
               <a class="cta-ghost" href="/convex-auth/getting-started/installation/">
                 Read the docs

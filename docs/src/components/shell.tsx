@@ -95,7 +95,7 @@ export function DocsShell(props: { page: DocumentationPage }) {
     <Chrome withSidebar>
       <main class="doc-pane" id="main-content">
         <div class="doc-grid">
-          <div>
+          <div class="doc-content">
             <header class="doc-hero">
               <Show when={section()}>
                 <p class="eyebrow">{section()}</p>
