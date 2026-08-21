@@ -1,19 +1,7 @@
-import { For, Show, createEffect, createMemo, on, onMount } from "solid-js";
+import { Show, createEffect, on, onMount } from "solid-js";
 import { adjacentPages, sectionFor } from "../config/sidebar";
 import type { DocumentationPage } from "../generated/docs";
 import { Chrome } from "./chrome";
-
-interface PageHeading {
-  id: string;
-  title: string;
-}
-
-function headingsFromHtml(html: string): PageHeading[] {
-  return [...html.matchAll(/<h2 id="([^"]*)"[^>]*>([\s\S]*?)<\/h2>/g)].map((match) => ({
-    id: match[1],
-    title: match[2].replace(/<[^>]+>/g, "").trim(),
-  }));
-}
 
 function mountCodeCopy(root: HTMLElement) {
   for (const pre of root.querySelectorAll<HTMLElement>("pre")) {
@@ -71,7 +59,6 @@ export function DocsShell(props: { page: DocumentationPage }) {
   let article: HTMLElement | undefined;
   const section = () => sectionFor(`/convex-auth${props.page.slug}`);
   const adjacent = () => adjacentPages(props.page.slug);
-  const headings = createMemo(() => headingsFromHtml(props.page.html));
 
   onMount(() => {
     if (article) {
@@ -131,20 +118,6 @@ export function DocsShell(props: { page: DocumentationPage }) {
               </Show>
             </nav>
           </div>
-          <Show when={headings().length}>
-            <nav aria-label="On this page" class="outline">
-              <h2>On this page</h2>
-              <ol>
-                <For each={headings()}>
-                  {(heading) => (
-                    <li>
-                      <a href={`#${heading.id}`}>{heading.title}</a>
-                    </li>
-                  )}
-                </For>
-              </ol>
-            </nav>
-          </Show>
         </div>
       </main>
     </Chrome>

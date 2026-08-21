@@ -126,10 +126,6 @@ export function Chrome(props: { children: JSX.Element; landing?: boolean; withSi
           <span class="brand-title">convex-auth</span>
         </a>
         <div class="masthead-actions">
-          <nav aria-label="Site" class="masthead-links">
-            <a href="/convex-auth/getting-started/installation/">Docs</a>
-            <a href="https://github.com/estifanos-sh/convex-auth">GitHub</a>
-          </nav>
           <button class="search-chip" onClick={openSearch} type="button">
             <SearchIcon />
             <span>Search</span>
@@ -217,9 +213,7 @@ export function Chrome(props: { children: JSX.Element; landing?: boolean; withSi
           </div>
           <nav aria-label="Footer" class="site-foot-links">
             <a href="/convex-auth/getting-started/installation/">Installation</a>
-            <a href="/convex-auth/getting-started/providers/">Providers</a>
-            <a href="/convex-auth/connection/overview/">Enterprise</a>
-            <a href="https://docs.convex.dev">Convex docs</a>
+            <a href="https://github.com/estifanos-sh/convex-auth">GitHub</a>
           </nav>
         </div>
       </footer>
@@ -284,27 +278,30 @@ export function Sidebar(props: { current: string; onNavigate?: () => void }) {
   return (
     <nav aria-label="Documentation">
       <For each={sidebar}>
-        {(group) => (
-          <section class="rail-group">
-            <h2>{group.label}</h2>
-            <ul>
-              <For each={group.items}>
-                {(item) => (
-                  <li>
-                    <a
-                      aria-current={props.current === item.slug ? "page" : undefined}
-                      classList={{ active: props.current === item.slug }}
-                      href={`/convex-auth${item.slug}/`}
-                      onClick={props.onNavigate}
-                    >
-                      {item.title}
-                    </a>
-                  </li>
-                )}
-              </For>
-            </ul>
-          </section>
-        )}
+        {(group) => {
+          const active = () => group.items.some((item) => props.current === item.slug);
+          return (
+            <details class="rail-group" open={active()}>
+              <summary>{group.label}</summary>
+              <ul>
+                <For each={group.items}>
+                  {(item) => (
+                    <li>
+                      <a
+                        aria-current={props.current === item.slug ? "page" : undefined}
+                        classList={{ active: props.current === item.slug }}
+                        href={`/convex-auth${item.slug}/`}
+                        onClick={props.onNavigate}
+                      >
+                        {item.title}
+                      </a>
+                    </li>
+                  )}
+                </For>
+              </ul>
+            </details>
+          );
+        }}
       </For>
     </nav>
   );
