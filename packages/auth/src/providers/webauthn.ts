@@ -4,7 +4,11 @@
  * @module
  */
 
-import type { WebAuthnAttestationPolicy, WebAuthnProviderConfig } from "../server/types";
+import type {
+  WebAuthnAttestationPolicy,
+  WebAuthnProviderConfig,
+  WebAuthnRotateOperation,
+} from "../server/types";
 import { fidoMds } from "./webauthn/attestation";
 
 /** WebAuthn Level 3 hints that browsers may use to guide authenticator selection. */
@@ -92,9 +96,12 @@ export interface WebAuthnConfig {
  */
 export const webauthn = Object.assign(
   function webauthn(config: WebAuthnConfig = {}): WebAuthnProviderConfig {
-    return {
+    const provider: WebAuthnProviderConfig = {
       id: "webauthn",
       type: "webauthn",
+      rotate(): WebAuthnRotateOperation {
+        return Object.freeze({ provider, operation: "rotate" });
+      },
       options: {
         rpName: config.rpName,
         rpId: config.rpId,
@@ -134,6 +141,7 @@ export const webauthn = Object.assign(
         },
       },
     };
+    return provider;
   },
   {
     /** WebAuthn attestation policies. */

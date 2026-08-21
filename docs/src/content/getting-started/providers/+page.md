@@ -15,9 +15,10 @@ description: Auth methods available in convex-auth.
 convex-auth currently ships first-party OAuth wrappers for Google, GitHub,
 Apple, and Microsoft. Each wrapper owns the provider defaults and automatically
 derives the callback URL from `CONVEX_SITE_URL` unless you override it.
-These examples assume `convex/convex.config.ts` uses `defineApp({ env:
-authEnv })` and provider setup imports generated `env` from
-`./_generated/server`.
+These examples use application-owned environment names. Declare the values in
+your own `defineApp({ env: { ...authEnv, ... } })` definition and import the
+generated `env` from `./_generated/server`. Convex Auth does not read or reserve
+provider credential names.
 
 ```ts
 import { defineAuth } from "@estifanos-sh/convex-auth/server";
@@ -42,17 +43,17 @@ import { env } from "./_generated/server";
 defineAuth(components.auth, {
   providers: [
     github({
-      clientId: env.AUTH_GITHUB_ID!,
-      clientSecret: env.AUTH_GITHUB_SECRET!,
+      clientId: env.GITHUB_CLIENT_ID,
+      clientSecret: env.GITHUB_CLIENT_SECRET,
     }),
     google({
-      clientId: env.AUTH_GOOGLE_ID!,
-      clientSecret: env.AUTH_GOOGLE_SECRET!,
+      clientId: env.GOOGLE_CLIENT_ID,
+      clientSecret: env.GOOGLE_CLIENT_SECRET,
     }),
     microsoft({
-      tenant: env.AUTH_MICROSOFT_TENANT_ID!,
-      clientId: env.AUTH_MICROSOFT_ID!,
-      clientSecret: env.AUTH_MICROSOFT_SECRET!,
+      tenant: env.MICROSOFT_TENANT_ID,
+      clientId: env.MICROSOFT_CLIENT_ID,
+      clientSecret: env.MICROSOFT_CLIENT_SECRET!,
     }),
   ],
 });
@@ -72,8 +73,8 @@ Opt out per-provider if your app owns the canonical user profile:
 
 ```ts
 google({
-  clientId: env.AUTH_GOOGLE_ID!,
-  clientSecret: env.AUTH_GOOGLE_SECRET!,
+  clientId: env.GOOGLE_CLIENT_ID,
+  clientSecret: env.GOOGLE_CLIENT_SECRET,
   updateProfileOnLogin: false, // keep user fields user-edited
 });
 ```
@@ -88,7 +89,7 @@ The flag is available on `google`, `github`, `apple`, `microsoft`, and
 - Factory:
   `google({ clientId, clientSecret, redirectUri?, scopes?, accountLinking?, updateProfileOnLogin? })`
 - Default scopes: `openid profile email`
-- Required env: `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`
+- Example app env: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`
 
 ```ts
 import { google } from "@estifanos-sh/convex-auth/providers";
@@ -96,8 +97,8 @@ import { google } from "@estifanos-sh/convex-auth/providers";
 defineAuth(components.auth, {
   providers: [
     google({
-      clientId: env.AUTH_GOOGLE_ID!,
-      clientSecret: env.AUTH_GOOGLE_SECRET!,
+      clientId: env.GOOGLE_CLIENT_ID,
+      clientSecret: env.GOOGLE_CLIENT_SECRET,
     }),
   ],
 });
@@ -111,7 +112,7 @@ Use `redirectUri` only when you need to override the default callback route.
 - Factory:
   `github({ clientId, clientSecret, redirectUri?, scopes?, accountLinking?, updateProfileOnLogin? })`
 - Default scopes: `user:email`
-- Required env: `AUTH_GITHUB_ID`, `AUTH_GITHUB_SECRET`
+- Example app env: `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`
 
 ```ts
 import { github } from "@estifanos-sh/convex-auth/providers";
@@ -119,8 +120,8 @@ import { github } from "@estifanos-sh/convex-auth/providers";
 defineAuth(components.auth, {
   providers: [
     github({
-      clientId: env.AUTH_GITHUB_ID!,
-      clientSecret: env.AUTH_GITHUB_SECRET!,
+      clientId: env.GITHUB_CLIENT_ID,
+      clientSecret: env.GITHUB_CLIENT_SECRET,
     }),
   ],
 });
@@ -134,8 +135,8 @@ The GitHub wrapper performs the profile and email fetch for you.
 - Factory:
   `apple({ clientId, teamId, keyId, privateKey, redirectUri?, scopes?, accountLinking?, updateProfileOnLogin? })`
 - Default scopes: `name email`
-- Required env: `AUTH_APPLE_ID`, `AUTH_APPLE_TEAM_ID`, `AUTH_APPLE_KEY_ID`,
-  `AUTH_APPLE_PRIVATE_KEY`
+- Example app env: `APPLE_CLIENT_ID`, `APPLE_TEAM_ID`, `APPLE_KEY_ID`,
+  `APPLE_PRIVATE_KEY`
 
 ```ts
 import { apple } from "@estifanos-sh/convex-auth/providers";
@@ -143,10 +144,10 @@ import { apple } from "@estifanos-sh/convex-auth/providers";
 defineAuth(components.auth, {
   providers: [
     apple({
-      clientId: env.AUTH_APPLE_ID!,
-      teamId: env.AUTH_APPLE_TEAM_ID!,
-      keyId: env.AUTH_APPLE_KEY_ID!,
-      privateKey: env.AUTH_APPLE_PRIVATE_KEY!,
+      clientId: env.APPLE_CLIENT_ID,
+      teamId: env.APPLE_TEAM_ID,
+      keyId: env.APPLE_KEY_ID,
+      privateKey: env.APPLE_PRIVATE_KEY,
     }),
   ],
 });
@@ -161,8 +162,8 @@ persist any extra profile fields you care about on first sign-in.
 - Factory:
   `microsoft({ tenant, clientId, clientSecret?, redirectUri?, scopes?, accountLinking?, updateProfileOnLogin? })`
 - Default scopes: `openid profile email`
-- Required env: `AUTH_MICROSOFT_TENANT_ID`, `AUTH_MICROSOFT_ID`
-- Optional env: `AUTH_MICROSOFT_SECRET`
+- Example app env: `MICROSOFT_TENANT_ID`, `MICROSOFT_CLIENT_ID`, and optionally
+  `MICROSOFT_CLIENT_SECRET`
 
 ```ts
 import { microsoft } from "@estifanos-sh/convex-auth/providers";
@@ -170,9 +171,9 @@ import { microsoft } from "@estifanos-sh/convex-auth/providers";
 defineAuth(components.auth, {
   providers: [
     microsoft({
-      tenant: env.AUTH_MICROSOFT_TENANT_ID!,
-      clientId: env.AUTH_MICROSOFT_ID!,
-      clientSecret: env.AUTH_MICROSOFT_SECRET!,
+      tenant: env.MICROSOFT_TENANT_ID,
+      clientId: env.MICROSOFT_CLIENT_ID,
+      clientSecret: env.MICROSOFT_CLIENT_SECRET!,
     }),
   ],
 });
@@ -263,29 +264,29 @@ defineAuth(components.auth, {
 });
 ```
 
-The password provider supports five flows, all single-word camelCase. Pass
-the flow name in `params.flow` when calling `signIn`:
+The password provider supports six flows, all single-word camelCase. Pass the
+flow in the second argument to `signIn`:
 
-| Flow     | Authenticated? | Required params                           | Notes                                                    |
-| -------- | -------------- | ----------------------------------------- | -------------------------------------------------------- |
-| `signUp` | No             | `email`, `password`                       | Creates a new account                                    |
-| `signIn` | No             | `email`, `password`                       | Authenticate existing user                               |
-| `reset`  | No             | `email`                                   | Sends an OTP via the configured `reset` email provider   |
-| `verify` | No             | `email`, `code`, `newPassword?`           | Verifies an OTP. With `newPassword`, completes a `reset` |
-| `change` | Yes            | `email`, `currentPassword`, `newPassword` | Authenticated change. Other sessions invalidated         |
+| Flow      | Authenticated? | Required params                           | Notes                                                  |
+| --------- | -------------- | ----------------------------------------- | ------------------------------------------------------ |
+| `signUp`  | No             | `email`, `password`                       | Creates a new account                                  |
+| `signIn`  | No             | `email`, `password`                       | Authenticate existing user                             |
+| `reset`   | No             | `email`                                   | Sends an OTP through the configured reset provider     |
+| `verify`  | No             | `email`, `code`                           | Verifies a post-signup email OTP                       |
+| `recover` | No             | `email`, `code`, `newPassword`            | Verifies a reset OTP and completes configured recovery |
+| `change`  | Yes            | `email`, `currentPassword`, `newPassword` | Authenticated change. Other sessions invalidated       |
 
-`reset` and `verify` (with `newPassword`) require a `reset` email provider in
-the config; `verify` (without `newPassword`) requires a `verify` email provider.
-The OTP scope is enforced server-side — a `reset`-issued OTP refuses to verify
-without `newPassword`, and a signup-issued OTP refuses with one.
+`reset` and `recover` require a `reset` email provider; `verify` requires a
+`verify` email provider. The OTP scope is enforced server-side, so reset and
+signup verification codes cannot be exchanged across flows.
 
 ```ts
 // Forgot password
-auth.signIn("password", { provider: "password", params: { email, flow: "reset" } });
-auth.signIn("password", { params: { email, code, newPassword, flow: "verify" } });
+await auth.signIn("password", { email, flow: "reset" });
+await auth.signIn("password", { email, code, newPassword, flow: "recover" });
 
 // Change password (authenticated)
-auth.signIn("password", { params: { email, currentPassword, newPassword, flow: "change" } });
+await auth.signIn("password", { email, currentPassword, newPassword, flow: "change" });
 ```
 
 To enable `reset` and post-signup email verification, pass an email provider:
@@ -297,6 +298,31 @@ const emailProvider = email({ from: "noreply@example.com", send: ... });
 
 password({ reset: emailProvider, verify: emailProvider });
 ```
+
+To require a replacement passkey during account recovery, reuse the configured
+WebAuthn provider and pass its typed rotation operation to `afterReset`:
+
+```ts
+import { password, webauthn } from "@estifanos-sh/convex-auth/providers";
+
+const passkeys = webauthn();
+
+defineAuth(components.auth, {
+  providers: [
+    password({
+      reset: emailProvider,
+      afterReset: passkeys.rotate(),
+    }),
+    passkeys,
+  ],
+});
+```
+
+After the reset OTP is verified, the browser automatically registers the new
+passkey. The new password remains staged until registration succeeds. That
+single completion transaction replaces the user's passkeys, revokes prior
+sessions, commits the password, and issues the final session. No restricted or
+normal session exists between OTP verification and passkey registration.
 
 ## Magic Links (Email)
 

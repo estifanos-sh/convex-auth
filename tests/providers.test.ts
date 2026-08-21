@@ -258,8 +258,26 @@ test("password() emits a credentials provider with a default scrypt crypto", () 
   expect(typeof provider.authorize).toBe("function");
   expect(typeof provider.crypto?.hashSecret).toBe("function");
   expect(typeof provider.crypto?.verifySecret).toBe("function");
-  // With neither reset nor verify configured, both extra-provider slots are undefined.
-  expect(provider.extraProviders).toEqual([undefined, undefined]);
+  expect(provider.extraProviders).toEqual([]);
+});
+
+test("password() rejects reset and recover when no reset provider is configured", async () => {
+  const provider = password();
+
+  await expect(
+    provider.authorize({ email: "user@example.com", flow: "reset" }, {} as never),
+  ).rejects.toThrow("Password reset is not enabled");
+  await expect(
+    provider.authorize(
+      {
+        email: "user@example.com",
+        code: "123456",
+        newPassword: "newpass123",
+        flow: "recover",
+      },
+      {} as never,
+    ),
+  ).rejects.toThrow("Password reset is not enabled");
 });
 
 test("password() accepts a custom id and registers reset/verify as extra providers", () => {
@@ -272,6 +290,21 @@ test("password() accepts a custom id and registers reset/verify as extra provide
   });
   expect(provider.id).toBe("pw2");
   expect(provider.extraProviders).toEqual([resetProvider, verifyProvider]);
+});
+
+test("password() registers a typed passkey rotation after reset", () => {
+  const resetProvider = email({ from: "a@b.com", send: async () => {} });
+  const passkeyProvider = webauthn();
+  const provider = password({
+    reset: resetProvider,
+    afterReset: passkeyProvider.rotate(),
+  });
+
+  expect(provider.extraProviders).toEqual([resetProvider, passkeyProvider]);
+  expect(passkeyProvider.rotate()).toEqual({
+    provider: passkeyProvider,
+    operation: "rotate",
+  });
 });
 
 test("password() lets a caller override the crypto helpers", () => {
@@ -325,6 +358,7 @@ test("phone() defaults id/type and a 20-minute maxAge", () => {
   expect(provider.maxAge).toBe(60 * 20);
   expect(provider.sendVerificationRequest).toBe(send);
   expect(typeof provider.authorize).toBe("function");
+  expect(provider).not.toHaveProperty("apiKey");
 });
 
 // ---------------------------------------------------------------------------

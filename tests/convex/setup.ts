@@ -38,20 +38,16 @@ if (!process.env.CONVEX_SITE_URL) {
   process.env.CONVEX_SITE_URL = "http://127.0.0.1:3211";
 }
 
-if (!process.env.AUTH_EMAIL) {
-  process.env.AUTH_EMAIL = "test@example.com";
-}
-
 if (!process.env.RESEND_API_KEY) {
   process.env.RESEND_API_KEY = "test-resend-api-key";
 }
 
-if (!process.env.AUTH_GOOGLE_ID) {
-  process.env.AUTH_GOOGLE_ID = "test-google-client-id";
+if (!process.env.GOOGLE_CLIENT_ID) {
+  process.env.GOOGLE_CLIENT_ID = "test-google-client-id";
 }
 
-if (!process.env.AUTH_GOOGLE_SECRET) {
-  process.env.AUTH_GOOGLE_SECRET = "test-google-client-secret";
+if (!process.env.GOOGLE_CLIENT_SECRET) {
+  process.env.GOOGLE_CLIENT_SECRET = "test-google-client-secret";
 }
 
 if (!process.env.AUTH_KEYS) {

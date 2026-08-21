@@ -1,4 +1,3 @@
-import { envOptionalString } from "./env";
 import {
   AuthProviderConfig,
   AuthProviderMaterializedConfig,
@@ -67,16 +66,7 @@ function materializeAndDefaultProviders(config_: ConvexAuthConfig) {
     allProviders.push(materializeProviderConfig(raw));
   }
 
-  const config = { ...config_, providers: allProviders };
-
-  config.providers.forEach((provider) => {
-    if (provider.type === "phone") {
-      const ID = provider.id.toUpperCase().replace(/-/g, "_");
-      provider.apiKey ??= envOptionalString(`AUTH_${ID}_KEY`);
-    }
-  });
-
-  return config;
+  return { ...config_, providers: allProviders };
 }
 
 function normalizePermissionsConfig(

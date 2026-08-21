@@ -36,11 +36,13 @@ export const vVerifyCodeAndSignInArgs = v.object({
   params: vPayloadRecord,
   provider: v.optional(v.string()),
   verifier: v.optional(v.string()),
+  createSession: v.boolean(),
   generateTokens: v.boolean(),
   allowExtraProviders: v.boolean(),
 });
 
-type MutationReturnType = null | SessionIssuance;
+type VerifiedIdentity = { userId: GenericId<"User"> };
+type MutationReturnType = null | SessionIssuance | VerifiedIdentity;
 
 export async function verifyCodeAndSignInImpl(
   ctx: MutationCtx,
@@ -168,6 +170,7 @@ async function verifyCodeAndSignInImplInner(
         userId,
         identifier,
         replaceSessionId: replaceSessionId ?? undefined,
+        createSession: args.createSession,
         generateTokens,
         sessionExpirationTime: sessionExpirationTime(config),
         refreshTokenExpirationTime: refreshTokenExpirationTime(config),
@@ -175,15 +178,20 @@ async function verifyCodeAndSignInImplInner(
     )) as
       | { status: "rejected" }
       | {
-          status: "accepted";
+          status: "verified";
+          user: CrossComponentUserDoc;
+        }
+      | {
+          status: "signedIn";
           user: CrossComponentUserDoc;
           sessionId: string;
           refreshTokenId?: string;
           replacedSessionId?: string;
         };
-    if (completed.status !== "accepted") throw new VerifyFailure("Invalid code");
+    if (completed.status === "rejected") throw new VerifyFailure("Invalid code");
 
     const typedUserId = completed.user._id as GenericId<"User">;
+    if (completed.status === "verified") return { userId: typedUserId };
     const sessionId = completed.sessionId as GenericId<"Session">;
     setActiveSpanAttributes({
       "auth.signin.result": "success",
@@ -267,10 +275,18 @@ class VerifyFailure extends Error {
  *
  * @internal
  */
-export const callVerifyCodeAndSignIn = async <DataModel extends GenericDataModel>(
+export function callVerifyCodeAndSignIn<DataModel extends GenericDataModel>(
+  ctx: GenericActionCtxWithAuthConfig<DataModel>,
+  args: Infer<typeof vVerifyCodeAndSignInArgs> & { createSession: false },
+): Promise<VerifiedIdentity | null>;
+export function callVerifyCodeAndSignIn<DataModel extends GenericDataModel>(
+  ctx: GenericActionCtxWithAuthConfig<DataModel>,
+  args: Infer<typeof vVerifyCodeAndSignInArgs> & { createSession: true },
+): Promise<SessionInfo | null>;
+export async function callVerifyCodeAndSignIn<DataModel extends GenericDataModel>(
   ctx: GenericActionCtxWithAuthConfig<DataModel>,
   args: Infer<typeof vVerifyCodeAndSignInArgs>,
-): Promise<SessionInfo | null> => {
+): Promise<SessionInfo | VerifiedIdentity | null> {
   const issuance = (await ctx.runMutation(AUTH_STORE_REF, {
     args: {
       type: "verifyCodeAndSignIn",
@@ -278,5 +294,6 @@ export const callVerifyCodeAndSignIn = async <DataModel extends GenericDataModel
     },
   })) as MutationReturnType;
   if (issuance === null) return null;
+  if (!("sessionId" in issuance)) return issuance;
   return await finalizeSessionIssuance(ctx.auth.config, issuance);
-};
+}

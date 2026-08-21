@@ -335,37 +335,7 @@ test("change password validates new password requirements", async () => {
   }).rejects.toThrow("Invalid password");
 });
 
-test("reset flow fails when reset email provider not configured", async () => {
-  const t = convexTest(schema);
-  await t.action(api.auth.signIn, {
-    provider: "password",
-    params: { email: TEST_EMAIL, password: TEST_PASSWORD, flow: "signUp" },
-  });
-
-  await expect(async () => {
-    await t.action(api.auth.signIn, {
-      provider: "password",
-      params: { email: TEST_EMAIL, flow: "reset" },
-    });
-  }).rejects.toThrow(/Password reset is not enabled/);
-});
-
-test("verify with newPassword fails when reset provider not configured", async () => {
-  const t = convexTest(schema);
-  await expect(async () => {
-    await t.action(api.auth.signIn, {
-      provider: "password",
-      params: {
-        email: TEST_EMAIL,
-        code: "123456",
-        newPassword: "newpass123",
-        flow: "verify",
-      },
-    });
-  }).rejects.toThrow(/Password reset is not enabled/);
-});
-
-test("verify without newPassword fails when verify provider not configured", async () => {
+test("verify fails when the email verification provider is not configured", async () => {
   const t = convexTest(schema);
   await expect(async () => {
     await t.action(api.auth.signIn, {
@@ -382,5 +352,5 @@ test("invalid flow name surfaces a clear error", async () => {
       provider: "password",
       params: { email: TEST_EMAIL, password: TEST_PASSWORD, flow: "bogus" },
     });
-  }).rejects.toThrow(/Missing or invalid `flow`|signUp.*signIn.*reset.*verify.*change/);
+  }).rejects.toThrow(/Missing or invalid `flow`|signUp.*signIn.*reset.*recover.*verify.*change/);
 });

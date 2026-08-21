@@ -41,6 +41,7 @@ import type * as oauth_client from "../oauth/client.js";
 import type * as oauth_code from "../oauth/code.js";
 import type * as oauth_refresh from "../oauth/refresh.js";
 import type * as session from "../session.js";
+import type * as token_continuation from "../token/continuation.js";
 import type * as token_pkce from "../token/pkce.js";
 import type * as token_refresh from "../token/refresh.js";
 import type * as token_verification from "../token/verification.js";
@@ -85,6 +86,7 @@ const fullApi: ApiFromModules<{
   "oauth/code": typeof oauth_code;
   "oauth/refresh": typeof oauth_refresh;
   session: typeof session;
+  "token/continuation": typeof token_continuation;
   "token/pkce": typeof token_pkce;
   "token/refresh": typeof token_refresh;
   "token/verification": typeof token_verification;

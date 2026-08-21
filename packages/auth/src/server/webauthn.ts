@@ -60,11 +60,14 @@ import { getAuthenticatedUserIdOrNull } from "./identity/claims";
 import { LOG_LEVELS, log } from "./log";
 import {
   consumeVerifierById,
+  mutatePasskeyBeginRotation,
   mutatePasskeyBeginAssertion,
   mutatePasskeyBeginRegistration,
   mutatePasskeyBeginSignIn,
   mutatePasskeyCompleteAssertion,
   mutatePasskeyCompleteRegistration,
+  mutatePasskeyCompleteRotation,
+  queryContinuation,
 } from "./component/factor/db";
 import {
   buildSessionIdentity,
@@ -286,7 +289,7 @@ async function verifyAndConsumeChallenge<T extends { challenge: Uint8Array }>(
   clientData: T,
   ctx: EnrichedActionCtx,
   verifierValue: string,
-): Promise<T> {
+) {
   const challengeHash = encodeBase64urlNoPadding(new Uint8Array(sha256(clientData.challenge)));
   // Read-check-delete the challenge verifier in ONE component mutation: this runs
   // in an action, so a separate `get` then `remove` let two concurrent
@@ -303,7 +306,7 @@ async function verifyAndConsumeChallenge<T extends { challenge: Uint8Array }>(
   if (!doc) {
     throw convexError(ErrorCode.PASSKEY_INVALID_CHALLENGE, "Invalid or expired passkey challenge.");
   }
-  return clientData;
+  return doc;
 }
 
 function verifyRpId<T extends { verifyRelyingPartyIdHash: (id: string) => boolean }>(
@@ -823,13 +826,13 @@ export async function handleWebAuthn(
   args: {
     params?: Record<string, unknown>;
     verifier?: string;
+    continuation?: string;
   },
 ): Promise<WebAuthnResult> {
   const params = (args.params ?? {}) as PasskeyParams;
   const dispatch = resolveWebAuthnDispatch(params);
 
   const handleRegisterVerify = async (): Promise<WebAuthnResult> => {
-    const userId = await requireAuthenticatedUserId(ctx);
     const rp = resolveRpOptions(provider);
     const verifier = requirePasskeyVerifier(args.verifier);
 
@@ -839,7 +842,26 @@ export async function handleWebAuthn(
     verifyClientDataType(clientData, ClientDataType.Create, "webauthn.create");
     verifySameOrigin(clientData);
     verifyOrigin(clientData, rp);
-    await verifyAndConsumeChallenge(clientData, ctx, verifier);
+    const challenge = await verifyAndConsumeChallenge(clientData, ctx, verifier);
+    if (challenge.continuationId !== args.continuation) {
+      throw convexError(ErrorCode.CONTINUATION_INVALID, "Invalid or expired continuation.");
+    }
+    let continuationId: string | undefined;
+    let userId: string;
+    if (challenge.continuationId !== undefined) {
+      const continuation = await queryContinuation(ctx, challenge.continuationId);
+      if (
+        continuation === null ||
+        continuation.provider !== provider.id ||
+        continuation.operation !== "rotate"
+      ) {
+        throw convexError(ErrorCode.CONTINUATION_INVALID, "Invalid or expired continuation.");
+      }
+      continuationId = continuation._id;
+      userId = continuation.userId;
+    } else {
+      userId = await requireAuthenticatedUserId(ctx);
+    }
 
     const encodedAttestationObject = requireStringParam(
       params.attestationObject,
@@ -915,10 +937,9 @@ export async function handleWebAuthn(
       }
     }
 
-    const replaceSessionId = (await getAuthSessionId(ctx)) ?? undefined;
     let completed;
     try {
-      completed = await mutatePasskeyCompleteRegistration(ctx, {
+      const registrationData = {
         userId,
         credentialId,
         publicKey: publicKeyBytes.buffer.slice(
@@ -933,11 +954,38 @@ export async function handleWebAuthn(
         name: params.passkeyName,
         ...(attestationEvidence ? { attestation: attestationEvidence } : {}),
         createdAt: Date.now(),
-        replaceSessionId,
         sessionExpirationTime: sessionExpirationTime(ctx.auth.config),
         refreshTokenExpirationTime: refreshTokenExpirationTime(ctx.auth.config),
-      });
+      };
+      if (continuationId === undefined) {
+        completed = await mutatePasskeyCompleteRegistration(ctx, {
+          ...registrationData,
+          replaceSessionId: (await getAuthSessionId(ctx)) ?? undefined,
+        });
+      } else {
+        const rotation = await mutatePasskeyCompleteRotation(ctx, {
+          ...registrationData,
+          continuationId,
+          provider: provider.id,
+        });
+        if (rotation.status === "rejected") {
+          throw convexError(ErrorCode.CONTINUATION_INVALID, "Invalid or expired continuation.");
+        }
+        completed = rotation;
+      }
       const passkeyId = completed.passkeyId as GenericId<"Passkey">;
+      if ("removedPasskeyIds" in completed) {
+        for (const removedPasskeyId of completed.removedPasskeyIds) {
+          await queueAuthEvent(ctx, ctx.auth.config, {
+            kind: "passkey.removed",
+            actor: { type: "user", id: userId },
+            subject: { type: "passkey", id: removedPasskeyId },
+            targets: [{ kind: "user", id: userId }],
+            outcome: "success",
+            data: { passkeyId: removedPasskeyId },
+          });
+        }
+      }
       await queueAuthEvent(ctx, ctx.auth.config, {
         kind: "passkey.added",
         actor: { type: "user", id: userId },
@@ -946,6 +994,16 @@ export async function handleWebAuthn(
         outcome: "success",
         data: { passkeyId, credentialId },
       });
+      if ("passwordChanged" in completed && completed.passwordChanged) {
+        await queueAuthEvent(ctx, ctx.auth.config, {
+          kind: "password.changed",
+          actor: { type: "user", id: userId },
+          subject: { type: "user", id: userId },
+          targets: [{ kind: "user", id: userId }],
+          outcome: "success",
+          data: { flow: "reset" },
+        });
+      }
     } catch (err) {
       logPasskeyError(err);
       // Preserve structured failures (e.g. the credentialId-uniqueness guard in
@@ -967,7 +1025,7 @@ export async function handleWebAuthn(
         completed.user.email,
       ),
     });
-    if (completed.replacedSessionId !== undefined) {
+    if ("replacedSessionId" in completed && completed.replacedSessionId !== undefined) {
       const replacedSessionId = completed.replacedSessionId as GenericId<"Session">;
       await queueAuthEvent(ctx, ctx.auth.config, {
         kind: "session.invalidated",
@@ -1154,22 +1212,36 @@ export async function handleWebAuthn(
 
   const flowHandlers: Record<WebAuthnFlow, () => Promise<WebAuthnResult>> = {
     register: async () => {
-      const userId = await requireAuthenticatedUserId(ctx);
       const rp = resolveRpOptions(provider);
 
       const challenge = new Uint8Array(32);
       crypto.getRandomValues(challenge);
       const challengeHash = encodeBase64urlNoPadding(new Uint8Array(sha256(challenge)));
 
-      const sessionId = (await getAuthSessionId(ctx)) ?? undefined;
       let registration;
+      let userId: string;
       try {
-        registration = await mutatePasskeyBeginRegistration(ctx, {
-          userId,
-          sessionId,
-          signature: challengeHash,
-          expirationTime: Date.now() + rp.challengeExpirationMs,
-        });
+        if (args.continuation === undefined) {
+          userId = await requireAuthenticatedUserId(ctx);
+          registration = await mutatePasskeyBeginRegistration(ctx, {
+            userId,
+            sessionId: (await getAuthSessionId(ctx)) ?? undefined,
+            signature: challengeHash,
+            expirationTime: Date.now() + rp.challengeExpirationMs,
+          });
+        } else {
+          const rotation = await mutatePasskeyBeginRotation(ctx, {
+            continuationId: args.continuation,
+            provider: provider.id,
+            signature: challengeHash,
+            expirationTime: Date.now() + rp.challengeExpirationMs,
+          });
+          if (rotation.status === "rejected") {
+            throw convexError(ErrorCode.CONTINUATION_INVALID, "Invalid or expired continuation.");
+          }
+          userId = rotation.userId;
+          registration = rotation;
+        }
       } catch (err) {
         logPasskeyError(err);
         throw convexError(ErrorCode.INTERNAL_ERROR, "An unexpected error occurred.");
@@ -1178,7 +1250,7 @@ export async function handleWebAuthn(
       const userName = params.userName ?? user?.email ?? "user";
       const userDisplayName = params.userDisplayName ?? user?.name ?? userName;
       const existing = registration.credentials;
-      if (existing.length >= MAX_WEBAUTHN_CREDENTIALS_PER_USER) {
+      if (args.continuation === undefined && existing.length >= MAX_WEBAUTHN_CREDENTIALS_PER_USER) {
         throw convexError(
           ErrorCode.INVALID_PARAMETERS,
           `A user can register at most ${MAX_WEBAUTHN_CREDENTIALS_PER_USER} WebAuthn credentials.`,
@@ -1221,6 +1293,12 @@ export async function handleWebAuthn(
           excludeCredentials,
         },
         verifier: registration.verifierId,
+        ...(args.continuation === undefined
+          ? {}
+          : {
+              continuation: args.continuation,
+              operation: "rotate" as const,
+            }),
       };
     },
 

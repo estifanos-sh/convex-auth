@@ -130,6 +130,7 @@ export async function signInImpl(
     accountId?: GenericId<"Account">;
     params?: SignInParams;
     verifier?: string;
+    continuation?: string;
     refreshToken?: string;
     calledBy?: string;
   },
@@ -168,6 +169,7 @@ export async function signInImpl(
           const result = await callVerifyCodeAndSignIn(ctx, {
             params: args.params as SignInParams,
             verifier: args.verifier,
+            createSession: true,
             generateTokens: true,
             allowExtraProviders: options.allowExtraProviders,
           });
@@ -231,6 +233,7 @@ async function handleEmailAndPhoneProvider(
         result = await callVerifyCodeAndSignIn(ctx, {
           params: args.params as SignInParams,
           provider: provider.id,
+          createSession: true,
           generateTokens: options.generateTokens,
           allowExtraProviders: options.allowExtraProviders,
         });
@@ -475,6 +478,7 @@ async function handleOAuthProvider(
         result = await callVerifyCodeAndSignIn(ctx, {
           params: args.params as SignInParams,
           verifier: args.verifier,
+          createSession: true,
           generateTokens: true,
           allowExtraProviders: options.allowExtraProviders,
         });

@@ -31,6 +31,7 @@ import type {
 } from "@estifanos-sh/convex-auth/client/core/types";
 import type { AuthTokens } from "@estifanos-sh/convex-auth/shared/results";
 import { ErrorCode } from "@estifanos-sh/convex-auth/client/errors";
+import { createWebAuthnClientCore } from "@estifanos-sh/convex-auth/client/factors/webauthn";
 import { expect, test } from "vite-plus/test";
 
 /** Build a branded {@link AuthTokens} pair for a mocked `signedIn` result. */
@@ -184,6 +185,68 @@ test("totp.verify surfaces a typed failed result when the code is rejected", asy
   expect(result).toEqual({ kind: "failed", code: ErrorCode.TOTP_INVALID_CODE });
   // A failed verify must not flip the client to signed in.
   expect(auth.getSnapshot()).toEqual({ status: "signedOut", token: null });
+});
+
+test("password recovery automatically completes the returned passkey rotation", async () => {
+  const calls: Array<Record<string, unknown>> = [];
+  const { convex } = mockConvex(
+    async (_ref, args) => {
+      calls.push(args as Record<string, unknown>);
+      if (calls.length === 1) {
+        return {
+          kind: "webauthnOptions",
+          options: { challenge: "challenge" },
+          verifier: "verifier",
+          continuation: "continuation",
+          operation: "rotate",
+        } satisfies SignInActionResult;
+      }
+      return {
+        kind: "signedIn",
+        session: session("recovered.jwt", "recovered.refresh"),
+      } satisfies SignInActionResult;
+    },
+    { autoConfirm: true },
+  );
+  const api: AuthApiRefs<true, false, false> = {
+    signIn: "auth:signIn" as never,
+    signOut: "auth:signOut" as never,
+    _capabilities: { webauthn: true, totp: false, device: false },
+  };
+  const auth = client({
+    convex,
+    api,
+    url: MOCK_URL,
+    token: null,
+    adapterFactories: {
+      webauthn: (deps) =>
+        createWebAuthnClientCore(deps, {
+          isSupported: () => true,
+          isAutofillSupported: async () => false,
+          register: async () => ({
+            flow: "verify",
+            credentialId: "replacement-credential",
+          }),
+          signIn: async () => ({}),
+        }),
+    },
+  });
+
+  const result = await auth.signIn("password", {
+    flow: "recover",
+    email: "recovery@example.com",
+    code: "123456",
+    newPassword: "new-password",
+  });
+
+  expect(result).toEqual({ kind: "signedIn" });
+  expect(calls).toHaveLength(2);
+  expect(calls[1]).toMatchObject({
+    provider: "webauthn",
+    verifier: "verifier",
+    continuation: "continuation",
+    params: { flow: "verify", credentialId: "replacement-credential" },
+  });
 });
 
 test("signOut clears persisted tokens and returns to signedOut", async () => {

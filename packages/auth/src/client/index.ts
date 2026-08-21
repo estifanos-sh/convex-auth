@@ -969,6 +969,13 @@ export function client<Api extends AuthApiRefs<boolean, boolean, boolean> = Auth
         } satisfies SignInResult;
       }
 
+      if (result.kind === "webauthnOptions" && "operation" in result) {
+        if (!webauthnAdapter) {
+          throw new Error("This client does not support WebAuthn continuations.");
+        }
+        return await webauthnAdapter.completeRegistration(result);
+      }
+
       if (result.kind === "signedIn") {
         const signingIn = await setTokenAndMaybeWait(
           resultOptions.shouldStore

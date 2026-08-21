@@ -2734,6 +2734,25 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         },
         Name
       >;
+      beginRotation: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          continuationId: string;
+          expirationTime: number;
+          provider: string;
+          signature: string;
+        },
+        | { status: "rejected" }
+        | {
+            credentials: Array<{ id: string; transports?: Array<string> }>;
+            status: "accepted";
+            user: { email?: string; name?: string };
+            userId: string;
+            verifierId: string;
+          },
+        Name
+      >;
       beginSignIn: FunctionReference<
         "mutation",
         "internal",
@@ -2832,6 +2851,60 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
             phoneVerificationTime?: number;
           };
         },
+        Name
+      >;
+      completeRotation: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          algorithm: number;
+          attestation?: {
+            aaguid: string;
+            format: string;
+            metadataDescription?: string;
+            status: "trusted";
+            verifiedAt: number;
+            verifier: string;
+          };
+          backedUp: boolean;
+          continuationId: string;
+          counter: number;
+          createdAt: number;
+          credentialId: string;
+          deviceType: string;
+          name?: string;
+          provider: string;
+          publicKey: ArrayBuffer;
+          refreshTokenExpirationTime: number;
+          sessionExpirationTime: number;
+          transports?: Array<string>;
+          userId: string;
+        },
+        | { status: "rejected" }
+        | {
+            passkeyId: string;
+            passwordChanged: boolean;
+            refreshTokenId: string;
+            removedPasskeyIds: Array<string>;
+            revokedSessions: number;
+            sessionId: string;
+            status: "accepted";
+            user: {
+              _creationTime: number;
+              _id: string;
+              email?: string;
+              emailVerificationTime?: number;
+              extend?: any;
+              firstName?: string;
+              image?: string;
+              isAnonymous?: boolean;
+              lastActiveGroup?: string;
+              lastName?: string;
+              name?: string;
+              phone?: string;
+              phoneVerificationTime?: number;
+            };
+          },
         Name
       >;
       create: FunctionReference<
@@ -4020,6 +4093,48 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
     >;
   };
   token: {
+    continuation: {
+      create: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          expirationTime: number;
+          operation: "rotate";
+          provider: string;
+          userId: string;
+        },
+        string,
+        Name
+      >;
+      createPasswordReset: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          accountId: string;
+          expirationTime: number;
+          operation: "rotate";
+          provider: string;
+          secret: string;
+          userId: string;
+        },
+        string,
+        Name
+      >;
+      get: FunctionReference<
+        "query",
+        "internal",
+        { id: string },
+        {
+          _creationTime: number;
+          _id: string;
+          expirationTime: number;
+          operation: "rotate";
+          provider: string;
+          userId: string;
+        } | null,
+        Name
+      >;
+    };
     pkce: {
       consume: FunctionReference<
         "mutation",
@@ -4028,6 +4143,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         {
           _creationTime: number;
           _id: string;
+          continuationId?: string;
           expirationTime?: number;
           sessionId?: string;
           signature?: string;
@@ -4037,7 +4153,12 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       create: FunctionReference<
         "mutation",
         "internal",
-        { expirationTime?: number; sessionId?: string; signature?: string },
+        {
+          continuationId?: string;
+          expirationTime?: number;
+          sessionId?: string;
+          signature?: string;
+        },
         string,
         Name
       >;
@@ -4048,6 +4169,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         {
           _creationTime: number;
           _id: string;
+          continuationId?: string;
           expirationTime?: number;
           sessionId?: string;
           signature?: string;
@@ -4061,6 +4183,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         {
           id: string;
           patch: {
+            continuationId?: string;
             expirationTime?: number;
             sessionId?: string;
             signature?: string;
@@ -4203,6 +4326,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         "internal",
         {
           codeId: string;
+          createSession: boolean;
           generateTokens: boolean;
           identifier?: string;
           refreshTokenExpirationTime: number;
@@ -4212,10 +4336,28 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         },
         | { status: "rejected" }
         | {
+            status: "verified";
+            user: {
+              _creationTime: number;
+              _id: string;
+              email?: string;
+              emailVerificationTime?: number;
+              extend?: any;
+              firstName?: string;
+              image?: string;
+              isAnonymous?: boolean;
+              lastActiveGroup?: string;
+              lastName?: string;
+              name?: string;
+              phone?: string;
+              phoneVerificationTime?: number;
+            };
+          }
+        | {
             refreshTokenId?: string;
             replacedSessionId?: string;
             sessionId: string;
-            status: "accepted";
+            status: "signedIn";
             user: {
               _creationTime: number;
               _id: string;

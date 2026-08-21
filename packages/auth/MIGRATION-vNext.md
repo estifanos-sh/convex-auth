@@ -135,16 +135,23 @@ const pending = await auth.invite.list(ctx, {
 
 ## Typed Convex env
 
-Import `authEnv` into your app definition and read generated env values from
-`convex/_generated/server`.
+Import `authEnv` into your app definition and extend it with application-owned
+provider or delivery settings. Convex Auth does not prescribe those names.
 
 ```ts
 // convex/convex.config.ts
 import { defineApp } from "convex/server";
+import { v } from "convex/values";
 import { authEnv } from "@estifanos-sh/convex-auth/server";
 import auth from "@estifanos-sh/convex-auth/convex.config";
 
-const app = defineApp({ env: authEnv });
+const app = defineApp({
+  env: {
+    ...authEnv,
+    GITHUB_CLIENT_ID: v.string(),
+    GITHUB_CLIENT_SECRET: v.string(),
+  },
+});
 app.use(auth, { name: "auth" });
 
 export default app;
@@ -154,6 +161,10 @@ export default app;
 import { env } from "./_generated/server";
 
 const appUrl = env.APP_URL;
+const github = {
+  clientId: env.GITHUB_CLIENT_ID,
+  clientSecret: env.GITHUB_CLIENT_SECRET,
+};
 ```
 
 ## Connection (SSO) admin APIs

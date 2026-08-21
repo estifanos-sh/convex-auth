@@ -5,9 +5,9 @@
  * import { microsoft } from "@estifanos-sh/convex-auth/providers/microsoft";
  *
  * microsoft({
- *   tenant: env.AUTH_MICROSOFT_TENANT_ID!,
- *   clientId: env.AUTH_MICROSOFT_ID!,
- *   clientSecret: env.AUTH_MICROSOFT_SECRET!,
+ *   tenant: env.MICROSOFT_TENANT_ID,
+ *   clientId: env.MICROSOFT_CLIENT_ID,
+ *   clientSecret: env.MICROSOFT_CLIENT_SECRET,
  * })
  * ```
  *
@@ -54,9 +54,9 @@ export interface MicrosoftConfig {
  * import { microsoft } from "@estifanos-sh/convex-auth/providers/microsoft";
  *
  * microsoft({
- *   tenant: env.AUTH_MICROSOFT_TENANT_ID!,
- *   clientId: env.AUTH_MICROSOFT_ID!,
- *   clientSecret: env.AUTH_MICROSOFT_SECRET!,
+ *   tenant: env.MICROSOFT_TENANT_ID,
+ *   clientId: env.MICROSOFT_CLIENT_ID,
+ *   clientSecret: env.MICROSOFT_CLIENT_SECRET,
  * })
  * ```
  */

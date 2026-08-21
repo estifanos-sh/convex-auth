@@ -2,7 +2,11 @@ import type { FunctionReference } from "convex/server";
 import type { ConvexError, Value } from "convex/values";
 
 import type { AccessToken } from "../../shared/brand";
-import type { AuthTokens, SignInFlowResult } from "../../shared/results";
+import type {
+  AuthTokens,
+  SignInFlowResult,
+  SignInWebAuthnOptionsResult,
+} from "../../shared/results";
 import type { ErrorCode } from "../../shared/codes";
 
 /**
@@ -144,6 +148,9 @@ export interface ClientAdapterFactories {
 
 /** @internal */
 export type SignInActionResult = SignInFlowResult<AuthTokens | null>;
+
+/** @internal */
+export type WebAuthnRotationResult = Extract<SignInWebAuthnOptionsResult, { operation: "rotate" }>;
 
 /**
  * Device authorization payload returned from the `deviceCode` sign-in flow.
@@ -291,6 +298,9 @@ export interface WebAuthnClient {
    * ```
    */
   register(opts?: WebAuthnRegisterOptions): Promise<SignInResult>;
+
+  /** @internal Complete registration options returned by a provider continuation. */
+  completeRegistration(result: WebAuthnRotationResult): Promise<SignInResult>;
 
   /**
    * Sign in with an existing passkey and complete the WebAuthn ceremony.
@@ -524,22 +534,16 @@ export interface PendingInvite {
 /**
  * Discriminated union of params for the password provider's flows.
  *
- * Each branch maps to one of the five password flows: `signUp`, `signIn`,
- * `reset`, `verify`, `change`. Selecting a `flow` literal narrows the
+ * Each branch maps to one of the six password flows: `signUp`, `signIn`,
+ * `reset`, `recover`, `verify`, `change`. Selecting a `flow` literal narrows the
  * accepted params automatically.
  */
 export type PasswordParams =
   | { flow: "signUp"; email: string; password: string; redirectTo?: string }
   | { flow: "signIn"; email: string; password: string; redirectTo?: string }
   | { flow: "reset"; email: string; redirectTo?: string }
-  | {
-      flow: "verify";
-      email: string;
-      code: string;
-      /** When set, completes a `reset` flow by updating the password. Otherwise confirms email. */
-      newPassword?: string;
-      redirectTo?: string;
-    }
+  | { flow: "recover"; email: string; code: string; newPassword: string; redirectTo?: string }
+  | { flow: "verify"; email: string; code: string; redirectTo?: string }
   | {
       flow: "change";
       email: string;
@@ -553,8 +557,8 @@ export type EmailInitiateParams = { email: string; redirectTo?: string };
 
 /**
  * Params for completing a code-based flow (no provider). Used to finalise
- * email magic-link sign-ins and password-reset OTPs when the verification
- * call is made without re-specifying the originating provider.
+ * email magic-link sign-ins and other provider-owned code flows when the
+ * verification call is made without re-specifying the originating provider.
  */
 export type CodeCompletionParams = { code: string; redirectTo?: string };
 

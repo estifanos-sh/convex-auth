@@ -16,7 +16,7 @@ import type { Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
 import { mutation, query } from "../functions";
 import { vPasskeyDoc, vUserDoc } from "../model";
-import { createSessionRows } from "../session";
+import { createSessionRows, revokeSessionRows } from "../session";
 
 const PASSKEY_LIST_BATCH = 128;
 const DEFAULT_VERIFIER_TTL_MS = 15 * 60 * 1000;
@@ -47,13 +47,17 @@ const vPasskeyCreateArgs = v.object({
 async function createVerifier(
   ctx: MutationCtx,
   args: {
-    sessionId?: Id<"Session">;
     signature: string;
     expirationTime?: number;
-  },
+  } & (
+    | { binding: "session"; sessionId?: Id<"Session"> }
+    | { binding: "continuation"; continuationId: Id<"AuthContinuation"> }
+  ),
 ) {
   return await ctx.db.insert("AuthVerifier", {
-    sessionId: args.sessionId,
+    ...(args.binding === "session"
+      ? { sessionId: args.sessionId }
+      : { continuationId: args.continuationId }),
     signature: args.signature,
     expirationTime: args.expirationTime ?? Date.now() + DEFAULT_VERIFIER_TTL_MS,
   });
@@ -95,7 +99,7 @@ export const beginRegistration = mutation({
     if (user === null) {
       throw new Error(`Cannot register a passkey for missing user ${args.userId}`);
     }
-    const verifierId = await createVerifier(ctx, args);
+    const verifierId = await createVerifier(ctx, { ...args, binding: "session" });
     return {
       verifierId,
       user: {
@@ -105,6 +109,67 @@ export const beginRegistration = mutation({
       credentials: passkeys.map((passkey) => ({
         id: passkey.credentialId,
         ...(passkey.transports === undefined ? {} : { transports: passkey.transports }),
+      })),
+    };
+  },
+});
+
+/** Create a registration challenge from an unexpired rotation continuation. */
+export const beginRotation = mutation({
+  args: {
+    continuationId: v.id("AuthContinuation"),
+    provider: v.string(),
+    signature: v.string(),
+    expirationTime: v.number(),
+  },
+  returns: v.union(
+    v.object({ status: v.literal("rejected") }),
+    v.object({
+      status: v.literal("accepted"),
+      userId: v.id("User"),
+      verifierId: v.id("AuthVerifier"),
+      user: v.object({
+        email: v.optional(v.string()),
+        name: v.optional(v.string()),
+      }),
+      credentials: v.array(
+        v.object({
+          id: v.string(),
+          transports: v.optional(v.array(v.string())),
+        }),
+      ),
+    }),
+  ),
+  handler: async (ctx, args) => {
+    const continuation = await ctx.db.get("AuthContinuation", args.continuationId);
+    if (
+      continuation === null ||
+      continuation.expirationTime < Date.now() ||
+      continuation.provider !== args.provider ||
+      continuation.operation !== "rotate"
+    ) {
+      return { status: "rejected" as const };
+    }
+    const user = await ctx.db.get("User", continuation.userId);
+    if (user === null) return { status: "rejected" as const };
+    const credentials = await listPasskeys(ctx, user._id);
+    const verifierId = await createVerifier(ctx, {
+      binding: "continuation",
+      continuationId: continuation._id,
+      signature: args.signature,
+      expirationTime: Math.min(args.expirationTime, continuation.expirationTime),
+    });
+    return {
+      status: "accepted" as const,
+      userId: user._id,
+      verifierId,
+      user: {
+        ...(user.email === undefined ? {} : { email: user.email }),
+        ...(user.name === undefined ? {} : { name: user.name }),
+      },
+      credentials: credentials.map((credential) => ({
+        id: credential.credentialId,
+        ...(credential.transports === undefined ? {} : { transports: credential.transports }),
       })),
     };
   },
@@ -142,7 +207,7 @@ export const beginSignIn = mutation({
         passkeys = await listPasskeys(ctx, user._id);
       }
     }
-    const verifierId = await createVerifier(ctx, args);
+    const verifierId = await createVerifier(ctx, { ...args, binding: "session" });
     return {
       verifierId,
       credentials: passkeys.map((passkey) => ({
@@ -373,6 +438,95 @@ export const completeRegistration = mutation({
       ...(created.replacedSessionId === undefined
         ? {}
         : { replacedSessionId: created.replacedSessionId }),
+    };
+  },
+});
+
+/** Rotate a user's passkeys, revoke prior sessions, and create the final session. */
+export const completeRotation = mutation({
+  args: {
+    ...vPasskeyCreateArgs.fields,
+    continuationId: v.id("AuthContinuation"),
+    provider: v.string(),
+    sessionExpirationTime: v.number(),
+    refreshTokenExpirationTime: v.number(),
+  },
+  returns: v.union(
+    v.object({ status: v.literal("rejected") }),
+    v.object({
+      status: v.literal("accepted"),
+      passkeyId: v.id("Passkey"),
+      user: vUserDoc,
+      sessionId: v.id("Session"),
+      refreshTokenId: v.id("RefreshToken"),
+      removedPasskeyIds: v.array(v.id("Passkey")),
+      revokedSessions: v.number(),
+      passwordChanged: v.boolean(),
+    }),
+  ),
+  handler: async (ctx, args) => {
+    const continuation = await ctx.db.get("AuthContinuation", args.continuationId);
+    if (
+      continuation === null ||
+      continuation.expirationTime < Date.now() ||
+      continuation.userId !== args.userId ||
+      continuation.provider !== args.provider ||
+      continuation.operation !== "rotate"
+    ) {
+      return { status: "rejected" as const };
+    }
+
+    const oldPasskeys = await listPasskeys(ctx, continuation.userId);
+    for (const passkey of oldPasskeys) await ctx.db.delete("Passkey", passkey._id);
+    for (const accountProvider of ["passkey", "webauthn"]) {
+      const accounts = await ctx.db
+        .query("Account")
+        .withIndex("user_id_provider", (q) =>
+          q.eq("userId", continuation.userId).eq("provider", accountProvider),
+        )
+        .take(PASSKEY_LIST_BATCH);
+      for (const account of accounts) await ctx.db.delete("Account", account._id);
+    }
+
+    const {
+      continuationId,
+      provider: _provider,
+      sessionExpirationTime,
+      refreshTokenExpirationTime,
+      ...data
+    } = args;
+    const passkeyId = await createPasskey(ctx, data);
+    const revokedSessions = await revokeSessionRows(ctx, continuation.userId);
+    const passwordReset = await ctx.db
+      .query("PasswordReset")
+      .withIndex("continuation_id", (q) => q.eq("continuationId", continuationId))
+      .unique();
+    if (passwordReset !== null) {
+      const account = await ctx.db.get("Account", passwordReset.accountId);
+      if (account === null || account.userId !== continuation.userId) {
+        throw new Error("Password reset account no longer belongs to the continuation user.");
+      }
+      await ctx.db.patch("Account", account._id, { secret: passwordReset.secret });
+      await ctx.db.delete("PasswordReset", passwordReset._id);
+    }
+    await ctx.db.delete("AuthContinuation", continuationId);
+    const created = await createSessionRows(ctx, {
+      userId: continuation.userId,
+      sessionExpirationTime,
+      refreshTokenExpirationTime,
+    });
+    if (created === null || created.refreshTokenId === undefined) {
+      throw new Error("Cannot create a session for the rotated passkey");
+    }
+    return {
+      status: "accepted" as const,
+      passkeyId,
+      user: created.user,
+      sessionId: created.sessionId,
+      refreshTokenId: created.refreshTokenId,
+      removedPasskeyIds: oldPasskeys.map((passkey) => passkey._id),
+      revokedSessions,
+      passwordChanged: passwordReset !== null,
     };
   },
 });

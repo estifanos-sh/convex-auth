@@ -78,6 +78,7 @@ export const completeVerification = mutation({
     userId: v.id("User"),
     identifier: v.optional(v.string()),
     replaceSessionId: v.optional(v.id("Session")),
+    createSession: v.boolean(),
     generateTokens: v.boolean(),
     sessionExpirationTime: v.number(),
     refreshTokenExpirationTime: v.number(),
@@ -85,7 +86,11 @@ export const completeVerification = mutation({
   returns: v.union(
     v.object({ status: v.literal("rejected") }),
     v.object({
-      status: v.literal("accepted"),
+      status: v.literal("verified"),
+      user: vUserDoc,
+    }),
+    v.object({
+      status: v.literal("signedIn"),
       user: vUserDoc,
       sessionId: v.id("Session"),
       refreshTokenId: v.optional(v.id("RefreshToken")),
@@ -100,6 +105,12 @@ export const completeVerification = mutation({
     const limitKeys = new Set([`accountId:${code.accountId}`]);
     if (args.identifier !== undefined) limitKeys.add(args.identifier);
     for (const key of limitKeys) await resetSignInLimit(ctx, key);
+    if (!args.createSession) {
+      const user = await ctx.db.get("User", args.userId);
+      return user === null
+        ? { status: "rejected" as const }
+        : { status: "verified" as const, user };
+    }
     const created = await createSessionRows(ctx, {
       userId: args.userId,
       replaceSessionId: args.replaceSessionId,
@@ -108,7 +119,7 @@ export const completeVerification = mutation({
     });
     if (created === null) return { status: "rejected" as const };
     return {
-      status: "accepted" as const,
+      status: "signedIn" as const,
       user: created.user,
       sessionId: created.sessionId,
       ...(created.refreshTokenId === undefined ? {} : { refreshTokenId: created.refreshTokenId }),

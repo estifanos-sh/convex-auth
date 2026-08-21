@@ -70,6 +70,11 @@ code→token), `accept` (consume a one-time token — invites, OAuth codes),
 delivery), `provision` (atomically materialize an externally managed identity),
 `resolve` (explicitly traverse relationships), `reset` (clear a stored
 preference so its documented fallback applies),
+`rotate` (replace security credentials and revoke their predecessors as one
+security operation), `continue` (hand an identity proven by one provider to a
+typed operation owned by another provider without issuing an intermediate
+session), `recover` (regain account access by proving a recovery channel and
+replacing the compromised credentials),
 `promote` (raise one item in a set to a privileged role, e.g.
 `user.email.promote` making a verified address primary). Add to this list when
 introduced. **Not verbs** (cut from the
@@ -143,6 +148,17 @@ inside the handler. Component calls look like `ctx.runQuery(component.user.get,
 
 Don't accept positional args in public APIs (always use object args after `ctx`).
 Don't use `args.opts` / `args.input` envelopes — flat args only.
+
+Provider operations are typed values produced by provider methods, for example
+`passkeys.rotate()`. Do not model them with caller-authored `flow`, `mode`, or
+`purpose` strings. A provider continuation takes `{ userId, operation }`; the
+operation carries its provider binding. Continuations are short-lived,
+single-use authorization tickets and never issue an intermediate session.
+
+Optional fields must represent an independently valid omission. Mutually
+dependent fields belong in a discriminated union or a required operation
+object; do not use a collection of optional fields and validate the meaningful
+combinations only at runtime.
 
 ---
 

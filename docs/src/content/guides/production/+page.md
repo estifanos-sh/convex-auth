@@ -40,20 +40,20 @@ description: Deploy convex-auth to production.
 <Tabs syncKey="pkg">
   <TabItem label="pnpm">
 
-`pnpm exec convex env set --prod AUTH_GITHUB_ID "..."` then
-`pnpm exec convex env set --prod AUTH_GITHUB_SECRET "..."`
+`pnpm exec convex env set --prod GITHUB_CLIENT_ID "..."` then
+`pnpm exec convex env set --prod GITHUB_CLIENT_SECRET "..."`
 
   </TabItem>
   <TabItem label="npm">
 
-`npx convex env set --prod AUTH_GITHUB_ID "..."` then
-`npx convex env set --prod AUTH_GITHUB_SECRET "..."`
+`npx convex env set --prod GITHUB_CLIENT_ID "..."` then
+`npx convex env set --prod GITHUB_CLIENT_SECRET "..."`
 
   </TabItem>
   <TabItem label="yarn">
 
-`yarn convex env set --prod AUTH_GITHUB_ID "..."` then
-`yarn convex env set --prod AUTH_GITHUB_SECRET "..."`
+`yarn convex env set --prod GITHUB_CLIENT_ID "..."` then
+`yarn convex env set --prod GITHUB_CLIENT_SECRET "..."`
 
   </TabItem>
 </Tabs>

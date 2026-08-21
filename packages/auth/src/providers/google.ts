@@ -5,8 +5,8 @@
  * import { google } from "@estifanos-sh/convex-auth/providers/google";
  *
  * google({
- *   clientId: env.AUTH_GOOGLE_ID!,
- *   clientSecret: env.AUTH_GOOGLE_SECRET!,
+ *   clientId: env.GOOGLE_CLIENT_ID,
+ *   clientSecret: env.GOOGLE_CLIENT_SECRET,
  * })
  * ```
  *
@@ -51,8 +51,8 @@ export interface GoogleConfig {
  * import { google } from "@estifanos-sh/convex-auth/providers/google";
  *
  * google({
- *   clientId: env.AUTH_GOOGLE_ID!,
- *   clientSecret: env.AUTH_GOOGLE_SECRET!,
+ *   clientId: env.GOOGLE_CLIENT_ID,
+ *   clientSecret: env.GOOGLE_CLIENT_SECRET,
  * })
  * ```
  */

@@ -20,6 +20,7 @@ const modules: Record<string, () => Promise<unknown>> = {
   "./component/account.ts": () => import("./account"),
   "./component/session.ts": () => import("./session"),
   "./component/token/refresh.ts": () => import("./token/refresh"),
+  "./component/token/continuation.ts": () => import("./token/continuation"),
   "./component/token/verification.ts": () => import("./token/verification"),
   "./component/token/pkce.ts": () => import("./token/pkce"),
   "./component/user.ts": () => import("./user"),
