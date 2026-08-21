@@ -29,6 +29,7 @@ const modules = {
   "./component/factor/totp.ts": () => import("./factor/totp"),
   "./component/factor/device.ts": () => import("./factor/device"),
   "./component/connection.ts": () => import("./connection"),
+  "./component/context.ts": () => import("./context"),
   "./component/connection/saml/request.ts": () => import("./connection/saml/request"),
   "./component/connection/saml/assertion.ts": () => import("./connection/saml/assertion"),
   "./component/connection/domain.ts": () => import("./connection/domain"),
