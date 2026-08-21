@@ -1,7 +1,7 @@
 import { For, Show, createSignal, onCleanup, onMount, type JSX } from "solid-js";
 import { useRouterState } from "@tanstack/solid-router";
 import { sidebar } from "../config/sidebar";
-import { CloseIcon, GitHubIcon, MenuIcon, MoonIcon, SearchIcon, SunIcon } from "./icons";
+import { CloseIcon, MenuIcon, MoonIcon, SearchIcon, SunIcon } from "./icons";
 
 interface SearchResult {
   excerpt: string;
@@ -115,57 +115,44 @@ export function Chrome(props: { children: JSX.Element; landing?: boolean; withSi
         Skip to content
       </a>
       <header class="masthead">
-        <div class="masthead-inner">
-          <a class="brand-lockup" href="/convex-auth/">
-            <img
-              alt="Convex"
-              class="brand-wordmark"
-              height="36"
-              src="/convex-auth/brand/convex-logo-white.svg"
-              width="92"
-            />
-            <span class="brand-title">convex-auth</span>
-          </a>
-          <nav aria-label="Site" class="masthead-links">
-            <a href="/convex-auth/getting-started/installation/">Docs</a>
-            <a href="https://docs.convex.dev">Convex</a>
-          </nav>
-          <div class="masthead-actions">
-            <button class="search-chip" onClick={openSearch} type="button">
-              <SearchIcon />
-              <span>Search</span>
-              <kbd>⌘K</kbd>
-            </button>
-            <a class="gh-pill" href="https://github.com/estifanos-sh/convex-auth">
-              <GitHubIcon />
-              <span>GitHub</span>
-            </a>
-            <a class="cta-dark" href="/convex-auth/getting-started/installation/">
-              Start building
-            </a>
+        <a class="brand-lockup" href="/convex-auth/">
+          <img
+            alt="Convex"
+            class="brand-wordmark"
+            height="36"
+            src="/convex-auth/brand/convex-logo-white.svg"
+            width="92"
+          />
+          <span class="brand-title">convex-auth</span>
+        </a>
+        <div class="masthead-actions">
+          <button class="search-chip" onClick={openSearch} type="button">
+            <SearchIcon />
+            <span>Search</span>
+            <kbd>⌘K</kbd>
+          </button>
+          <button
+            aria-label={theme() === "dark" ? "Switch to light theme" : "Switch to dark theme"}
+            class="theme-switcher"
+            onClick={toggleTheme}
+            type="button"
+          >
+            <Show when={theme() === "dark"} fallback={<MoonIcon />}>
+              <SunIcon />
+            </Show>
+          </button>
+          <Show when={props.withSidebar}>
             <button
-              aria-label={theme() === "dark" ? "Switch to light theme" : "Switch to dark theme"}
-              class="icon-btn"
-              onClick={toggleTheme}
+              aria-controls="mobile-docs-nav"
+              aria-expanded={menuOpen()}
+              aria-label="Open documentation menu"
+              class="icon-btn menu-btn"
+              onClick={() => setMenuOpen(!menuOpen())}
               type="button"
             >
-              <Show when={theme() === "dark"} fallback={<MoonIcon />}>
-                <SunIcon />
-              </Show>
+              <MenuIcon />
             </button>
-            <Show when={props.withSidebar}>
-              <button
-                aria-controls="mobile-docs-nav"
-                aria-expanded={menuOpen()}
-                aria-label="Open documentation menu"
-                class="icon-btn menu-btn"
-                onClick={() => setMenuOpen(!menuOpen())}
-                type="button"
-              >
-                <MenuIcon />
-              </button>
-            </Show>
-          </div>
+          </Show>
         </div>
       </header>
       <Show when={props.withSidebar}>
@@ -208,30 +195,26 @@ export function Chrome(props: { children: JSX.Element; landing?: boolean; withSi
       </div>
       <footer class="site-foot">
         <div class="site-foot-inner">
-          <div class="site-foot-brand">
-            <img
-              alt="Convex"
-              class="brand-wordmark"
-              height="36"
-              src="/convex-auth/brand/convex-logo-white.svg"
-              width="92"
-            />
-            <p>Authentication infrastructure for Convex applications.</p>
+          <div class="site-foot-primary">
+            <div class="site-foot-brand">
+              <span>Built for</span>
+              <img
+                alt="Convex"
+                class="brand-wordmark"
+                height="36"
+                src="/convex-auth/brand/convex-logo-white.svg"
+                width="92"
+              />
+            </div>
+            <div class="site-foot-credits">
+              <a href="https://github.com/estifanos-sh/convex-auth">Open source on GitHub</a>
+              <a href="/convex-auth/llms.txt">llms.txt</a>
+            </div>
           </div>
-          <div class="site-foot-cols">
-            <section>
-              <h2>Product</h2>
-              <a href="/convex-auth/getting-started/installation/">Installation</a>
-              <a href="/convex-auth/getting-started/providers/">Providers</a>
-              <a href="/convex-auth/connection/overview/">Enterprise</a>
-            </section>
-            <section>
-              <h2>Developers</h2>
-              <a href="https://docs.convex.dev">Convex docs</a>
-              <a href="https://www.convex.dev">convex.dev</a>
-              <a href="https://github.com/estifanos-sh/convex-auth">GitHub</a>
-            </section>
-          </div>
+          <nav aria-label="Footer" class="site-foot-links">
+            <a href="/convex-auth/getting-started/installation/">Installation</a>
+            <a href="https://github.com/estifanos-sh/convex-auth">GitHub</a>
+          </nav>
         </div>
       </footer>
       <Show when={searchOpen()}>
@@ -295,27 +278,30 @@ export function Sidebar(props: { current: string; onNavigate?: () => void }) {
   return (
     <nav aria-label="Documentation">
       <For each={sidebar}>
-        {(group) => (
-          <section class="rail-group">
-            <h2>{group.label}</h2>
-            <ul>
-              <For each={group.items}>
-                {(item) => (
-                  <li>
-                    <a
-                      aria-current={props.current === item.slug ? "page" : undefined}
-                      classList={{ active: props.current === item.slug }}
-                      href={`/convex-auth${item.slug}/`}
-                      onClick={props.onNavigate}
-                    >
-                      {item.title}
-                    </a>
-                  </li>
-                )}
-              </For>
-            </ul>
-          </section>
-        )}
+        {(group) => {
+          const active = () => group.items.some((item) => props.current === item.slug);
+          return (
+            <details class="rail-group" open={active()}>
+              <summary>{group.label}</summary>
+              <ul>
+                <For each={group.items}>
+                  {(item) => (
+                    <li>
+                      <a
+                        aria-current={props.current === item.slug ? "page" : undefined}
+                        classList={{ active: props.current === item.slug }}
+                        href={`/convex-auth${item.slug}/`}
+                        onClick={props.onNavigate}
+                      >
+                        {item.title}
+                      </a>
+                    </li>
+                  )}
+                </For>
+              </ul>
+            </details>
+          );
+        }}
       </For>
     </nav>
   );
