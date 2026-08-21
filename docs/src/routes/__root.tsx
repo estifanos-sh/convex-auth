@@ -3,12 +3,21 @@ import type { JSX } from "solid-js";
 import { HydrationScript } from "solid-js/web";
 import "../app.css";
 
-const themeBootstrap = `(()=>{try{const t=localStorage.getItem("convex-auth-theme");if(t==="dark"||(t!=="light"&&matchMedia("(prefers-color-scheme: dark)").matches))document.documentElement.classList.add("dark")}catch{}})();`;
+const themeBootstrap = `(()=>{try{const t=localStorage.getItem("convex-auth-theme");if(t==="dark")document.documentElement.classList.add("dark")}catch{}})();`;
 
 export const Route = createRootRoute({
   head: () => ({
     links: [
       { href: "/convex-auth/favicon.svg", rel: "icon", type: "image/svg+xml" },
+      { href: "https://use.typekit.net", rel: "preconnect" },
+      { href: "https://p.typekit.net", rel: "preconnect" },
+      { href: "https://fonts.googleapis.com", rel: "preconnect" },
+      { crossorigin: "anonymous", href: "https://fonts.gstatic.com", rel: "preconnect" },
+      { href: "https://use.typekit.net/xmd6bow.css", rel: "stylesheet" },
+      {
+        href: "https://fonts.googleapis.com/css2?family=Geist:wght@300..800&family=Geist+Mono:wght@400..700&display=swap",
+        rel: "stylesheet",
+      },
       {
         as: "font",
         crossorigin: "anonymous",
@@ -28,7 +37,7 @@ export const Route = createRootRoute({
       { charSet: "utf-8" },
       { content: "width=device-width, initial-scale=1", name: "viewport" },
       { content: "The unofficial auth solution for Convex.", name: "description" },
-      { content: "#f6f6f6", name: "theme-color" },
+      { content: "#f7eedb", name: "theme-color" },
     ],
   }),
   shellComponent: RootDocument,
@@ -36,7 +45,7 @@ export const Route = createRootRoute({
 
 function RootDocument(props: { children: JSX.Element }) {
   return (
-    <html lang="en">
+    <html data-theme="convex" lang="en">
       <head>
         <script innerHTML={themeBootstrap} />
         <HydrationScript />
