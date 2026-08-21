@@ -62,6 +62,7 @@ const readonlyOrigins = ["https://app.example.com"] as const;
 const readonlyWebAuthnHints = ["security-key"] as const;
 const readonlyWebAuthnAlgorithms = [-7, -257] as const;
 void webauthn({
+  securityKeysOnly: true,
   origin: readonlyOrigins,
   registration: {
     hints: readonlyWebAuthnHints,

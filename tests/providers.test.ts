@@ -352,6 +352,7 @@ test("webauthn() emits secure ceremony defaults", () => {
     rpId: undefined,
     origin: undefined,
     challengeExpirationMs: 300_000,
+    securityKeysOnly: false,
     registration: {
       residentKey: "preferred",
       userVerification: "required",
@@ -361,6 +362,22 @@ test("webauthn() emits secure ceremony defaults", () => {
       userVerification: "required",
     },
   });
+});
+
+test("webauthn() enforces a single hardware-security-key policy", () => {
+  const provider = webauthn({
+    securityKeysOnly: true,
+    registration: {
+      authenticatorAttachment: "platform",
+      hints: ["client-device", "hybrid"],
+    },
+    authentication: { hints: ["client-device"] },
+  });
+
+  expect(provider.options.securityKeysOnly).toBe(true);
+  expect(provider.options.registration.authenticatorAttachment).toBe("cross-platform");
+  expect(provider.options.registration.hints).toEqual(["security-key"]);
+  expect(provider.options.authentication.hints).toEqual(["security-key"]);
 });
 
 test("webauthn() keeps registration and authentication overrides independent", () => {

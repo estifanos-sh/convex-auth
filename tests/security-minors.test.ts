@@ -50,6 +50,11 @@ function allowCredentials(result: {
   ).allowCredentials;
 }
 
+function authenticationHints(result: { kind: string; options?: unknown }): string[] | undefined {
+  if (result.kind !== "webauthnOptions") throw new Error("expected webauthnOptions");
+  return (result.options as { hints?: string[] }).hints;
+}
+
 function encodeBase64url(bytes: Uint8Array): string {
   return Buffer.from(bytes).toString("base64url");
 }
@@ -72,19 +77,18 @@ function credentialLengthCounts(ids: readonly string[]): Map<number, number> {
 test("passkey signIn returns deterministic decoy allowCredentials for an unknown email", async () => {
   const t = convexTest(schema);
 
-  const first = allowCredentialIds(
-    await t.action(api.auth.signIn, {
-      provider: "webauthn",
-      params: { flow: "signIn", email: "ghost@example.com" },
-    }),
-  );
-  // Unknown email still yields a non-empty, paired allowCredentials list. This
-  // removes the immediate empty/non-empty response-shape oracle.
+  const firstResult = await t.action(api.auth.signIn, {
+    provider: "webauthn",
+    params: { flow: "signIn", email: "ghost@example.com" },
+  });
+  const first = allowCredentialIds(firstResult);
   expect(first).toBeDefined();
   expect(first).toHaveLength(32);
+  expect(
+    allowCredentials(firstResult)?.every((descriptor) => descriptor.transports === undefined),
+  ).toBe(true);
   expect([...credentialLengthCounts(first!).values()].every((count) => count % 2 === 0)).toBe(true);
 
-  // Same email → same decoys (derived from a hash of the email).
   const second = allowCredentialIds(
     await t.action(api.auth.signIn, {
       provider: "webauthn",
@@ -125,6 +129,7 @@ test("passkey signIn returns the real credential for a known email (not a decoy)
       publicKey: new ArrayBuffer(32),
       algorithm: -7,
       counter: 0,
+      transports: ["internal", "hybrid"],
       deviceType: "multiDevice",
       backedUp: true,
       createdAt: Date.now(),
@@ -138,7 +143,13 @@ test("passkey signIn returns the real credential for a known email (not a decoy)
   const descriptors = allowCredentials(result);
   expect(descriptors).toHaveLength(32);
   expect(descriptors?.map(({ id }) => id)).toContain(credentialId);
-  expect(descriptors?.every((descriptor) => descriptor.transports === undefined)).toBe(true);
+  expect(descriptors?.find(({ id }) => id === credentialId)?.transports).toBeUndefined();
+  expect(descriptors?.every(({ transports }) => transports === undefined)).toBe(true);
+  expect(
+    descriptors?.filter(
+      ({ id, transports }) => decodeBase64url(id).byteLength === 21 && transports === undefined,
+    ).length,
+  ).toBeGreaterThanOrEqual(2);
   const matchingLength = descriptors?.filter(
     ({ id }) => decodeBase64url(id).byteLength === 21,
   ).length;
@@ -151,21 +162,28 @@ test("passkey signIn returns the real credential for a known email (not a decoy)
   ).toBe(true);
 });
 
-test("WebAuthn email signIn includes stored credentials without policy filtering", async () => {
+test("WebAuthn email signIn routes roaming credentials without constraining passkeys", async () => {
   const t = convexTest(schema);
   const userId = await createVerifiedUser(t, "mixed-passkeys@example.com");
-  const credentialIds = [
-    encodeBase64url(new Uint8Array(18).fill(1)),
-    encodeBase64url(new Uint8Array(27).fill(2)),
+  const credentials = [
+    {
+      id: encodeBase64url(new Uint8Array(18).fill(1)),
+      transports: ["usb", "nfc"],
+    },
+    {
+      id: encodeBase64url(new Uint8Array(27).fill(2)),
+      transports: ["internal", "hybrid"],
+    },
   ];
   await t.run(async (ctx) => {
-    for (const credentialId of credentialIds) {
+    for (const credential of credentials) {
       await ctx.runMutation(components.auth.factor.passkey.create, {
         userId: userId as never,
-        credentialId,
+        credentialId: credential.id,
         publicKey: new ArrayBuffer(32),
         algorithm: -7,
         counter: 0,
+        transports: credential.transports,
         deviceType: "singleDevice",
         backedUp: false,
         createdAt: Date.now(),
@@ -173,14 +191,85 @@ test("WebAuthn email signIn includes stored credentials without policy filtering
     }
   });
 
-  const ids = allowCredentialIds(
+  const descriptors = allowCredentials(
     await t.action(api.auth.signIn, {
       provider: "webauthn",
       params: { flow: "signIn", email: "mixed-passkeys@example.com" },
     }),
   );
-  expect(ids).toHaveLength(32);
-  expect(ids).toEqual(expect.arrayContaining(credentialIds));
+  expect(descriptors).toHaveLength(32);
+  expect(descriptors?.find(({ id }) => id === credentials[0].id)?.transports).toEqual([
+    "nfc",
+    "usb",
+  ]);
+  expect(descriptors?.find(({ id }) => id === credentials[1].id)?.transports).toBeUndefined();
+
+  expect(
+    descriptors?.filter(
+      ({ id, transports }) =>
+        decodeBase64url(id).byteLength === 18 && transports?.join(",") === "nfc,usb",
+    ),
+  ).toHaveLength(2);
+});
+
+test("WebAuthn email signIn prefers the native security-key ceremony for roaming credentials", async () => {
+  const t = convexTest(schema);
+  const userId = await createVerifiedUser(t, "security-key@example.com");
+  const credentialId = encodeBase64url(new Uint8Array(20).fill(3));
+  await t.run((ctx) =>
+    ctx.runMutation(components.auth.factor.passkey.create, {
+      userId: userId as never,
+      credentialId,
+      publicKey: new ArrayBuffer(32),
+      algorithm: -7,
+      counter: 0,
+      transports: ["usb", "nfc"],
+      deviceType: "singleDevice",
+      backedUp: false,
+      createdAt: Date.now(),
+    }),
+  );
+
+  const result = await t.action(api.auth.signIn, {
+    provider: "webauthn",
+    params: { flow: "signIn", email: "security-key@example.com" },
+  });
+  expect(authenticationHints(result)).toEqual(["security-key"]);
+  expect(
+    allowCredentials(result)?.every(({ transports }) => transports?.join(",") === "ble,nfc,usb"),
+  ).toBe(true);
+  expect(allowCredentials(result)?.find(({ id }) => id === credentialId)?.transports).toEqual([
+    "ble",
+    "nfc",
+    "usb",
+  ]);
+});
+
+test("WebAuthn email signIn omits ambiguous mixed transport hints", async () => {
+  const t = convexTest(schema);
+  const userId = await createVerifiedUser(t, "ambiguous-passkey@example.com");
+  const credentialId = encodeBase64url(new Uint8Array(19).fill(4));
+  await t.run((ctx) =>
+    ctx.runMutation(components.auth.factor.passkey.create, {
+      userId: userId as never,
+      credentialId,
+      publicKey: new ArrayBuffer(32),
+      algorithm: -7,
+      counter: 0,
+      transports: ["usb", "hybrid"],
+      deviceType: "singleDevice",
+      backedUp: false,
+      createdAt: Date.now(),
+    }),
+  );
+
+  const result = await t.action(api.auth.signIn, {
+    provider: "webauthn",
+    params: { flow: "signIn", email: "ambiguous-passkey@example.com" },
+  });
+  const descriptors = allowCredentials(result);
+  expect(descriptors?.find(({ id }) => id === credentialId)?.transports).toBeUndefined();
+  expect(authenticationHints(result)).toBeUndefined();
 });
 
 test("WebAuthn email signIn normalizes email before lookup and decoy derivation", async () => {

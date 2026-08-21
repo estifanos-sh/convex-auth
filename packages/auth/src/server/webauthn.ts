@@ -598,8 +598,8 @@ export async function assertStoredAttestationTrusted(
 
 /**
  * Build a constant-size, secret-keyed `allowCredentials` list for an email-first
- * sign-in. Real credential IDs are mixed with deterministic decoys, all without
- * transport metadata, then ordered by a secret-keyed digest.
+ * sign-in. Real credential IDs are mixed with deterministic decoys, then are
+ * ordered by a secret-keyed digest.
  *
  * A known email with passkeys returns a populated `allowCredentials`, so an
  * absent/empty list for every other email would be an immediate
@@ -621,7 +621,63 @@ const EMAIL_ALLOW_CREDENTIALS_SIZE = 32;
 const EMAIL_ALLOW_REAL_CREDENTIALS = EMAIL_ALLOW_CREDENTIALS_SIZE / 2;
 const MAX_EMAIL_LENGTH = 254;
 
-type AllowCredential = { type: "public-key"; id: string };
+type AllowCredential = { type: "public-key"; id: string; transports?: string[] };
+
+type StoredCredential = { id: string; transports?: string[] };
+
+const ROAMING_AUTHENTICATOR_TRANSPORTS = new Set(["usb", "nfc", "ble"]);
+const ROAMING_CEREMONY_TRANSPORTS = ["ble", "nfc", "usb"];
+
+type SecurityKeyCredential = {
+  transports?: readonly string[];
+  deviceType?: string;
+  backedUp?: boolean;
+};
+
+function roamingTransports(transports: readonly string[] | undefined): string[] | undefined {
+  if (
+    !transports?.length ||
+    !transports.every((value) => ROAMING_AUTHENTICATOR_TRANSPORTS.has(value))
+  ) {
+    return undefined;
+  }
+  return [...new Set(transports)].sort();
+}
+
+/** @internal */
+export function isSecurityKeyCredential(credential: SecurityKeyCredential): boolean {
+  return (
+    roamingTransports(credential.transports) !== undefined &&
+    (credential.deviceType === undefined || credential.deviceType === "singleDevice") &&
+    (credential.backedUp === undefined || credential.backedUp === false)
+  );
+}
+
+/** @internal */
+export function selectAuthenticationCredentials<T extends StoredCredential>(
+  credentials: readonly T[],
+  securityKeysOnly: boolean | undefined,
+): T[] {
+  return securityKeysOnly ? credentials.filter(isSecurityKeyCredential) : [...credentials];
+}
+
+function requireSecurityKeyCredential(credential: SecurityKeyCredential): void {
+  if (!isSecurityKeyCredential(credential)) {
+    throw convexError(
+      ErrorCode.PASSKEY_SECURITY_KEY_REQUIRED,
+      "A roaming hardware security key is required.",
+    );
+  }
+}
+
+function credentialAuthenticationHints(
+  credentials: readonly StoredCredential[],
+): string[] | undefined {
+  return credentials.length > 0 &&
+    credentials.every((credential) => roamingTransports(credential.transports) !== undefined)
+    ? ["security-key"]
+    : undefined;
+}
 
 async function keyedDigest(key: CryptoKey, value: string): Promise<Uint8Array> {
   const encoder = new TextEncoder();
@@ -652,24 +708,35 @@ function normalizeEmail(value: unknown): string {
 async function deriveEmailAllowCredentials(
   normalizedEmail: string,
   rpId: string,
-  realCredentialIds: readonly string[],
+  realCredentials: readonly StoredCredential[],
+  forceRoamingCeremony = false,
 ): Promise<AllowCredential[]> {
   const secret = requireAuthKey("webauthnMaskingKey");
   const emailSeed = encodeBase64urlNoPadding(
     new Uint8Array(sha256(new TextEncoder().encode(normalizedEmail))),
   );
-  const realIds = realCredentialIds
-    .flatMap((id) => {
+  const realIds = realCredentials
+    .flatMap((credential) => {
       try {
-        const byteLength = decodeBase64urlIgnorePadding(id).byteLength;
+        const byteLength = decodeBase64urlIgnorePadding(credential.id).byteLength;
         return byteLength >= 1 && byteLength <= MAX_WEBAUTHN_CREDENTIAL_ID_LENGTH
-          ? [{ id, byteLength }]
+          ? [
+              {
+                id: credential.id,
+                byteLength,
+                transports: roamingTransports(credential.transports),
+              },
+            ]
           : [];
       } catch {
         return [];
       }
     })
     .slice(0, EMAIL_ALLOW_REAL_CREDENTIALS);
+  const ceremonyTransports =
+    forceRoamingCeremony || credentialAuthenticationHints(realCredentials)
+      ? ROAMING_CEREMONY_TRANSPORTS
+      : undefined;
   const key = await crypto.subtle.importKey(
     "raw",
     new TextEncoder().encode(secret),
@@ -680,9 +747,11 @@ async function deriveEmailAllowCredentials(
   const makeCredential = async (
     id: string,
     discriminator: string,
+    transports?: string[],
   ): Promise<AllowCredential & { order: string }> => ({
     type: "public-key",
     id,
+    ...(transports === undefined ? {} : { transports }),
     order: encodeBase64urlNoPadding(
       await keyedDigest(
         key,
@@ -700,28 +769,41 @@ async function deriveEmailAllowCredentials(
         (((lengthSeed[pairIndex * 2] << 8) | lengthSeed[pairIndex * 2 + 1]) %
           MAX_WEBAUTHN_CREDENTIAL_ID_LENGTH);
       const byteLength = real?.byteLength ?? derivedLength;
+      const pairTransports = ceremonyTransports ?? real?.transports;
       const first = real
-        ? await makeCredential(real.id, `real:${pairIndex}`)
+        ? await makeCredential(real.id, `real:${pairIndex}`, pairTransports)
         : await keyedBytes(
             key,
             `convex-auth:webauthn-decoy:v2:${rpId}:${emailSeed}:pair:${pairIndex}:first`,
             byteLength,
           ).then((bytes) =>
-            makeCredential(encodeBase64urlNoPadding(bytes), `pair:${pairIndex}:first`),
+            makeCredential(
+              encodeBase64urlNoPadding(bytes),
+              `pair:${pairIndex}:first`,
+              pairTransports,
+            ),
           );
       const companion = await keyedBytes(
         key,
         `convex-auth:webauthn-decoy:v2:${rpId}:${emailSeed}:pair:${pairIndex}:companion`,
         byteLength,
       ).then((bytes) =>
-        makeCredential(encodeBase64urlNoPadding(bytes), `pair:${pairIndex}:companion`),
+        makeCredential(
+          encodeBase64urlNoPadding(bytes),
+          `pair:${pairIndex}:companion`,
+          pairTransports,
+        ),
       );
       return [first, companion];
     }),
   );
   const credentials = credentialPairs.flat();
   credentials.sort((a, b) => a.order.localeCompare(b.order));
-  return credentials.map(({ type, id }) => ({ type, id }));
+  return credentials.map(({ type, id, transports }) => ({
+    type,
+    id,
+    ...(transports === undefined ? {} : { transports }),
+  }));
 }
 
 /**
@@ -796,6 +878,13 @@ export async function handleWebAuthn(
     validateCredentialAlgorithm(algorithm, rp.registration.algorithms);
     const publicKeyBytes = resolveRegistrationPublicKeyBytes(publicKey, algorithm);
     const backupState = parseBackupState(rawAuthenticatorData);
+    if (provider.options.securityKeysOnly) {
+      requireSecurityKeyCredential({
+        transports: params.transports,
+        deviceType: backupState.deviceType,
+        backedUp: backupState.backedUp,
+      });
+    }
     let attestationEvidence: WebAuthnAttestationEvidence | undefined;
     if (rp.registration.attestation) {
       const { verifier: attestationVerifier } = rp.registration.attestation;
@@ -969,6 +1058,14 @@ export async function handleWebAuthn(
     const passkey = assertion.passkey;
 
     verifyAssertionSignatureUniformly(passkey, signatureBytes, messageHash);
+    if (provider.options.securityKeysOnly) {
+      requireSecurityKeyCredential(passkey);
+      requireSecurityKeyCredential({
+        transports: passkey.transports,
+        deviceType: backupState.deviceType,
+        backedUp: backupState.backedUp,
+      });
+    }
     validateBackupEligibility(passkey.deviceType, backupState.deviceType);
 
     if (rp.registration.attestation) {
@@ -1134,6 +1231,7 @@ export async function handleWebAuthn(
       const challengeHash = encodeBase64urlNoPadding(new Uint8Array(sha256(challenge)));
 
       let allowCredentials: AllowCredential[] | undefined;
+      let credentialHints: string[] | undefined;
       const email = params.email === undefined ? undefined : normalizeEmail(params.email);
       const sessionId = (await getAuthSessionId(ctx)) ?? undefined;
       let signIn;
@@ -1150,7 +1248,20 @@ export async function handleWebAuthn(
       }
 
       if (email !== undefined) {
-        allowCredentials = await deriveEmailAllowCredentials(email, rp.rpId, signIn.credentialIds);
+        const securityKeysOnly = provider.options.securityKeysOnly === true;
+        const eligibleCredentials = selectAuthenticationCredentials(
+          signIn.credentials,
+          securityKeysOnly,
+        );
+        allowCredentials = await deriveEmailAllowCredentials(
+          email,
+          rp.rpId,
+          eligibleCredentials,
+          securityKeysOnly,
+        );
+        credentialHints = securityKeysOnly
+          ? ["security-key"]
+          : credentialAuthenticationHints(eligibleCredentials);
       }
 
       const options: {
@@ -1162,13 +1273,16 @@ export async function handleWebAuthn(
         allowCredentials?: Array<{
           type: "public-key";
           id: string;
+          transports?: string[];
         }>;
       } = {
         challenge: encodeBase64urlNoPadding(challenge),
         timeout: rp.challengeExpirationMs,
         rpId: rp.rpId,
         userVerification: rp.authentication.userVerification,
-        ...(rp.authentication.hints ? { hints: rp.authentication.hints } : {}),
+        ...((rp.authentication.hints ?? credentialHints)
+          ? { hints: rp.authentication.hints ?? credentialHints }
+          : {}),
       };
 
       if (allowCredentials) {

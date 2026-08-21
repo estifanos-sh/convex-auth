@@ -348,7 +348,7 @@ test("passkey option transactions create the challenge and load ceremony context
       verifiedEmail: "options@example.com",
     }),
   );
-  expect(signIn.credentialIds).toEqual(["options-credential"]);
+  expect(signIn.credentials).toEqual([{ id: "options-credential" }]);
 
   const verifiers = await t.run(async (ctx) =>
     Promise.all([
