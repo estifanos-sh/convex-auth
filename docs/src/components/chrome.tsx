@@ -119,13 +119,6 @@ export function Chrome(props: { children: JSX.Element; landing?: boolean; withSi
           <a class="lockup" href="/convex-auth/">
             <img
               alt=""
-              class="lockup-symbol lockup-light"
-              height="28"
-              src="/convex-auth/brand/symbol-color.svg"
-              width="28"
-            />
-            <img
-              alt=""
               class="lockup-symbol lockup-dark"
               height="28"
               src="/convex-auth/brand/symbol-white.svg"
@@ -133,13 +126,6 @@ export function Chrome(props: { children: JSX.Element; landing?: boolean; withSi
             />
             <img
               alt="Convex"
-              class="lockup-word lockup-light"
-              height="18"
-              src="/convex-auth/brand/wordmark-black-tight.svg"
-              width="108"
-            />
-            <img
-              alt=""
               class="lockup-word lockup-dark"
               height="18"
               src="/convex-auth/brand/wordmark-white-tight.svg"
@@ -220,13 +206,6 @@ export function Chrome(props: { children: JSX.Element; landing?: boolean; withSi
       <footer class="site-foot">
         <div class="site-foot-inner">
           <div class="site-foot-brand">
-            <img
-              alt=""
-              class="lockup-symbol lockup-light"
-              height="22"
-              src="/convex-auth/brand/symbol-color.svg"
-              width="22"
-            />
             <img
               alt=""
               class="lockup-symbol lockup-dark"

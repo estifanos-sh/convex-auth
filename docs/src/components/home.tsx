@@ -39,16 +39,14 @@ export function HomePage() {
     <Chrome landing>
       <main class="home" id="main-content">
         <section class="home-hero">
-          <img
-            alt=""
-            aria-hidden="true"
-            class="home-stripes"
-            src="/convex-auth/brand/racing-lines.png"
-          />
           <div class="home-hero-inner">
             <div class="home-copy">
+              <p class="hero-eyebrow">
+                <span>Friends of Convex</span>
+                <span>Auth</span>
+              </p>
               <h1>
-                <span>Convex-Auth</span>
+                Convex-Auth
                 <span>By Estifanos</span>
               </h1>
               <p class="lede">the unofficial auth solution for convex</p>

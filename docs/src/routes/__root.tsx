@@ -3,7 +3,7 @@ import type { JSX } from "solid-js";
 import { HydrationScript } from "solid-js/web";
 import "../app.css";
 
-const themeBootstrap = `(()=>{try{const t=localStorage.getItem("convex-auth-theme");if(t==="dark"||(t!=="light"&&matchMedia("(prefers-color-scheme: dark)").matches))document.documentElement.classList.add("dark")}catch{}})();`;
+const themeBootstrap = `(()=>{try{const t=localStorage.getItem("convex-auth-theme");if(t==="dark")document.documentElement.classList.add("dark")}catch{}})();`;
 
 export const Route = createRootRoute({
   head: () => ({
@@ -28,7 +28,7 @@ export const Route = createRootRoute({
       { charSet: "utf-8" },
       { content: "width=device-width, initial-scale=1", name: "viewport" },
       { content: "The unofficial auth solution for Convex.", name: "description" },
-      { content: "#f6f6f6", name: "theme-color" },
+      { content: "#f7eedb", name: "theme-color" },
     ],
   }),
   shellComponent: RootDocument,
@@ -36,7 +36,7 @@ export const Route = createRootRoute({
 
 function RootDocument(props: { children: JSX.Element }) {
   return (
-    <html lang="en">
+    <html data-theme="convex" lang="en">
       <head>
         <script innerHTML={themeBootstrap} />
         <HydrationScript />

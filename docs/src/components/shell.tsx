@@ -15,6 +15,29 @@ function headingsFromHtml(html: string): PageHeading[] {
   }));
 }
 
+function mountCodeCopy(root: HTMLElement) {
+  for (const pre of root.querySelectorAll<HTMLElement>("pre")) {
+    if (pre.parentElement?.classList.contains("code-block")) continue;
+    const wrap = document.createElement("div");
+    wrap.className = "code-block";
+    pre.replaceWith(wrap);
+    wrap.append(pre);
+    const button = document.createElement("button");
+    button.className = "code-copy";
+    button.type = "button";
+    button.textContent = "Copy";
+    button.addEventListener("click", () => {
+      void navigator.clipboard.writeText(pre.textContent || "").then(() => {
+        button.textContent = "Copied";
+        window.setTimeout(() => {
+          button.textContent = "Copy";
+        }, 1600);
+      });
+    });
+    wrap.append(button);
+  }
+}
+
 function mountTabs(root: HTMLElement) {
   for (const tabs of root.querySelectorAll<HTMLElement>("[data-tabs]")) {
     const panels = [...tabs.querySelectorAll<HTMLElement>("[data-tab]")];
@@ -51,12 +74,20 @@ export function DocsShell(props: { page: DocumentationPage }) {
   const headings = createMemo(() => headingsFromHtml(props.page.html));
 
   onMount(() => {
-    if (article) mountTabs(article);
+    if (article) {
+      mountTabs(article);
+      mountCodeCopy(article);
+    }
   });
   createEffect(
     on(
       () => props.page.html,
-      () => queueMicrotask(() => article && mountTabs(article)),
+      () =>
+        queueMicrotask(() => {
+          if (!article) return;
+          mountTabs(article);
+          mountCodeCopy(article);
+        }),
     ),
   );
 
