@@ -96,6 +96,11 @@ export default async function setupNodeInterop(project: {
           timeout: convexTimeoutMs,
         });
       }
+      await run(
+        "vp",
+        ["exec", "convex", "env", "set", "RESEND_API_KEY", env.RESEND_API_KEY],
+        convexEnv,
+      );
       await run("vp", ["exec", "convex", "deploy", "--yes"], convexEnv, {
         timeout: convexTimeoutMs,
       });
@@ -114,11 +119,6 @@ export default async function setupNodeInterop(project: {
       await run(
         "vp",
         ["exec", "convex", "env", "set", "GOOGLE_CLIENT_SECRET", env.GOOGLE_CLIENT_SECRET],
-        convexEnv,
-      );
-      await run(
-        "vp",
-        ["exec", "convex", "env", "set", "RESEND_API_KEY", env.RESEND_API_KEY],
         convexEnv,
       );
       await warmUpAnonymousSignIn(env.TEST_TARGET_BASE_URL, convexTimeoutMs);
