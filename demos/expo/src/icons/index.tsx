@@ -29,20 +29,6 @@ export function Plus({ size = DEFAULT_SIZE, color = DEFAULT_COLOR }: IconProps) 
   );
 }
 
-/** Left arrow glyph. Path sourced from `@radix-ui/react-icons` (ArrowLeftIcon). */
-export function ArrowLeft({ size = DEFAULT_SIZE, color = DEFAULT_COLOR }: IconProps) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 15 15" fill="none">
-      <Path
-        fillRule="evenodd"
-        clipRule="evenodd"
-        d="M6.85355 3.85355C7.04882 3.65829 7.04882 3.34171 6.85355 3.14645C6.65829 2.95118 6.34171 2.95118 6.14645 3.14645L2.14645 7.14645C1.95118 7.34171 1.95118 7.65829 2.14645 7.85355L6.14645 11.8536C6.34171 12.0488 6.65829 12.0488 6.85355 11.8536C7.04882 11.6583 7.04882 11.3417 6.85355 11.1464L3.70711 8H12.5C12.7761 8 13 7.77614 13 7.5C13 7.22386 12.7761 7 12.5 7H3.70711L6.85355 3.85355Z"
-        fill={color}
-      />
-    </Svg>
-  );
-}
-
 /** Right chevron glyph. Path sourced from `@radix-ui/react-icons` (ChevronRightIcon). */
 export function ChevronRight({ size = DEFAULT_SIZE, color = DEFAULT_COLOR }: IconProps) {
   return (

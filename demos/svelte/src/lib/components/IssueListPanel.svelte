@@ -6,7 +6,7 @@
   import { errorText } from "$lib/errors";
   import IssueDetailPanel from "./IssueDetailPanel.svelte";
 
-  let { project, permissions, members, currentUserId, groupId, client } = $props<{
+  let { project, permissions, members, currentUserId, client } = $props<{
     project: {
       projectId: string;
       name: string;
@@ -25,7 +25,6 @@
     };
     members: Array<{ userId: string; name: string }>;
     currentUserId: string;
-    groupId: string;
     client: ConvexClient;
   }>();
 
@@ -217,7 +216,6 @@
                 {permissions}
                 {members}
                 {currentUserId}
-                {groupId}
                 {client}
                 onclose={() => { expandedIssueId = null; }}
               />

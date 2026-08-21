@@ -20,6 +20,61 @@ export type KeyDeps = {
   config: ReturnType<typeof configDefaults>;
 };
 
+type RecordUseResult =
+  | { status: "invalid" | "revoked" | "expired" | "limited" }
+  | {
+      status: "verified";
+      keyId: string;
+      userId: string;
+      scopes: KeyScope[];
+    };
+
+function isKeyScope(value: unknown): value is KeyScope {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "resource" in value &&
+    typeof value.resource === "string" &&
+    "actions" in value &&
+    Array.isArray(value.actions) &&
+    value.actions.every((action) => typeof action === "string")
+  );
+}
+
+/** Validate the opaque cross-component result before using its security-sensitive fields. */
+function parseRecordUseResult(value: unknown): RecordUseResult {
+  if (typeof value !== "object" || value === null || !("status" in value)) {
+    throw new Error("ERR_INVALID_API_KEY_RECORD_USE_RESULT");
+  }
+  switch (value.status) {
+    case "invalid":
+    case "revoked":
+    case "expired":
+    case "limited":
+      return { status: value.status };
+    case "verified":
+      if (
+        !("keyId" in value) ||
+        typeof value.keyId !== "string" ||
+        !("userId" in value) ||
+        typeof value.userId !== "string" ||
+        !("scopes" in value) ||
+        !Array.isArray(value.scopes) ||
+        !value.scopes.every(isKeyScope)
+      ) {
+        throw new Error("ERR_INVALID_API_KEY_RECORD_USE_RESULT");
+      }
+      return {
+        status: "verified",
+        keyId: value.keyId,
+        userId: value.userId,
+        scopes: value.scopes,
+      };
+    default:
+      throw new Error("ERR_INVALID_API_KEY_RECORD_USE_RESULT");
+  }
+}
+
 /**
  * Sampling window for the `lastUsedAt` touch in {@link createKeyDomain}'s
  * `verify`. Bearer verification runs on every authenticated API-key request, so
@@ -173,18 +228,13 @@ export function createKeyDomain(deps: KeyDeps) {
       // `lastUsedAt` write when it is still within the window (and no rate-limit
       // decrement forces a write), so read-only bearer traffic on a hot key does
       // not turn into a per-request write.
-      const result = (await ctx.runMutation(config.component.user.key.recordUse, {
-        id: doc._id,
-        now: Date.now(),
-        coarsenMs: LAST_USED_COARSEN_MS,
-      })) as unknown as
-        | { status: "invalid" | "revoked" | "expired" | "limited" }
-        | {
-            status: "verified";
-            keyId: string;
-            userId: string;
-            scopes: KeyScope[];
-          };
+      const result = parseRecordUseResult(
+        await ctx.runMutation(config.component.user.key.recordUse, {
+          id: doc._id,
+          now: Date.now(),
+          coarsenMs: LAST_USED_COARSEN_MS,
+        }),
+      );
       switch (result.status) {
         case "invalid":
           throw new ConvexError({

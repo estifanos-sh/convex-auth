@@ -210,6 +210,8 @@ type AuthContextResolverLike = {
  * concrete domains object (the only real value ever passed) satisfies both.
  */
 function asResolver(auth: AuthLike): AuthContextResolverLike {
+  // SAFETY: AuthLike is intentionally contravariant for compatibility; all
+  // runtime callers pass domains with these exact methods.
   return auth as unknown as AuthContextResolverLike;
 }
 

@@ -110,7 +110,8 @@ export default defineConfig({
         ],
       },
       "cache:test:unit": {
-        command: "vp test --run --project convex --project node",
+        command:
+          "vp exec node ./tests/projects.ts && vp test --run --project convex --project node",
         cache: true,
         input: [
           "convex/**",
@@ -126,7 +127,7 @@ export default defineConfig({
         ],
       },
       "cache:test:interop": {
-        command: "vp test --run --project interop",
+        command: "vp exec node ./tests/projects.ts && vp test --run --project interop",
         cache: true,
         input: [
           "convex/**",
@@ -177,7 +178,6 @@ export default defineConfig({
     },
   },
   test: {
-    passWithNoTests: true,
     projects: [
       {
         root: "./tests",
@@ -187,7 +187,7 @@ export default defineConfig({
         test: {
           name: "convex",
           include: ["**/*.test.ts"],
-          exclude: ["**/node.test.ts"],
+          exclude: ["**/node.test.ts", "**/*.node.test.ts"],
           environment: "edge-runtime",
           setupFiles: ["./vitest/setup.ts"],
           server: { deps: { inline: ["convex-test"] } },
@@ -202,7 +202,7 @@ export default defineConfig({
         },
         test: {
           name: "node",
-          include: ["**/node.test.ts"],
+          include: ["**/node.test.ts", "**/*.node.test.ts"],
           exclude: ["connection/**/node.test.ts", "benchmarks/**/node.test.ts"],
           environment: "node",
           setupFiles: ["./vitest/setup.ts"],

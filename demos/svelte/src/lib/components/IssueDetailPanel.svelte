@@ -13,7 +13,6 @@
     permissions,
     members,
     currentUserId,
-    groupId,
     client,
     onclose,
   } = $props<{
@@ -40,7 +39,6 @@
     };
     members: Array<{ userId: string; name: string }>;
     currentUserId: string;
-    groupId: string;
     client: ConvexClient;
     onclose: () => void;
   }>();

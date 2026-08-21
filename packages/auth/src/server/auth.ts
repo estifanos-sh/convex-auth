@@ -431,6 +431,8 @@ export type AuthApi<
   TExtend extends AuthExtendValidators = {},
 > = AuthApiBase<TPermissions, TExtend>;
 
+declare const providerConfigs: unique symbol;
+
 /**
  * The return type of {@link defineAuth}.
  *
@@ -445,7 +447,10 @@ export type ConvexAuthResult<
   P extends AuthProviderConfig[],
   TPermissions extends PermissionsConfig | undefined = undefined,
   TExtend extends AuthExtendValidators = {},
-> = AuthApi<TPermissions, TExtend>;
+> = AuthApi<TPermissions, TExtend> & {
+  /** Provider tuple retained solely for {@link InferClientApi}. */
+  readonly [providerConfigs]?: P;
+};
 
 /**
  * Infer the typed `AuthApiRefs` for the client SDK from a `defineAuth` call.
@@ -724,6 +729,10 @@ export function defineAuth<
     connection: publicGroupConnection,
 
     ...(createAuthContextFacade(authResult.auth as AuthLike) as AuthContextFacade),
+    // SAFETY: AuthFactory's runtime surface is refined here into the documented
+    // public facade; the provider tuple is declaration-only. The permissions
+    // facade is narrowed from its runtime string representation to its generic
+    // role and grant vocabulary.
   } as unknown as ConvexAuthResult<P, TPermissions, TExtend>;
   return api;
 }

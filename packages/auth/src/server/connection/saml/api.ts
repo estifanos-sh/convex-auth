@@ -38,6 +38,8 @@ function loadDomParserCtor(): DomParserCtor {
     return globalParser;
   }
   if (typeof XmldomDOMParser === "function") {
+    // SAFETY: xmldom implements the DOMParser contract, but its DOM types are
+    // from a separate package universe.
     return XmldomDOMParser as unknown as DomParserCtor;
   }
   throw new Error("ERR_DOM_PARSER_NOT_AVAILABLE");

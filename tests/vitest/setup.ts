@@ -1,5 +1,3 @@
-// fallow-ignore-file unused-file
-
 const DIRECT_CALL_WARNING = "Convex functions should not directly call other Convex functions.";
 const EXPECTED_ERROR_SUBSTRINGS = [
   "Invalid refresh token",

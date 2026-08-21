@@ -881,7 +881,6 @@ export function addGroupHttpRuntime(deps: GroupHttpRuntimeDeps) {
     request: Request,
     runtimeRoute: ConnectionRuntimeRoute,
   ) => {
-    type LogoutResponseContext = { context: string; entityEndpoint: string };
     if (
       runtimeRoute.protocol !== "saml" ||
       runtimeRoute.rest.length !== 1 ||
@@ -903,17 +902,20 @@ export function addGroupHttpRuntime(deps: GroupHttpRuntimeDeps) {
       if (!parsedMessage.parsedRequest) {
         throw convexError(ErrorCode.INVALID_PARAMETERS, "Missing SAML logout payload.");
       }
-      const responseContext = parsedMessage.runtime.sp.createLogoutResponse(
+      const responseContext = await parsedMessage.runtime.sp.createLogoutResponse(
         parsedMessage.runtime.idp,
         parsedMessage.parsedRequest.extract,
         parsedMessage.binding,
         parsedMessage.relayState ?? "",
-      ) as unknown as LogoutResponseContext;
+      );
       if (parsedMessage.binding === "redirect") {
         return new Response(null, {
           status: 302,
           headers: { Location: responseContext.context },
         });
+      }
+      if (!("entityEndpoint" in responseContext)) {
+        throw convexError(ErrorCode.INVALID_PARAMETERS, "Invalid SAML logout response binding.");
       }
       return createSamlPostBindingResponse({
         endpoint: responseContext.entityEndpoint,

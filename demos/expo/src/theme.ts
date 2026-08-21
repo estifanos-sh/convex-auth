@@ -137,12 +137,6 @@ export const statusColors = {
   cancelled: colors.warm[300],
 } as const;
 
-export const roleColors = {
-  admin: colors.accent[500],
-  member: colors.warm[500],
-  viewer: colors.warm[400],
-} as const;
-
 /**
  * Semantic UI recipes mirroring the Convex dashboard design system. Each entry
  * is a plain style object consumable directly by `StyleSheet.create` or inline
@@ -228,6 +222,3 @@ export const recipes = {
     borderBottomColor: colors.border.transparent,
   },
 } as const;
-
-/** Backdrop scrim color for modal/sheet presentations. */
-export const overlayScrim = "rgba(0, 0, 0, 0.5)";

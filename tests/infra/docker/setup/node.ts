@@ -1,4 +1,3 @@
-// fallow-ignore-file unused-file
 import { execFile } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { access, mkdir, rename, rm, writeFile } from "node:fs/promises";

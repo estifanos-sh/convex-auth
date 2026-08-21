@@ -69,7 +69,7 @@ type SamlServiceProvider = ReturnType<typeof createSamlServiceProvider> & {
     extract: SamlParsedFlow["extract"],
     binding: GroupSamlHttpRequest["binding"],
     relayState: string,
-  ): { context: string; entityEndpoint: string };
+  ): Promise<BindingContext | PostBindingContext>;
 };
 
 type FormDataEntryLike = string | { name: string };

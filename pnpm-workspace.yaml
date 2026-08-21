@@ -1,7 +1,6 @@
 packages:
   - packages/*
   - demos/*
-  - tests
   - docs
 
 catalog:

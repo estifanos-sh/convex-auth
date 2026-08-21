@@ -892,12 +892,8 @@ export function server(options: ServerOptions) {
             _argsJSON: convexToJson(queryArgs as Value),
             _valueJSON: convexToJson((value ?? null) as Value),
           };
-          /**
-           * `Preloaded` carries a phantom `__type: Query` field that cannot be
-           * produced positively, so the serialized payload is bridged through
-           * `unknown` to the precise `Preloaded<Query>` target (the same shape
-           * Convex's own `preloadQuery` returns).
-           */
+          // SAFETY: Preloaded's phantom query member has no runtime
+          // representation; this payload matches Convex's preload wire shape.
           return payload as unknown as Preloaded<Query>;
         };
       const logVerbose = (message: string) => {

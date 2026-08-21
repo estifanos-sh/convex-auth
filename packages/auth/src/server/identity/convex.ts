@@ -1,7 +1,5 @@
 import type { GenericId } from "convex/values";
 
-export {};
-
 declare module "convex/server" {
   interface UserIdentity {
     /**
