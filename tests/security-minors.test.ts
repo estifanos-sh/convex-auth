@@ -82,8 +82,6 @@ test("passkey signIn returns deterministic decoy allowCredentials for an unknown
     params: { flow: "signIn", email: "ghost@example.com" },
   });
   const first = allowCredentialIds(firstResult);
-  // Unknown email still yields a non-empty, paired allowCredentials list. This
-  // removes the immediate empty/non-empty response-shape oracle.
   expect(first).toBeDefined();
   expect(first).toHaveLength(32);
   expect(
@@ -91,7 +89,6 @@ test("passkey signIn returns deterministic decoy allowCredentials for an unknown
   ).toBe(true);
   expect([...credentialLengthCounts(first!).values()].every((count) => count % 2 === 0)).toBe(true);
 
-  // Same email → same decoys (derived from a hash of the email).
   const second = allowCredentialIds(
     await t.action(api.auth.signIn, {
       provider: "webauthn",
@@ -207,8 +204,6 @@ test("WebAuthn email signIn routes roaming credentials without constraining pass
   ]);
   expect(descriptors?.find(({ id }) => id === credentials[1].id)?.transports).toBeUndefined();
 
-  // The roaming credential's same-length companion has the same descriptor
-  // shape, so adding routing information does not create a unique real entry.
   expect(
     descriptors?.filter(
       ({ id, transports }) =>

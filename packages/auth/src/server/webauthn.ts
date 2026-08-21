@@ -634,15 +634,6 @@ type SecurityKeyCredential = {
   backedUp?: boolean;
 };
 
-/**
- * Preserve only transports that unambiguously identify a roaming authenticator.
- *
- * Password-manager extensions can report `internal` / `hybrid` at registration,
- * then become unreachable when those hints are replayed during authentication.
- * USB/NFC/BLE hints are useful in the opposite direction: Safari uses them to
- * route a credential to the native security-key ceremony instead of its generic
- * passkey picker. Unknown and mixed transport sets stay unconstrained.
- */
 function roamingTransports(transports: readonly string[] | undefined): string[] | undefined {
   if (
     !transports?.length ||
