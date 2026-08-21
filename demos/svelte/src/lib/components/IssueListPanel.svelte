@@ -79,7 +79,7 @@
   } as const;
 
   type IssueType = (typeof issues)[number];
-  type StatusGroup = { status: string; label: string; issues: IssueType[] };
+  type StatusGroup = { status: (typeof statusOrder)[number]; label: string; issues: IssueType[] };
 
   const groupedIssues = $derived.by(() => {
     const groups: StatusGroup[] = [];

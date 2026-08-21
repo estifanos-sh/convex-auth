@@ -193,7 +193,7 @@
     const request = configRecord(record.request);
     return {
       idp:
-        idp !== undefined
+        idp
           ? {
               metadataUrl:
                 typeof idp.metadataUrl === "string" ? idp.metadataUrl : undefined,
@@ -202,7 +202,7 @@
             }
           : undefined,
       request:
-        request !== null
+        request
           ? {
               signAuthnRequests:
                 typeof request.signAuthnRequests === "boolean"
@@ -211,7 +211,7 @@
             }
           : undefined,
       profile:
-        attributeMapping !== undefined
+        attributeMapping
           ? {
               mapping: {
                 subject:
