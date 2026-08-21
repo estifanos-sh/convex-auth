@@ -17,20 +17,67 @@ export default defineConfig({
   staged: {
     "*": "vp check --fix",
   },
+  fmt: {
+    ignorePatterns: [
+      ".agent/**",
+      ".agents/**",
+      ".claude/**",
+      ".codex/**",
+      ".continue/**",
+      ".cursor/**",
+      ".gemini/**",
+      ".opencode/**",
+      ".pi/**",
+      ".roo/**",
+      ".windsurf/**",
+      "tools/oxlint/anti-slop/**",
+    ],
+  },
   lint: {
     ignorePatterns: [
       "**/dist/**",
       "**/_generated/**",
       "**/node_modules/**",
+      ".agent/**",
+      ".agents/**",
+      ".claude/**",
+      ".codex/**",
+      ".continue/**",
+      ".cursor/**",
+      ".gemini/**",
+      ".opencode/**",
+      ".pi/**",
+      ".roo/**",
+      ".windsurf/**",
       ".github/**",
-      "packages/auth/src/server/auth.ts",
-      "packages/auth/src/server/index.ts",
-      "packages/auth/src/server/implementation.ts",
+      "tools/oxlint/anti-slop/**",
+    ],
+    jsPlugins: [
+      {
+        name: "anti-slop",
+        specifier: "./tools/oxlint/anti-slop/index.ts",
+      },
     ],
     options: {
       typeAware: true,
       typeCheck: true,
     },
+    rules: {
+      "anti-slop/no-chained-type-assertions": "error",
+      "anti-slop/no-conditional-empty-object-spread": "error",
+      "anti-slop/no-module-mocking": "error",
+      "anti-slop/no-reflect-apply": "error",
+      "anti-slop/no-reflect-get": "error",
+      "anti-slop/no-widen-then-assert": "error",
+    },
+    overrides: [
+      {
+        files: ["packages/auth/src/server/validators.ts"],
+        rules: {
+          "anti-slop/no-chained-type-assertions": "off",
+        },
+      },
+    ],
   },
   run: {
     cache: {

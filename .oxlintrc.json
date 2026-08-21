@@ -1,6 +1,12 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
   "plugins": ["typescript", "jest", "import", "unicorn"],
+  "jsPlugins": [
+    {
+      "name": "anti-slop",
+      "specifier": "./tools/oxlint/anti-slop/index.ts"
+    }
+  ],
   "env": {
     "browser": true,
     "node": true
@@ -10,11 +16,23 @@
     "**/.next/**",
     "**/coverage/**",
     "**/node_modules/**",
+    ".agent/**",
+    ".agents/**",
+    ".claude/**",
+    ".codex/**",
+    ".continue/**",
+    ".cursor/**",
+    ".gemini/**",
+    ".opencode/**",
+    ".pi/**",
+    ".roo/**",
+    ".windsurf/**",
     "**/convex/_generated/**",
     "packages/auth/src/component/_generated/**",
     "examples/**/.output/**",
     "examples/**/src/routeTree.gen.ts",
-    "**/*.d.ts"
+    "**/*.d.ts",
+    "tools/oxlint/anti-slop/**"
   ],
   "rules": {
     "typescript/no-unused-vars": ["warn", { "varsIgnorePattern": "^_", "argsIgnorePattern": "^_" }],
@@ -23,7 +41,13 @@
     "typescript/no-empty-object-type": "off",
     "typescript/no-require-imports": "off",
     "typescript/no-unused-expressions": "off",
-    "jest/no-focused-tests": "warn"
+    "jest/no-focused-tests": "warn",
+    "anti-slop/no-chained-type-assertions": "error",
+    "anti-slop/no-conditional-empty-object-spread": "error",
+    "anti-slop/no-module-mocking": "error",
+    "anti-slop/no-reflect-apply": "error",
+    "anti-slop/no-reflect-get": "error",
+    "anti-slop/no-widen-then-assert": "error"
   },
   "overrides": [
     {
@@ -39,6 +63,12 @@
         "convex/explicit-table-ids": "error",
         "convex/import-wrong-runtime": "error",
         "convex/require-args-validator": ["error", { "ignoreUnusedArguments": false }]
+      }
+    },
+    {
+      "files": ["packages/auth/src/server/validators.ts"],
+      "rules": {
+        "anti-slop/no-chained-type-assertions": "off"
       }
     },
     {

@@ -25,6 +25,7 @@ ignorePatterns = [
   "**/.svelte-kit/**",
   "docs/src/generated/**",
   "docs/src/routeTree.gen.ts",
+  "tools/oxlint/anti-slop/**",
 ]
 
 # Loaded by CLIs, framework configuration, or optional platform adapters.
