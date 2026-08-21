@@ -5,8 +5,8 @@
  * import { github } from "@estifanos-sh/convex-auth/providers/github";
  *
  * github({
- *   clientId: env.AUTH_GITHUB_ID!,
- *   clientSecret: env.AUTH_GITHUB_SECRET!,
+ *   clientId: env.GITHUB_CLIENT_ID,
+ *   clientSecret: env.GITHUB_CLIENT_SECRET,
  * })
  * ```
  *
@@ -64,8 +64,8 @@ export interface GitHubConfig {
  * import { github } from "@estifanos-sh/convex-auth/providers/github";
  *
  * github({
- *   clientId: env.AUTH_GITHUB_ID!,
- *   clientSecret: env.AUTH_GITHUB_SECRET!,
+ *   clientId: env.GITHUB_CLIENT_ID,
+ *   clientSecret: env.GITHUB_CLIENT_SECRET,
  * })
  * ```
  */

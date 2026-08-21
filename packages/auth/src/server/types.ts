@@ -586,10 +586,6 @@ export interface PhoneConfig<DataModel extends GenericDataModel = GenericDataMod
     ctx: GenericActionCtxWithAuthConfig<DataModel>,
   ) => Promise<void>;
   /**
-   * Defaults to `env.AUTH_<PROVIDER_ID>_KEY`.
-   */
-  apiKey?: string;
-  /**
    * Override this to generate a custom token.
    * Note that the tokens are assumed to be cryptographically secure.
    * Any tokens shorter than 24 characters are assumed to not

@@ -202,7 +202,7 @@ No test imports `src/react`, `src/svelte`, `src/expo`, `src/browser`, constructs
 - Dead cron-poll webhook delivery path (`webhook/delivery.ts:153-168`, `webhook.ts:155-195`) with a divergent second backoff calc — no callers; delete.
 - `redirect.ts` is a 6-line `@internal` helper, not the escape hatch it's sometimes described as (the real one is `custom.ts`, which is well-designed) — no action, just noting.
 - Expo silently lacks `runtime.sync`/`runtime.mutex` (cross-tab sync + cross-context lock) that browser provides — arguably fine on single-process RN, but the parity gap is invisible at the type level; document it.
-- `.npmignore` duplicates `files[]` negative globs; `dist/model.*`/`dist/schema.*` ship unreferenced; `tsconfig.consumer.json` maps `/errors` to a subpath not in `exports`; reference-app `convex/functions.ts:4` imports the heavy `auth` handle instead of `./auth/core`; `reference/architecture` calls `auth.oauth.*` "not shipped yet" while it ships; several env vars (`AUTH_LOG_SECRETS`, `AUTH_PASSWORD_EMAIL_VERIFICATION`, `AUTH_EMAIL`, `RESEND_API_KEY`) are undocumented; `credentials()` provider has no docs page. **[Low-confidence]** `bench.ts` appears orphaned (no CI/package reference) — confirm before deleting.
+- `.npmignore` duplicates `files[]` negative globs; `dist/model.*`/`dist/schema.*` ship unreferenced; `tsconfig.consumer.json` maps `/errors` to a subpath not in `exports`; reference-app `convex/functions.ts:4` imports the heavy `auth` handle instead of `./auth/core`; `reference/architecture` calls `auth.oauth.*` "not shipped yet" while it ships; `credentials()` provider has no docs page. **[Low-confidence]** `bench.ts` appears orphaned (no CI/package reference) — confirm before deleting.
 
 ---
 

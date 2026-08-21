@@ -2,7 +2,6 @@ import { ConvexError, GenericId } from "convex/values";
 
 import type { RefreshToken } from "../../shared/brand";
 import { ErrorCode } from "../../shared/codes";
-import { envOptionalNumber, readConfigSync } from "../env";
 import { maybeRedact } from "../log";
 import type { ConvexAuthConfig } from "../types";
 
@@ -19,10 +18,7 @@ const DEFAULT_SESSION_INACTIVE_DURATION_MS = 1000 * 60 * 60 * 24 * 30;
 export const REFRESH_TOKEN_REUSE_WINDOW_MS = 10 * 1000;
 
 export const refreshTokenExpirationTime = (config: ConvexAuthConfig, now = Date.now()) =>
-  now +
-  (config.session?.inactiveDurationMs ??
-    readConfigSync(envOptionalNumber("AUTH_SESSION_INACTIVE_DURATION_MS")) ??
-    DEFAULT_SESSION_INACTIVE_DURATION_MS);
+  now + (config.session?.inactiveDurationMs ?? DEFAULT_SESSION_INACTIVE_DURATION_MS);
 
 /** @internal */
 export const parseRefreshToken = (

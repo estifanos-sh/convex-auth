@@ -92,7 +92,7 @@ test("refreshed access token gets a unique jti", async () => {
 test("refresh token expiration", async () => {
   vi.useFakeTimers();
   const ONE_DAY_MS = 1000 * 60 * 60 * 24;
-  setEnv("AUTH_SESSION_INACTIVE_DURATION_MS", `${ONE_DAY_MS}`);
+  setEnv("SESSION_INACTIVE_DURATION_MS", `${ONE_DAY_MS}`);
   const t = convexTest(schema);
   const initialTokens = expectSignInSession(
     await t.action(api.auth.signIn, {
@@ -255,7 +255,7 @@ test("refresh token theft revokes the entire session", async () => {
 test("session expiration", async () => {
   vi.useFakeTimers();
   const ONE_DAY_MS = 1000 * 60 * 60 * 24;
-  setEnv("AUTH_SESSION_TOTAL_DURATION_MS", `${ONE_DAY_MS}`);
+  setEnv("SESSION_TOTAL_DURATION_MS", `${ONE_DAY_MS}`);
   const t = convexTest(schema);
   const initialTokens = expectSignInSession(
     await t.action(api.auth.signIn, {

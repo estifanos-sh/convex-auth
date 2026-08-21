@@ -1,7 +1,4 @@
 // fallow-ignore-file unused-file
-if (!process.env.AUTH_PASSWORD_EMAIL_VERIFICATION) {
-  process.env.AUTH_PASSWORD_EMAIL_VERIFICATION = "false";
-}
 
 const DIRECT_CALL_WARNING = "Convex functions should not directly call other Convex functions.";
 const EXPECTED_ERROR_SUBSTRINGS = [

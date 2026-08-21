@@ -9,13 +9,13 @@ below show the stable shape at publication time.
 import { github } from "@estifanos-sh/convex-auth/providers";
 import { env } from "./_generated/server";
 
-if (!env.AUTH_GITHUB_ID || !env.AUTH_GITHUB_SECRET) {
+if (!env.GITHUB_CLIENT_ID || !env.GITHUB_CLIENT_SECRET) {
   throw new Error("GitHub OAuth environment variables are required");
 }
 
 github({
-  clientId: env.AUTH_GITHUB_ID,
-  clientSecret: env.AUTH_GITHUB_SECRET,
+  clientId: env.GITHUB_CLIENT_ID,
+  clientSecret: env.GITHUB_CLIENT_SECRET,
 });
 ```
 

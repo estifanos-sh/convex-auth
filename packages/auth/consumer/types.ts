@@ -34,7 +34,8 @@ void authEnvironment.JWT_PRIVATE_KEY;
 void authEnvironment.JWKS;
 // @ts-expect-error Legacy secret encryption material is no longer public configuration.
 void authEnvironment.AUTH_SECRET_ENCRYPTION_KEY;
-const optionalProviderEnvironment: string | undefined = authEnvironment.AUTH_GITHUB_ID;
+// @ts-expect-error Provider credentials belong to the application environment.
+void authEnvironment.AUTH_GITHUB_ID;
 declare const authComponent: Parameters<typeof defineAuth>[0];
 declare const authUserId: GenericId<"User">;
 declare const authGroupId: GenericId<"Group">;
@@ -87,7 +88,6 @@ const permissions = definePermissions({
 void defineApp({ env: authEnv });
 void optionalKeyring;
 void authEnvironment;
-void optionalProviderEnvironment;
 void permissions.roles.admin.id;
 void createAuth;
 void defineAuth(authComponent, {

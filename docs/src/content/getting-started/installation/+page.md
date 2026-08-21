@@ -107,10 +107,17 @@ The wizard creates:
 ```ts
 // convex/convex.config.ts
 import { defineApp } from "convex/server";
+import { v } from "convex/values";
 import auth from "@estifanos-sh/convex-auth/convex.config";
 import { authEnv } from "@estifanos-sh/convex-auth/server";
 
-const app = defineApp({ env: authEnv });
+const app = defineApp({
+  env: {
+    ...authEnv,
+    GITHUB_CLIENT_ID: v.string(),
+    GITHUB_CLIENT_SECRET: v.string(),
+  },
+});
 app.use(auth);
 export default app;
 ```
@@ -127,8 +134,8 @@ import { github } from "@estifanos-sh/convex-auth/providers/github";
 const auth = defineAuth(components.auth, {
   providers: [
     github({
-      clientId: env.AUTH_GITHUB_ID!,
-      clientSecret: env.AUTH_GITHUB_SECRET!,
+      clientId: env.GITHUB_CLIENT_ID,
+      clientSecret: env.GITHUB_CLIENT_SECRET,
     }),
   ],
 });

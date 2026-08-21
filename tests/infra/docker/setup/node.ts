@@ -100,7 +100,6 @@ export default async function setupNodeInterop(project: {
         timeout: convexTimeoutMs,
       });
       await run("vp", ["exec", "convex", "env", "set", "APP_URL", env.APP_URL], convexEnv);
-      await run("vp", ["exec", "convex", "env", "set", "AUTH_EMAIL", env.AUTH_EMAIL], convexEnv);
       await writeFile(authKeysPath, generated.authKeys + "\n");
       await run(
         "vp",
@@ -109,12 +108,12 @@ export default async function setupNodeInterop(project: {
       );
       await run(
         "vp",
-        ["exec", "convex", "env", "set", "AUTH_GOOGLE_ID", env.AUTH_GOOGLE_ID],
+        ["exec", "convex", "env", "set", "GOOGLE_CLIENT_ID", env.GOOGLE_CLIENT_ID],
         convexEnv,
       );
       await run(
         "vp",
-        ["exec", "convex", "env", "set", "AUTH_GOOGLE_SECRET", env.AUTH_GOOGLE_SECRET],
+        ["exec", "convex", "env", "set", "GOOGLE_CLIENT_SECRET", env.GOOGLE_CLIENT_SECRET],
         convexEnv,
       );
       await run(
@@ -160,9 +159,8 @@ function baseEnv() {
     TEST_TARGET_BASE_URL: "http://127.0.0.1:3210",
     CONVEX_SITE_URL: "http://127.0.0.1:3211",
     APP_URL: "http://localhost:5173",
-    AUTH_EMAIL: "test@example.com",
-    AUTH_GOOGLE_ID: "test-google-client-id",
-    AUTH_GOOGLE_SECRET: "test-google-client-secret",
+    GOOGLE_CLIENT_ID: "test-google-client-id",
+    GOOGLE_CLIENT_SECRET: "test-google-client-secret",
     RESEND_API_KEY: "test-resend-api-key",
     ZITADEL_BASE_URL: "http://127.0.0.1:8080",
     // A dotted Docker network alias keeps the interop endpoint compatible with

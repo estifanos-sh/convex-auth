@@ -17,8 +17,8 @@ import { env } from "./_generated/server";
 import { permissions } from "./roles";
 
 function maybeGoogleProvider() {
-  const clientId = env.AUTH_GOOGLE_ID;
-  const clientSecret = env.AUTH_GOOGLE_SECRET;
+  const clientId = env.GOOGLE_CLIENT_ID;
+  const clientSecret = env.GOOGLE_CLIENT_SECRET;
   if (!clientId || !clientSecret) {
     return null;
   }
@@ -52,7 +52,7 @@ function asResendSendCtx(ctx: GenericActionCtx<AnyDataModel>): ResendSendCtx {
 }
 
 const emailProvider = email({
-  from: env.AUTH_EMAIL ?? "My App <onboarding@resend.dev>",
+  from: "My App <onboarding@resend.dev>",
   send: async (ctx, params) => {
     await resend.sendEmailManually(
       asResendSendCtx(ctx),
@@ -85,15 +85,15 @@ const emailProvider = email({
   },
 });
 
-const passwordEmailVerification = env.AUTH_PASSWORD_EMAIL_VERIFICATION === "true";
 const passkeyProvider = webauthn();
-const passwordProvider = passwordEmailVerification
-  ? password({
-      reset: emailProvider,
-      verify: emailProvider,
-      afterReset: passkeyProvider.rotate(),
-    })
-  : password();
+const passwordProvider = password({
+  reset: emailProvider,
+  afterReset: passkeyProvider.rotate(),
+});
+const verifiedPasswordProvider = password({
+  id: "password-verified",
+  verify: emailProvider,
+});
 
 const googleProvider = maybeGoogleProvider();
 const auth = defineAuth(components.auth, {
@@ -101,6 +101,7 @@ const auth = defineAuth(components.auth, {
     connection(),
     ...(googleProvider ? [googleProvider] : []),
     passwordProvider,
+    verifiedPasswordProvider,
     passkeyProvider,
     totp({ issuer: "ConvexAuth Example" }),
     anonymous(),
@@ -111,6 +112,16 @@ const auth = defineAuth(components.auth, {
     }),
     emailProvider,
   ],
+  session: {
+    get inactiveDurationMs() {
+      return env.SESSION_INACTIVE_DURATION_MS
+        ? Number(env.SESSION_INACTIVE_DURATION_MS)
+        : undefined;
+    },
+    get totalDurationMs() {
+      return env.SESSION_TOTAL_DURATION_MS ? Number(env.SESSION_TOTAL_DURATION_MS) : undefined;
+    },
+  },
   permissions,
   oauth: {
     pages: { login: "/demo/sign-in", consent: "/demo/oauth/authorize" },

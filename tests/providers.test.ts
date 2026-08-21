@@ -261,6 +261,25 @@ test("password() emits a credentials provider with a default scrypt crypto", () 
   expect(provider.extraProviders).toEqual([]);
 });
 
+test("password() rejects reset and recover when no reset provider is configured", async () => {
+  const provider = password();
+
+  await expect(
+    provider.authorize({ email: "user@example.com", flow: "reset" }, {} as never),
+  ).rejects.toThrow("Password reset is not enabled");
+  await expect(
+    provider.authorize(
+      {
+        email: "user@example.com",
+        code: "123456",
+        newPassword: "newpass123",
+        flow: "recover",
+      },
+      {} as never,
+    ),
+  ).rejects.toThrow("Password reset is not enabled");
+});
+
 test("password() accepts a custom id and registers reset/verify as extra providers", () => {
   const resetProvider = email({ from: "a@b.com", send: async () => {} });
   const verifyProvider = email({ from: "a@b.com", send: async () => {}, id: "verify-email" });
@@ -339,6 +358,7 @@ test("phone() defaults id/type and a 20-minute maxAge", () => {
   expect(provider.maxAge).toBe(60 * 20);
   expect(provider.sendVerificationRequest).toBe(send);
   expect(typeof provider.authorize).toBe("function");
+  expect(provider).not.toHaveProperty("apiKey");
 });
 
 // ---------------------------------------------------------------------------

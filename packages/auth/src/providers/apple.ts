@@ -5,10 +5,10 @@
  * import { apple } from "@estifanos-sh/convex-auth/providers/apple";
  *
  * apple({
- *   clientId: env.AUTH_APPLE_ID!,
- *   teamId: env.AUTH_APPLE_TEAM_ID!,
- *   keyId: env.AUTH_APPLE_KEY_ID!,
- *   privateKey: env.AUTH_APPLE_PRIVATE_KEY!,
+ *   clientId: env.APPLE_CLIENT_ID,
+ *   teamId: env.APPLE_TEAM_ID,
+ *   keyId: env.APPLE_KEY_ID,
+ *   privateKey: env.APPLE_PRIVATE_KEY,
  * })
  * ```
  *
@@ -54,10 +54,10 @@ export interface AppleConfig {
  * import { apple } from "@estifanos-sh/convex-auth/providers/apple";
  *
  * apple({
- *   clientId: env.AUTH_APPLE_ID!,
- *   teamId: env.AUTH_APPLE_TEAM_ID!,
- *   keyId: env.AUTH_APPLE_KEY_ID!,
- *   privateKey: env.AUTH_APPLE_PRIVATE_KEY!,
+ *   clientId: env.APPLE_CLIENT_ID,
+ *   teamId: env.APPLE_TEAM_ID,
+ *   keyId: env.APPLE_KEY_ID,
+ *   privateKey: env.APPLE_PRIVATE_KEY,
  * })
  * ```
  */

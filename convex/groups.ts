@@ -122,7 +122,7 @@ export const authProviders = query({
   args: {},
   returns: v.object({ google: v.boolean() }),
   handler: async () => ({
-    google: Boolean(env.AUTH_GOOGLE_ID && env.AUTH_GOOGLE_SECRET),
+    google: Boolean(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET),
   }),
 });
 
@@ -419,7 +419,7 @@ export const inviteMember = authAction({
 
     const appUrl = env.APP_URL ?? "http://localhost:3001";
     const inviteLink = `${appUrl}/?invite=${result.token}&email=${encodeURIComponent(email)}`;
-    const from = env.AUTH_EMAIL ?? "My App <onboarding@resend.dev>";
+    const from = "My App <onboarding@resend.dev>";
 
     try {
       const res = await fetch("https://api.resend.com/emails", {

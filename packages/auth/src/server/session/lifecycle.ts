@@ -3,7 +3,6 @@ import { GenericId } from "convex/values";
 
 import type { RefreshToken } from "../../shared/brand";
 import { authDb } from "../db";
-import { envOptionalNumber, readConfigSync } from "../env";
 import { queueAuthEvent } from "../events";
 import { getAuthenticatedSessionIdOrNull } from "../identity/claims";
 import { LOG_LEVELS, log, maybeRedact } from "../log";
@@ -23,16 +22,12 @@ const DEFAULT_SESSION_TOTAL_DURATION_MS = 1000 * 60 * 60 * 24 * 30;
 /**
  * Absolute expiration timestamp (ms) for a new session.
  *
- * Resolved from `config.session.totalDurationMs`, then the
- * `AUTH_SESSION_TOTAL_DURATION_MS` env var, defaulting to 30 days.
+ * Resolved from `config.session.totalDurationMs`, defaulting to 30 days.
  *
  * @internal
  */
 export const sessionExpirationTime = (config: ConvexAuthConfig, now = Date.now()) =>
-  now +
-  (config.session?.totalDurationMs ??
-    readConfigSync(envOptionalNumber("AUTH_SESSION_TOTAL_DURATION_MS")) ??
-    DEFAULT_SESSION_TOTAL_DURATION_MS);
+  now + (config.session?.totalDurationMs ?? DEFAULT_SESSION_TOTAL_DURATION_MS);
 
 /**
  * Mutation-side session issuance result. The mutation creates the session

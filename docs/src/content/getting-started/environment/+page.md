@@ -52,39 +52,57 @@ export default {
 };
 ```
 
-## Provider
+## Application-owned environment
 
-| Pattern                  | Example              |
-| ------------------------ | -------------------- |
-| `AUTH_<PROVIDER>_ID`     | `AUTH_GITHUB_ID`     |
-| `AUTH_<PROVIDER>_SECRET` | `AUTH_GITHUB_SECRET` |
+Provider credentials and delivery-service secrets are not part of `authEnv`.
+Declare them in your app and pass them explicitly to the provider that consumes
+them:
 
-### OAuth provider env
+```ts
+// convex/convex.config.ts
+import { authEnv } from "@estifanos-sh/convex-auth/server";
+import { defineApp } from "convex/server";
+import { v } from "convex/values";
 
-| Provider  | Required variables                                                                   | Optional variables      |
-| --------- | ------------------------------------------------------------------------------------ | ----------------------- |
-| Google    | `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`                                               | -                       |
-| GitHub    | `AUTH_GITHUB_ID`, `AUTH_GITHUB_SECRET`                                               | -                       |
-| Apple     | `AUTH_APPLE_ID`, `AUTH_APPLE_TEAM_ID`, `AUTH_APPLE_KEY_ID`, `AUTH_APPLE_PRIVATE_KEY` | -                       |
-| Microsoft | `AUTH_MICROSOFT_TENANT_ID`, `AUTH_MICROSOFT_ID`                                      | `AUTH_MICROSOFT_SECRET` |
-
-OAuth provider callbacks default to:
-
-```text
-${CONVEX_SITE_URL}/auth/callback/<provider>
+export default defineApp({
+  env: {
+    ...authEnv,
+    GITHUB_CLIENT_ID: v.string(),
+    GITHUB_CLIENT_SECRET: v.string(),
+    RESEND_API_KEY: v.string(),
+  },
+});
 ```
 
-This matches the default `path: "/auth"` used by `defineAuth`. Pass
-`redirectUri` in provider config when you want to override that default.
+```ts
+github({
+  clientId: env.GITHUB_CLIENT_ID,
+  clientSecret: env.GITHUB_CLIENT_SECRET,
+});
+```
+
+The names above are examples owned by the application. Convex Auth neither
+reads nor reserves them. The same applies to sender addresses, SMS credentials,
+and flags that select which providers an application configures.
 
 ## Optional
 
-| Variable                            | Purpose                                                          | Default           |
-| ----------------------------------- | ---------------------------------------------------------------- | ----------------- |
-| `AUTH_SESSION_TOTAL_DURATION_MS`    | Max session lifetime                                             | 30 days           |
-| `AUTH_SESSION_INACTIVE_DURATION_MS` | Inactive session timeout                                         | Provider-specific |
-| `AUTH_LOG_LEVEL`                    | `DEBUG` / `INFO` / `WARN` / `ERROR`                              | `INFO`            |
-| `AUTH_LOG_SECRETS`                  | `"true"` logs secret values in full; otherwise they are redacted | `"false"`         |
+| Variable           | Purpose                                                          | Default   |
+| ------------------ | ---------------------------------------------------------------- | --------- |
+| `AUTH_LOG_LEVEL`   | `DEBUG` / `INFO` / `WARN` / `ERROR`                              | `INFO`    |
+| `AUTH_LOG_SECRETS` | `"true"` logs secret values in full; otherwise they are redacted | `"false"` |
+
+Configure session lifetimes explicitly on `defineAuth`:
+
+```ts
+defineAuth(components.auth, {
+  providers,
+  session: {
+    totalDurationMs: 30 * 24 * 60 * 60 * 1000,
+    inactiveDurationMs: 7 * 24 * 60 * 60 * 1000,
+  },
+});
+```
 
 ### `.well-known` content
 
@@ -107,16 +125,3 @@ redirects:
 ```bash
 APP_URL=https://app.example.com
 ```
-
-### Email and password provider
-
-These are declared on `authEnv` (so they are typed and validated when you use
-`defineApp({ env: authEnv })`), but they are read by your own provider config in
-`convex/auth.ts` rather than by the library directly. Wire them where you
-configure the `email()` and `password()` providers.
-
-| Variable                           | Purpose                                                                        | Default   |
-| ---------------------------------- | ------------------------------------------------------------------------------ | --------- |
-| `AUTH_EMAIL`                       | Default `from` address for the `email()` provider                              | -         |
-| `RESEND_API_KEY`                   | API key for sending email through Resend from your `email()` provider's `send` | -         |
-| `AUTH_PASSWORD_EMAIL_VERIFICATION` | `"true"` enables email verification / reset for the `password()` provider      | `"false"` |

@@ -1,23 +1,4 @@
-/**
- * Integration tests for the password provider's `reset` and `verify` flows.
- *
- * `convex/auth.ts` reads `AUTH_PASSWORD_EMAIL_VERIFICATION` at module-init
- * time. The shared test setup defaults the flag to `"false"` so legacy
- * password tests in `tests/passwords.test.ts` keep returning a session
- * directly without intercepting OTP emails. This file flips the flag at the
- * top so `convex/auth.ts` is loaded with `password({ reset, verify })` and
- * the post-signup verification + reset flows are wired through the email
- * provider.
- *
- * Setting `process.env.AUTH_PASSWORD_EMAIL_VERIFICATION = "true"` BEFORE
- * importing the convex modules ensures this file's view of the auth runtime
- * has reset and verify enabled. Vite resolves the convex modules per-file
- * via `import.meta.glob`, so as long as no earlier test in this project has
- * already loaded `convex/auth.ts`, the import-time check picks up the new
- * value.
- */
-
-process.env.AUTH_PASSWORD_EMAIL_VERIFICATION = "true";
+/** Integration tests for explicitly configured password reset and verification providers. */
 
 import { api, components } from "@convex/_generated/api";
 import schema from "@convex/schema";
@@ -35,14 +16,11 @@ test("reset verification returns a passkey rotation without issuing a session", 
   const t = convexTest(schema);
   const email = "reset-flow@example.com";
 
-  const signUpCapture = stubResendCapture();
   const signUpResult = await t.action(api.auth.signIn, {
     provider: "password",
     params: { email, password: TEST_PASSWORD, flow: "signUp" },
   });
-  signUpCapture.restore();
-  expect(signUpResult.kind).toBe("started");
-  expect(signUpCapture.code()).not.toEqual("");
+  expectSignInSession(signUpResult);
 
   const resetCapture = stubResendCapture();
   const resetStart = await t.action(api.auth.signIn, {
@@ -54,7 +32,6 @@ test("reset verification returns a passkey rotation without issuing a session", 
   expect(resetStart.kind).toBe("started");
   expect(resetCapture.captured()).not.toBeNull();
   expect(resetCapture.code()).not.toEqual("");
-  expect(resetCapture.code()).not.toEqual(signUpCapture.code());
 
   const NEW_PASSWORD = "freshpassword123";
   const accountBefore = await t.run((ctx) =>
@@ -94,7 +71,7 @@ test("verify without newPassword completes post-signup email confirmation", asyn
 
   const capture = stubResendCapture();
   const signUpResult = await t.action(api.auth.signIn, {
-    provider: "password",
+    provider: "password-verified",
     params: { email, password: TEST_PASSWORD, flow: "signUp" },
   });
   capture.restore();
@@ -103,7 +80,7 @@ test("verify without newPassword completes post-signup email confirmation", asyn
 
   const tokens = expectSignInSession(
     await t.action(api.auth.signIn, {
-      provider: "password",
+      provider: "password-verified",
       params: { email, code: capture.code(), flow: "verify" },
     }),
   );
@@ -115,7 +92,7 @@ test("verify without newPassword completes post-signup email confirmation", asyn
 
   const reSignIn = expectSignInSession(
     await t.action(api.auth.signIn, {
-      provider: "password",
+      provider: "password-verified",
       params: { email, password: TEST_PASSWORD, flow: "signIn" },
     }),
   );
@@ -141,7 +118,7 @@ test("verify resend flow does not reveal whether an email is registered", async 
 
   const capture = stubResendCapture();
   const result = await t.action(api.auth.signIn, {
-    provider: "password",
+    provider: "password-verified",
     params: { email: "no-such-verify-user@example.com", flow: "verify" },
   });
   capture.restore();

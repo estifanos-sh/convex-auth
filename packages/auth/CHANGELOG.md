@@ -9,6 +9,11 @@
 - Password reset completion is the required `recover` flow with
   `{ email, code, newPassword }`. The overloaded `verify` flow no longer accepts
   an optional `newPassword`; it is reserved for email verification.
+- `authEnv` no longer declares provider credentials, email delivery settings,
+  application feature flags, or session durations. Applications declare their
+  own environment names and pass those values to provider and `defineAuth`
+  configuration. Phone providers no longer discover
+  `AUTH_<PROVIDER_ID>_KEY`; capture delivery credentials in `send` instead.
 
 ### New
 
