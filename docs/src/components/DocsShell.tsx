@@ -1,4 +1,13 @@
-import { For, Show, createEffect, createSignal, on, onCleanup, onMount } from "solid-js";
+import {
+  For,
+  Show,
+  createEffect,
+  createMemo,
+  createSignal,
+  on,
+  onCleanup,
+  onMount,
+} from "solid-js";
 import { useRouterState } from "@tanstack/solid-router";
 import type { DocumentationPage } from "../generated/docs";
 import { sidebar } from "../config/sidebar";
@@ -8,6 +17,11 @@ interface SearchResult {
   title: string;
   excerpt: string;
   section: string;
+}
+
+interface PageHeading {
+  id: string;
+  title: string;
 }
 
 function sectionFor(url: string) {
@@ -25,6 +39,13 @@ function adjacentPages(slug: string) {
     next: currentIndex >= 0 ? navigationItems[currentIndex + 1] : undefined,
     previous: currentIndex > 0 ? navigationItems[currentIndex - 1] : undefined,
   };
+}
+
+function headingsFromHtml(html: string): PageHeading[] {
+  return [...html.matchAll(/<h2 id="([^"]*)"[^>]*>([\s\S]*?)<\/h2>/g)].map((match) => ({
+    id: match[1],
+    title: match[2].replace(/<[^>]+>/g, "").trim(),
+  }));
 }
 
 function mountTabs(root: HTMLElement) {
@@ -56,6 +77,10 @@ function mountTabs(root: HTMLElement) {
   }
 }
 
+function currentTheme(): "light" | "dark" {
+  return document.documentElement.classList.contains("dark") ? "dark" : "light";
+}
+
 export function DocsShell(props: { page: DocumentationPage }) {
   let article: HTMLElement | undefined;
   let input: HTMLInputElement | undefined;
@@ -68,8 +93,10 @@ export function DocsShell(props: { page: DocumentationPage }) {
   const [query, setQuery] = createSignal("");
   const [results, setResults] = createSignal<SearchResult[]>([]);
   const [activeIndex, setActiveIndex] = createSignal(0);
+  const [theme, setTheme] = createSignal<"light" | "dark">("light");
   const section = () => sectionFor(`/convex-auth${props.page.slug}`);
   const adjacent = () => adjacentPages(props.page.slug);
+  const headings = createMemo(() => headingsFromHtml(props.page.html));
   let pagefind:
     | {
         init: () => Promise<void>;
@@ -117,8 +144,15 @@ export function DocsShell(props: { page: DocumentationPage }) {
     );
     setActiveIndex(0);
   };
+  const toggleTheme = () => {
+    const next = theme() === "dark" ? "light" : "dark";
+    setTheme(next);
+    document.documentElement.classList.toggle("dark", next === "dark");
+    localStorage.setItem("convex-auth-theme", next);
+  };
 
   onMount(() => {
+    setTheme(currentTheme());
     if (article) mountTabs(article);
     void import(/* @vite-ignore */ `${import.meta.env.BASE_URL}pagefind/pagefind.js`)
       .then(async (module) => {
@@ -155,26 +189,59 @@ export function DocsShell(props: { page: DocumentationPage }) {
       </a>
       <header class="docs-header">
         <div class="docs-header-inner">
-          <a class="docs-brand" href="/" aria-label="estifanos.sh home">
-            <span class="site-mark" aria-hidden="true" />
-            <span class="docs-site-context">estifanos.sh / </span>
-            <span>convex-auth</span>
+          <a class="docs-brand" href="/convex-auth/getting-started/installation/">
+            <img
+              alt=""
+              class="brand-symbol brand-symbol-light"
+              height="27"
+              src="/convex-auth/brand/symbol-color.svg"
+              width="27"
+            />
+            <img
+              alt=""
+              class="brand-symbol brand-symbol-dark"
+              height="27"
+              src="/convex-auth/brand/symbol-white.svg"
+              width="27"
+            />
+            <span class="brand-copy">
+              <span class="brand-word">convex</span>
+              <span class="brand-product">Auth</span>
+            </span>
           </a>
           <div class="docs-actions">
-            <button class="header-action" onClick={openSearch}>
-              Search
+            <button class="search-trigger" onClick={openSearch} type="button">
+              <SearchIcon />
+              <span>Search</span>
+              <kbd>⌘K</kbd>
+            </button>
+            <a
+              aria-label="GitHub repository"
+              class="header-link"
+              href="https://github.com/estifanos-sh/convex-auth"
+            >
+              <GitHubIcon />
+            </a>
+            <button
+              aria-label={theme() === "dark" ? "Switch to light theme" : "Switch to dark theme"}
+              class="icon-button"
+              onClick={toggleTheme}
+              type="button"
+            >
+              <Show when={theme() === "dark"} fallback={<MoonIcon />}>
+                <SunIcon />
+              </Show>
             </button>
             <button
               aria-controls="mobile-docs-nav"
               aria-expanded={menuOpen()}
-              class="header-action menu-button"
+              aria-label="Open documentation menu"
+              class="icon-button menu-button"
               onClick={() => setMenuOpen(!menuOpen())}
+              type="button"
             >
-              Menu
+              <MenuIcon />
             </button>
-            <a class="site-switch" href="https://estifanos.com/">
-              com
-            </a>
           </div>
         </div>
       </header>
@@ -190,56 +257,85 @@ export function DocsShell(props: { page: DocumentationPage }) {
               onClick={() => setMenuOpen(false)}
             />
             <nav class="mobile-nav" id="mobile-docs-nav">
-              <button class="header-action close-button" onClick={() => setMenuOpen(false)}>
-                Close
+              <button
+                aria-label="Close navigation"
+                class="icon-button close-button"
+                onClick={() => setMenuOpen(false)}
+                type="button"
+              >
+                <CloseIcon />
               </button>
               <Nav current={pathname()} onNavigate={() => setMenuOpen(false)} />
             </nav>
           </div>
         </Show>
         <main class="docs-main" id="main-content">
-          <header class="doc-header">
-            <Show when={section()}>
-              <p class="doc-section">{section()}</p>
+          <div class="doc-canvas">
+            <div>
+              <header class="doc-header">
+                <Show when={section()}>
+                  <p class="doc-section">{section()}</p>
+                </Show>
+                <h1>{props.page.title}</h1>
+                <p class="doc-description">{props.page.description}</p>
+              </header>
+              <article
+                class="doc-content"
+                data-pagefind-body
+                ref={(element) => {
+                  article = element;
+                }}
+                tabindex="-1"
+                innerHTML={props.page.html}
+              />
+              <nav class="doc-pagination" aria-label="Adjacent documentation pages">
+                <Show when={adjacent().previous}>
+                  {(previous) => (
+                    <a
+                      class="doc-pagination-link doc-pagination-previous"
+                      href={`/convex-auth${previous().slug}/`}
+                    >
+                      <span>Previous</span>
+                      <strong>{previous().title}</strong>
+                    </a>
+                  )}
+                </Show>
+                <Show when={adjacent().next}>
+                  {(next) => (
+                    <a
+                      class="doc-pagination-link doc-pagination-next"
+                      href={`/convex-auth${next().slug}/`}
+                    >
+                      <span>Next</span>
+                      <strong>{next().title}</strong>
+                    </a>
+                  )}
+                </Show>
+              </nav>
+            </div>
+            <Show when={headings().length}>
+              <nav aria-label="On this page" class="toc">
+                <h2>On this page</h2>
+                <ol>
+                  <For each={headings()}>
+                    {(heading) => (
+                      <li>
+                        <a href={`#${heading.id}`}>{heading.title}</a>
+                      </li>
+                    )}
+                  </For>
+                </ol>
+              </nav>
             </Show>
-            <h1>{props.page.title}</h1>
-            <p class="doc-description">{props.page.description}</p>
-          </header>
-          <article
-            class="doc-content"
-            data-pagefind-body
-            ref={(element) => {
-              article = element;
-            }}
-            tabindex="-1"
-            innerHTML={props.page.html}
-          />
-          <nav class="doc-pagination" aria-label="Adjacent documentation pages">
-            <Show when={adjacent().previous}>
-              {(previous) => (
-                <a
-                  class="doc-pagination-link doc-pagination-previous"
-                  href={`/convex-auth${previous().slug}/`}
-                >
-                  <span>{previous().section}</span>
-                  <strong>{previous().title}</strong>
-                </a>
-              )}
-            </Show>
-            <Show when={adjacent().next}>
-              {(next) => (
-                <a
-                  class="doc-pagination-link doc-pagination-next"
-                  href={`/convex-auth${next().slug}/`}
-                >
-                  <span>{next().section}</span>
-                  <strong>{next().title}</strong>
-                </a>
-              )}
-            </Show>
-          </nav>
+          </div>
         </main>
       </div>
+      <footer class="docs-footer">
+        <span>Authentication infrastructure for Convex apps.</span>
+        <a href="https://www.convex.dev">convex.dev</a>
+        <a href="https://docs.convex.dev">Convex docs</a>
+        <a href="https://github.com/estifanos-sh/convex-auth">GitHub</a>
+      </footer>
       <Show when={searchOpen()}>
         <div class="search-layer">
           <button aria-label="Close search" class="scrim" onClick={closeSearch} />
@@ -250,6 +346,7 @@ export function DocsShell(props: { page: DocumentationPage }) {
             role="dialog"
           >
             <div class="search-input">
+              <SearchIcon />
               <input
                 ref={(element) => {
                   input = element;
@@ -270,7 +367,6 @@ export function DocsShell(props: { page: DocumentationPage }) {
               }
             >
               <ol class="search-results">
-                {" "}
                 <For each={results()}>
                   {(result, index) => (
                     <li>
@@ -324,5 +420,80 @@ function Nav(props: { current: string; onNavigate?: () => void }) {
         )}
       </For>
     </nav>
+  );
+}
+
+function SearchIcon() {
+  return (
+    <svg aria-hidden="true" fill="none" height="16" viewBox="0 0 16 16" width="16">
+      <circle cx="7" cy="7" r="4.25" stroke="currentColor" stroke-width="1.5" />
+      <path
+        d="m10.2 10.2 3.05 3.05"
+        stroke="currentColor"
+        stroke-linecap="round"
+        stroke-width="1.5"
+      />
+    </svg>
+  );
+}
+
+function GitHubIcon() {
+  return (
+    <svg aria-hidden="true" fill="currentColor" height="16" viewBox="0 0 16 16" width="16">
+      <path d="M8 0a8 8 0 0 0-2.53 15.59c.4.07.55-.17.55-.38v-1.33c-2.23.48-2.7-1.07-2.7-1.07-.36-.93-.89-1.18-.89-1.18-.73-.5.05-.49.05-.49.8.06 1.23.83 1.23.83.72 1.22 1.89.87 2.35.66.07-.52.28-.87.51-1.07-1.78-.2-3.65-.89-3.65-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.54 7.54 0 0 1 4 0c1.53-1.03 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.28.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48v2.2c0 .21.15.46.55.38A8 8 0 0 0 8 0Z" />
+    </svg>
+  );
+}
+
+function SunIcon() {
+  return (
+    <svg aria-hidden="true" fill="none" height="16" viewBox="0 0 16 16" width="16">
+      <circle cx="8" cy="8" r="3.1" stroke="currentColor" stroke-width="1.5" />
+      <path
+        d="M8 1.4v1.4M8 13.2v1.4M1.4 8h1.4M13.2 8h1.4M3.2 3.2l1 1M11.8 11.8l1 1M3.2 12.8l1-1M11.8 4.2l1-1"
+        stroke="currentColor"
+        stroke-linecap="round"
+        stroke-width="1.5"
+      />
+    </svg>
+  );
+}
+
+function MoonIcon() {
+  return (
+    <svg aria-hidden="true" fill="none" height="16" viewBox="0 0 16 16" width="16">
+      <path
+        d="M13.3 10.2A5.4 5.4 0 1 1 5.8 2.7 4.3 4.3 0 0 0 13.3 10.2Z"
+        stroke="currentColor"
+        stroke-linejoin="round"
+        stroke-width="1.5"
+      />
+    </svg>
+  );
+}
+
+function MenuIcon() {
+  return (
+    <svg aria-hidden="true" fill="none" height="16" viewBox="0 0 16 16" width="16">
+      <path
+        d="M2.5 4.25h11M2.5 8h11M2.5 11.75h11"
+        stroke="currentColor"
+        stroke-linecap="round"
+        stroke-width="1.5"
+      />
+    </svg>
+  );
+}
+
+function CloseIcon() {
+  return (
+    <svg aria-hidden="true" fill="none" height="16" viewBox="0 0 16 16" width="16">
+      <path
+        d="m4 4 8 8M12 4 4 12"
+        stroke="currentColor"
+        stroke-linecap="round"
+        stroke-width="1.5"
+      />
+    </svg>
   );
 }
