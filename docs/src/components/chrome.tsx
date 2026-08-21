@@ -159,6 +159,16 @@ export function Chrome(props: { children: JSX.Element; landing?: boolean; withSi
           </Show>
         </div>
       </header>
+      <Show when={props.withSidebar}>
+        <section class="brand-strip" aria-label="Convex Auth by Estifanos">
+          <div class="brand-strip-inner">
+            <p class="brand-strip-title">
+              Convex Auth <span>By Estifanos</span>
+            </p>
+            <p class="brand-strip-deck">The unofficial Convex authentication solution.</p>
+          </div>
+        </section>
+      </Show>
       <div classList={{ "docs-frame": true, "docs-frame-home": !props.withSidebar }}>
         <Show when={props.withSidebar}>
           <aside class="rail">
@@ -189,30 +199,28 @@ export function Chrome(props: { children: JSX.Element; landing?: boolean; withSi
       </div>
       <footer class="site-foot">
         <div class="site-foot-inner">
-          <div class="site-foot-brand">
-            <img
-              alt="Convex"
-              class="brand-wordmark"
-              height="36"
-              src="/convex-auth/brand/convex-logo-white.svg"
-              width="92"
-            />
-            <p>Authentication infrastructure for Convex applications.</p>
+          <div class="site-foot-primary">
+            <div class="site-foot-brand">
+              <span>Built for</span>
+              <img
+                alt="Convex"
+                class="brand-wordmark"
+                height="36"
+                src="/convex-auth/brand/convex-logo-white.svg"
+                width="92"
+              />
+            </div>
+            <div class="site-foot-credits">
+              <a href="https://github.com/estifanos-sh/convex-auth">Open source on GitHub</a>
+              <a href="/convex-auth/llms.txt">llms.txt</a>
+            </div>
           </div>
-          <div class="site-foot-cols">
-            <section>
-              <h2>Product</h2>
-              <a href="/convex-auth/getting-started/installation/">Installation</a>
-              <a href="/convex-auth/getting-started/providers/">Providers</a>
-              <a href="/convex-auth/connection/overview/">Enterprise</a>
-            </section>
-            <section>
-              <h2>Developers</h2>
-              <a href="https://docs.convex.dev">Convex docs</a>
-              <a href="https://www.convex.dev">convex.dev</a>
-              <a href="https://github.com/estifanos-sh/convex-auth">GitHub</a>
-            </section>
-          </div>
+          <nav aria-label="Footer" class="site-foot-links">
+            <a href="/convex-auth/getting-started/installation/">Installation</a>
+            <a href="/convex-auth/getting-started/providers/">Providers</a>
+            <a href="/convex-auth/connection/overview/">Enterprise</a>
+            <a href="https://docs.convex.dev">Convex docs</a>
+          </nav>
         </div>
       </footer>
       <Show when={searchOpen()}>
