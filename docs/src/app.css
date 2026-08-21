@@ -396,7 +396,11 @@ input {
 }
 
 .chrome-docs .site-foot {
+  position: relative;
+  z-index: 20;
   grid-area: footer;
+  width: calc(100% + var(--rail-w));
+  margin-left: calc(-1 * var(--rail-w));
 }
 
 .chrome-docs .site-foot-inner {
@@ -1146,6 +1150,11 @@ input {
 
   .doc-pane {
     padding: 2rem 1.25rem 4rem;
+  }
+
+  .chrome-docs .site-foot {
+    width: 100%;
+    margin-left: 0;
   }
 
   .home-hero,
