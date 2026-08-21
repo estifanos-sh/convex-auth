@@ -256,7 +256,7 @@ input {
 
 .brand-strip {
   position: relative;
-  min-height: clamp(18rem, 27vw, 23rem);
+  min-height: clamp(15rem, 17vw, 18rem);
   overflow: hidden;
   background: #211718;
   color: #fffaf0;
@@ -265,7 +265,7 @@ input {
 .brand-strip::after {
   position: absolute;
   inset: 0;
-  background: url("/convex-auth/brand/convex-racing-lines.png") center bottom / 100% auto no-repeat;
+  background: url("/convex-auth/brand/convex-stripes.svg") center bottom / 100% auto no-repeat;
   content: "";
   pointer-events: none;
 }
@@ -274,12 +274,12 @@ input {
   position: relative;
   z-index: 1;
   display: grid;
-  grid-template-columns: minmax(0, 0.85fr) minmax(24rem, 1.15fr);
-  gap: clamp(3rem, 7vw, 8rem);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: clamp(3rem, 6vw, 6rem);
   width: min(100%, var(--page-width));
-  min-height: clamp(18rem, 27vw, 23rem);
+  min-height: clamp(15rem, 17vw, 18rem);
   margin: 0 auto;
-  padding: clamp(2.75rem, 5vw, 4.75rem) var(--page-gutter) clamp(7rem, 10vw, 9rem);
+  padding: clamp(2.5rem, 4vw, 3.75rem) var(--page-gutter) clamp(4.75rem, 7vw, 6rem);
   align-items: start;
 }
 
@@ -287,7 +287,7 @@ input {
   margin: 0;
   color: #fffaf0;
   font-family: "neue-haas-grotesk-display", "Inter Tight", Inter, sans-serif;
-  font-size: clamp(2.75rem, 4.5vw, 4.75rem);
+  font-size: clamp(2.5rem, 3.5vw, 4rem);
   font-weight: 900;
   letter-spacing: -0.035em;
   line-height: 0.95;
@@ -380,7 +380,27 @@ input {
 }
 
 .chrome-docs .docs-frame {
+  grid-template-areas:
+    "rail content"
+    "rail footer";
+  grid-template-rows: minmax(calc(100svh - var(--header-h)), auto) auto;
   background: var(--studio-paper);
+}
+
+.chrome-docs .rail {
+  grid-area: rail;
+}
+
+.chrome-docs .doc-pane {
+  grid-area: content;
+}
+
+.chrome-docs .site-foot {
+  grid-area: footer;
+}
+
+.chrome-docs .site-foot-inner {
+  width: 100%;
 }
 
 .docs-frame-home {
@@ -895,6 +915,10 @@ input {
   color: var(--broadcast-ink);
 }
 
+.search-close {
+  display: none;
+}
+
 .search-hits a {
   display: grid;
   gap: 2px;
@@ -1121,7 +1145,7 @@ input {
   }
 
   .doc-pane {
-    padding: 28px 0 64px;
+    padding: 2rem 1.25rem 4rem;
   }
 
   .home-hero,
@@ -1136,15 +1160,91 @@ input {
   }
 
   .search-chip {
-    width: 44px;
-    padding: 0;
+    width: auto;
+    padding-inline: 0.875rem;
     justify-content: center;
-    border-radius: 50%;
+    border-radius: var(--pill);
   }
 
-  .search-chip span,
   .search-chip kbd {
     display: none;
+  }
+
+  .drawer {
+    width: min(calc(100% - 2rem), 26rem);
+    max-height: calc(100dvh - 2rem);
+    margin: 1rem;
+    overscroll-behavior: contain;
+  }
+
+  .drawer .rail-group {
+    padding-inline: 1rem;
+  }
+
+  .search-overlay {
+    padding: 0;
+    place-items: stretch;
+  }
+
+  .search-sheet {
+    width: 100%;
+    height: 100dvh;
+    max-height: none;
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+    overscroll-behavior: contain;
+  }
+
+  .search-field {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    min-height: 4.5rem;
+    gap: 0.875rem;
+    padding: max(1rem, env(safe-area-inset-top)) 1.25rem 1rem;
+    background: var(--studio-sheet);
+  }
+
+  .search-field input {
+    font-size: 1rem;
+  }
+
+  .search-field kbd {
+    display: none;
+  }
+
+  .search-close {
+    display: grid;
+    width: 2.75rem;
+    height: 2.75rem;
+    flex: 0 0 auto;
+    border: 1px solid var(--line-standard);
+    border-radius: 50%;
+    background: transparent;
+    color: var(--broadcast-ink);
+    cursor: pointer;
+    place-items: center;
+  }
+
+  .search-close svg {
+    width: 1.125rem;
+    height: 1.125rem;
+  }
+
+  .search-hits a {
+    gap: 0.25rem;
+    padding: 1rem 1.25rem;
+  }
+
+  .search-empty {
+    padding: 1.25rem;
+  }
+
+  .doc-prose pre,
+  .doc-prose .shiki,
+  .code-window pre {
+    padding: 1.25rem 5rem 1.25rem 1.25rem;
   }
 }
 
@@ -1152,7 +1252,7 @@ input {
   .brand-strip-inner {
     grid-template-columns: 1fr;
     gap: 2rem;
-    padding-bottom: 8rem;
+    padding-bottom: 5.5rem;
   }
 
   .install-panel {
@@ -1171,9 +1271,18 @@ input {
 }
 
 @media (max-width: 47.5rem) {
+  .masthead {
+    gap: 0.75rem;
+    padding-inline: 1.25rem;
+  }
+
+  .masthead-actions {
+    gap: 0.5rem;
+  }
+
   .brand-wordmark {
-    width: 78px;
-    height: 30px;
+    width: 4.875rem;
+    height: 1.875rem;
   }
 
   .home-hero {
@@ -1185,17 +1294,36 @@ input {
 
   .brand-strip,
   .brand-strip-inner {
-    min-height: 25rem;
+    min-height: 0;
   }
 
   .brand-strip::after {
-    background-position: 34% bottom;
-    background-size: auto 7rem;
+    background-position: 49% bottom;
+    background-size: auto 4rem;
   }
 
   .brand-strip-inner {
     gap: 1.5rem;
-    padding: 2.5rem 1.25rem 7rem;
+    padding: 2.5rem 1.25rem 5.5rem;
+  }
+
+  .brand-strip-title {
+    font-size: clamp(2.25rem, 11vw, 3.25rem);
+  }
+
+  .brand-strip-deck {
+    max-width: 24rem;
+    font-size: 1rem;
+    line-height: 1.45;
+  }
+
+  .install-panel {
+    padding: 0.625rem;
+  }
+
+  .install-panel button {
+    min-height: 3.25rem;
+    padding-inline: 0.875rem;
   }
 
   .brand-strip-title span {
@@ -1208,6 +1336,29 @@ input {
 }
 
 @media (max-width: 34rem) {
+  .github-button {
+    width: 2.75rem;
+    padding: 0;
+    justify-content: center;
+  }
+
+  .github-button span {
+    display: none;
+  }
+
+  .search-chip,
+  .icon-btn {
+    min-height: 2.75rem;
+  }
+
+  .icon-btn {
+    width: 2.75rem;
+  }
+
+  .doc-pane {
+    padding-inline: 1rem;
+  }
+
   .pager {
     grid-template-columns: 1fr;
   }
