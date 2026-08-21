@@ -553,14 +553,14 @@ input {
 }
 
 .doc-prose table {
-  display: block;
+  display: table;
   width: 100%;
   margin: 24px 0;
-  overflow: auto;
   border: 1px solid var(--line-standard);
   border-radius: var(--radius-medium);
   border-collapse: separate;
   border-spacing: 0;
+  table-layout: fixed;
   background: var(--studio-sheet);
 }
 
@@ -568,8 +568,14 @@ input {
 .doc-prose td {
   padding: 10px 12px;
   border-bottom: 1px solid var(--line-whisper);
+  overflow-wrap: anywhere;
   text-align: left;
   vertical-align: top;
+}
+
+.doc-prose th:first-child,
+.doc-prose td:first-child {
+  width: 30%;
 }
 
 .doc-prose tr:last-child td {
