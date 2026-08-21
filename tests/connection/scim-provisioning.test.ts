@@ -23,8 +23,9 @@
 import { components } from "@convex/_generated/api";
 import schema from "@convex/schema";
 import { ErrorCode } from "@estifanos-sh/convex-auth/shared/codes";
+import { notifyScimAfterProvision } from "@estifanos-sh/convex-auth/server/connection/http";
 import { ConvexError } from "convex/values";
-import { expect, test } from "vite-plus/test";
+import { expect, test, vi } from "vite-plus/test";
 
 import { convexTest } from "../convex/setup";
 
@@ -36,6 +37,9 @@ import { convexTest } from "../convex/setup";
 type MemberDoc = { _id: string; status?: string; userId: string } | null;
 
 const provisionScimUser = components.auth.connection.scim.identity.provision;
+const provisionScimGroup = components.auth.connection.scim.identity.provisionGroup;
+const updateScimGroup = components.auth.connection.scim.identity.updateGroup;
+const revokeScimGroup = components.auth.connection.scim.identity.revokeGroup;
 
 /** Seed a group + an active SCIM-capable connection, mirroring replay.test.ts. */
 async function seedConnection(t: ReturnType<typeof convexTest>) {
@@ -52,6 +56,13 @@ async function seedConnection(t: ReturnType<typeof convexTest>) {
       protocol: "oidc",
       status: "active",
     });
+    await ctx.runMutation(components.auth.connection.scim.config.upsert, {
+      connectionId,
+      groupId,
+      status: "active",
+      basePath: `/scim/${connectionId}`,
+      tokenHash: `test-token-${connectionId}`,
+    });
     return { groupId, connectionId };
   });
 }
@@ -60,37 +71,81 @@ test("SCIM create-user provisions a membership and a linked SCIM identity", asyn
   const t = convexTest(schema);
   const { groupId, connectionId } = await seedConnection(t);
 
-  const { userId, memberId, identityId } = await t.run(async (ctx) => {
-    // POST /Users: create the local user...
-    const userId = (await ctx.runMutation(components.auth.user.create, {
-      data: { email: "provisioned@example.com", name: "Provisioned User" },
-    })) as never;
-    // ...add them to the connection's group...
-    const memberId = await ctx.runMutation(components.auth.group.member.create, {
-      groupId,
-      userId,
-      status: "active",
-    });
-    // ...and record the external-id <-> user link.
-    const identityId = await ctx.runMutation(components.auth.connection.scim.identity.upsert, {
+  const { userId } = await t.run((ctx) =>
+    ctx.runMutation(provisionScimUser, {
       connectionId,
-      groupId,
-      resourceType: "user",
       externalId: "okta-user-001",
-      userId,
+      userData: { email: "provisioned@example.com", name: "Provisioned User" },
+      profileUpdate: "always",
+      roleIds: [],
       active: true,
-      lastProvisionedAt: Date.now(),
-    });
-    return { userId, memberId, identityId };
-  });
+    }),
+  );
 
   // Membership now exists and is discoverable by (groupId, userId).
   const membership = (await t.run((ctx) =>
     ctx.runQuery(components.auth.group.member.get, { groupId, userId }),
   )) as MemberDoc;
-  expect(membership?._id).toBe(memberId);
   expect(membership?.status).toBe("active");
-  expect(identityId).toBeTruthy();
+  const identity = await t.run((ctx) =>
+    ctx.runQuery(components.auth.connection.scim.identity.get, {
+      connectionId,
+      resourceType: "user",
+      externalId: "okta-user-001",
+    }),
+  );
+  expect((identity as { userId?: string } | null)?.userId).toBe(userId);
+});
+
+test("SCIM provisions connection-owned users and groups without an externalId", async () => {
+  const t = convexTest(schema);
+  const { groupId, connectionId } = await seedConnection(t);
+
+  const user = await t.run((ctx) =>
+    ctx.runMutation(provisionScimUser, {
+      connectionId,
+      userData: { email: "directory-user@example.com", name: "Directory User" },
+      profileUpdate: "always",
+      roleIds: [],
+      active: true,
+    }),
+  );
+  const group = await t.run((ctx) =>
+    ctx.runMutation(provisionScimGroup, {
+      connectionId,
+      name: "Directory Group",
+      memberIds: [user.userId],
+      roleIds: [],
+    }),
+  );
+
+  const state = await t.run(async (ctx) => ({
+    userIdentity: await ctx.runQuery(components.auth.connection.scim.identity.get, {
+      connectionId,
+      userId: user.userId,
+    }),
+    groupIdentity: await ctx.runQuery(components.auth.connection.scim.identity.get, {
+      mappedGroupId: group.groupId,
+    }),
+    accounts: await ctx.runQuery(components.auth.account.list, { userId: user.userId }),
+    membership: await ctx.runQuery(components.auth.group.member.get, {
+      groupId,
+      userId: user.userId,
+    }),
+  }));
+
+  expect(state.userIdentity).toMatchObject({
+    connectionId,
+    userId: user.userId,
+    resourceType: "user",
+  });
+  expect(state.groupIdentity).toMatchObject({
+    connectionId,
+    mappedGroupId: group.groupId,
+    resourceType: "group",
+  });
+  expect(state.accounts).toHaveLength(0);
+  expect(state.membership).toMatchObject({ status: "active" });
 });
 
 test("SCIM PATCH active:false deactivates the membership (status flip)", async () => {
@@ -133,49 +188,40 @@ test("SCIM PATCH active:false deactivates the membership (status flip)", async (
   expect(activeMembers.page.some((m: { userId: string }) => m.userId === userId)).toBe(false);
 });
 
-test("SCIM identity upsert is idempotent on (connectionId, resourceType, externalId)", async () => {
+test("SCIM user aggregates require an active SCIM configuration", async () => {
   const t = convexTest(schema);
   const { groupId, connectionId } = await seedConnection(t);
-
-  const userId = (await t.run((ctx) =>
-    ctx.runMutation(components.auth.user.create, {
-      data: { email: "idem@example.com" },
-    }),
-  )) as never;
-
-  const first = await t.run((ctx) =>
-    ctx.runMutation(components.auth.connection.scim.identity.upsert, {
+  await t.run((ctx) =>
+    ctx.runMutation(components.auth.connection.scim.config.upsert, {
       connectionId,
       groupId,
-      resourceType: "user",
-      externalId: "azure-guid-42",
-      userId,
-      active: true,
+      status: "disabled",
+      basePath: `/scim/${connectionId}`,
+      tokenHash: `disabled-${connectionId}`,
     }),
   );
-
-  // A repeat provision for the same external id must patch the SAME row, not
-  // create a duplicate (SCIM re-sends are routine).
-  const second = await t.run((ctx) =>
-    ctx.runMutation(components.auth.connection.scim.identity.upsert, {
-      connectionId,
-      groupId,
-      resourceType: "user",
-      externalId: "azure-guid-42",
-      userId,
-      active: false,
+  await expect(
+    t.run((ctx) =>
+      ctx.runMutation(provisionScimUser, {
+        connectionId,
+        externalId: "blocked-by-disabled-scim",
+        userData: { email: "blocked@example.com" },
+        profileUpdate: "always",
+        roleIds: [],
+        active: true,
+      }),
+    ),
+  ).rejects.toSatisfy(
+    (error: unknown) =>
+      error instanceof ConvexError &&
+      (error.data as { code?: string }).code === ErrorCode.INVALID_PARAMETERS,
+  );
+  const users = await t.run((ctx) =>
+    ctx.runQuery(components.auth.user.list, {
+      paginationOpts: { cursor: null, numItems: 10 },
     }),
   );
-  expect(second).toBe(first);
-
-  const identities = await t.run((ctx) =>
-    ctx.runQuery(components.auth.connection.scim.identity.list, {
-      connectionId,
-      paginationOpts: { cursor: null, numItems: 50 },
-    }),
-  );
-  expect(identities.page).toHaveLength(1);
-  expect(identities.page[0].active).toBe(false);
+  expect(users.page).toHaveLength(0);
 });
 
 test("SCIM user provisioning atomically deduplicates User, Account, and identity", async () => {
@@ -183,9 +229,9 @@ test("SCIM user provisioning atomically deduplicates User, Account, and identity
   const { groupId, connectionId } = await seedConnection(t);
   const args = {
     connectionId,
-    groupId,
     externalId: "atomic-external-user",
-    provider: `oidc:${connectionId}`,
+    profileUpdate: "missing" as const,
+    roleIds: ["member"],
     userData: {
       email: "atomic@example.com",
       emailVerificationTime: Date.now(),
@@ -213,9 +259,9 @@ test("SCIM user provisioning atomically deduplicates User, Account, and identity
   expect(first.created).toBe(true);
   expect(retry).toEqual({ userId: first.userId, created: false });
 
-  const { account, identity, accounts, users } = await t.run(async (ctx) => ({
+  const { account, identity, accounts, membership, users } = await t.run(async (ctx) => ({
     account: await ctx.runQuery(components.auth.account.get, {
-      provider: args.provider,
+      provider: `oidc:${connectionId}`,
       providerAccountId: args.externalId,
     }),
     identity: await ctx.runQuery(components.auth.connection.scim.identity.get, {
@@ -224,6 +270,10 @@ test("SCIM user provisioning atomically deduplicates User, Account, and identity
       externalId: args.externalId,
     }),
     accounts: await ctx.runQuery(components.auth.account.list, {
+      userId: first.userId as never,
+    }),
+    membership: await ctx.runQuery(components.auth.group.member.get, {
+      groupId,
       userId: first.userId as never,
     }),
     users: await ctx.runQuery(components.auth.user.list, {
@@ -236,6 +286,7 @@ test("SCIM user provisioning atomically deduplicates User, Account, and identity
   expect(resolvedIdentity?.userId).toBe(first.userId);
   expect(resolvedIdentity?.lastProvisionedAt).toBe(args.lastProvisionedAt + 1);
   expect(accounts).toHaveLength(1);
+  expect(membership).toMatchObject({ roleIds: ["member"], status: "active" });
   expect(users.page).toHaveLength(1);
   expect(users.page[0]).toMatchObject({
     name: "Atomic SCIM User",
@@ -244,66 +295,238 @@ test("SCIM user provisioning atomically deduplicates User, Account, and identity
   });
 });
 
-test("SCIM provisioning rejects conflicting existing owners without reassigning either", async () => {
+test("a failed SCIM post-provision notification preserves committed state", async () => {
   const t = convexTest(schema);
-  const { groupId, connectionId } = await seedConnection(t);
-  const provider = `oidc:${connectionId}`;
-  const externalId = "conflicting-external-user";
-  const { accountUserId, identityUserId } = await t.run(async (ctx) => {
-    const accountUserId = await ctx.runMutation(components.auth.user.create, {
-      data: { email: "account-owner@example.com" },
-    });
-    const identityUserId = await ctx.runMutation(components.auth.user.create, {
-      data: { email: "identity-owner@example.com" },
-    });
-    await ctx.runMutation(components.auth.account.create, {
-      userId: accountUserId,
-      provider,
-      providerAccountId: externalId,
-    });
-    await ctx.runMutation(components.auth.connection.scim.identity.upsert, {
+  const { connectionId } = await seedConnection(t);
+  const provisioned = await t.run((ctx) =>
+    ctx.runMutation(provisionScimUser, {
       connectionId,
-      groupId,
+      externalId: "hook-failure-user",
+      userData: { email: "hook-failure@example.com" },
+      profileUpdate: "always",
+      roleIds: [],
+      active: true,
+    }),
+  );
+  const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+  await expect(
+    notifyScimAfterProvision(async () => {
+      throw new Error("notification destination unavailable");
+    }),
+  ).resolves.toBeUndefined();
+  error.mockRestore();
+
+  const identity = await t.run((ctx) =>
+    ctx.runQuery(components.auth.connection.scim.identity.get, {
+      connectionId,
       resourceType: "user",
-      externalId,
-      userId: identityUserId,
-    });
-    return { accountUserId, identityUserId };
-  });
+      externalId: "hook-failure-user",
+    }),
+  );
+  expect((identity as { userId?: string } | null)?.userId).toBe(provisioned.userId);
+});
+
+test("SCIM update rejects a user owned by another connection", async () => {
+  const t = convexTest(schema);
+  const { connectionId } = await seedConnection(t);
+  const { connectionId: otherConnectionId } = await seedConnection(t);
+  const provisioned = await t.run((ctx) =>
+    ctx.runMutation(provisionScimUser, {
+      connectionId,
+      externalId: "directory-user",
+      userData: { email: "directory@example.com" },
+      profileUpdate: "always",
+      roleIds: [],
+      active: true,
+    }),
+  );
 
   await expect(
     t.run((ctx) =>
-      ctx.runMutation(provisionScimUser, {
-        connectionId,
-        groupId,
-        externalId,
-        provider,
-        userData: { email: "must-not-be-created@example.com" },
+      ctx.runMutation(components.auth.connection.scim.identity.update, {
+        connectionId: otherConnectionId,
+        userId: provisioned.userId,
+        externalId: "directory-user",
+        userData: { name: "Must not update" },
+        profileUpdate: "always",
+        roleIds: [],
+        active: true,
       }),
     ),
   ).rejects.toSatisfy(
     (error: unknown) =>
       error instanceof ConvexError &&
-      (error.data as { code?: string }).code === ErrorCode.ACCOUNT_ALREADY_LINKED,
+      (error.data as { code?: string }).code === ErrorCode.ACCOUNT_NOT_FOUND,
+  );
+});
+
+test("SCIM update rotates and revocation removes the connection Account", async () => {
+  const t = convexTest(schema);
+  const { groupId, connectionId } = await seedConnection(t);
+  const externalId = "directory-user-before-rename";
+  const replacementExternalId = "directory-user-after-rename";
+  const provisioned = await t.run((ctx) =>
+    ctx.runMutation(provisionScimUser, {
+      connectionId,
+      externalId,
+      userData: { email: "rotate@example.com" },
+      profileUpdate: "always",
+      roleIds: ["member"],
+      active: true,
+    }),
   );
 
-  const { account, identity, users } = await t.run(async (ctx) => ({
-    account: await ctx.runQuery(components.auth.account.get, {
-      provider,
+  await t.run((ctx) =>
+    ctx.runMutation(components.auth.connection.scim.identity.update, {
+      connectionId,
+      userId: provisioned.userId,
+      externalId: replacementExternalId,
+      userData: { name: "Renamed directory user" },
+      profileUpdate: "always",
+      roleIds: ["admin"],
+      active: true,
+    }),
+  );
+
+  const afterUpdate = await t.run(async (ctx) => ({
+    oldAccount: await ctx.runQuery(components.auth.account.get, {
+      provider: `oidc:${connectionId}`,
       providerAccountId: externalId,
+    }),
+    replacementAccount: await ctx.runQuery(components.auth.account.get, {
+      provider: `oidc:${connectionId}`,
+      providerAccountId: replacementExternalId,
+    }),
+    membership: await ctx.runQuery(components.auth.group.member.get, {
+      groupId,
+      userId: provisioned.userId,
+    }),
+  }));
+  expect(afterUpdate.oldAccount).toBeNull();
+  expect(afterUpdate.replacementAccount?.userId).toBe(provisioned.userId);
+  expect(afterUpdate.membership).toMatchObject({ roleIds: ["admin"], status: "active" });
+
+  await t.run((ctx) =>
+    ctx.runMutation(components.auth.connection.scim.identity.revoke, {
+      connectionId,
+      userId: provisioned.userId,
+      mode: "hard",
+    }),
+  );
+
+  const afterRevoke = await t.run(async (ctx) => ({
+    account: await ctx.runQuery(components.auth.account.get, {
+      provider: `oidc:${connectionId}`,
+      providerAccountId: replacementExternalId,
     }),
     identity: await ctx.runQuery(components.auth.connection.scim.identity.get, {
       connectionId,
-      resourceType: "user",
-      externalId,
+      userId: provisioned.userId,
     }),
-    users: await ctx.runQuery(components.auth.user.list, {
+    membership: await ctx.runQuery(components.auth.group.member.get, {
+      groupId,
+      userId: provisioned.userId,
+    }),
+  }));
+  expect(afterRevoke.account).toBeNull();
+  expect(afterRevoke.identity).toBeNull();
+  expect(afterRevoke.membership).toBeNull();
+});
+
+test("SCIM group lifecycle is atomic across identity, group, and memberships", async () => {
+  const t = convexTest(schema);
+  const { groupId, connectionId } = await seedConnection(t);
+  const { connectionId: outsideConnectionId } = await seedConnection(t);
+  const provisionUser = (targetConnectionId: string, externalId: string) =>
+    t.run((ctx) =>
+      ctx.runMutation(provisionScimUser, {
+        connectionId: targetConnectionId as never,
+        externalId,
+        userData: { email: `${externalId}@example.com` },
+        profileUpdate: "always",
+        roleIds: [],
+        active: true,
+      }),
+    );
+  const first = await provisionUser(connectionId, "group-member-first");
+  const second = await provisionUser(connectionId, "group-member-second");
+  const outside = await provisionUser(outsideConnectionId, "outside-directory-member");
+
+  await expect(
+    t.run((ctx) =>
+      ctx.runMutation(provisionScimGroup, {
+        connectionId,
+        externalId: "engineering",
+        name: "Engineering",
+        memberIds: [first.userId, outside.userId],
+        roleIds: ["member"],
+      }),
+    ),
+  ).rejects.toSatisfy(
+    (error: unknown) =>
+      error instanceof ConvexError &&
+      (error.data as { code?: string }).code === ErrorCode.ACCOUNT_NOT_FOUND,
+  );
+
+  const afterRejectedProvision = await t.run(async (ctx) => ({
+    identity: await ctx.runQuery(components.auth.connection.scim.identity.get, {
+      connectionId,
+      resourceType: "group",
+      externalId: "engineering",
+    }),
+    groups: await ctx.runQuery(components.auth.group.list, {
+      where: { parentGroupId: groupId },
       paginationOpts: { cursor: null, numItems: 10 },
     }),
   }));
-  expect(account?.userId).toBe(accountUserId);
-  expect((identity as { userId?: string } | null)?.userId).toBe(identityUserId);
-  expect(users.page).toHaveLength(2);
+  expect(afterRejectedProvision.identity).toBeNull();
+  expect(afterRejectedProvision.groups.page).toHaveLength(0);
+
+  const provisioned = await t.run((ctx) =>
+    ctx.runMutation(provisionScimGroup, {
+      connectionId,
+      externalId: "engineering",
+      name: "Engineering",
+      memberIds: [first.userId, second.userId],
+      roleIds: ["member"],
+    }),
+  );
+  await t.run((ctx) =>
+    ctx.runMutation(updateScimGroup, {
+      connectionId,
+      groupId: provisioned.groupId,
+      memberIds: [second.userId],
+      roleIds: ["owner"],
+    }),
+  );
+  const afterReplace = await t.run((ctx) =>
+    ctx.runQuery(components.auth.group.member.list, {
+      where: { groupId: provisioned.groupId },
+      paginationOpts: { cursor: null, numItems: 10 },
+    }),
+  );
+  expect(afterReplace.page).toMatchObject([
+    { userId: second.userId, roleIds: ["owner"], status: "active" },
+  ]);
+
+  await t.run((ctx) =>
+    ctx.runMutation(revokeScimGroup, { connectionId, groupId: provisioned.groupId }),
+  );
+  const afterRevoke = await t.run(async (ctx) => ({
+    group: await ctx.runQuery(components.auth.group.get, { id: provisioned.groupId }),
+    identity: await ctx.runQuery(components.auth.connection.scim.identity.get, {
+      connectionId,
+      resourceType: "group",
+      externalId: "engineering",
+    }),
+    members: await ctx.runQuery(components.auth.group.member.list, {
+      where: { groupId: provisioned.groupId },
+      paginationOpts: { cursor: null, numItems: 10 },
+    }),
+  }));
+  expect(afterRevoke.group).toBeNull();
+  expect(afterRevoke.identity).toBeNull();
+  expect(afterRevoke.members.page).toHaveLength(0);
 });
 
 test("member.create rejects a duplicate membership for the same user", async () => {

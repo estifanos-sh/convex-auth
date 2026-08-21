@@ -764,7 +764,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
               _id: string;
               active?: boolean;
               connectionId: string;
-              externalId: string;
+              externalId?: string;
               groupId: string;
               lastProvisionedAt?: number;
               mappedGroupId?: string;
@@ -778,7 +778,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
               _id: string;
               active?: boolean;
               connectionId: string;
-              externalId: string;
+              externalId?: string;
               groupId: string;
               lastProvisionedAt?: number;
               mappedGroupId?: string;
@@ -810,7 +810,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
               _id: string;
               active?: boolean;
               connectionId: string;
-              externalId: string;
+              externalId?: string;
               groupId: string;
               lastProvisionedAt?: number;
               mappedGroupId?: string;
@@ -829,11 +829,11 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           {
             active?: boolean;
             connectionId: string;
-            externalId: string;
-            groupId: string;
+            externalId?: string;
             lastProvisionedAt?: number;
-            provider: string;
+            profileUpdate: "never" | "missing" | "always";
             raw?: any;
+            roleIds: Array<string>;
             userData: {
               email?: string;
               emailVerificationTime?: number;
@@ -851,22 +851,75 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           { created: boolean; userId: string },
           Name
         >;
-        remove: FunctionReference<"mutation", "internal", { id: string }, null, Name>;
-        upsert: FunctionReference<
+        provisionGroup: FunctionReference<
           "mutation",
           "internal",
           {
-            active?: boolean;
             connectionId: string;
-            externalId: string;
-            groupId: string;
-            lastProvisionedAt?: number;
-            mappedGroupId?: string;
+            externalId?: string;
+            memberIds: Array<string>;
+            name: string;
             raw?: any;
-            resourceType: "user" | "group";
-            userId?: string;
+            roleIds: Array<string>;
           },
-          string,
+          { created: boolean; groupId: string },
+          Name
+        >;
+        revoke: FunctionReference<
+          "mutation",
+          "internal",
+          { connectionId: string; mode: "soft" | "hard"; userId: string },
+          { revoked: number },
+          Name
+        >;
+        revokeGroup: FunctionReference<
+          "mutation",
+          "internal",
+          { connectionId: string; groupId: string },
+          null,
+          Name
+        >;
+        updateGroup: FunctionReference<
+          "mutation",
+          "internal",
+          {
+            connectionId: string;
+            groupId: string;
+            memberIds: Array<string>;
+            name?: string;
+            raw?: any;
+            roleIds: Array<string>;
+          },
+          null,
+          Name
+        >;
+        update: FunctionReference<
+          "mutation",
+          "internal",
+          {
+            active: boolean;
+            connectionId: string;
+            externalId?: string;
+            lastProvisionedAt?: number;
+            profileUpdate: "never" | "missing" | "always";
+            raw?: any;
+            roleIds: Array<string>;
+            userData: {
+              email?: string;
+              emailVerificationTime?: number;
+              extend?: any;
+              firstName?: string;
+              image?: string;
+              isAnonymous?: boolean;
+              lastActiveGroup?: string;
+              lastName?: string;
+              name?: string;
+              phone?: string;
+              phoneVerificationTime?: number;
+            };
+            userId: string;
+          },
+          null,
           Name
         >;
       };
@@ -3231,9 +3284,8 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
                   mode: "ignore" | "map";
                   source: "protocol";
                 };
-                scimReuse: { user: "externalId" | "none" };
                 user: {
-                  authority: "app" | "connection" | "scim";
+                  authority: "app" | "scim";
                   createOnSignIn: boolean;
                   updateProfileFromScim: "never" | "missing" | "always";
                   updateProfileOnLogin: "never" | "missing" | "always";
@@ -3305,9 +3357,8 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
                 mode: "ignore" | "map";
                 source: "protocol";
               };
-              scimReuse: { user: "externalId" | "none" };
               user: {
-                authority: "app" | "connection" | "scim";
+                authority: "app" | "scim";
                 createOnSignIn: boolean;
                 updateProfileFromScim: "never" | "missing" | "always";
                 updateProfileOnLogin: "never" | "missing" | "always";
@@ -3373,9 +3424,8 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
                 mode: "ignore" | "map";
                 source: "protocol";
               };
-              scimReuse: { user: "externalId" | "none" };
               user: {
-                authority: "app" | "connection" | "scim";
+                authority: "app" | "scim";
                 createOnSignIn: boolean;
                 updateProfileFromScim: "never" | "missing" | "always";
                 updateProfileOnLogin: "never" | "missing" | "always";
@@ -3420,9 +3470,8 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
                 mode: "ignore" | "map";
                 source: "protocol";
               };
-              scimReuse: { user: "externalId" | "none" };
               user: {
-                authority: "app" | "connection" | "scim";
+                authority: "app" | "scim";
                 createOnSignIn: boolean;
                 updateProfileFromScim: "never" | "missing" | "always";
                 updateProfileOnLogin: "never" | "missing" | "always";
@@ -3591,9 +3640,8 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
                 mode: "ignore" | "map";
                 source: "protocol";
               };
-              scimReuse: { user: "externalId" | "none" };
               user: {
-                authority: "app" | "connection" | "scim";
+                authority: "app" | "scim";
                 createOnSignIn: boolean;
                 updateProfileFromScim: "never" | "missing" | "always";
                 updateProfileOnLogin: "never" | "missing" | "always";
@@ -3766,9 +3814,8 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
                 mode: "ignore" | "map";
                 source: "protocol";
               };
-              scimReuse: { user: "externalId" | "none" };
               user: {
-                authority: "app" | "connection" | "scim";
+                authority: "app" | "scim";
                 createOnSignIn: boolean;
                 updateProfileFromScim: "never" | "missing" | "always";
                 updateProfileOnLogin: "never" | "missing" | "always";

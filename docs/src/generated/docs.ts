@@ -88,7 +88,7 @@ export const documentationPages: DocumentationPageMeta[] = [
   },
   {
     description:
-      "Group policy management — centralize account linking, SCIM reuse, JIT, and deprovision behavior.",
+      "Group policy management — centralize account linking, directory lifecycle, JIT, and deprovision behavior.",
     slug: "/connection/policy",
     title: "auth.connection.policy",
   },

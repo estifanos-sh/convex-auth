@@ -244,9 +244,7 @@ export async function userOAuthImpl(
   const connectionPolicy = connection ? normalizeGroupConnectionPolicy(group?.policy) : null;
 
   const existingScimIdentity =
-    connectionId !== null &&
-    existingAccount === null &&
-    connectionPolicy?.provisioning.scimReuse.user === "externalId"
+    connectionId !== null && existingAccount === null
       ? single(
           await ctx.runQuery(config.component.connection.scim.identity.get, {
             connectionId,

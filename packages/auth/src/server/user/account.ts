@@ -65,9 +65,6 @@ function effectiveUserUpdateMode(
   if (authority === "app") {
     return mode === "never" ? "never" : "missing";
   }
-  if (authority === "connection" && source === "scim") {
-    return mode === "never" ? "never" : "missing";
-  }
   if (authority === "scim" && source === "login") {
     return mode === "never" ? "never" : "missing";
   }

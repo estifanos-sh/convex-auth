@@ -367,7 +367,6 @@ type GroupConnectionAccountLinkingPolicy = "verifiedEmail" | "none" | "sameConne
  * - `"externalId"` — match by the SCIM `externalId` to reuse a previously provisioned user.
  * - `"none"` — always create a new user for each SCIM provision request.
  */
-type GroupConnectionScimReuseUserPolicy = "externalId" | "none";
 
 /**
  * Just-in-time provisioning mode for group Connection.
@@ -387,14 +386,15 @@ type GroupConnectionJitProvisioningMode = "off" | "createUser" | "createUserAndM
 type GroupConnectionDeprovisionMode = "soft" | "hard";
 
 type GroupConnectionProfileUpdateMode = "never" | "missing" | "always";
-type GroupConnectionProvisioningAuthority = "app" | "connection" | "scim";
+/** The authority allowed to create and maintain identities for a connection. */
+type GroupConnectionProvisioningAuthority = "app" | "scim";
 type GroupConnectionGroupSyncMode = "ignore" | "sync";
 type GroupConnectionRoleSyncMode = "ignore" | "map";
 
 /**
  * Effective group policy document stored for an Connection/SCIM tenant.
  *
- * Controls account linking, JIT provisioning, SCIM reuse behavior,
+ * Controls account linking, JIT provisioning, directory-managed identity lifecycle,
  * deprovisioning, and any app-defined extension metadata.
  *
  * @see {@link GroupConnectionPolicyPatch}
@@ -413,9 +413,6 @@ export interface GroupConnectionPolicy {
       updateProfileOnLogin: GroupConnectionProfileUpdateMode;
       updateProfileFromScim: GroupConnectionProfileUpdateMode;
       authority: GroupConnectionProvisioningAuthority;
-    };
-    scimReuse: {
-      user: GroupConnectionScimReuseUserPolicy;
     };
     jit: {
       mode: GroupConnectionJitProvisioningMode;
@@ -457,9 +454,6 @@ export interface GroupConnectionPolicyPatch {
       updateProfileOnLogin?: GroupConnectionProfileUpdateMode;
       updateProfileFromScim?: GroupConnectionProfileUpdateMode;
       authority?: GroupConnectionProvisioningAuthority;
-    };
-    scimReuse?: {
-      user?: GroupConnectionScimReuseUserPolicy;
     };
     jit?: {
       mode?: GroupConnectionJitProvisioningMode;

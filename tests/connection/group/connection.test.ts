@@ -541,16 +541,6 @@ test("group connection component stores scim config, audit events, and webhook d
   const scimConfigId = configured.configId;
   const rawToken = configured.token;
 
-  const identityId = await t.run(async (ctx) => {
-    return await ctx.runMutation(components.auth.connection.scim.identity.upsert, {
-      connectionId,
-      groupId,
-      resourceType: "user",
-      externalId: "scim-user-1",
-      active: true,
-      raw: { userName: "person@globex.com" },
-    });
-  });
   const eventId = await t.run(async (ctx) => {
     const { page } = await auth.connection.audit.list(ctx, {
       connectionId,
@@ -587,13 +577,6 @@ test("group connection component stores scim config, audit events, and webhook d
       tokenHash: await sha256(rawToken),
     });
   });
-  const identity = await t.run(async (ctx) => {
-    return (await ctx.runQuery(components.auth.connection.scim.identity.get, {
-      connectionId,
-      resourceType: "user",
-      externalId: "scim-user-1",
-    })) as any;
-  });
   const auditEvents = (
     (await t.run(async (ctx) => {
       return await auth.connection.audit.list(ctx, {
@@ -617,10 +600,8 @@ test("group connection component stores scim config, audit events, and webhook d
   })) as Array<Record<string, unknown>>;
 
   expect(scimConfigId).toBeDefined();
-  expect(identityId).toBeDefined();
   expect(endpointId).toBeDefined();
   expect(scimConfig?.connectionId).toBe(connectionId);
-  expect(identity?.externalId).toBe("scim-user-1");
   expect(auditEvents.some((event: { kind?: string }) => event.kind === "connection.scim.set")).toBe(
     true,
   );
@@ -635,91 +616,6 @@ test("group connection component stores scim config, audit events, and webhook d
   for (const endpoint of webhookList) {
     expect(endpoint).not.toHaveProperty("secretCiphertext");
   }
-});
-
-test("group connection scim identity lookup is scoped to the group connection", async () => {
-  const t = convexTest(schema);
-
-  const userId = await t.run(async (ctx) => {
-    return await ctx.runMutation(components.auth.user.create, {
-      data: {
-        name: "Shared User",
-        email: "shared-scim@example.com",
-        emailVerificationTime: Date.now(),
-      },
-    });
-  });
-
-  const first = await t.run(async (ctx) => {
-    const groupId = await ctx.runMutation(components.auth.group.create, {
-      name: "First Group Connection",
-      slug: "first-group-connection",
-    });
-    const connectionId = await ctx.runMutation(components.auth.connection.create, {
-      groupId,
-      slug: "first-group-connection",
-      name: "First Group Connection",
-      status: "active",
-      protocol: "oidc",
-    });
-    await ctx.runMutation(components.auth.connection.scim.identity.upsert, {
-      connectionId,
-      groupId,
-      resourceType: "user",
-      externalId: "first-external-id",
-      userId,
-      active: true,
-    });
-    return { connectionId, groupId };
-  });
-
-  const second = await t.run(async (ctx) => {
-    const groupId = await ctx.runMutation(components.auth.group.create, {
-      name: "Second Group Connection",
-      slug: "second-group-connection",
-    });
-    const connectionId = await ctx.runMutation(components.auth.connection.create, {
-      groupId,
-      slug: "second-group-connection",
-      name: "Second Group Connection",
-      status: "active",
-      protocol: "oidc",
-    });
-    await ctx.runMutation(components.auth.connection.scim.identity.upsert, {
-      connectionId,
-      groupId,
-      resourceType: "user",
-      externalId: "second-external-id",
-      userId,
-      active: true,
-    });
-    return { connectionId, groupId };
-  });
-
-  const firstIdentities = (
-    await t.run(async (ctx) => {
-      return await ctx.runQuery(components.auth.connection.scim.identity.list, {
-        connectionId: first.connectionId as any,
-        paginationOpts: { numItems: 100, cursor: null },
-      });
-    })
-  ).page;
-
-  const secondIdentities = (
-    await t.run(async (ctx) => {
-      return await ctx.runQuery(components.auth.connection.scim.identity.list, {
-        connectionId: second.connectionId as any,
-        paginationOpts: { numItems: 100, cursor: null },
-      });
-    })
-  ).page;
-
-  expect(firstIdentities.find((identity: any) => identity.userId === userId)?.externalId).toBe(
-    "first-external-id",
-  );
-  expect(secondIdentities.find((identity: any) => identity.userId === userId)?.externalId).toBe(
-    "second-external-id",
-  );
 });
 
 test("group connection helper utilities build protocol config and provider ids", () => {
@@ -892,7 +788,6 @@ test("group saml.register persists config directly on group connection", async (
   expect(connection?.config?.protocols?.saml?.accountLinking).toBeUndefined();
   expect(connection?.config?.protocols?.saml?.reuseScimUserBy).toBeUndefined();
   expect(policy.identity.accountLinking.saml).toBe("sameConnection");
-  expect(policy.provisioning.scimReuse.user).toBe("externalId");
   expect(domains[0]?.domain).toBe("register.example.com");
   expect(auditEvents[0]?.kind).toBe("connection.saml.set");
 });
@@ -918,7 +813,7 @@ test("group policy defaults and updates are normalized through auth.connection.p
         provisioning: {
           user: {
             updateProfileOnLogin: "always",
-            authority: "connection",
+            authority: "app",
           },
           jit: { mode: "createUser", defaultRoleIds: ["orgAdmin"] },
           groups: {
@@ -948,7 +843,7 @@ test("group policy defaults and updates are normalized through auth.connection.p
   expect(defaults.provisioning.deprovision.mode).toBe("soft");
   expect(updated.identity.accountLinking.saml).toBe("none");
   expect(updated.provisioning.user.updateProfileOnLogin).toBe("always");
-  expect(updated.provisioning.user.authority).toBe("connection");
+  expect(updated.provisioning.user.authority).toBe("app");
   expect(updated.provisioning.jit.mode).toBe("createUser");
   expect(updated.provisioning.jit.defaultRoleIds).toEqual(["orgAdmin"]);
   expect(updated.provisioning.groups.mode).toBe("sync");
@@ -961,6 +856,61 @@ test("group policy defaults and updates are normalized through auth.connection.p
   });
   expect(updated.provisioning.deprovision.mode).toBe("hard");
   expect(validation.ok).toBe(true);
+});
+
+test("SCIM-managed policy requires an active connection and SCIM configuration", async () => {
+  const t = convexTest(schema);
+  const groupId = await t.run((ctx) =>
+    ctx.runMutation(components.auth.group.create, {
+      name: "Managed Policy Co",
+      slug: "managed-policy-co",
+      type: "organization",
+    }),
+  );
+  const managedPatch = {
+    provisioning: {
+      user: { authority: "scim" as const, createOnSignIn: false },
+      jit: { mode: "off" as const, defaultRoleIds: [] },
+    },
+  };
+  const updatePolicy = () =>
+    t.run((ctx) => auth.connection.policy.update(ctx as any, { groupId, patch: managedPatch }));
+
+  await expect(updatePolicy()).rejects.toThrow("active SCIM configuration");
+
+  const connectionId = await t.run((ctx) =>
+    ctx.runMutation(components.auth.connection.create, {
+      groupId,
+      slug: "managed-policy-connection",
+      name: "Managed Policy Connection",
+      protocol: "oidc",
+      status: "active",
+    }),
+  );
+  await expect(updatePolicy()).rejects.toThrow("active SCIM configuration");
+
+  await t.run((ctx) =>
+    ctx.runMutation(components.auth.connection.scim.config.upsert, {
+      connectionId,
+      groupId,
+      status: "disabled",
+      basePath: `/scim/${connectionId}`,
+      tokenHash: `managed-policy-${connectionId}`,
+    }),
+  );
+  await expect(updatePolicy()).rejects.toThrow("active SCIM configuration");
+
+  await t.run((ctx) =>
+    ctx.runMutation(components.auth.connection.scim.config.upsert, {
+      connectionId,
+      groupId,
+      status: "active",
+      basePath: `/scim/${connectionId}`,
+      tokenHash: `managed-policy-${connectionId}`,
+    }),
+  );
+  const policy = await updatePolicy();
+  expect(policy.provisioning.user.authority).toBe("scim");
 });
 
 test("group connection domain status exposes trust and next steps", async () => {
@@ -1362,15 +1312,6 @@ test("removing a connection cascades scim config, identities, webhook endpoints 
   });
   const tokenHash = await sha256(configured.token);
 
-  await t.run(async (ctx) => {
-    await ctx.runMutation(components.auth.connection.scim.identity.upsert, {
-      connectionId,
-      groupId,
-      resourceType: "user",
-      externalId: "cascade-user-1",
-      active: true,
-    });
-  });
   const endpointId = await t.run(async (ctx) => {
     return await ctx.runMutation(components.auth.connection.webhook.endpoint.create, {
       connectionId,
@@ -1479,7 +1420,6 @@ test("policy role resolution combines jit defaults with mapped groups and roles"
           updateProfileFromScim: "always",
           authority: "app",
         },
-        scimReuse: { user: "externalId" },
         jit: { mode: "createUserAndMembership", defaultRoleIds: ["member"] },
         deprovision: { mode: "soft" },
         groups: {
@@ -1545,7 +1485,6 @@ test("provisioned membership stores resolved roleIds queryable via memberGetByGr
           updateProfileFromScim: "always",
           authority: "app",
         },
-        scimReuse: { user: "externalId" },
         jit: { mode: "createUserAndMembership", defaultRoleIds: ["member"] },
         deprovision: { mode: "soft" },
         groups: {

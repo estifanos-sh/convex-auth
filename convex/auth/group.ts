@@ -139,14 +139,7 @@ const vPolicyPatch = v.object({
           updateProfileFromScim: v.optional(
             v.union(v.literal("never"), v.literal("missing"), v.literal("always")),
           ),
-          authority: v.optional(
-            v.union(v.literal("app"), v.literal("connection"), v.literal("scim")),
-          ),
-        }),
-      ),
-      scimReuse: v.optional(
-        v.object({
-          user: v.optional(v.union(v.literal("externalId"), v.literal("none"))),
+          authority: v.optional(v.union(v.literal("app"), v.literal("scim"))),
         }),
       ),
       jit: v.optional(

@@ -400,12 +400,6 @@ export const getScimIdentityByMappedGroup = (
   mappedGroupId: string,
 ) => ctx.runQuery(componentConnection.scim.identity.get, { mappedGroupId }).then(single);
 
-export const upsertScimIdentity = (
-  ctx: ComponentWriteCtx,
-  componentConnection: ComponentConnection,
-  args: FunctionArgs<ComponentConnection["scim"]["identity"]["upsert"]>,
-) => componentMutation<typeof args, string>(ctx, componentConnection.scim.identity.upsert, args);
-
 export const provisionScimUser = (
   ctx: ComponentWriteCtx,
   componentConnection: ComponentConnection,
@@ -417,14 +411,45 @@ export const provisionScimUser = (
     args,
   );
 
-export const removeScimIdentity = (
+export const updateScimUser = (
   ctx: ComponentWriteCtx,
   componentConnection: ComponentConnection,
-  identityId: string,
+  args: FunctionArgs<ComponentConnection["scim"]["identity"]["update"]>,
+) => componentMutation<typeof args, null>(ctx, componentConnection.scim.identity.update, args);
+
+export const revokeScimUser = (
+  ctx: ComponentWriteCtx,
+  componentConnection: ComponentConnection,
+  args: FunctionArgs<ComponentConnection["scim"]["identity"]["revoke"]>,
 ) =>
-  componentMutation<{ id: string }, null>(ctx, componentConnection.scim.identity.remove, {
-    id: identityId,
-  });
+  componentMutation<typeof args, { revoked: number }>(
+    ctx,
+    componentConnection.scim.identity.revoke,
+    args,
+  );
+
+export const provisionScimGroup = (
+  ctx: ComponentWriteCtx,
+  componentConnection: ComponentConnection,
+  args: FunctionArgs<ComponentConnection["scim"]["identity"]["provisionGroup"]>,
+) =>
+  componentMutation<typeof args, { groupId: string; created: boolean }>(
+    ctx,
+    componentConnection.scim.identity.provisionGroup,
+    args,
+  );
+
+export const updateScimGroup = (
+  ctx: ComponentWriteCtx,
+  componentConnection: ComponentConnection,
+  args: FunctionArgs<ComponentConnection["scim"]["identity"]["updateGroup"]>,
+) => componentMutation<typeof args, null>(ctx, componentConnection.scim.identity.updateGroup, args);
+
+export const revokeScimGroup = (
+  ctx: ComponentWriteCtx,
+  componentConnection: ComponentConnection,
+  args: FunctionArgs<ComponentConnection["scim"]["identity"]["revokeGroup"]>,
+) => componentMutation<typeof args, null>(ctx, componentConnection.scim.identity.revokeGroup, args);
 
 export const insertUser = (
   ctx: ComponentWriteCtx,
