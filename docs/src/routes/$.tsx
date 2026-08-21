@@ -1,6 +1,6 @@
 import { createFileRoute, notFound } from "@tanstack/solid-router";
 import { documentationBySlug, documentationLoaders } from "../generated/docs";
-import { DocsShell } from "../components/DocsShell";
+import { DocsShell } from "../components/shell";
 
 export const Route = createFileRoute("/$")({
   beforeLoad: ({ params }) => {
@@ -16,7 +16,7 @@ export const Route = createFileRoute("/$")({
     links: loaderData ? [{ href: `/convex-auth${loaderData.slug}/`, rel: "canonical" }] : [],
     meta: loaderData
       ? [
-          { title: `${loaderData.title} | convex-auth` },
+          { title: `${loaderData.title} | Convex Auth` },
           { content: loaderData.description, name: "description" },
         ]
       : [],
@@ -39,8 +39,8 @@ function NotFound() {
     <main class="not-found">
       <meta name="robots" content="noindex" />
       <h1>404</h1>
-      <p>This page has wandered off.</p>
-      <a href="/convex-auth/">Return to docs.</a>
+      <p>This page does not exist.</p>
+      <a href="/convex-auth/">Return to Convex Auth.</a>
     </main>
   );
 }

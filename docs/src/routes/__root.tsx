@@ -3,6 +3,8 @@ import type { JSX } from "solid-js";
 import { HydrationScript } from "solid-js/web";
 import "../app.css";
 
+const themeBootstrap = `(()=>{try{const t=localStorage.getItem("convex-auth-theme");if(t==="dark"||(t!=="light"&&matchMedia("(prefers-color-scheme: dark)").matches))document.documentElement.classList.add("dark")}catch{}})();`;
+
 export const Route = createRootRoute({
   head: () => ({
     links: [
@@ -10,7 +12,14 @@ export const Route = createRootRoute({
       {
         as: "font",
         crossorigin: "anonymous",
-        href: "/convex-auth/fonts/figtree.woff2",
+        href: "/convex-auth/fonts/inter.woff2",
+        rel: "preload",
+        type: "font/woff2",
+      },
+      {
+        as: "font",
+        crossorigin: "anonymous",
+        href: "/convex-auth/fonts/intertight.woff2",
         rel: "preload",
         type: "font/woff2",
       },
@@ -18,7 +27,8 @@ export const Route = createRootRoute({
     meta: [
       { charSet: "utf-8" },
       { content: "width=device-width, initial-scale=1", name: "viewport" },
-      { content: "Authentication infrastructure for Convex applications.", name: "description" },
+      { content: "The unofficial auth solution for Convex.", name: "description" },
+      { content: "#f6f6f6", name: "theme-color" },
     ],
   }),
   shellComponent: RootDocument,
@@ -28,6 +38,7 @@ function RootDocument(props: { children: JSX.Element }) {
   return (
     <html lang="en">
       <head>
+        <script innerHTML={themeBootstrap} />
         <HydrationScript />
         <HeadContent />
       </head>

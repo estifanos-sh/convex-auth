@@ -3,7 +3,7 @@ import path from "node:path";
 
 const root = path.resolve(import.meta.dirname, "../..");
 const build = path.join(root, "docs", "dist", "client", "convex-auth");
-const fonts = ["figtree.woff2"];
+const fonts = ["inter.woff2", "intertight.woff2"];
 const required = [
   "index.html",
   "404.html",
