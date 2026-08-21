@@ -258,8 +258,7 @@ test("password() emits a credentials provider with a default scrypt crypto", () 
   expect(typeof provider.authorize).toBe("function");
   expect(typeof provider.crypto?.hashSecret).toBe("function");
   expect(typeof provider.crypto?.verifySecret).toBe("function");
-  // With neither reset nor verify configured, both extra-provider slots are undefined.
-  expect(provider.extraProviders).toEqual([undefined, undefined]);
+  expect(provider.extraProviders).toEqual([]);
 });
 
 test("password() accepts a custom id and registers reset/verify as extra providers", () => {
@@ -272,6 +271,21 @@ test("password() accepts a custom id and registers reset/verify as extra provide
   });
   expect(provider.id).toBe("pw2");
   expect(provider.extraProviders).toEqual([resetProvider, verifyProvider]);
+});
+
+test("password() registers a typed passkey rotation after reset", () => {
+  const resetProvider = email({ from: "a@b.com", send: async () => {} });
+  const passkeyProvider = webauthn();
+  const provider = password({
+    reset: resetProvider,
+    afterReset: passkeyProvider.rotate(),
+  });
+
+  expect(provider.extraProviders).toEqual([resetProvider, passkeyProvider]);
+  expect(passkeyProvider.rotate()).toEqual({
+    provider: passkeyProvider,
+    operation: "rotate",
+  });
 });
 
 test("password() lets a caller override the crypto helpers", () => {

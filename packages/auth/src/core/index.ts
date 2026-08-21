@@ -86,6 +86,12 @@ export function createAuthContext(
     getEnrichCtx: () => enrichCtx,
     inviteTokenAlphabet: INVITE_TOKEN_ALPHABET,
     inviteTokenLength: INVITE_TOKEN_LENGTH,
+    signInForProvider: async () => {
+      throw new Error("Provider sign-in is unavailable in the lightweight auth context.");
+    },
+    continueWithProvider: async () => {
+      throw new Error("Provider continuations are unavailable in the lightweight auth context.");
+    },
   });
 
   const authLike: AuthLike = {

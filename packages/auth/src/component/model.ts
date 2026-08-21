@@ -23,6 +23,8 @@ export const TABLES = {
   Session: "Session",
   Account: "Account",
   AuthVerifier: "AuthVerifier",
+  AuthContinuation: "AuthContinuation",
+  PasswordReset: "PasswordReset",
   VerificationCode: "VerificationCode",
   RefreshToken: "RefreshToken",
   Passkey: "Passkey",
@@ -566,8 +568,18 @@ export const vAccountDoc = v.object({
 export const vAuthVerifierDoc = v.object({
   ...vDocMeta(TABLES.AuthVerifier),
   sessionId: v.optional(v.id(TABLES.Session)),
+  continuationId: v.optional(v.id(TABLES.AuthContinuation)),
   signature: v.optional(v.string()),
   expirationTime: v.optional(v.number()),
+});
+
+/** Validator for an `AuthContinuation` document. */
+export const vAuthContinuationDoc = v.object({
+  ...vDocMeta(TABLES.AuthContinuation),
+  userId: v.id(TABLES.User),
+  provider: v.string(),
+  operation: v.literal("rotate"),
+  expirationTime: v.number(),
 });
 
 /** Validator for a `VerificationCode` document. */

@@ -19,7 +19,7 @@ import { createUserDomain } from "./domains/user";
 import { createGroupDomain } from "./domains/group";
 import { capGrantsForCaller, resolveOAuthCaller } from "./domains/access";
 import { createFactorDomain } from "./domains/factor";
-import type { AuthProviderConfig, Doc } from "./types";
+import type { AuthProviderConfig, AuthProviderContinueArgs, Doc } from "./types";
 import type { SignInParams } from "./payloads";
 import type { SignInFlowResult } from "../shared/results";
 
@@ -70,7 +70,7 @@ type CoreDeps = {
   ) => GenericActionCtx<DataModel>;
   inviteTokenAlphabet: string;
   inviteTokenLength: number;
-  signInForProvider?: <DataModel extends GenericDataModel>(
+  signInForProvider: <DataModel extends GenericDataModel>(
     ctx: GenericActionCtx<DataModel>,
     providerConfig: AuthProviderConfig,
     args: {
@@ -78,6 +78,10 @@ type CoreDeps = {
       params?: SignInParams;
     },
   ) => Promise<ProviderSignInResult>;
+  continueWithProvider: <DataModel extends GenericDataModel>(
+    ctx: GenericActionCtx<DataModel>,
+    args: AuthProviderContinueArgs,
+  ) => Promise<ProviderDeferredSignInResult>;
 };
 
 /**
@@ -179,7 +183,7 @@ export function createCoreDomains(deps: CoreDeps) {
      * the public auth API without generating tokens for the client.
      *
      * @param ctx - Convex action context.
-     * @param providerConfig - Provider configuration object to materialize and use.
+     * @param args.provider - Provider configuration object to materialize and use.
      * @param args.accountId - Optional account document ID to sign in with directly.
      * @param args.params - Optional provider-specific parameters forwarded to the sign-in flow.
      * @returns `{ userId, sessionId }` when sign-in succeeds immediately, or `null`
@@ -187,7 +191,8 @@ export function createCoreDomains(deps: CoreDeps) {
      *
      * @example
      * ```ts
-     * const session = await auth.provider.signIn(ctx, passwordProvider, {
+     * const session = await auth.provider.signIn(ctx, {
+     *   provider: passwordProvider,
      *   params: { email: "alice@example.com", password: "secret" },
      * });
      *
@@ -196,18 +201,37 @@ export function createCoreDomains(deps: CoreDeps) {
      * }
      * ```
      */
-    signIn: deps.signInForProvider
-      ? async <DataModel extends GenericDataModel>(
-          ctx: GenericActionCtx<DataModel>,
-          providerConfig: AuthProviderConfig,
-          args: {
-            accountId?: GenericId<"Account">;
-            params?: SignInParams;
-          },
-        ) => {
-          return deps.signInForProvider!(ctx, providerConfig, args);
-        }
-      : undefined,
+    signIn: async <DataModel extends GenericDataModel>(
+      ctx: GenericActionCtx<DataModel>,
+      args: {
+        provider: AuthProviderConfig;
+        accountId?: GenericId<"Account">;
+        params?: SignInParams;
+      },
+    ) => {
+      const { provider, ...providerArgs } = args;
+      return deps.signInForProvider(ctx, provider, providerArgs);
+    },
+    /**
+     * Continue authentication through another provider without first creating
+     * a session.
+     *
+     * @param ctx - Convex action context.
+     * @param args.userId - User whose identity the calling provider proved.
+     * @param args.operation - Typed operation returned by the target provider.
+     * @returns The deferred provider result for automatic client completion.
+     * @example
+     * ```ts
+     * return await auth.provider.continue(ctx, {
+     *   userId,
+     *   operation: passkeys.rotate(),
+     * });
+     * ```
+     */
+    continue: async <DataModel extends GenericDataModel>(
+      ctx: GenericActionCtx<DataModel>,
+      args: AuthProviderContinueArgs,
+    ) => await deps.continueWithProvider(ctx, args),
   };
 
   /**

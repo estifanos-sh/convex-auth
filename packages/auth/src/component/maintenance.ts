@@ -3,8 +3,8 @@
  *
  * Wire `pruneExpired` to a daily cron in the consumer app to keep tables
  * with expiring or unbounded-growth rows (sessions, refresh tokens,
- * verification codes, PKCE verifiers, sign-in limits, invites, device codes, OAuth codes,
- * connection domain verifications, webhook deliveries, and auth-event
+ * verification codes, PKCE verifiers, provider continuations, sign-in limits,
+ * invites, device codes, OAuth codes, connection domain verifications, webhook deliveries, and auth-event
  * projections) bounded.
  *
  * @module
@@ -67,6 +67,7 @@ export const pruneExpired = internalMutation({
     refreshTokens: v.number(),
     verificationCodes: v.number(),
     authVerifiers: v.number(),
+    authContinuations: v.number(),
     signInLimits: v.number(),
     invites: v.number(),
     deviceCodes: v.number(),
@@ -87,6 +88,7 @@ export const pruneExpired = internalMutation({
     let refreshTokens = 0;
     let verificationCodes = 0;
     let authVerifiers = 0;
+    let authContinuations = 0;
     let signInLimits = 0;
     let invites = 0;
     let deviceCodes = 0;
@@ -133,6 +135,20 @@ export const pruneExpired = internalMutation({
     for (const doc of verifierDocs) {
       await ctx.db.delete("AuthVerifier", doc._id);
       authVerifiers += 1;
+    }
+
+    const continuationDocs = await ctx.db
+      .query("AuthContinuation")
+      .withIndex("expiration_time", (q) => q.lt("expirationTime", now))
+      .take(batchSize);
+    for (const doc of continuationDocs) {
+      const passwordReset = await ctx.db
+        .query("PasswordReset")
+        .withIndex("continuation_id", (q) => q.eq("continuationId", doc._id))
+        .unique();
+      if (passwordReset !== null) await ctx.db.delete("PasswordReset", passwordReset._id);
+      await ctx.db.delete("AuthContinuation", doc._id);
+      authContinuations += 1;
     }
 
     const signInLimitDocs = await ctx.db
@@ -281,6 +297,7 @@ export const pruneExpired = internalMutation({
       refreshTokens === batchSize ||
       verificationCodes === batchSize ||
       authVerifiers === batchSize ||
+      authContinuations === batchSize ||
       signInLimits === batchSize ||
       invitesScanned === batchSize ||
       invites >= batchSize ||
@@ -302,6 +319,7 @@ export const pruneExpired = internalMutation({
       refreshTokens,
       verificationCodes,
       authVerifiers,
+      authContinuations,
       signInLimits,
       invites,
       deviceCodes,

@@ -1,15 +1,14 @@
 /**
  * Configure the password provider for email/password authentication.
  *
- * Five flows, all single-word camelCase:
+ * Six flows, all single-word camelCase:
  *
  * - `signUp` — Create a new account.
  * - `signIn` — Sign in with email + password.
  * - `reset` — Kick off a forgot-password flow (issues an OTP via email).
- * - `verify` — Verify any pending email OTP. With `newPassword`, completes a
- *   `reset` flow and updates the password. Without `newPassword`, completes
- *   the post-signup email confirmation. The OTP scope is enforced server-side
- *   by the issuing email provider.
+ * - `recover` — Verify a reset OTP and set a new password, optionally continuing
+ *   into the configured `afterReset` operation.
+ * - `verify` — Complete post-signup email confirmation.
  * - `change` — Authenticated password change (requires `currentPassword`).
  *
  * ```ts
@@ -29,7 +28,9 @@ import { ConvexError, Value } from "convex/values";
 
 import { emitAuthEvent } from "../server/events";
 import { getAuthenticatedUserIdOrNull } from "../server/identity/claims";
+import type { SignInParams } from "../server/payloads";
 import { callCredentialsSignIn } from "../server/mutations/calls";
+import { callVerifyCodeAndSignIn } from "../server/mutations/verify";
 import type { Hashed } from "../shared/brand";
 import { ErrorCode } from "../shared/codes";
 import type {
@@ -37,6 +38,7 @@ import type {
   GenericActionCtxWithAuthConfig,
   GenericDoc,
   ConvexCredentialsConfig,
+  WebAuthnRotateOperation,
 } from "../server/types";
 import { credentials, type CredentialsConfig } from "./credentials";
 
@@ -59,8 +61,8 @@ export interface PasswordConfig<DataModel extends GenericDataModel> {
     email: string;
   };
   /**
-   * Performs custom validation on a password during `signUp`, `verify`
-   * (when `newPassword` is set), and `change`.
+   * Performs custom validation on a password during `signUp`, `recover`, and
+   * `change`.
    *
    * Default: non-empty, length >= 8.
    *
@@ -72,18 +74,22 @@ export interface PasswordConfig<DataModel extends GenericDataModel> {
    */
   crypto?: CredentialsConfig["crypto"];
   /**
-   * Email provider for the `reset` flow. Issues OTPs that the `verify` flow
-   * accepts when `newPassword` is included.
+   * Email provider for the `reset` flow. Issues OTPs accepted by `recover`.
    */
   reset?: EmailConfig | PasswordEmailProviderFactory;
   /**
+   * Continue reset recovery with a typed provider operation before a session
+   * is issued. The password is committed only when that operation succeeds.
+   */
+  afterReset?: WebAuthnRotateOperation;
+  /**
    * Email provider for post-signup email confirmation. Issues OTPs that the
-   * `verify` flow accepts when `newPassword` is omitted.
+   * `verify` flow accepts.
    */
   verify?: EmailConfig | PasswordEmailProviderFactory;
 }
 
-const PASSWORD_FLOWS = ["signUp", "signIn", "reset", "verify", "change"] as const;
+const PASSWORD_FLOWS = ["signUp", "signIn", "reset", "recover", "verify", "change"] as const;
 type PasswordFlow = (typeof PASSWORD_FLOWS)[number];
 
 type PasswordFlowDispatch = { tag: PasswordFlow } | { tag: "invalid"; flow: unknown };
@@ -121,6 +127,20 @@ export function password<DataModel extends GenericDataModel = GenericDataModel>(
   const provider = config.id ?? "password";
   const resetProvider = typeof config.reset === "function" ? config.reset() : config.reset;
   const verifyProvider = typeof config.verify === "function" ? config.verify() : config.verify;
+  const extraProviders = [resetProvider, verifyProvider, config.afterReset?.provider]
+    .filter(
+      (extraProvider): extraProvider is NonNullable<typeof extraProvider> =>
+        extraProvider !== undefined,
+    )
+    .filter((extraProvider, index, providers) => providers.indexOf(extraProvider) === index);
+  const crypto = config.crypto ?? {
+    async hashSecret(password: string) {
+      return await hashPassword(password);
+    },
+    async verifySecret(password: string, hash: Hashed<"Password">) {
+      return await verifyPassword(password, hash);
+    },
+  };
 
   return credentials<DataModel>({
     id: provider,
@@ -150,7 +170,8 @@ export function password<DataModel extends GenericDataModel = GenericDataModel>(
         user: GenericDoc<DataModel, "User">,
       ) => {
         if (verifyProvider && !account.emailVerified) {
-          return await ctx.auth.provider.signIn(ctx, verifyProvider, {
+          return await ctx.auth.provider.signIn(ctx, {
+            provider: verifyProvider,
             accountId: account._id,
             params,
           });
@@ -197,7 +218,8 @@ export function password<DataModel extends GenericDataModel = GenericDataModel>(
             });
           }
           if (result.kind === "emailVerificationRequired") {
-            return await ctx.auth.provider.signIn(ctx, verifyProvider!, {
+            return await ctx.auth.provider.signIn(ctx, {
+              provider: verifyProvider!,
               accountId: result.account._id as GenericDoc<DataModel, "Account">["_id"],
               params,
             });
@@ -221,54 +243,87 @@ export function password<DataModel extends GenericDataModel = GenericDataModel>(
           if (result === null) {
             return { kind: "started" as const };
           }
-          return await ctx.auth.provider.signIn(ctx, resetProvider, {
+          return await ctx.auth.provider.signIn(ctx, {
+            provider: resetProvider,
             accountId: result.account._id,
             params,
           });
         },
 
-        verify: async () => {
-          const newPassword = params.newPassword;
-          const isResetCompletion = typeof newPassword === "string" && newPassword.length > 0;
-
-          if (isResetCompletion) {
-            if (!resetProvider) {
-              throw new Error(`Password reset is not enabled for ${provider}`);
-            }
-            validatePasswordRequirements(newPassword as string);
-            const result = await ctx.auth.provider.signIn(ctx, resetProvider, { params });
-            if (result === null) {
-              throw new ConvexError({
-                code: ErrorCode.INVALID_CREDENTIALS,
-                message: "Invalid code",
-              });
-            }
-            if ("kind" in result) {
-              throw new ConvexError({
-                code: ErrorCode.INVALID_CREDENTIALS,
-                message: "Invalid code",
-              });
-            }
-            const { userId, sessionId } = result;
-            await ctx.auth.account.update(ctx, {
-              provider,
-              account: { id: email, secret: newPassword as string },
-            });
-            await ctx.auth.session.revoke(ctx, {
-              userId,
-              except: [sessionId],
-            });
-            await emitAuthEvent(ctx, ctx.auth.config, {
-              kind: "password.changed",
-              actor: { type: "user", id: userId },
-              subject: { type: "user", id: userId },
-              targets: [{ kind: "user", id: userId }],
-              outcome: "success",
-              data: { flow: "reset" },
-            });
-            return { userId, sessionId };
+        recover: async () => {
+          const newPassword = requireStringParam(params.newPassword, "newPassword", "recover");
+          if (!resetProvider) {
+            throw new Error(`Password reset is not enabled for ${provider}`);
           }
+          validatePasswordRequirements(newPassword);
+          if (config.afterReset !== undefined) {
+            const verified = await callVerifyCodeAndSignIn(ctx, {
+              params: params as SignInParams,
+              provider: resetProvider.id,
+              createSession: false,
+              generateTokens: false,
+              allowExtraProviders: true,
+            });
+            if (verified === null) {
+              throw new ConvexError({
+                code: ErrorCode.INVALID_CREDENTIALS,
+                message: "Invalid code",
+              });
+            }
+            const account = await ctx.auth.account.get(ctx, {
+              provider,
+              account: { id: email },
+            });
+            if (account === null || account.user._id !== verified.userId) {
+              throw new ConvexError({
+                code: ErrorCode.INVALID_CREDENTIALS,
+                message: "Invalid code",
+              });
+            }
+            return await ctx.auth.provider.continuePasswordReset(ctx, {
+              userId: verified.userId,
+              operation: config.afterReset,
+              accountId: account.account._id,
+              secret: await crypto.hashSecret(newPassword),
+            });
+          }
+          const result = await ctx.auth.provider.signIn(ctx, {
+            provider: resetProvider,
+            params,
+          });
+          if (result === null) {
+            throw new ConvexError({
+              code: ErrorCode.INVALID_CREDENTIALS,
+              message: "Invalid code",
+            });
+          }
+          if ("kind" in result) {
+            throw new ConvexError({
+              code: ErrorCode.INVALID_CREDENTIALS,
+              message: "Invalid code",
+            });
+          }
+          const { userId, sessionId } = result;
+          await ctx.auth.account.update(ctx, {
+            provider,
+            account: { id: email, secret: newPassword },
+          });
+          await ctx.auth.session.revoke(ctx, {
+            userId,
+            except: [sessionId],
+          });
+          await emitAuthEvent(ctx, ctx.auth.config, {
+            kind: "password.changed",
+            actor: { type: "user", id: userId },
+            subject: { type: "user", id: userId },
+            targets: [{ kind: "user", id: userId }],
+            outcome: "success",
+            data: { flow: "reset" },
+          });
+          return { userId, sessionId };
+        },
 
+        verify: async () => {
           if (!verifyProvider) {
             throw new Error(`Email verification is not enabled for ${provider}`);
           }
@@ -279,7 +334,8 @@ export function password<DataModel extends GenericDataModel = GenericDataModel>(
           if (result === null) {
             return { kind: "started" as const };
           }
-          return await ctx.auth.provider.signIn(ctx, verifyProvider, {
+          return await ctx.auth.provider.signIn(ctx, {
+            provider: verifyProvider,
             accountId: result.account._id,
             params,
           });
@@ -358,16 +414,9 @@ export function password<DataModel extends GenericDataModel = GenericDataModel>(
       }
       return await flowHandlers[flowDispatch.tag]();
     },
-    crypto: config.crypto ?? {
-      async hashSecret(password: string) {
-        return await hashPassword(password);
-      },
-      async verifySecret(password: string, hash: Hashed<"Password">) {
-        return await verifyPassword(password, hash);
-      },
-    },
-    extraProviders: [resetProvider, verifyProvider],
     ...config,
+    crypto,
+    extraProviders,
   });
 }
 

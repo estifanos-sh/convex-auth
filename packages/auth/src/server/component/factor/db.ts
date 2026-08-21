@@ -15,6 +15,7 @@ import type { GenericActionCtx } from "convex/server";
 import type { Infer } from "convex/values";
 
 import {
+  vAuthContinuationDoc,
   vAuthVerifierDoc,
   vDeviceCodeDoc,
   vPasskeyDoc,
@@ -32,6 +33,8 @@ type TotpDoc = Infer<typeof vTotpFactorDoc>;
 type PasskeyDoc = Infer<typeof vPasskeyDoc>;
 
 type VerifierDoc = Infer<typeof vAuthVerifierDoc>;
+
+type ContinuationDoc = Infer<typeof vAuthContinuationDoc>;
 
 type DeviceDoc = Infer<typeof vDeviceCodeDoc>;
 
@@ -88,6 +91,50 @@ export async function consumeVerifierById(
     id: verifierId,
     ...(expectedSignature === undefined ? {} : { expectedSignature }),
   })) as VerifierDoc | null;
+}
+
+/** Create a provider continuation. */
+export async function mutateContinuationCreate(
+  ctx: ComponentCallCtx,
+  args: {
+    userId: string;
+    provider: string;
+    operation: "rotate";
+    expirationTime: number;
+  },
+): Promise<string> {
+  return (await ctx.runMutation(
+    ctx.auth.config.component.token.continuation.create,
+    args,
+  )) as string;
+}
+
+/** Create a password-reset continuation. */
+export async function mutatePasswordResetContinuationCreate(
+  ctx: ComponentCallCtx,
+  args: {
+    userId: string;
+    provider: string;
+    operation: "rotate";
+    expirationTime: number;
+    accountId: string;
+    secret: string;
+  },
+): Promise<string> {
+  return (await ctx.runMutation(
+    ctx.auth.config.component.token.continuation.createPasswordReset,
+    args,
+  )) as string;
+}
+
+/** Read an unexpired provider continuation. */
+export async function queryContinuation(
+  ctx: ComponentCallCtx,
+  id: string,
+): Promise<ContinuationDoc | null> {
+  return (await ctx.runQuery(ctx.auth.config.component.token.continuation.get, {
+    id,
+  })) as ContinuationDoc | null;
 }
 
 /** Fetch a TOTP factor by ID across the component boundary. */
@@ -184,6 +231,36 @@ export async function mutatePasskeyBeginRegistration(
   };
 }
 
+/** Create a registration challenge bound to a rotation continuation. */
+export async function mutatePasskeyBeginRotation(
+  ctx: ComponentCallCtx,
+  args: {
+    continuationId: string;
+    provider: string;
+    signature: string;
+    expirationTime: number;
+  },
+): Promise<
+  | { status: "rejected" }
+  | {
+      status: "accepted";
+      userId: string;
+      verifierId: string;
+      user: Pick<CrossComponentUserDoc, "email" | "name">;
+      credentials: Array<{ id: string; transports?: string[] }>;
+    }
+> {
+  return (await ctx.runMutation(ctx.auth.config.component.factor.passkey.beginRotation, args)) as
+    | { status: "rejected" }
+    | {
+        status: "accepted";
+        userId: string;
+        verifierId: string;
+        user: Pick<CrossComponentUserDoc, "email" | "name">;
+        credentials: Array<{ id: string; transports?: string[] }>;
+      };
+}
+
 /** Create a sign-in challenge and resolve its optional email allow-list atomically. */
 export async function mutatePasskeyBeginSignIn(
   ctx: ComponentCallCtx,
@@ -255,6 +332,56 @@ export async function mutatePasskeyCompleteRegistration(
     refreshTokenId: string;
     replacedSessionId?: string;
   };
+}
+
+/** Rotate passkeys and sessions after a verified continuation registration. */
+export async function mutatePasskeyCompleteRotation(
+  ctx: ComponentCallCtx,
+  args: {
+    userId: string;
+    credentialId: string;
+    publicKey: ArrayBuffer;
+    algorithm: number;
+    counter: number;
+    transports?: string[];
+    deviceType: string;
+    backedUp: boolean;
+    name?: string;
+    attestation?: WebAuthnAttestationEvidence;
+    createdAt: number;
+    continuationId: string;
+    provider: string;
+    sessionExpirationTime: number;
+    refreshTokenExpirationTime: number;
+  },
+): Promise<
+  | { status: "rejected" }
+  | {
+      status: "accepted";
+      passkeyId: string;
+      user: CrossComponentUserDoc;
+      sessionId: string;
+      refreshTokenId: string;
+      removedPasskeyIds: string[];
+      revokedSessions: number;
+      passwordChanged: boolean;
+    }
+> {
+  return (await ctx.runMutation(
+    ctx.auth.config.component.factor.passkey.completeRotation,
+    args,
+  )) as
+    | { status: "rejected" }
+    | {
+        status: "accepted";
+        passkeyId: string;
+        user: CrossComponentUserDoc;
+        sessionId: string;
+        refreshTokenId: string;
+        removedPasskeyIds: string[];
+        revokedSessions: number;
+        passwordChanged: boolean;
+      };
 }
 
 /**

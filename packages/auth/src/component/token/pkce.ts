@@ -96,13 +96,15 @@ export const consume = mutation({
 export const create = mutation({
   args: {
     sessionId: v.optional(v.id("Session")),
+    continuationId: v.optional(v.id("AuthContinuation")),
     signature: v.optional(v.string()),
     expirationTime: v.optional(v.number()),
   },
   returns: v.id("AuthVerifier"),
-  handler: async (ctx, { sessionId, signature, expirationTime }) => {
+  handler: async (ctx, { sessionId, continuationId, signature, expirationTime }) => {
     return await ctx.db.insert("AuthVerifier", {
       sessionId: sessionId,
+      continuationId,
       signature,
       expirationTime: expirationTime ?? Date.now() + DEFAULT_VERIFIER_TTL_MS,
     });
@@ -115,6 +117,7 @@ export const update = mutation({
     id: v.id("AuthVerifier"),
     patch: v.object({
       sessionId: v.optional(v.id("Session")),
+      continuationId: v.optional(v.id("AuthContinuation")),
       signature: v.optional(v.string()),
       expirationTime: v.optional(v.number()),
     }),

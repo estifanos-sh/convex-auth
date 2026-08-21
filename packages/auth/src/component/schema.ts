@@ -156,11 +156,25 @@ export default defineSchema({
    */
   AuthVerifier: defineTable({
     sessionId: v.optional(v.id("Session")),
+    continuationId: v.optional(v.id("AuthContinuation")),
     signature: v.optional(v.string()),
     expirationTime: v.optional(v.number()),
   })
     .index("signature", ["signature"])
     .index("expiration_time", ["expirationTime"]),
+
+  AuthContinuation: defineTable({
+    userId: v.id("User"),
+    provider: v.string(),
+    operation: v.literal("rotate"),
+    expirationTime: v.number(),
+  }).index("expiration_time", ["expirationTime"]),
+
+  PasswordReset: defineTable({
+    continuationId: v.id("AuthContinuation"),
+    accountId: v.id("Account"),
+    secret: v.string(),
+  }).index("continuation_id", ["continuationId"]),
 
   /** Token-bucket state for guessable-secret authentication attempts. */
   SignInLimit: defineTable({

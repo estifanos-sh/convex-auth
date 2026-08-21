@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+### Breaking
+
+- `auth.provider.signIn` now takes one object argument after `ctx`:
+  `{ provider, accountId?, params? }`.
+- Password reset completion is the required `recover` flow with
+  `{ email, code, newPassword }`. The overloaded `verify` flow no longer accepts
+  an optional `newPassword`; it is reserved for email verification.
+
+### New
+
+- Password recovery can require passkey rotation with
+  `password({ reset, afterReset: passkeys.rotate() })`. OTP verification creates
+  a short-lived, provider-bound continuation without issuing a session. The
+  replacement passkey, staged password, old passkeys, old sessions, and final
+  session are committed in one transaction, and platform clients automatically
+  complete the WebAuthn ceremony.
+- `auth.provider.continue(ctx, { userId, operation })` composes typed provider
+  operations without caller-authored mode or purpose strings.
+
 ## 0.0.1
 
 First stable release under the `@estifanos-sh/convex-auth` package name. It

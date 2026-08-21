@@ -48,11 +48,19 @@ export type SignInStartResult = {
 };
 
 /** Sign-in result carrying options for a WebAuthn ceremony. */
-export type SignInWebAuthnOptionsResult = {
-  kind: "webauthnOptions";
-  options: Record<string, unknown>;
-  verifier: string;
-};
+export type SignInWebAuthnOptionsResult =
+  | {
+      kind: "webauthnOptions";
+      options: Record<string, unknown>;
+      verifier: string;
+    }
+  | {
+      kind: "webauthnOptions";
+      options: Record<string, unknown>;
+      verifier: string;
+      continuation: string;
+      operation: "rotate";
+    };
 
 /** Sign-in result requesting a TOTP code to complete two-factor sign-in. */
 export type SignInTotpChallengeResult = {

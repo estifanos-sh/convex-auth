@@ -14,6 +14,7 @@ import type {
   WebAuthnClient,
   WebAuthnRegisterOptions,
   WebAuthnSignInOptions,
+  WebAuthnRotationResult,
   SignInActionResult,
   SignInResult,
 } from "../core/types";
@@ -60,17 +61,24 @@ export function createWebAuthnClientCore(
   const requestSignIn = async (
     params: Record<string, unknown>,
     verifier?: string,
+    continuation?: string,
   ): Promise<SignInActionResult> => {
     if (proxy) {
       return (await proxyFetch({
         action: "auth:signIn",
-        args: { provider: "webauthn", params, ...(verifier ? { verifier } : {}) },
+        args: {
+          provider: "webauthn",
+          params,
+          ...(verifier ? { verifier } : {}),
+          ...(continuation ? { continuation } : {}),
+        },
       })) as SignInActionResult;
     }
     return (await convex.action(requireApiRefs().signIn, {
       provider: "webauthn",
       params,
       ...(verifier ? { verifier } : {}),
+      ...(continuation ? { continuation } : {}),
     })) as SignInActionResult;
   };
 
@@ -103,6 +111,15 @@ export function createWebAuthnClientCore(
       : ({ kind: "started" as const } satisfies SignInResult);
   };
 
+  const completeRegistration = async (
+    result: WebAuthnRotationResult,
+    opts?: WebAuthnRegisterOptions,
+  ) => {
+    const phase2Params = await ceremony.register(result.options, opts);
+    const phase2 = await requestSignIn(phase2Params, result.verifier, result.continuation);
+    return await handleSignedInResult(phase2, "rotate");
+  };
+
   return {
     isSupported: () => ceremony.isSupported(),
     isAutofillSupported: () => ceremony.isAutofillSupported(),
@@ -120,6 +137,8 @@ export function createWebAuthnClientCore(
       const phase2 = await requestSignIn(phase2Params, phase1.verifier);
       return handleSignedInResult(phase2, "verify");
     },
+
+    completeRegistration,
 
     signIn: async (opts?: WebAuthnSignInOptions): Promise<SignInResult> => {
       const phase1 = await requestSignIn({ flow: "signIn", email: opts?.email });

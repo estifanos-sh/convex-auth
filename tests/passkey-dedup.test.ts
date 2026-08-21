@@ -398,6 +398,111 @@ test("passkey registration completion stores the credential and replaces the ses
   expect(state.current?.userId).toBe(userId);
 });
 
+test("passkey rotation commits a staged password reset and revokes prior auth atomically", async () => {
+  const t = convexTest(schema);
+  const state = await t.run(async (ctx) => {
+    const userId = await ctx.runMutation(components.auth.user.create, {
+      data: { email: "recovery-rotation@example.com" },
+    });
+    const accountId = await ctx.runMutation(components.auth.account.create, {
+      userId,
+      provider: "password",
+      providerAccountId: "recovery-rotation@example.com",
+      secret: "old-secret",
+    });
+    const oldPasskeyId = await ctx.runMutation(components.auth.factor.passkey.create, {
+      ...passkeyArgs(userId),
+      credentialId: "old-recovery-credential",
+    });
+    const firstSession = await ctx.runMutation(components.auth.session.create, {
+      userId,
+      sessionExpirationTime: Date.now() + 60_000,
+      refreshTokenExpirationTime: Date.now() + 120_000,
+    });
+    const secondSession = await ctx.runMutation(components.auth.session.create, {
+      userId,
+      sessionExpirationTime: Date.now() + 60_000,
+      refreshTokenExpirationTime: Date.now() + 120_000,
+    });
+    const continuationId = await ctx.runMutation(
+      components.auth.token.continuation.createPasswordReset,
+      {
+        userId,
+        accountId,
+        provider: "webauthn",
+        operation: "rotate",
+        secret: "new-secret",
+        expirationTime: Date.now() + 60_000,
+      },
+    );
+    return {
+      userId,
+      accountId,
+      oldPasskeyId,
+      firstSessionId: firstSession.sessionId,
+      secondSessionId: secondSession.sessionId,
+      continuationId,
+    };
+  });
+
+  const completed = await t.run((ctx) =>
+    ctx.runMutation(components.auth.factor.passkey.completeRotation, {
+      ...passkeyArgs(state.userId),
+      credentialId: "replacement-recovery-credential",
+      continuationId: state.continuationId,
+      provider: "webauthn",
+      sessionExpirationTime: Date.now() + 60_000,
+      refreshTokenExpirationTime: Date.now() + 120_000,
+    }),
+  );
+  expect(completed.status).toBe("accepted");
+  if (completed.status !== "accepted") throw new Error("expected accepted rotation");
+  expect(completed.passwordChanged).toBe(true);
+  expect(completed.revokedSessions).toBe(2);
+  expect(completed.removedPasskeyIds).toEqual([state.oldPasskeyId]);
+
+  const stored = await t.run(async (ctx) => ({
+    account: await ctx.runQuery(components.auth.account.get, { id: state.accountId }),
+    oldPasskey: await ctx.runQuery(components.auth.factor.passkey.get, {
+      id: state.oldPasskeyId,
+    }),
+    replacement: await ctx.runQuery(components.auth.factor.passkey.get, {
+      id: completed.passkeyId,
+    }),
+    firstSession: await ctx.runQuery(components.auth.session.get, {
+      id: state.firstSessionId,
+    }),
+    secondSession: await ctx.runQuery(components.auth.session.get, {
+      id: state.secondSessionId,
+    }),
+    finalSession: await ctx.runQuery(components.auth.session.get, {
+      id: completed.sessionId,
+    }),
+    continuation: await ctx.runQuery(components.auth.token.continuation.get, {
+      id: state.continuationId,
+    }),
+  }));
+  expect(stored.account?.secret).toBe("new-secret");
+  expect(stored.oldPasskey).toBeNull();
+  expect(stored.replacement?.credentialId).toBe("replacement-recovery-credential");
+  expect(stored.firstSession).toBeNull();
+  expect(stored.secondSession).toBeNull();
+  expect(stored.finalSession?.userId).toBe(state.userId);
+  expect(stored.continuation).toBeNull();
+
+  const replay = await t.run((ctx) =>
+    ctx.runMutation(components.auth.factor.passkey.completeRotation, {
+      ...passkeyArgs(state.userId),
+      credentialId: "replayed-recovery-credential",
+      continuationId: state.continuationId,
+      provider: "webauthn",
+      sessionExpirationTime: Date.now() + 60_000,
+      refreshTokenExpirationTime: Date.now() + 120_000,
+    }),
+  );
+  expect(replay).toEqual({ status: "rejected" });
+});
+
 test("passkey assertion begin preserves a challenge when the response does not match", async () => {
   const t = convexTest(schema);
   const verifierId = await t.run((ctx) =>

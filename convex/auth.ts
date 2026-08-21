@@ -86,8 +86,13 @@ const emailProvider = email({
 });
 
 const passwordEmailVerification = env.AUTH_PASSWORD_EMAIL_VERIFICATION === "true";
+const passkeyProvider = webauthn();
 const passwordProvider = passwordEmailVerification
-  ? password({ reset: emailProvider, verify: emailProvider })
+  ? password({
+      reset: emailProvider,
+      verify: emailProvider,
+      afterReset: passkeyProvider.rotate(),
+    })
   : password();
 
 const googleProvider = maybeGoogleProvider();
@@ -96,7 +101,7 @@ const auth = defineAuth(components.auth, {
     connection(),
     ...(googleProvider ? [googleProvider] : []),
     passwordProvider,
-    webauthn(),
+    passkeyProvider,
     totp({ issuer: "ConvexAuth Example" }),
     anonymous(),
     device({

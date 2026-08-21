@@ -152,6 +152,23 @@ export { remove };
 /** Upper bound on sessions revoked in one de-provisioning transaction. */
 const REVOKE_FOR_USER_MAX = 1000;
 
+/** @internal */
+export async function revokeSessionRows(ctx: MutationCtx, userId: Id<"User">) {
+  const sessions = await ctx.db
+    .query("Session")
+    .withIndex("user_id", (q) => q.eq("userId", userId))
+    .take(REVOKE_FOR_USER_MAX);
+  for (const session of sessions) {
+    const tokens = await ctx.db
+      .query("RefreshToken")
+      .withIndex("session_id", (q) => q.eq("sessionId", session._id))
+      .take(SESSION_TOKEN_DELETE_BATCH);
+    for (const token of tokens) await ctx.db.delete("RefreshToken", token._id);
+    await ctx.db.delete("Session", session._id);
+  }
+  return sessions.length;
+}
+
 /**
  * Revoke every session a user owns, deleting each session and all of its
  * refresh tokens in one atomic transaction. Used on SSO de-provisioning so an
@@ -163,20 +180,6 @@ export const revokeForUser = mutation({
   args: { userId: v.id("User") },
   returns: v.object({ revoked: v.number() }),
   handler: async (ctx, { userId }) => {
-    const sessions = await ctx.db
-      .query("Session")
-      .withIndex("user_id", (q) => q.eq("userId", userId))
-      .take(REVOKE_FOR_USER_MAX);
-    for (const session of sessions) {
-      const tokens = await ctx.db
-        .query("RefreshToken")
-        .withIndex("session_id", (q) => q.eq("sessionId", session._id))
-        .take(SESSION_TOKEN_DELETE_BATCH);
-      for (const token of tokens) {
-        await ctx.db.delete("RefreshToken", token._id);
-      }
-      await ctx.db.delete("Session", session._id);
-    }
-    return { revoked: sessions.length };
+    return { revoked: await revokeSessionRows(ctx, userId) };
   },
 });

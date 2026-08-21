@@ -7,9 +7,10 @@ import {
   internalMutationGeneric,
 } from "convex/server";
 import type { RouteSpec } from "convex/server";
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 
 import type { AuthTokens, SignInFlowResult } from "../shared/results";
+import { ErrorCode } from "../shared/codes";
 import { createCoreDomains } from "./core";
 import { GetProviderOrThrowFunc } from "./crypto";
 import { requireAuthKey, requireEnv } from "./env";
@@ -50,12 +51,18 @@ import { extractBearerToken } from "./utils/bearer";
 import { encryptSecret } from "./secret";
 import { createGroupService } from "./connection/group/service";
 import { createFactorUnlinkHelpers } from "./services/factors";
+import {
+  mutateContinuationCreate,
+  mutatePasswordResetContinuationCreate,
+  queryContinuation,
+} from "./component/factor/db";
 import { resolveServerServices } from "./services/resolve";
 import { signInImpl } from "./signin/flow";
 import { createGroupConnectionDomain } from "./connection/domain";
 import { addGroupHttpRuntime } from "./connection/http";
 import { normalizeGroupConnectionPolicy } from "./connection/policy";
 import type {
+  AuthProviderContinueArgs,
   ConvexAuthConfig,
   FunctionReferenceFromExport,
   ConnectionProviderConfig,
@@ -209,6 +216,50 @@ export function Auth(config_: ConvexAuthConfig) {
     connection: ReturnType<typeof createGroupConnectionDomain>;
   };
 
+  type PasswordResetContinuationRequest = AuthProviderContinueArgs & {
+    commit: "passwordReset";
+    accountId: string;
+    secret: string;
+  };
+
+  const continueWithProvider = async <DataModel extends GenericDataModel>(
+    ctx: GenericActionCtx<DataModel>,
+    continuationRequest: AuthProviderContinueArgs | PasswordResetContinuationRequest,
+  ) => {
+    const { userId, operation } = continuationRequest;
+    const enriched = bridgeRuntimeType<Parameters<typeof signInImpl>[0]>(enrichCtx(ctx));
+    const continuationArgs = {
+      userId,
+      provider: operation.provider.id,
+      operation: operation.operation,
+      expirationTime: Date.now() + (operation.provider.options.challengeExpirationMs ?? 300_000),
+    };
+    const continuation =
+      "commit" in continuationRequest && continuationRequest.commit === "passwordReset"
+        ? await mutatePasswordResetContinuationCreate(enriched, {
+            ...continuationArgs,
+            accountId: continuationRequest.accountId,
+            secret: continuationRequest.secret,
+          })
+        : await mutateContinuationCreate(enriched, continuationArgs);
+    const result = await signInImpl(
+      enriched,
+      operation.provider,
+      {
+        params: { flow: "register" },
+        continuation,
+      },
+      {
+        generateTokens: true,
+        allowExtraProviders: true,
+      },
+    );
+    if (result.kind === "signedIn") {
+      throw new Error("A provider continuation cannot issue an immediate session.");
+    }
+    return result;
+  };
+
   const authBase: AuthRuntimeBase = {
     ...createCoreDomains({
       config,
@@ -249,6 +300,7 @@ export function Auth(config_: ConvexAuthConfig) {
         }
         return result as Exclude<typeof result, { kind: "signedIn" }>;
       },
+      continueWithProvider,
     }),
     event: createAuthEventDomain(config),
     /**
@@ -575,7 +627,13 @@ export function Auth(config_: ConvexAuthConfig) {
       totp: totpHelpers,
       session: auth.session,
       member: auth.member,
-      provider: auth.provider,
+      provider: {
+        ...auth.provider,
+        continuePasswordReset: async (
+          continuationCtx: GenericActionCtx<DataModel>,
+          args: Omit<PasswordResetContinuationRequest, "commit">,
+        ) => await continueWithProvider(continuationCtx, { ...args, commit: "passwordReset" }),
+      },
       event: auth.event,
     });
 
@@ -591,6 +649,7 @@ export function Auth(config_: ConvexAuthConfig) {
         provider: v.optional(v.string()),
         params: v.optional(vPayloadRecord),
         verifier: v.optional(v.string()),
+        continuation: v.optional(v.string()),
         refreshToken: v.optional(v.string()),
         calledBy: v.optional(v.string()),
       },
@@ -598,7 +657,28 @@ export function Auth(config_: ConvexAuthConfig) {
         if (args.calledBy !== undefined) {
           log("INFO", `\`auth:signIn\` called by ${args.calledBy}`);
         }
-        const provider = args.provider !== undefined ? getProviderOrThrow(args.provider) : null;
+        let provider = null;
+        if (args.provider !== undefined && args.continuation !== undefined) {
+          const continuation = await queryContinuation(
+            bridgeRuntimeType<Parameters<typeof signInImpl>[0]>(enrichCtx(ctx)),
+            args.continuation,
+          );
+          if (continuation === null || continuation.provider !== args.provider) {
+            throw new ConvexError({
+              code: ErrorCode.CONTINUATION_INVALID,
+              message: "The provider continuation is invalid or expired.",
+            });
+          }
+          provider = getProviderOrThrow(args.provider, true);
+          if (provider.type !== "webauthn") {
+            throw new ConvexError({
+              code: ErrorCode.CONTINUATION_INVALID,
+              message: "The provider continuation does not support this provider.",
+            });
+          }
+        } else if (args.provider !== undefined) {
+          provider = getProviderOrThrow(args.provider);
+        }
         const authSiteUrl =
           provider?.type === "oauth" || provider?.type === "connection"
             ? getAuthSiteUrl(ctx)

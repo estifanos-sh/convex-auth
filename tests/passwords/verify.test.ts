@@ -19,7 +19,7 @@
 
 process.env.AUTH_PASSWORD_EMAIL_VERIFICATION = "true";
 
-import { api } from "@convex/_generated/api";
+import { api, components } from "@convex/_generated/api";
 import schema from "@convex/schema";
 import { decodeJwt } from "jose";
 import { afterEach, expect, test, vi } from "vite-plus/test";
@@ -31,7 +31,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-test("reset flow sends an OTP, lets the user choose a new password, and rotates the secret", async () => {
+test("reset verification returns a passkey rotation without issuing a session", async () => {
   const t = convexTest(schema);
   const email = "reset-flow@example.com";
 
@@ -57,33 +57,35 @@ test("reset flow sends an OTP, lets the user choose a new password, and rotates 
   expect(resetCapture.code()).not.toEqual(signUpCapture.code());
 
   const NEW_PASSWORD = "freshpassword123";
-  const tokens = expectSignInSession(
-    await t.action(api.auth.signIn, {
+  const accountBefore = await t.run((ctx) =>
+    ctx.runQuery(components.auth.account.get, {
       provider: "password",
-      params: {
-        email,
-        code: resetCapture.code(),
-        newPassword: NEW_PASSWORD,
-        flow: "verify",
-      },
+      providerAccountId: email,
     }),
   );
-  expect(tokens).not.toBeNull();
+  const continuation = await t.action(api.auth.signIn, {
+    provider: "password",
+    params: {
+      email,
+      code: resetCapture.code(),
+      newPassword: NEW_PASSWORD,
+      flow: "recover",
+    },
+  });
+  expect(continuation.kind).toBe("webauthnOptions");
+  if (continuation.kind !== "webauthnOptions" || !("operation" in continuation)) {
+    throw new Error("expected passkey rotation");
+  }
+  expect(continuation.operation).toBe("rotate");
+  expect(continuation.continuation).not.toEqual("");
 
-  const reSignIn = expectSignInSession(
-    await t.action(api.auth.signIn, {
+  const accountAfter = await t.run((ctx) =>
+    ctx.runQuery(components.auth.account.get, {
       provider: "password",
-      params: { email, password: NEW_PASSWORD, flow: "signIn" },
+      providerAccountId: email,
     }),
   );
-  expect(reSignIn).not.toBeNull();
-
-  await expect(async () => {
-    await t.action(api.auth.signIn, {
-      provider: "password",
-      params: { email, password: TEST_PASSWORD, flow: "signIn" },
-    });
-  }).rejects.toThrow(/Invalid credentials/);
+  expect(accountAfter?.secret).toBe(accountBefore?.secret);
 });
 
 test("verify without newPassword completes post-signup email confirmation", async () => {

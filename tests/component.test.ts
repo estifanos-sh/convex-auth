@@ -437,6 +437,38 @@ test("pruneExpired skips never-expire verifiers and prunes expired ones", async 
   expect(survivor).not.toBeNull();
 });
 
+test("pruneExpired deletes expired provider continuations", async () => {
+  const t = convexTest(schema);
+  const continuationId = await t.run(async (ctx) => {
+    const userId = await ctx.runMutation(components.auth.user.create, {
+      data: { email: "expired-continuation@example.com" },
+    });
+    const accountId = await ctx.runMutation(components.auth.account.create, {
+      userId,
+      provider: "password",
+      providerAccountId: "expired-continuation@example.com",
+      secret: "old-secret",
+    });
+    return await ctx.runMutation(components.auth.token.continuation.createPasswordReset, {
+      userId,
+      accountId,
+      provider: "webauthn",
+      operation: "rotate",
+      secret: "staged-secret",
+      expirationTime: Date.now() - 1,
+    });
+  });
+
+  const result = await t.run((ctx) =>
+    ctx.runMutation(pruneExpiredForTest(components.auth), { batchSize: 10 }),
+  );
+  expect(result.authContinuations).toBe(1);
+  const continuation = await t.run((ctx) =>
+    ctx.runQuery(components.auth.token.continuation.get, { id: continuationId }),
+  );
+  expect(continuation).toBeNull();
+});
+
 test("sign-in limiter reservations are atomic and fully-refilled buckets are pruned", async () => {
   vi.useFakeTimers();
   try {

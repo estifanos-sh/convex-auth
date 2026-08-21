@@ -113,7 +113,10 @@ authorization model.
 - `auth.member.*` — Membership helpers
 - `auth.invite.*` — Invite helpers
 - `auth.key.*` — API key helpers
-- `auth.provider.signIn` — Server-side provider orchestration
+- `auth.provider.signIn(ctx, { provider, ... })` — Server-side provider sign-in
+- `auth.provider.continue(ctx, { userId, operation })` — Continue a proven
+  identity into a typed provider operation without issuing an intermediate
+  session
 - `auth.event.*` — Audit reads and app-owned event emission
 - `auth.request.*` — HTTP route helpers
 - `auth.http()` — app-owned HTTP router for OAuth callbacks, JWKS, and protocol

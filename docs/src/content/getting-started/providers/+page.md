@@ -263,29 +263,29 @@ defineAuth(components.auth, {
 });
 ```
 
-The password provider supports five flows, all single-word camelCase. Pass
-the flow name in `params.flow` when calling `signIn`:
+The password provider supports six flows, all single-word camelCase. Pass the
+flow in the second argument to `signIn`:
 
-| Flow     | Authenticated? | Required params                           | Notes                                                    |
-| -------- | -------------- | ----------------------------------------- | -------------------------------------------------------- |
-| `signUp` | No             | `email`, `password`                       | Creates a new account                                    |
-| `signIn` | No             | `email`, `password`                       | Authenticate existing user                               |
-| `reset`  | No             | `email`                                   | Sends an OTP via the configured `reset` email provider   |
-| `verify` | No             | `email`, `code`, `newPassword?`           | Verifies an OTP. With `newPassword`, completes a `reset` |
-| `change` | Yes            | `email`, `currentPassword`, `newPassword` | Authenticated change. Other sessions invalidated         |
+| Flow      | Authenticated? | Required params                           | Notes                                                  |
+| --------- | -------------- | ----------------------------------------- | ------------------------------------------------------ |
+| `signUp`  | No             | `email`, `password`                       | Creates a new account                                  |
+| `signIn`  | No             | `email`, `password`                       | Authenticate existing user                             |
+| `reset`   | No             | `email`                                   | Sends an OTP through the configured reset provider     |
+| `verify`  | No             | `email`, `code`                           | Verifies a post-signup email OTP                       |
+| `recover` | No             | `email`, `code`, `newPassword`            | Verifies a reset OTP and completes configured recovery |
+| `change`  | Yes            | `email`, `currentPassword`, `newPassword` | Authenticated change. Other sessions invalidated       |
 
-`reset` and `verify` (with `newPassword`) require a `reset` email provider in
-the config; `verify` (without `newPassword`) requires a `verify` email provider.
-The OTP scope is enforced server-side — a `reset`-issued OTP refuses to verify
-without `newPassword`, and a signup-issued OTP refuses with one.
+`reset` and `recover` require a `reset` email provider; `verify` requires a
+`verify` email provider. The OTP scope is enforced server-side, so reset and
+signup verification codes cannot be exchanged across flows.
 
 ```ts
 // Forgot password
-auth.signIn("password", { provider: "password", params: { email, flow: "reset" } });
-auth.signIn("password", { params: { email, code, newPassword, flow: "verify" } });
+await auth.signIn("password", { email, flow: "reset" });
+await auth.signIn("password", { email, code, newPassword, flow: "recover" });
 
 // Change password (authenticated)
-auth.signIn("password", { params: { email, currentPassword, newPassword, flow: "change" } });
+await auth.signIn("password", { email, currentPassword, newPassword, flow: "change" });
 ```
 
 To enable `reset` and post-signup email verification, pass an email provider:
@@ -297,6 +297,31 @@ const emailProvider = email({ from: "noreply@example.com", send: ... });
 
 password({ reset: emailProvider, verify: emailProvider });
 ```
+
+To require a replacement passkey during account recovery, reuse the configured
+WebAuthn provider and pass its typed rotation operation to `afterReset`:
+
+```ts
+import { password, webauthn } from "@estifanos-sh/convex-auth/providers";
+
+const passkeys = webauthn();
+
+defineAuth(components.auth, {
+  providers: [
+    password({
+      reset: emailProvider,
+      afterReset: passkeys.rotate(),
+    }),
+    passkeys,
+  ],
+});
+```
+
+After the reset OTP is verified, the browser automatically registers the new
+passkey. The new password remains staged until registration succeeds. That
+single completion transaction replaces the user's passkeys, revokes prior
+sessions, commits the password, and issues the final session. No restricted or
+normal session exists between OTP verification and passkey registration.
 
 ## Magic Links (Email)
 

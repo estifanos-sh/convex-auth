@@ -700,6 +700,19 @@ export interface WebAuthnAttestationPolicy {
 export interface WebAuthnProviderConfig {
   id: string;
   type: "webauthn";
+  /**
+   * Create a typed operation that replaces a user's passkeys during a provider
+   * continuation.
+   *
+   * @returns An operation accepted by `password({ afterReset })` and
+   *   `auth.provider.continue()`.
+   * @example
+   * ```ts
+   * const passkeys = webauthn();
+   * password({ reset: recoveryEmail, afterReset: passkeys.rotate() });
+   * ```
+   */
+  rotate(): WebAuthnRotateOperation;
   options: {
     /** Relying Party display name. Defaults to APP_URL hostname. */
     rpName?: string;
@@ -729,6 +742,12 @@ export interface WebAuthnProviderConfig {
     };
   };
 }
+
+/** A typed WebAuthn operation accepted by provider continuations. */
+export type WebAuthnRotateOperation = Readonly<{
+  provider: WebAuthnProviderConfig;
+  operation: "rotate";
+}>;
 
 /**
  * Configuration for the TOTP two-factor authentication provider.
@@ -873,6 +892,7 @@ type AuthDeleteTotpArgs = {
 
 /** Arguments for `auth.provider.signIn()`. */
 type AuthProviderSignInArgs = {
+  provider: AuthProviderConfig;
   accountId?: GenericId<"Account">;
   params?: Record<string, Value | undefined>;
 };
@@ -889,6 +909,17 @@ type AuthProviderSignInResult =
   | AuthProviderImmediateSignInResult
   | AuthProviderDeferredSignInResult
   | null;
+
+/** Arguments for `auth.provider.continue()`. */
+export type AuthProviderContinueArgs = {
+  userId: GenericId<"User">;
+  operation: WebAuthnRotateOperation;
+};
+
+type AuthProviderPasswordResetContinueArgs = AuthProviderContinueArgs & {
+  accountId: GenericId<"Account">;
+  secret: string;
+};
 
 /** Arguments for `auth.member.get()`. */
 type AuthMemberInspectArgs = {
@@ -1030,9 +1061,17 @@ type AuthServerHelpers = {
   provider: {
     signIn: (
       ctx: GenericActionCtx<GenericDataModel>,
-      provider: AuthProviderConfig,
       args: AuthProviderSignInArgs,
     ) => Promise<AuthProviderSignInResult>;
+    continue: (
+      ctx: GenericActionCtx<GenericDataModel>,
+      args: AuthProviderContinueArgs,
+    ) => Promise<AuthProviderDeferredSignInResult>;
+    /** @internal */
+    continuePasswordReset: (
+      ctx: GenericActionCtx<GenericDataModel>,
+      args: AuthProviderPasswordResetContinueArgs,
+    ) => Promise<AuthProviderDeferredSignInResult>;
   };
 };
 

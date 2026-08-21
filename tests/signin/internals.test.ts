@@ -273,7 +273,8 @@ test("password provider routes unverified sign-in through verify provider withou
       provider: "password",
     }),
   );
-  expect(ctx.auth.provider.signIn).toHaveBeenCalledWith(ctx, verifyProvider, {
+  expect(ctx.auth.provider.signIn).toHaveBeenCalledWith(ctx, {
+    provider: verifyProvider,
     accountId: "account1",
     params,
   });
