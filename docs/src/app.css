@@ -437,6 +437,7 @@ input {
   display: block;
   width: 100%;
   max-width: 780px;
+  margin-inline: auto;
 }
 
 .doc-content {
