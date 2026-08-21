@@ -1,6 +1,6 @@
 import { createFileRoute, notFound } from "@tanstack/solid-router";
 import { documentationBySlug, documentationLoaders } from "../generated/docs";
-import { DocsShell } from "../components/DocsShell";
+import { DocsShell } from "../components/shell";
 
 export const Route = createFileRoute("/$")({
   beforeLoad: ({ params }) => {
