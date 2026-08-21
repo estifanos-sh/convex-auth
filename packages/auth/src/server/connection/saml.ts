@@ -74,6 +74,19 @@ type SamlServiceProvider = ReturnType<typeof createSamlServiceProvider> & {
 
 type FormDataEntryLike = string | { name: string };
 
+type SamlServiceBindings = { redirect?: string; post?: string };
+
+type SamlReplaySource = {
+  samlContent: string;
+  extract?: SamlParsedExtract;
+};
+
+type SamlReplayIdentifiers = {
+  assertionId?: string;
+  inResponseTo?: string;
+  notOnOrAfter?: string;
+};
+
 function formDataEntries(formData: unknown): Iterable<[string, FormDataEntryLike]> {
   return (formData as { entries(): Iterable<[string, FormDataEntryLike]> }).entries();
 }
@@ -101,7 +114,7 @@ export type SamlConfigShape = {
 };
 
 const _samlifyPermissiveValidator = {
-  validate: (_xml: string) => Promise.resolve("OK"),
+  validate: (_xml: string) => Promise.resolve(),
 };
 /**
  * Register the SAML schema validator before parsing any SAML response.
@@ -296,7 +309,7 @@ export function parseSamlIdpMetadata(metadata: string): ParsedSamlMetadata {
   };
 
   const readServiceBindings = (tagName: string) => {
-    const bindings: { redirect?: string; post?: string } = {};
+    const bindings: SamlServiceBindings = {};
     const pattern = new RegExp(
       `<(?:[A-Za-z0-9_.-]+:)?${tagName}\\b([^>]*)\\/?>(?:<\\/(?:[A-Za-z0-9_.-]+:)?${tagName}>)?`,
       "gi",
@@ -833,14 +846,7 @@ function assertionIdFromXml(content: string): string | undefined {
  * or `<Conditions>`) used to bound the seen-assertion cache's TTL.
  * @internal
  */
-export function samlReplayIdentifiers(parsed: {
-  samlContent: string;
-  extract?: SamlParsedExtract;
-}): {
-  assertionId?: string;
-  inResponseTo?: string;
-  notOnOrAfter?: string;
-} {
+export function samlReplayIdentifiers(parsed: SamlReplaySource): SamlReplayIdentifiers {
   const extract = parsed.extract;
   const notOnOrAfter =
     extract?.subjectConfirmation?.notOnOrAfter ?? extract?.conditions?.notOnOrAfter ?? undefined;
@@ -1024,13 +1030,14 @@ export function reconstructRedirectOctetString(url: URL): string | undefined {
 }
 
 function toSamlHttpRequest(request: GroupSamlHttpRequest): ESamlHttpRequest {
-  return {
+  const samlRequest: ESamlHttpRequest = {
     query: request.query,
     body: request.body,
-    ...(request.binding === "redirect"
-      ? { octetString: reconstructRedirectOctetString(request.url) }
-      : {}),
   };
+  if (request.binding === "redirect") {
+    samlRequest.octetString = reconstructRedirectOctetString(request.url);
+  }
+  return samlRequest;
 }
 
 /**

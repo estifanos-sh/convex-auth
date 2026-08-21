@@ -33,11 +33,7 @@ export function register(
   workpoolTest.register(t, `${name}/webhookWorkpool`);
 }
 
-const testHelpers: {
-  register: typeof register;
-  schema: SchemaDefinition<GenericSchema, boolean>;
-  modules: Record<string, () => Promise<unknown>>;
-} = {
+const testHelpers = {
   register,
   schema,
   modules,

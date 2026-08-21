@@ -9,11 +9,19 @@ import type { Storage } from "../core/types";
  */
 const STORAGE_MUTATION_ATTEMPTS = 2;
 
-/** @internal */
-export function createStorageHelpers(args: {
+type StorageHelpersOptions = {
   storage: Storage | null;
   key: (name: string) => string;
-}) {
+};
+
+type StorageHelpers = {
+  get: (name: string) => Promise<string | null>;
+  set: (name: string, value: string) => Promise<boolean>;
+  remove: (name: string) => Promise<boolean>;
+};
+
+/** @internal */
+export function createStorageHelpers(args: StorageHelpersOptions): StorageHelpers {
   const { storage, key } = args;
 
   const get = async (name: string): Promise<string | null> => {

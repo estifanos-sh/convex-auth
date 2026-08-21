@@ -81,8 +81,8 @@ type AuthRuntime = {
     update(
       ctx: GenericActionCtx<GenericDataModel>,
       args: { id: string; patch: Record<string, unknown> },
-    ): Promise<unknown>;
-    remove(ctx: GenericActionCtx<GenericDataModel>, args: { id: string }): Promise<unknown>;
+    ): Promise<null>;
+    remove(ctx: GenericActionCtx<GenericDataModel>, args: { id: string }): Promise<null>;
   };
   member: {
     list(
@@ -106,12 +106,12 @@ type AuthRuntime = {
           status: string;
         };
       },
-    ): Promise<unknown>;
+    ): Promise<string>;
     update(
       ctx: GenericActionCtx<GenericDataModel>,
       args: { id: string; patch: Record<string, unknown> },
-    ): Promise<unknown>;
-    remove(ctx: GenericActionCtx<GenericDataModel>, args: { id: string }): Promise<unknown>;
+    ): Promise<null>;
+    remove(ctx: GenericActionCtx<GenericDataModel>, args: { id: string }): Promise<null>;
     get(
       ctx: GenericActionCtx<GenericDataModel>,
       args: { groupId: string; userId: string },
@@ -155,6 +155,23 @@ type CookieToSerialize = {
   name: string;
   value: string;
   options: Parameters<typeof serializeCookie>[2];
+};
+
+type ScimEventPayload = {
+  connectionId: string;
+  subjectId?: string;
+  data?: AuthEventObject;
+};
+
+type ScimUserData = {
+  name?: string;
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  emailVerificationTime?: number;
+  phone?: string;
+  phoneVerificationTime?: number;
+  extend?: unknown;
 };
 
 function formDataEntries(formData: unknown): Iterable<[string, string | { name: string }]> {
@@ -263,16 +280,13 @@ const SAML_LOGIN_REQUEST_TTL_MS = 10 * 60 * 1000;
  */
 const SAML_SEEN_ASSERTION_FALLBACK_TTL_MS = 10 * 60 * 1000;
 
-const SCIM_FILTER_OPERATORS: Record<
-  ScimFilterOperator,
-  (values: string[], filterValue: string) => boolean
-> = {
+const SCIM_FILTER_OPERATORS = {
   pr: (values) => values.length > 0,
   eq: (values, filterValue) => values.includes(filterValue),
   co: (values, filterValue) => values.some((value) => value.includes(filterValue)),
   sw: (values, filterValue) => values.some((value) => value.startsWith(filterValue)),
   ew: (values, filterValue) => values.some((value) => value.endsWith(filterValue)),
-};
+} satisfies Record<ScimFilterOperator, (values: string[], filterValue: string) => boolean>;
 
 export function addGroupHttpRuntime(deps: GroupHttpRuntimeDeps) {
   if (!deps.hasConnection) {
@@ -314,6 +328,12 @@ export function addGroupHttpRuntime(deps: GroupHttpRuntimeDeps) {
   };
 
   type ScimHandler = (state: ScimState) => Promise<Response>;
+
+  const getScimHandler = (
+    handlers: Record<string, Partial<Record<string, ScimHandler>>>,
+    resource: string,
+    method: string,
+  ) => handlers[resource]?.[method];
 
   const errorCodeForEvent = (error: unknown, fallback: string) => {
     if (
@@ -519,7 +539,17 @@ export function addGroupHttpRuntime(deps: GroupHttpRuntimeDeps) {
     };
   };
 
-  const scimFieldAccessors: Record<string, (body: ScimBody) => unknown> = {
+  type ScimFieldValue =
+    | string
+    | number
+    | boolean
+    | null
+    | ScimFieldValue[]
+    | { [key: string]: ScimFieldValue };
+
+  type ScimFieldAccessor = (body: ScimBody) => ScimFieldValue | undefined;
+
+  const scimFieldAccessors = {
     userName: (body) => body.userName,
     externalId: (body) => body.externalId,
     displayName: (body) => body.displayName,
@@ -529,21 +559,26 @@ export function addGroupHttpRuntime(deps: GroupHttpRuntimeDeps) {
     "emails.primary": (body) => pickPrimaryEmail(body),
     "emails.value": (body) =>
       Array.isArray(body.emails)
-        ? body.emails.map((entry) => entry.value).filter(Boolean)
+        ? body.emails
+            .map((entry) => entry.value)
+            .filter((value): value is string => typeof value === "string")
         : undefined,
     "phoneNumbers.primary": (body) => pickPhone(body),
     "phoneNumbers.value": (body) => pickPhone(body),
     active: (body) => body.active,
-    groups: (body) => (body as Record<string, unknown>).groups,
-    roles: (body) => (body as Record<string, unknown>).roles,
-  };
+    groups: (body) => body.groups,
+    roles: (body) => body.roles,
+  } satisfies Record<string, ScimFieldAccessor>;
+
+  const getScimFieldAccessor = (accessors: Record<string, ScimFieldAccessor>, key: string) =>
+    accessors[key];
 
   const resolveScimField = (body: ScimBody, key: string | undefined) => {
     if (!key) {
       return undefined;
     }
-    const accessor = scimFieldAccessors[key];
-    return accessor ? accessor(body) : (body as Record<string, unknown>)[key];
+    const accessor = getScimFieldAccessor(scimFieldAccessors, key);
+    return accessor ? accessor(body) : body[key];
   };
 
   const extractScimProfile = (
@@ -609,6 +644,9 @@ export function addGroupHttpRuntime(deps: GroupHttpRuntimeDeps) {
     return [];
   };
 
+  const asScimFilterString = (value: unknown): string | undefined =>
+    typeof value === "string" ? value : undefined;
+
   const applyUserProvisioningPatch = (args: {
     currentUser: Record<string, unknown>;
     nextUser: Record<string, unknown>;
@@ -637,10 +675,12 @@ export function addGroupHttpRuntime(deps: GroupHttpRuntimeDeps) {
     );
   };
 
+  type ScimFilterValue = string | boolean | string[] | undefined;
+
   const filterScimCollection = <T>(
     items: T[],
     filter: ReturnType<typeof parseScimListRequest>["filter"],
-    filters: Record<string, (item: T) => unknown>,
+    filters: Record<string, (item: T) => ScimFilterValue>,
   ) => {
     if (!filter) {
       return items;
@@ -670,7 +710,24 @@ export function addGroupHttpRuntime(deps: GroupHttpRuntimeDeps) {
     return null;
   };
 
-  const readScimJson = async (request: Request) => {
+  const isScimFieldValue = (value: unknown): value is ScimFieldValue => {
+    if (
+      value === null ||
+      typeof value === "string" ||
+      typeof value === "number" ||
+      typeof value === "boolean"
+    ) {
+      return true;
+    }
+    if (Array.isArray(value)) {
+      return value.every(isScimFieldValue);
+    }
+    return (
+      typeof value === "object" && value !== null && Object.values(value).every(isScimFieldValue)
+    );
+  };
+
+  const readScimJson = async (request: Request): Promise<ScimBody> => {
     const contentType = request.headers.get("Content-Type") ?? "";
     if (
       contentType &&
@@ -680,7 +737,16 @@ export function addGroupHttpRuntime(deps: GroupHttpRuntimeDeps) {
       throw new Error("Unsupported SCIM content type.");
     }
     try {
-      return (await request.json()) as Record<string, unknown>;
+      const body: unknown = await request.json();
+      if (
+        typeof body !== "object" ||
+        body === null ||
+        Array.isArray(body) ||
+        !isScimFieldValue(body)
+      ) {
+        throw new Error("Invalid SCIM JSON.");
+      }
+      return body as ScimBody;
     } catch {
       throw new Error("Invalid SCIM JSON.");
     }
@@ -692,7 +758,7 @@ export function addGroupHttpRuntime(deps: GroupHttpRuntimeDeps) {
 
   const scimCollectOverflow = () => new Error("SCIM member set too large to reconcile.");
 
-  type ScimBody = Record<string, unknown> & {
+  type ScimBody = { [key: string]: ScimFieldValue } & {
     displayName?: string;
     userName?: string;
     active?: boolean;
@@ -950,6 +1016,9 @@ export function addGroupHttpRuntime(deps: GroupHttpRuntimeDeps) {
         policy: await loadGroupPolicyOrThrow(ctx, connection.groupId),
         recordScimEvent: async (kind, outcome, subject, data) => {
           try {
+            const payload: ScimEventPayload = { connectionId: connection._id };
+            if (subject.id) payload.subjectId = subject.id;
+            if (data) payload.data = data as AuthEventObject;
             await emitGroupAuthEvent(ctx, {
               connectionId: connection._id,
               groupId: connection.groupId,
@@ -959,11 +1028,7 @@ export function addGroupHttpRuntime(deps: GroupHttpRuntimeDeps) {
               outcome,
               data,
               webhook: {
-                payload: {
-                  connectionId: connection._id,
-                  ...(subject.id ? { subjectId: subject.id } : {}),
-                  ...(data ? { data: data as AuthEventObject } : {}),
-                },
+                payload,
               },
             });
           } catch (error) {
@@ -1169,14 +1234,18 @@ export function addGroupHttpRuntime(deps: GroupHttpRuntimeDeps) {
         const filtered = filterScimCollection<UserListItem>(users, listRequest.filter, {
           id: (item) => item.user._id,
           externalId: (item) => item.identity?.externalId,
-          userName: (item) => item.user.email ?? item.user.phone ?? item.user.name ?? item.user._id,
-          displayName: (item) => item.user.name,
-          name: (item) => item.user.name,
-          "name.formatted": (item) => item.user.name,
-          "name.givenName": (item) => item.user.firstName,
-          "name.familyName": (item) => item.user.lastName,
-          "emails.value": (item) => item.user.email,
-          "phoneNumbers.value": (item) => item.user.phone,
+          userName: (item) =>
+            asScimFilterString(item.user.email) ??
+            asScimFilterString(item.user.phone) ??
+            asScimFilterString(item.user.name) ??
+            item.user._id,
+          displayName: (item) => asScimFilterString(item.user.name),
+          name: (item) => asScimFilterString(item.user.name),
+          "name.formatted": (item) => asScimFilterString(item.user.name),
+          "name.givenName": (item) => asScimFilterString(item.user.firstName),
+          "name.familyName": (item) => asScimFilterString(item.user.lastName),
+          "emails.value": (item) => asScimFilterString(item.user.email),
+          "phoneNumbers.value": (item) => asScimFilterString(item.user.phone),
           active: (item) => item.identity?.active ?? item.member.status === "active",
         });
         const paged = paginateScimCollection(filtered, listRequest);
@@ -1238,24 +1307,26 @@ export function addGroupHttpRuntime(deps: GroupHttpRuntimeDeps) {
           groups: provisionProfile.groups,
           roles: provisionProfile.roles,
         });
-        const userData = {
+        const userData: ScimUserData = {
           name: provisionProfile.name,
-          ...(typeof provisionProfile.firstName === "string"
-            ? { firstName: provisionProfile.firstName }
-            : {}),
-          ...(typeof provisionProfile.lastName === "string"
-            ? { lastName: provisionProfile.lastName }
-            : {}),
           email: provisionProfile.email,
-          ...(typeof provisionProfile.email === "string"
-            ? { emailVerificationTime: Date.now() }
-            : {}),
           phone: provisionProfile.phone,
-          ...(typeof provisionProfile.phone === "string"
-            ? { phoneVerificationTime: Date.now() }
-            : {}),
-          ...(provisionProfile.extend ? { extend: provisionProfile.extend } : {}),
         };
+        if (typeof provisionProfile.firstName === "string") {
+          userData.firstName = provisionProfile.firstName;
+        }
+        if (typeof provisionProfile.lastName === "string") {
+          userData.lastName = provisionProfile.lastName;
+        }
+        if (typeof provisionProfile.email === "string") {
+          userData.emailVerificationTime = Date.now();
+        }
+        if (typeof provisionProfile.phone === "string") {
+          userData.phoneVerificationTime = Date.now();
+        }
+        if (provisionProfile.extend) {
+          userData.extend = provisionProfile.extend;
+        }
         const provisioned = externalId
           ? await provisionScimUser(state.ctx, config.component.connection, {
               connectionId: state.connection._id,
@@ -1280,14 +1351,16 @@ export function addGroupHttpRuntime(deps: GroupHttpRuntimeDeps) {
           });
         }
         if (existingUser) {
-          const nextUserData: Record<string, unknown> = {
+          const nextUserData: ScimUserData = {
             name: provisionProfile.name,
             firstName: provisionProfile.firstName,
             lastName: provisionProfile.lastName,
             email: provisionProfile.email,
             phone: provisionProfile.phone,
-            ...(provisionProfile.extend ? { extend: provisionProfile.extend } : {}),
           };
+          if (provisionProfile.extend) {
+            nextUserData.extend = provisionProfile.extend;
+          }
           if (typeof provisionProfile.email === "string") {
             nextUserData.emailVerificationTime = Date.now();
           }
@@ -1963,7 +2036,7 @@ export function addGroupHttpRuntime(deps: GroupHttpRuntimeDeps) {
         return new Response(null, { status: 204 });
       };
 
-      const scimHandlers: Record<string, Partial<Record<string, ScimHandler>>> = {
+      const scimHandlers = {
         ServiceProviderConfig: {
           GET: async () =>
             scimJson({
@@ -2014,9 +2087,9 @@ export function addGroupHttpRuntime(deps: GroupHttpRuntimeDeps) {
           PATCH: handleGroupsPatch,
           DELETE: handleGroupsDelete,
         },
-      };
+      } satisfies Record<string, Partial<Record<string, ScimHandler>>>;
 
-      const handler = scimHandlers[state.parsedPath.resource]?.[state.request.method];
+      const handler = getScimHandler(scimHandlers, state.parsedPath.resource, state.request.method);
       return handler
         ? await handler(state)
         : scimError(404, "notFound", "SCIM resource not found.");

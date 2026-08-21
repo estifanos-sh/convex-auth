@@ -28,15 +28,29 @@ type UserProvisioningPolicy = GroupConnectionPolicy["provisioning"]["user"];
 
 type UserProvisioningSource = "login" | "scim";
 
-function mergeExtend(existing: unknown, incoming: Record<string, unknown> | undefined) {
+type UserData = AuthProfile & {
+  emailVerificationTime?: number;
+  phoneVerificationTime?: number;
+};
+
+type AccountPatchData = {
+  extend?: AuthAccountExtend;
+  emailVerified?: string;
+  phoneVerified?: string;
+};
+
+function mergeExtend(
+  existing: AuthAccountExtend | undefined,
+  incoming: AuthAccountExtend | undefined,
+) {
   if (!incoming) {
     return undefined;
   }
-  const existingRecord =
-    typeof existing === "object" && existing !== null && !Array.isArray(existing)
-      ? (existing as Record<string, unknown>)
-      : undefined;
-  return existingRecord ? { ...existingRecord, ...incoming } : incoming;
+  return existing ? { ...existing, ...incoming } : incoming;
+}
+
+function isConnectionProtocol(value: unknown): value is "oidc" | "saml" {
+  return value === "oidc" || value === "saml";
 }
 
 function effectiveUserUpdateMode(
@@ -71,8 +85,8 @@ function isUserFieldMissing(value: unknown) {
 }
 
 function buildUserPatchData(args: {
-  currentUser: Record<string, unknown>;
-  nextUser: Record<string, unknown>;
+  currentUser: object;
+  nextUser: UserData;
   mode: "never" | "missing" | "always";
 }) {
   if (args.mode === "never") {
@@ -86,7 +100,10 @@ function buildUserPatchData(args: {
       if (value === undefined) {
         return false;
       }
-      return isUserFieldMissing(args.currentUser[key]);
+      const currentField = Object.entries(args.currentUser).find(
+        ([currentKey]) => currentKey === key,
+      );
+      return isUserFieldMissing(currentField?.[1]);
     }),
   );
 }
@@ -146,7 +163,7 @@ export async function upsertUserAndAccount(
 async function resolveUserIdByLinking(
   ctx: MutationCtx,
   args: CreateOrUpdateUserArgs,
-  profile: Record<string, unknown>,
+  profile: AuthProfile,
   shouldLinkViaEmail: boolean,
   shouldLinkViaPhone: boolean,
   existingUserIdOverride: GenericId<"User"> | null,
@@ -201,8 +218,9 @@ async function checkAllowLink(
   const allowed = await config.connection.hooks.allowLink({
     protocol: isCredentialsLink
       ? "credentials"
-      : args.provider.type === "oauth" && typeof args.accountExtend?.identity?.protocol === "string"
-        ? (args.accountExtend.identity.protocol as "oidc" | "saml")
+      : args.provider.type === "oauth" &&
+          isConnectionProtocol(args.accountExtend?.identity?.protocol)
+        ? args.accountExtend.identity.protocol
         : "oidc",
     connectionId:
       typeof args.accountExtend?.identity?.connectionId === "string"
@@ -233,7 +251,7 @@ async function recordOwnedEmails(
   db: ReturnType<typeof authDb>,
   userId: GenericId<"User">,
   args: CreateOrUpdateUserArgs,
-  profile: Record<string, unknown>,
+  profile: AuthProfile,
   emailVerified: boolean,
 ): Promise<void> {
   const identity = args.accountExtend?.identity;
@@ -280,12 +298,12 @@ async function recordOwnedEmails(
 async function updateExistingUser(
   db: ReturnType<typeof authDb>,
   userId: GenericId<"User">,
-  userData: Record<string, unknown>,
+  userData: UserData,
   source: UserProvisioningSource,
   provisioningUser: UserProvisioningPolicy | undefined,
   providerUpdateProfileOnLogin?: boolean,
 ) {
-  const currentUser = (await db.users.get({ id: userId })) as Record<string, unknown> | null;
+  const currentUser = await db.users.get({ id: userId });
   const mode = effectiveUserUpdateMode(source, provisioningUser, providerUpdateProfileOnLogin);
   const patchData = buildUserPatchData({
     currentUser: currentUser ?? {},
@@ -378,11 +396,9 @@ async function defaultCreateOrUpdateUser(
     }
   }
 
-  const userData = {
-    ...(emailVerified ? { emailVerificationTime: Date.now() } : null),
-    ...(phoneVerified ? { phoneVerificationTime: Date.now() } : null),
-    ...profile,
-  };
+  const userData: UserData = { ...profile };
+  if (emailVerified) userData.emailVerificationTime = Date.now();
+  if (phoneVerified) userData.phoneVerificationTime = Date.now();
   const existingOrLinkedUserId = userId;
 
   if (userId !== null) {
@@ -466,7 +482,7 @@ async function uniqueUserWithVerifiedEmail(
   config: ConvexAuthConfig,
 ) {
   const db = authDb(ctx, config);
-  return (await db.users.get({ verifiedEmail: email })) as Doc<"User"> | null;
+  return await db.users.get({ verifiedEmail: email });
 }
 
 async function uniqueUserWithVerifiedPhone(
@@ -475,7 +491,7 @@ async function uniqueUserWithVerifiedPhone(
   config: ConvexAuthConfig,
 ) {
   const db = authDb(ctx, config);
-  return (await db.users.get({ verifiedPhone: phone })) as Doc<"User"> | null;
+  return await db.users.get({ verifiedPhone: phone });
 }
 
 async function createOrUpdateAccount(
@@ -495,18 +511,21 @@ async function createOrUpdateAccount(
     "existingAccount" in account
       ? mergeExtend(account.existingAccount.extend, args.accountExtend)
       : args.accountExtend;
-  const isNewAccount = !("existingAccount" in account);
-  const accountId =
-    "existingAccount" in account
-      ? account.existingAccount._id
-      : ((await db.accounts.create({
-          userId,
-          provider: args.provider.id,
-          providerAccountId: account.providerAccountId,
-          secret: account.secret,
-          extend: mergedExtend,
-        })) as GenericId<"Account">);
-  if (isNewAccount) {
+  let accountId: GenericId<"Account">;
+  let linkedProviderAccountId: string | undefined;
+  if ("existingAccount" in account) {
+    accountId = account.existingAccount._id;
+  } else {
+    linkedProviderAccountId = account.providerAccountId;
+    accountId = (await db.accounts.create({
+      userId,
+      provider: args.provider.id,
+      providerAccountId: linkedProviderAccountId,
+      secret: account.secret,
+      extend: mergedExtend,
+    })) as GenericId<"Account">;
+  }
+  if (linkedProviderAccountId !== undefined) {
     await queueAuthEvent(ctx, config, {
       kind: "account.linked",
       actor: { type: "user", id: userId },
@@ -515,14 +534,14 @@ async function createOrUpdateAccount(
       outcome: "success",
       data: {
         provider: args.provider.id,
-        providerAccountId: (account as { providerAccountId: string }).providerAccountId,
+        providerAccountId: linkedProviderAccountId,
       },
     });
   }
   if ("existingAccount" in account && account.existingAccount.userId !== userId) {
     await db.accounts.update(accountId, { userId });
   }
-  const accountPatchData: Record<string, unknown> = {};
+  const accountPatchData: AccountPatchData = {};
   if (mergedExtend) {
     accountPatchData.extend = mergedExtend;
   }

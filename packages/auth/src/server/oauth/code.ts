@@ -22,7 +22,7 @@ const CODE_TTL_MS = 2 * 60 * 1000;
 export type OAuthCodeRecord = Infer<typeof vOAuthCodeDoc>;
 
 /** Map a grant denial to a `ConvexError` for the post-consent (mutation) boundary. */
-const GRANT_ERROR: Record<OAuthGrantDenial["reason"], { code: string; message: string }> = {
+const GRANT_ERROR = {
   client_not_found: {
     code: ErrorCode.OAUTH_CLIENT_NOT_FOUND,
     message: "Unknown or inactive OAuth client.",
@@ -39,11 +39,11 @@ const GRANT_ERROR: Record<OAuthGrantDenial["reason"], { code: string; message: s
     code: ErrorCode.OAUTH_SCOPE_NOT_ALLOWED,
     message: "Scope not permitted for this client.",
   },
-};
+} as const satisfies Record<OAuthGrantDenial["reason"], { code: ErrorCode; message: string }>;
 
 function oauthGrantConvexError(
   denial: OAuthGrantDenial,
-): ConvexError<{ code: string; message: string }> {
+): ConvexError<(typeof GRANT_ERROR)[OAuthGrantDenial["reason"]]> {
   return new ConvexError(GRANT_ERROR[denial.reason]);
 }
 
@@ -184,13 +184,14 @@ export function createOAuthCodeDomain(deps: {
     },
 
     async accept(ctx, { codeHash, clientId, redirectUri, codeChallenge, refresh }) {
-      return (await ctx.runMutation(component.oauth.code.accept, {
+      const args: Parameters<OAuthCodeDomain["accept"]>[1] = {
         codeHash,
         clientId,
         redirectUri,
         codeChallenge,
-        ...(refresh === undefined ? {} : { refresh }),
-      })) as OAuthCodeRecord | null;
+      };
+      if (refresh !== undefined) args.refresh = refresh;
+      return (await ctx.runMutation(component.oauth.code.accept, args)) as OAuthCodeRecord | null;
     },
   };
 }

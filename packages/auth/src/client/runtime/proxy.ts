@@ -1,13 +1,33 @@
-import { ConvexError } from "convex/values";
+import { ConvexError, type Value } from "convex/values";
 
 import { ErrorCode } from "../../shared/codes";
 
 const NETWORK_ERROR_PATTERN = /(network|fetch|load failed|failed to fetch)/i;
 
-type ProxyErrorBody = {
+export type ProxyErrorBody = {
   error?: string;
-  authError?: unknown;
+  authError?: Value;
 };
+
+function isConvexValue(value: unknown): value is Value {
+  if (
+    value === null ||
+    typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "boolean" ||
+    typeof value === "bigint" ||
+    value instanceof ArrayBuffer
+  ) {
+    return true;
+  }
+  if (Array.isArray(value)) return value.every(isConvexValue);
+  if (typeof value !== "object" || value === null) return false;
+  const prototype = Object.getPrototypeOf(value);
+  return (
+    (prototype === Object.prototype || prototype === null) &&
+    Object.values(value).every(isConvexValue)
+  );
+}
 
 /**
  * Error codes that mean a forced refresh was definitively rejected — the
@@ -85,9 +105,17 @@ export function parseProxyErrorBody(value: unknown): ProxyErrorBody {
   if (typeof value !== "object" || value === null) {
     return {};
   }
-  const obj = value as Record<string, unknown>;
+  const obj = value as { error?: unknown; authError?: unknown };
   return {
     error: typeof obj.error === "string" ? obj.error : undefined,
-    authError: obj.authError,
+    authError: isConvexValue(obj.authError) ? obj.authError : undefined,
   };
+}
+
+/** @internal */
+export function parseProxyResponseBody(value: unknown): Value {
+  if (!isConvexValue(value)) {
+    throw new Error("Proxy response contained an unsupported Convex value");
+  }
+  return value;
 }

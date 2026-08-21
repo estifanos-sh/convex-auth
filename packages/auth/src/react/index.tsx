@@ -20,16 +20,26 @@ import type { AuthState, SignInOverloads } from "../client/core/types";
 
 type AnyAuthClient = AuthClient<AuthApiRefs<boolean, boolean, boolean>>;
 
+type ConvexAuthProviderProps = {
+  auth: AnyAuthClient;
+  children: ReactNode;
+};
+
+type SignedInProps = {
+  children: ReactNode | ((token: string) => ReactNode);
+};
+
+type AuthStateBoundaryProps = { children: ReactNode };
+
+type AuthActions = {
+  signIn: SignInOverloads;
+  signOut: () => Promise<void>;
+};
+
 const AuthClientContext = createContext<AnyAuthClient | null>(null);
 
 /** Provide an app-owned auth client to descendants. */
-export function ConvexAuthProvider({
-  auth,
-  children,
-}: {
-  auth: AnyAuthClient;
-  children: ReactNode;
-}): ReactElement {
+export function ConvexAuthProvider({ auth, children }: ConvexAuthProviderProps): ReactElement {
   return <AuthClientContext.Provider value={auth}>{children}</AuthClientContext.Provider>;
 }
 
@@ -69,18 +79,14 @@ export function useAuth(): AuthState {
 }
 
 /** Render children only when signed in; supports a render prop receiving the JWT. */
-export function SignedIn({
-  children,
-}: {
-  children: ReactNode | ((token: string) => ReactNode);
-}): ReactElement | null {
+export function SignedIn({ children }: SignedInProps): ReactElement | null {
   const state = useAuth();
   if (state.status !== "signedIn") return null;
   return <>{typeof children === "function" ? children(state.token) : children}</>;
 }
 
 /** Render children only when signed out. */
-export function SignedOut({ children }: { children: ReactNode }): ReactElement | null {
+export function SignedOut({ children }: AuthStateBoundaryProps): ReactElement | null {
   const state = useAuth();
   return state.status === "signedOut" ? <>{children}</> : null;
 }
@@ -89,7 +95,7 @@ export function SignedOut({ children }: { children: ReactNode }): ReactElement |
  * Render children only while auth is still resolving or Convex is confirming a
  * stored token.
  */
-export function AuthLoading({ children }: { children: ReactNode }): ReactElement | null {
+export function AuthLoading({ children }: AuthStateBoundaryProps): ReactElement | null {
   const state = useAuth();
   return state.status === "loading" ? <>{children}</> : null;
 }
@@ -99,10 +105,7 @@ export function AuthLoading({ children }: { children: ReactNode }): ReactElement
  * {@link ConvexAuthProvider} is above — matching Svelte's non-nullable
  * `signIn`/`signOut`, so callers never have to null-check the actions.
  */
-export function useAuthActions(): {
-  signIn: SignInOverloads;
-  signOut: () => Promise<void>;
-} {
+export function useAuthActions(): AuthActions {
   const client = useAuthClientOrThrow();
   return { signIn: client.signIn, signOut: client.signOut };
 }

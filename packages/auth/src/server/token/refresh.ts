@@ -17,16 +17,16 @@ const DEFAULT_SESSION_INACTIVE_DURATION_MS = 1000 * 60 * 60 * 24 * 30;
 /** @internal */
 export const REFRESH_TOKEN_REUSE_WINDOW_MS = 10 * 1000;
 
+type ParsedRefreshToken = {
+  refreshTokenId: GenericId<"RefreshToken">;
+  sessionId: GenericId<"Session">;
+};
+
 export const refreshTokenExpirationTime = (config: ConvexAuthConfig, now = Date.now()) =>
   now + (config.session?.inactiveDurationMs ?? DEFAULT_SESSION_INACTIVE_DURATION_MS);
 
 /** @internal */
-export const parseRefreshToken = (
-  refreshToken: string,
-): {
-  refreshTokenId: GenericId<"RefreshToken">;
-  sessionId: GenericId<"Session">;
-} => {
+export const parseRefreshToken = (refreshToken: string): ParsedRefreshToken => {
   const parts = refreshToken.split(REFRESH_TOKEN_DIVIDER);
   const message = `Can't parse refresh token: ${maybeRedact(refreshToken)}`;
   if (parts.length !== 2) {

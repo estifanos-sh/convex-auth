@@ -349,27 +349,45 @@ function appendCookieHeaders(response: Response, values: string[]): Response {
   return response;
 }
 
+function isConvexValue(value: unknown): value is Value {
+  if (value === null || typeof value === "string" || typeof value === "number") {
+    return true;
+  }
+  if (typeof value === "boolean" || typeof value === "bigint" || value instanceof ArrayBuffer) {
+    return true;
+  }
+  if (Array.isArray(value)) {
+    return value.every(isConvexValue);
+  }
+  if (typeof value !== "object" || Object.getPrototypeOf(value) !== Object.prototype) {
+    return false;
+  }
+  return Object.values(value).every(isConvexValue);
+}
+
+function isConvexObject(value: unknown): value is Record<string, Value> {
+  return (
+    !Array.isArray(value) && value !== null && typeof value === "object" && isConvexValue(value)
+  );
+}
+
 function getConvexErrorCode(error: unknown): string | null {
-  return error instanceof ConvexError &&
-    typeof error.data === "object" &&
-    error.data !== null &&
-    typeof (error.data as Record<string, unknown>).code === "string"
-    ? ((error.data as Record<string, unknown>).code as string)
-    : null;
+  if (!(error instanceof ConvexError) || !isConvexObject(error.data)) {
+    return null;
+  }
+  return typeof error.data.code === "string" ? error.data.code : null;
 }
 
 function getProxyErrorBody(error: unknown) {
-  return error instanceof ConvexError &&
-    typeof error.data === "object" &&
-    error.data !== null &&
-    "code" in error.data
-    ? {
-        error: (error.data as { message?: string }).message ?? String(error),
-        authError: error.data,
-      }
-    : {
-        error: error instanceof Error ? error.message : String(error),
-      };
+  if (error instanceof ConvexError && isConvexObject(error.data) && "code" in error.data) {
+    return {
+      error: typeof error.data.message === "string" ? error.data.message : String(error),
+      authError: error.data,
+    };
+  }
+  return {
+    error: error instanceof Error ? error.message : String(error),
+  };
 }
 
 function extractSignedInTokens(result: SignInActionResult, context: string): AuthTokens | null {
@@ -740,7 +758,7 @@ export function server(options: ServerOptions) {
       let body: ProxyActionBody | null = null;
       try {
         const parsed = await request.json();
-        body = typeof parsed === "object" && parsed !== null ? (parsed as ProxyActionBody) : null;
+        body = isConvexObject(parsed) ? parsed : null;
       } catch {
         body = null;
       }
@@ -749,10 +767,7 @@ export function server(options: ServerOptions) {
       }
 
       const action = body.action;
-      const args: ProxySignInArgs =
-        typeof body.args === "object" && body.args !== null
-          ? { ...(body.args as Record<string, unknown>) }
-          : {};
+      const args: ProxySignInArgs = isConvexObject(body.args) ? { ...body.args } : {};
       if (args.refreshToken === null) {
         args.refreshToken = undefined;
       }
@@ -892,9 +907,7 @@ export function server(options: ServerOptions) {
             _argsJSON: convexToJson(queryArgs as Value),
             _valueJSON: convexToJson((value ?? null) as Value),
           };
-          // SAFETY: Preloaded's phantom query member has no runtime
-          // representation; this payload matches Convex's preload wire shape.
-          return payload as unknown as Preloaded<Query>;
+          return payload as Preloaded<Query>;
         };
       const logVerbose = (message: string) => {
         if (verbose) {

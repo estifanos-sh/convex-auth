@@ -2,7 +2,12 @@ import type { GenericActionCtx, GenericDataModel } from "convex/server";
 
 import { extractBearerToken } from "../utils/bearer";
 import type { OAuthClientDoc, OAuthClientUpdate, OAuthTokenEndpointAuthMethod } from "./client";
-import { clientMetadataBody, jsonError, validateClientMetadata } from "./register";
+import {
+  clientMetadataBody,
+  jsonError,
+  parseClientMetadata,
+  validateClientMetadata,
+} from "./register";
 
 /**
  * RFC 7592 `401` challenge for a missing/invalid registration access token.
@@ -29,7 +34,10 @@ export interface OAuthManageDeps {
     args: { clientId: string; patch: OAuthClientUpdate },
   ) => Promise<void>;
   /** Soft-revoke (deregister) the client. */
-  revoke: (ctx: GenericActionCtx<GenericDataModel>, args: { clientId: string }) => Promise<unknown>;
+  revoke: (
+    ctx: GenericActionCtx<GenericDataModel>,
+    args: { clientId: string },
+  ) => Promise<{ clientId: string }>;
   /** Scopes the server is willing to grant; `PUT` clamps requested scopes to this. */
   allowedScopes: string[];
   /** Build the `registration_client_uri` for the managed client. */
@@ -74,11 +82,14 @@ async function handlePut(
   deps: OAuthManageDeps,
   client: OAuthClientDoc,
 ): Promise<Response> {
-  let body: Record<string, unknown>;
+  let body;
   try {
-    body = (await request.json()) as Record<string, unknown>;
+    body = parseClientMetadata(await request.json());
   } catch {
     return jsonError(400, "invalid_client_metadata", "Request body must be JSON.");
+  }
+  if (body === null) {
+    return jsonError(400, "invalid_client_metadata", "Request body must be an object.");
   }
   if (typeof body.client_id === "string" && body.client_id !== client.clientId) {
     return jsonError(400, "invalid_client_metadata", "client_id is immutable.");

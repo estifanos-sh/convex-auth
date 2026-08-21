@@ -4,19 +4,25 @@
  * @module
  */
 
-interface CacheEntry<V> {
+type CacheEntry<V> = {
   value: V;
   expiresAt: number;
-}
+};
 
-interface CacheOptions<K, V> {
+type CacheOptions<K, V> = {
   /** Maximum number of entries before the oldest is evicted. */
   capacity: number;
   /** Time-to-live in milliseconds. */
   timeToLiveMs: number;
   /** Factory function called on cache miss. */
   lookup: (key: K) => V;
-}
+};
+
+type Cache<K, V> = {
+  get: (key: K) => V;
+  invalidate: (key: K) => void;
+  clear: () => void;
+};
 
 /**
  * Create a synchronous TTL cache.
@@ -30,13 +36,7 @@ interface CacheOptions<K, V> {
  * const jwks = jwksCache.get(url);
  * ```
  */
-export function createCache<K, V>(
-  opts: CacheOptions<K, V>,
-): {
-  get: (key: K) => V;
-  invalidate: (key: K) => void;
-  clear: () => void;
-} {
+export function createCache<K, V>(opts: CacheOptions<K, V>): Cache<K, V> {
   const { capacity, timeToLiveMs, lookup } = opts;
   const store = new Map<K, CacheEntry<V>>();
 

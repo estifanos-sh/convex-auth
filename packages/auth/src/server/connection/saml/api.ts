@@ -1,11 +1,11 @@
 import { DOMParser as XmldomDOMParser } from "@xmldom/xmldom";
 
 interface ValidatorContext {
-  validate?: (xml: string) => Promise<unknown>;
+  validate?: (xml: string) => Promise<void>;
 }
 
 interface DOMParserLike {
-  parseFromString: (xml: string, mimeType?: string) => Document;
+  parseFromString: (xml: string, mimeType?: DOMParserSupportedType) => Document;
 }
 
 interface DOMParserContext {
@@ -19,32 +19,6 @@ interface FileIOContext {
 
 interface Context extends ValidatorContext, DOMParserContext, FileIOContext {}
 
-/** A DOMParser constructor — the platform global or xmldom's, normalized to a `Document`-returning shape. */
-interface DomParserCtor {
-  new (options?: Record<string, unknown>): {
-    parseFromString(xml: string, mimeType?: string): Document;
-  };
-}
-
-/**
- * Resolve a DOMParser constructor: the platform global if present, else xmldom's.
- * xmldom implements the standard DOM interfaces but its declared types don't unify
- * with the global ones, so its constructor is bridged to {@link DomParserCtor}
- * through the single typed assertion at that cross-package boundary.
- */
-function loadDomParserCtor(): DomParserCtor {
-  const globalParser = globalThis.DOMParser;
-  if (typeof globalParser === "function") {
-    return globalParser;
-  }
-  if (typeof XmldomDOMParser === "function") {
-    // SAFETY: xmldom implements the DOMParser contract, but its DOM types are
-    // from a separate package universe.
-    return XmldomDOMParser as unknown as DomParserCtor;
-  }
-  throw new Error("ERR_DOM_PARSER_NOT_AVAILABLE");
-}
-
 const DOCTYPE_OR_ENTITY = /<!\s*(DOCTYPE|ENTITY)\b/i;
 
 function rejectDoctypeOrEntity(xml: string): void {
@@ -53,9 +27,9 @@ function rejectDoctypeOrEntity(xml: string): void {
   }
 }
 
-function createDOMParser(options: Record<string, unknown> = {}): DOMParserLike {
-  const DOMParserCtor = loadDomParserCtor();
-  const parser = new DOMParserCtor(options);
+function createDOMParser(): DOMParserLike {
+  const parser =
+    typeof globalThis.DOMParser === "function" ? new globalThis.DOMParser() : new XmldomDOMParser();
   return {
     parseFromString: (xml: string, mimeType = "text/xml") => {
       rejectDoctypeOrEntity(xml);
@@ -85,7 +59,7 @@ export function getContext() {
  * payloads, encrypted assertions) instead of constructing a `DOMParser`
  * directly — direct construction bypasses the doctype/entity guard.
  */
-export function safeParseXml(xml: string, mimeType: string = "text/xml"): Document {
+export function safeParseXml(xml: string, mimeType: DOMParserSupportedType = "text/xml"): Document {
   const { dom } = getContext();
   return dom!.parseFromString(xml, mimeType);
 }
@@ -117,5 +91,5 @@ export async function isValidXml(input: string) {
     );
   }
 
-  return await validate(input);
+  await validate(input);
 }

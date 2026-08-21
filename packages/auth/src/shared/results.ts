@@ -4,7 +4,12 @@
  * @module
  */
 
+import type { Value } from "convex/values";
+
 import type { AccessToken, RefreshToken } from "./brand";
+
+/** Values that can cross the auth action/proxy boundary. */
+export type AuthParameters = { [key: string]: Value | undefined };
 
 /** Access/refresh token pair issued on a successful sign-in. */
 export type AuthTokens = {
@@ -51,12 +56,12 @@ export type SignInStartResult = {
 export type SignInWebAuthnOptionsResult =
   | {
       kind: "webauthnOptions";
-      options: Record<string, unknown>;
+      options: AuthParameters;
       verifier: string;
     }
   | {
       kind: "webauthnOptions";
-      options: Record<string, unknown>;
+      options: AuthParameters;
       verifier: string;
       continuation: string;
       operation: "rotate";

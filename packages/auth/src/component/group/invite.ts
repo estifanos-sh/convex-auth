@@ -19,6 +19,12 @@ import { vGroupInviteDoc, vInviteAcceptResult, vInviteStatus, vPaginated } from 
 
 const STALE_INVITE_EXPIRATION_BATCH = 32;
 
+type InviteAcceptancePatch = {
+  status: "accepted";
+  acceptedTime: number;
+  acceptedByUserId?: Id<"User">;
+};
+
 /** Read an invite by `id`, or by `tokenHash` (the indexed redemption token). */
 export const get = query({
   args: {
@@ -395,11 +401,12 @@ export const accept = mutation({
         inviteId: id,
       });
     }
-    await ctx.db.patch("GroupInvite", id, {
+    const patch: InviteAcceptancePatch = {
       status: "accepted",
       acceptedTime: Date.now(),
-      ...(acceptedByUserId ? { acceptedByUserId } : {}),
-    });
+    };
+    if (acceptedByUserId !== undefined) patch.acceptedByUserId = acceptedByUserId;
+    await ctx.db.patch("GroupInvite", id, patch);
     return null;
   },
 });

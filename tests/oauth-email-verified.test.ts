@@ -20,12 +20,15 @@ import {
   handleOAuthCallback,
 } from "../packages/auth/src/server/oauth/runtime";
 
+type IdTokenClaim = boolean | number | string | null;
+type IdTokenClaims = Record<string, IdTokenClaim>;
+
 /**
  * Build an (unsigned) id_token whose payload carries `claims`. `decodeIdToken`
  * only base64url-decodes the payload segment, so the header/signature are inert.
  */
-function encodeUnsignedIdToken(claims: Record<string, unknown>): string {
-  const segment = (value: unknown) =>
+function encodeUnsignedIdToken(claims: IdTokenClaims): string {
+  const segment = (value: IdTokenClaims) =>
     btoa(JSON.stringify(value)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
   return `${segment({ alg: "none", typ: "JWT" })}.${segment(claims)}.signature`;
 }
@@ -35,7 +38,7 @@ function encodeUnsignedIdToken(claims: Record<string, unknown>): string {
  * id_token carrying `claims`, and return the extracted profile. Mirrors the
  * `handleOAuthCallback` harness in `tests/security.test.ts`.
  */
-async function extractOAuthProfile(claims: Record<string, unknown>) {
+async function extractOAuthProfile(claims: IdTokenClaims) {
   const provider = {
     pkce: "never" as const,
     createAuthorizationURL(_args: {

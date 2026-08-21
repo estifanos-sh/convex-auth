@@ -6,7 +6,7 @@
  * @module
  */
 
-import { v } from "convex/values";
+import { type Infer, v } from "convex/values";
 
 import type { Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
@@ -21,6 +21,13 @@ type CreateSessionArgs = {
   replaceSessionId?: Id<"Session">;
   sessionExpirationTime: number;
   refreshTokenExpirationTime?: number;
+};
+
+export type SessionRows = {
+  user: Infer<typeof vUserDoc>;
+  sessionId: Id<"Session">;
+  refreshTokenId?: Id<"RefreshToken">;
+  replacedSessionId?: Id<"Session">;
 };
 
 /**
@@ -69,12 +76,13 @@ export async function createSessionRows(ctx: MutationCtx, args: CreateSessionArg
           expirationTime: args.refreshTokenExpirationTime,
         });
 
-  return {
+  const rows: SessionRows = {
     user,
     sessionId,
-    ...(refreshTokenId === undefined ? {} : { refreshTokenId }),
-    ...(replacedSessionId === undefined ? {} : { replacedSessionId }),
   };
+  if (refreshTokenId !== undefined) rows.refreshTokenId = refreshTokenId;
+  if (replacedSessionId !== undefined) rows.replacedSessionId = replacedSessionId;
+  return rows;
 }
 
 /** Read a session by id. */

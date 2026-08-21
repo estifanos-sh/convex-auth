@@ -5,6 +5,7 @@ import https from "node:https";
 import { api } from "@convex/_generated/api";
 import type { AuthEventKind } from "@estifanos-sh/convex-auth/server";
 import { ConvexHttpClient } from "convex/browser";
+import type { Value } from "convex/values";
 import { inject } from "vite-plus/test";
 
 declare module "vite-plus/test" {
@@ -220,12 +221,8 @@ export interface RequestOptions {
   body?: string;
 }
 
-function toHeadersObject(headers: Headers): Record<string, string> {
-  const result: Record<string, string> = {};
-  headers.forEach((value, key) => {
-    result[key] = value;
-  });
-  return result;
+function toHeadersObject(headers: Headers) {
+  return Object.fromEntries(headers.entries());
 }
 
 export function requestHttp(input: string, init: RequestOptions = {}): Promise<SimpleResponse> {
@@ -322,7 +319,7 @@ async function groupRpc<T>(
   userToken: string,
   kind: "action" | "mutation" | "query",
   functionPath: string[],
-  args: Record<string, unknown>,
+  args: Record<string, Value>,
 ): Promise<T> {
   convexClient.setAuth(userToken);
   let reference: any = api as any;
@@ -341,6 +338,10 @@ async function groupRpc<T>(
       return (await convexClient.action(reference, args)) as T;
   }
 }
+
+type GroupRpcResult = {
+  [key: string]: boolean | number | string | null | GroupRpcResult | GroupRpcResult[];
+};
 
 export async function groupCreateRpc(
   convexClient: ConvexHttpClient,
@@ -412,7 +413,7 @@ export async function groupOidcConfigureRpc(
       extraFields?: Record<string, string>;
     };
   },
-): Promise<Record<string, unknown>> {
+): Promise<GroupRpcResult> {
   return await groupRpc(
     convexClient,
     userToken,
@@ -471,7 +472,7 @@ export async function groupSamlConfigureRpc(
       encPrivateKeyPass?: string;
     };
   },
-): Promise<Record<string, unknown>> {
+): Promise<GroupRpcResult> {
   return await groupRpc(
     convexClient,
     userToken,
@@ -525,7 +526,7 @@ export async function groupWebhookEndpointCreateRpc(
     secret: string;
     subscriptions: AuthEventKind[];
   },
-): Promise<Record<string, unknown>> {
+): Promise<GroupRpcResult> {
   return await groupRpc(
     convexClient,
     userToken,
@@ -543,7 +544,7 @@ export async function groupWebhookDeliveryListRpc(
     paginationOpts?: { numItems: number; cursor: string | null };
   },
 ): Promise<{
-  page: Array<Record<string, unknown>>;
+  page: GroupRpcResult[];
   isDone: boolean;
   continueCursor: string;
 }> {
@@ -560,7 +561,7 @@ export async function groupWebhookEndpointListRpc(
   convexClient: ConvexHttpClient,
   userToken: string,
   connectionId: string,
-): Promise<Array<Record<string, unknown>>> {
+): Promise<GroupRpcResult[]> {
   return await groupRpc(
     convexClient,
     userToken,
@@ -578,7 +579,7 @@ export async function groupAuditListRpc(
     paginationOpts?: { numItems: number; cursor: string | null };
   },
 ): Promise<{
-  page: Array<Record<string, unknown>>;
+  page: GroupRpcResult[];
   isDone: boolean;
   continueCursor: string;
 }> {

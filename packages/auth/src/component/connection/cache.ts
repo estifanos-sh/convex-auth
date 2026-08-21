@@ -53,6 +53,8 @@ const fetchUrlArgs = {
   externalHost: v.optional(v.string()),
 };
 
+const vFetchUrlArgs = v.object(fetchUrlArgs);
+
 const vOidcDiscovery = v.object({
   issuer: v.string(),
   authorization_endpoint: v.string(),
@@ -63,11 +65,7 @@ const vOidcDiscovery = v.object({
   id_token_signing_alg_values_supported: v.optional(v.array(v.string())),
 });
 
-type FetchUrlArgs = {
-  url: string;
-  runtimeOrigin?: string;
-  externalHost?: string;
-};
+type FetchUrlArgs = Infer<typeof vFetchUrlArgs>;
 
 type OidcDiscovery = Infer<typeof vOidcDiscovery>;
 
@@ -80,6 +78,8 @@ type OidcDiscoveryAction = FunctionReference<
 >;
 
 type TextAction = FunctionReference<"action", "internal", FetchUrlArgs, string, string | undefined>;
+
+type RequestTarget = { url: URL; headers: Headers };
 
 const requestOidcDiscoveryRef = internal.connection.cache
   .requestOidcDiscovery as OidcDiscoveryAction;
@@ -163,7 +163,7 @@ const buildRequestUrl = (
   url: string,
   runtimeOrigin: string | undefined,
   externalHost: string | undefined,
-): { url: URL; headers: Headers } => {
+): RequestTarget => {
   assertSafeIdpFetchUrl(url);
   const normalizedRuntimeOrigin = normalizeRuntimeOrigin(runtimeOrigin);
   validateExternalHost(externalHost, normalizedRuntimeOrigin);
@@ -268,7 +268,7 @@ export const oidcStatusDiscovery = action({
 export const samlMetadata = action({
   args: fetchUrlArgs,
   returns: v.string(),
-  handler: async (ctx, args): Promise<string> => {
+  handler: async (ctx, args) => {
     return await samlMetadataCache.fetch(asActionCacheCtx(ctx), args);
   },
 });
@@ -277,7 +277,7 @@ export const samlMetadata = action({
 export const invalidateOidcDiscovery = mutation({
   args: fetchUrlArgs,
   returns: v.null(),
-  handler: async (ctx, args): Promise<null> => {
+  handler: async (ctx, args) => {
     await oidcDiscoveryCache.remove(ctx, args);
     await oidcStatusDiscoveryCache.remove(ctx, args);
     return null;
@@ -288,7 +288,7 @@ export const invalidateOidcDiscovery = mutation({
 export const invalidateSamlMetadata = mutation({
   args: fetchUrlArgs,
   returns: v.null(),
-  handler: async (ctx, args): Promise<null> => {
+  handler: async (ctx, args) => {
     await samlMetadataCache.remove(ctx, args);
     return null;
   },

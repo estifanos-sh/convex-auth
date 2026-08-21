@@ -1,4 +1,4 @@
-import { GenericId, ConvexError, type Value } from "convex/values";
+import { GenericId, ConvexError } from "convex/values";
 import type { CredentialsAuthorizeResult } from "../../providers/credentials";
 
 import { assertNever } from "../../shared/brand";
@@ -9,7 +9,6 @@ import type {
   SignInRedirectResult,
   SignInSessionResult,
   SignInStartResult,
-  SignInTotpChallengeResult,
 } from "../../shared/results";
 import { handleDevice } from "../device";
 import type { AuthErrorData } from "../errors";
@@ -224,7 +223,7 @@ async function handleEmailAndPhoneProvider(
     generateTokens: boolean;
     allowExtraProviders: boolean;
   },
-): Promise<SignInStartResult | SignInSessionResult<SessionInfo<AuthTokens>>> {
+): Promise<SignInStartResult | SignInSessionResult<SessionInfo<AuthTokens | null>>> {
   return withSpan(`convex-auth.signin.${provider.type}`, {}, async () => {
     const normalizedParams = normalizeVerificationParams(args.params);
     if (args.params?.code !== undefined) {
@@ -247,7 +246,7 @@ async function handleEmailAndPhoneProvider(
       }
       return {
         kind: "signedIn" as const,
-        session: result as SessionInfo<AuthTokens>,
+        session: result,
       };
     }
 
@@ -285,11 +284,9 @@ async function handleEmailAndPhoneProvider(
 
     let destination: string;
     try {
-      destination = await redirectAbsoluteUrl(
-        ctx,
-        ctx.auth.config,
-        (args.params ?? {}) as { redirectTo: unknown },
-      );
+      destination = await redirectAbsoluteUrl(ctx, ctx.auth.config, {
+        redirectTo: args.params?.redirectTo,
+      });
     } catch (error) {
       throw asConvexError(error, "INVALID_REDIRECT", "Failed to resolve redirect URL.");
     }
@@ -335,18 +332,14 @@ async function handleCredentials(
   options: {
     generateTokens: boolean;
   },
-): Promise<SignInSessionResult<SessionInfo<AuthTokens | null> | null> | SignInTotpChallengeResult> {
+): Promise<SignInFlowResult<SessionInfo<AuthTokens | null> | null>> {
   return withSpan("convex-auth.signin.credentials", {}, async () => {
     let result: CredentialsAuthorizeResult;
     try {
       result = await withSpan(
         "convex-auth.signin.credentials.authorize",
         { providerId: provider.id },
-        () =>
-          provider.authorize(
-            (args.params ?? {}) as Partial<Record<string, Value | undefined>>,
-            ctx,
-          ),
+        () => provider.authorize(args.params ?? {}, ctx),
       );
     } catch (error) {
       throw asCredentialsError(error);
@@ -354,15 +347,8 @@ async function handleCredentials(
     if (result === null) {
       return { kind: "signedIn" as const, session: null };
     }
-    if (typeof result === "object" && "kind" in result) {
-      /**
-       * `authorize` may return any non-signedIn flow result, a superset of this
-       * function's declared return; the two share only `totpRequired`, so the
-       * pass-through needs one typed assertion to the narrower return type.
-       */
-      return result as
-        | SignInSessionResult<SessionInfo<AuthTokens | null> | null>
-        | SignInTotpChallengeResult;
+    if ("kind" in result) {
+      return result;
     }
 
     if ("provision" in result) {
@@ -381,7 +367,7 @@ async function handleCredentials(
             }),
         );
         result = {
-          userId: provisioned.account.userId as GenericId<"User">,
+          userId: provisioned.account.userId,
           hasTotp,
         };
       } catch (error) {
@@ -487,7 +473,7 @@ async function handleOAuthProvider(
       }
       return {
         kind: "signedIn" as const,
-        session: result as SessionInfo<AuthTokens> | null,
+        session: result,
       };
     }
 

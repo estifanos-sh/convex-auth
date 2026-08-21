@@ -12,6 +12,7 @@ import type { UserIdentity } from "convex/server";
 import { ConvexError } from "convex/values";
 
 import { ErrorCode } from "../shared/codes";
+import type { ComponentReadCtx } from "./component/context";
 import {
   createUnauthenticatedAuthContext,
   getAuthContext as getResolvedAuthContext,
@@ -39,11 +40,9 @@ type AuthIdentityCtx = {
   };
 };
 
-type AuthQueryCtx = {
-  runQuery: (...args: never[]) => Promise<unknown>;
-};
+type AuthQueryCtx = ComponentReadCtx;
 
-type CustomFunctionInputResult<TAuth extends Record<string, unknown>> = Promise<{
+type CustomFunctionInputResult<TAuth extends object> = Promise<{
   ctx: { auth: TAuth };
 }>;
 
@@ -61,20 +60,20 @@ type ResolvedOptionalAuthContext<TResolve> = OptionalAuthContext & TResolve;
 
 type AuthResolverCtx = AuthIdentityCtx & AuthQueryCtx;
 
-type PublicAuthContextConfig<TResolve extends Record<string, unknown>, TCtx> = AuthContextConfig<
+type PublicAuthContextConfig<TResolve extends object, TCtx> = AuthContextConfig<
   TResolve,
   TCtx & AuthResolverCtx
 >;
 
 interface AuthContextResolver {
-  <TCtx, TResolve extends Record<string, unknown> = Record<string, never>>(
+  <TCtx, TResolve extends object = Record<string, never>>(
     ctx: TCtx,
     config?: PublicAuthContextConfig<TResolve, TCtx>,
   ): Promise<ResolvedAuthContext<TResolve>>;
 }
 
 interface OptionalAuthContextResolver {
-  <TCtx, TResolve extends Record<string, unknown> = Record<string, never>>(
+  <TCtx, TResolve extends object = Record<string, never>>(
     ctx: TCtx,
     config?: PublicAuthContextConfig<TResolve, TCtx>,
   ): Promise<ResolvedOptionalAuthContext<TResolve>>;
@@ -95,13 +94,13 @@ type AuthContextCustomization<TAuth> = {
 };
 
 interface AuthContextFactory {
-  <TResolve extends Record<string, unknown> = Record<string, never>>(
+  <TResolve extends object = Record<string, never>>(
     config?: AuthContextConfig<TResolve>,
   ): AuthContextCustomization<RequiredAuthContextState & TResolve>;
 }
 
 interface OptionalAuthContextFactory {
-  <TResolve extends Record<string, unknown> = Record<string, never>>(
+  <TResolve extends object = Record<string, never>>(
     config?: AuthContextConfig<TResolve>,
   ): AuthContextCustomization<OptionalAuthContextState & TResolve>;
 }
@@ -132,7 +131,7 @@ interface OptionalAuthContextFactory {
  */
 export type InferAuth<
   T extends {
-    input: (...args: never[]) => CustomFunctionInputResult<Record<string, unknown>>;
+    input: (...args: never[]) => CustomFunctionInputResult<object>;
   },
 > = Awaited<ReturnType<T["input"]>>["ctx"]["auth"];
 
@@ -149,30 +148,15 @@ export type {
   OptionalAuthContextFactory,
 };
 
-/**
- * Single sanctioned bridge for the resolver's irreducible ctx-family boundary.
- * `getResolvedAuthContext` over-specifies its `runQuery` ctx with the concrete
- * Convex `ComponentReadCtx`, which TypeScript cannot positively unify with the
- * facade's loose `AuthIdentityCtx & AuthQueryCtx` shape. Callers route their
- * generic ctx through this one narrow, typed assertion — naming the exact target
- * via `T` — instead of asserting at each call site.
- */
-function bridgeResolverCtx<T>(ctx: object): T {
-  return ctx as T;
-}
-
 async function resolveConfiguredAuthContext<
   TCtx extends AuthIdentityCtx & AuthQueryCtx,
-  TResolve extends Record<string, unknown> = Record<string, never>,
+  TResolve extends object = Record<string, never>,
 >(
   auth: AuthLike,
   ctx: TCtx,
   _config?: AuthContextConfig<TResolve, TCtx>,
 ): Promise<AuthContext | null> {
-  return await getResolvedAuthContext(
-    auth,
-    bridgeResolverCtx<Parameters<typeof getResolvedAuthContext>[1]>(ctx),
-  );
+  return await getResolvedAuthContext(auth, ctx);
 }
 
 function createNotSignedInError() {
@@ -234,7 +218,7 @@ function enforceAuthRequirements(
  */
 async function createPublicAuthContext<
   TCtx extends AuthIdentityCtx & AuthQueryCtx,
-  TResolve extends Record<string, unknown> = Record<string, never>,
+  TResolve extends object = Record<string, never>,
 >(
   auth: AuthLike,
   ctx: TCtx,
@@ -266,10 +250,10 @@ async function createPublicAuthContext<
  * This low-level helper underpins `auth.ctx(...)` and `auth.ctx.optional(...)`.
  */
 function createAuthContextCustomization<
-  TResolve extends Record<string, unknown> = Record<string, never>,
+  TResolve extends object = Record<string, never>,
   TCtx extends AuthIdentityCtx & {
-    runQuery: (...args: never[]) => Promise<unknown>;
-  } = AuthIdentityCtx & { runQuery: (...args: never[]) => Promise<unknown> },
+    runQuery: ComponentReadCtx["runQuery"];
+  } = AuthIdentityCtx & ComponentReadCtx,
 >(auth: AuthLike, config: AuthContextConfig<TResolve, TCtx> | undefined, optional: boolean) {
   return {
     args: {},
@@ -318,26 +302,20 @@ function createAuthContextCustomization<
  * @internal
  */
 export function createAuthContextFacade(auth: AuthLike): AuthContextFacade {
-  const context = ((
-    ctx: AuthResolverCtx,
-    config?: AuthContextConfig<Record<string, unknown>, AuthResolverCtx>,
-  ) => {
+  const context = ((ctx: AuthResolverCtx, config?: AuthContextConfig<any, AuthResolverCtx>) => {
     assertAuthResolverContext(ctx);
     return createPublicAuthContext(auth, ctx, config, false);
   }) as AuthContextFacade["context"];
 
-  context.optional = ((
-    ctx: AuthResolverCtx,
-    config?: AuthContextConfig<Record<string, unknown>, AuthResolverCtx>,
-  ) => {
+  context.optional = ((ctx: AuthResolverCtx, config?: AuthContextConfig<any, AuthResolverCtx>) => {
     assertAuthResolverContext(ctx);
     return createPublicAuthContext(auth, ctx, config, true);
   }) as OptionalAuthContextResolver;
 
-  const ctxFactory = ((config?: AuthContextConfig<Record<string, unknown>, AuthResolverCtx>) =>
+  const ctxFactory = ((config?: AuthContextConfig<any, AuthResolverCtx>) =>
     createAuthContextCustomization(auth, config, false)) as AuthContextFacade["ctx"];
 
-  ctxFactory.optional = ((config?: AuthContextConfig<Record<string, unknown>, AuthResolverCtx>) =>
+  ctxFactory.optional = ((config?: AuthContextConfig<any, AuthResolverCtx>) =>
     createAuthContextCustomization(auth, config, true)) as OptionalAuthContextFactory;
 
   return {

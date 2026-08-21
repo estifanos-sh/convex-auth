@@ -9,34 +9,47 @@ const utf8Decoder = new TextDecoder();
 
 const XMLENC_NS = "http://www.w3.org/2001/04/xmlenc#";
 
-const DATA_ALGORITHMS: {
-  [key: string]: {
+const DATA_ALGORITHMS = new Map<
+  string,
+  {
     mode: "AES-CBC" | "AES-GCM";
     keyBytes: number;
     ivBytes: number;
-  };
-} = {
-  "http://www.w3.org/2001/04/xmlenc#aes128-cbc": {
-    mode: "AES-CBC",
-    keyBytes: 16,
-    ivBytes: 16,
-  },
-  "http://www.w3.org/2001/04/xmlenc#aes256-cbc": {
-    mode: "AES-CBC",
-    keyBytes: 32,
-    ivBytes: 16,
-  },
-  "http://www.w3.org/2009/xmlenc11#aes128-gcm": {
-    mode: "AES-GCM",
-    keyBytes: 16,
-    ivBytes: 12,
-  },
-  "http://www.w3.org/2009/xmlenc11#aes256-gcm": {
-    mode: "AES-GCM",
-    keyBytes: 32,
-    ivBytes: 12,
-  },
-};
+  }
+>([
+  [
+    "http://www.w3.org/2001/04/xmlenc#aes128-cbc",
+    {
+      mode: "AES-CBC",
+      keyBytes: 16,
+      ivBytes: 16,
+    },
+  ],
+  [
+    "http://www.w3.org/2001/04/xmlenc#aes256-cbc",
+    {
+      mode: "AES-CBC",
+      keyBytes: 32,
+      ivBytes: 16,
+    },
+  ],
+  [
+    "http://www.w3.org/2009/xmlenc11#aes128-gcm",
+    {
+      mode: "AES-GCM",
+      keyBytes: 16,
+      ivBytes: 12,
+    },
+  ],
+  [
+    "http://www.w3.org/2009/xmlenc11#aes256-gcm",
+    {
+      mode: "AES-GCM",
+      keyBytes: 32,
+      ivBytes: 12,
+    },
+  ],
+]);
 
 const KEY_ALGORITHMS = {
   RSA_OAEP_MGF1P: "http://www.w3.org/2001/04/xmlenc#rsa-oaep-mgf1p",
@@ -69,6 +82,11 @@ function firstElement(expression: string, source: Element | Document): Element |
   const node = selectNodes(expression, source)[0];
   return isElement(node) ? node : undefined;
 }
+
+type EncryptedKey = {
+  keyEncryptionAlgorithm: string;
+  encryptedKey: Uint8Array;
+};
 
 function hasWebCrypto(): boolean {
   return !!(globalThis.crypto && globalThis.crypto.subtle && globalThis.crypto.getRandomValues);
@@ -278,13 +296,7 @@ function resolveEncryptedDataNode(doc: Document): Element {
   return encryptedDataNode;
 }
 
-function resolveEncryptedKeyNode(
-  doc: Document,
-  encryptedDataNode: Element,
-): {
-  keyEncryptionAlgorithm: string;
-  encryptedKey: Uint8Array;
-} {
+function resolveEncryptedKeyNode(doc: Document, encryptedDataNode: Element): EncryptedKey {
   const keyInfoNode = firstElement("./*[local-name(.)='KeyInfo']", encryptedDataNode);
   if (!keyInfoNode) {
     throw new Error("cant find encryption algorithm");
@@ -375,7 +387,7 @@ export async function encryptAssertion(opts: EncryptAssertionOptions): Promise<s
     );
   }
 
-  const dataAlg = DATA_ALGORITHMS[encryptionAlgorithm];
+  const dataAlg = DATA_ALGORITHMS.get(encryptionAlgorithm);
   if (!dataAlg) {
     throw new Error(`encryption algorithm not supported: ${encryptionAlgorithm}`);
   }
@@ -440,7 +452,7 @@ export async function decryptAssertion(opts: DecryptAssertionOptions): Promise<s
   );
   const encryptionAlgorithm = getRequiredAttrValue(dataEncMethodNode, "Algorithm");
 
-  const dataAlg = DATA_ALGORITHMS[encryptionAlgorithm];
+  const dataAlg = DATA_ALGORITHMS.get(encryptionAlgorithm);
   // Only authenticated AES-GCM is accepted on the decrypt path. AES-CBC is
   // unauthenticated and malleable, which exposes a padding/decryption oracle
   // (Jager–Somorovsky) when an attacker submits crafted EncryptedAssertion

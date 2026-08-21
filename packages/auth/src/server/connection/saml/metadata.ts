@@ -18,6 +18,8 @@ import type { MetadataIdpConstructor, MetadataSpConstructor } from "./types";
 /** Open dictionary of parsed metadata fields as produced by {@link extract}. */
 type ParsedMeta = Record<string, unknown>;
 
+type ParsedMetadataBase = { xmlString: string; meta: ParsedMeta };
+
 interface SloService {
   binding?: string;
   location?: string;
@@ -78,7 +80,7 @@ export interface SpMetadata extends SamlMetadata {
 function parseBaseFields(
   xml: string | Uint8Array,
   extraParse: ExtractorFields,
-): { xmlString: string; meta: ParsedMeta } {
+): ParsedMetadataBase {
   const xmlString = xml.toString();
   const parsed: ParsedMeta = extract(xmlString, [
     {
@@ -300,13 +302,13 @@ export function parseSpMetadata(input: MetadataSpConstructor): SpMetadata {
       assertionConsumerService = [],
     } = input;
 
-    const descriptors: Record<string, XmlNode[]> = {
-      KeyDescriptor: [],
-      NameIDFormat: [],
-      SingleLogoutService: [],
-      AssertionConsumerService: [],
-      AttributeConsumingService: [],
-    };
+    const descriptors = new Map<string, XmlNode[]>([
+      ["KeyDescriptor", []],
+      ["NameIDFormat", []],
+      ["SingleLogoutService", []],
+      ["AssertionConsumerService", []],
+      ["AttributeConsumingService", []],
+    ]);
 
     const SPSSODescriptor: XmlNode[] = [
       {
@@ -323,23 +325,23 @@ export function parseSpMetadata(input: MetadataSpConstructor): SpMetadata {
     }
 
     for (const cert of castArrayOpt(signingCert)) {
-      descriptors.KeyDescriptor.push(createKeySection("signing", cert).KeyDescriptor);
+      descriptors.get("KeyDescriptor")!.push(createKeySection("signing", cert).KeyDescriptor);
     }
     for (const cert of castArrayOpt(encryptCert)) {
-      descriptors.KeyDescriptor.push(createKeySection("encryption", cert).KeyDescriptor);
+      descriptors.get("KeyDescriptor")!.push(createKeySection("encryption", cert).KeyDescriptor);
     }
 
     if (isNonEmptyArray(nameIDFormat)) {
-      nameIDFormat.forEach((f: string) => descriptors.NameIDFormat.push(f));
+      nameIDFormat.forEach((f: string) => descriptors.get("NameIDFormat")!.push(f));
     } else {
-      descriptors.NameIDFormat.push(NameIdFormat.emailAddress);
+      descriptors.get("NameIDFormat")!.push(NameIdFormat.emailAddress);
     }
 
     if (isNonEmptyArray(singleLogoutService)) {
       singleLogoutService.forEach((a) => {
         const attr: XmlObject = { Binding: a.Binding, Location: a.Location };
         if (a.isDefault) attr.isDefault = true;
-        descriptors.SingleLogoutService.push([{ _attr: attr }]);
+        descriptors.get("SingleLogoutService")!.push([{ _attr: attr }]);
       });
     }
 
@@ -352,15 +354,15 @@ export function parseSpMetadata(input: MetadataSpConstructor): SpMetadata {
           Location: a.Location,
         };
         if (a.isDefault) attr.isDefault = true;
-        descriptors.AssertionConsumerService.push([{ _attr: attr }]);
+        descriptors.get("AssertionConsumerService")!.push([{ _attr: attr }]);
       });
     }
 
     const existedElements = elementsOrder.filter((name: string) =>
-      isNonEmptyArray(descriptors[name]),
+      isNonEmptyArray(descriptors.get(name)),
     );
     existedElements.forEach((name: string) => {
-      descriptors[name].forEach((e) => SPSSODescriptor.push({ [name]: e }));
+      descriptors.get(name)!.forEach((e) => SPSSODescriptor.push({ [name]: e }));
     });
 
     xmlInput = buildXml([

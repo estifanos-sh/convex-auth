@@ -87,15 +87,26 @@ type AuthEventProjection = {
   subjectType?: string;
 };
 
+type ScimValue = boolean | number | string | null | ScimValue[] | { [key: string]: ScimValue };
+type ScimRequestOptions = {
+  method?: string;
+  body?: ScimValue;
+};
+type ScimHeaders = {
+  Authorization: string;
+  Accept: string;
+  "Content-Type"?: string;
+};
+
 async function scimRequest<T>(
   base: string,
   path: string,
   token: string,
-  opts: { method?: string; body?: unknown } = {},
+  opts: ScimRequestOptions = {},
 ): Promise<{ status: number; headers: Headers; body: T }> {
   const method = opts.method ?? "GET";
   const bodyStr = opts.body !== undefined ? JSON.stringify(opts.body) : undefined;
-  const headers: Record<string, string> = {
+  const headers: ScimHeaders = {
     Authorization: `Bearer ${token}`,
     Accept: "application/scim+json",
   };
@@ -110,7 +121,7 @@ async function scimRequest<T>(
   try {
     body = JSON.parse(text) as T;
   } catch {
-    body = text as unknown as T;
+    body = text as T;
   }
   return { status: res.status, headers: res.headers, body };
 }

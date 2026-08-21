@@ -3,6 +3,14 @@ import { client } from "@estifanos-sh/convex-auth/client";
 import { ConvexError } from "convex/values";
 import { afterEach, expect, test, vi } from "vite-plus/test";
 
+type ProxyArgs = {
+  provider?: string;
+  params?: { code?: string };
+  refreshToken?: boolean;
+  verifier?: string;
+};
+type ProxyBody = { action?: string; args?: ProxyArgs };
+
 async function waitForSetAuthCalls(
   convex: ReturnType<typeof createConvexMock>,
   count: number,
@@ -59,9 +67,7 @@ function createMemoryStorage() {
   };
 }
 
-function createProxyRuntime(
-  fetchImpl: (body: Record<string, unknown>, proxyPath: string) => Promise<Response>,
-) {
+function createProxyRuntime(fetchImpl: (body: ProxyBody, proxyPath: string) => Promise<Response>) {
   return {
     fetch: fetchImpl,
   };
@@ -74,7 +80,7 @@ afterEach(() => {
 
 test("proxy mode re-syncs convex auth after sign in", async () => {
   const convex = createConvexMock();
-  const fetchMock = vi.fn(async (_body: Record<string, unknown>, proxyPath: string) => {
+  const fetchMock = vi.fn(async (_body: ProxyBody, proxyPath: string) => {
     expect(proxyPath).toBe("/api/auth");
     return new Response(
       JSON.stringify({
@@ -146,7 +152,7 @@ test("server token starts authenticated without loading handshake", () => {
 
 test("forced refresh reuses a freshly refreshed token", async () => {
   const convex = createConvexMock();
-  const fetchMock = vi.fn(async (_body: Record<string, unknown>, proxyPath: string) => {
+  const fetchMock = vi.fn(async (_body: ProxyBody, proxyPath: string) => {
     expect(proxyPath).toBe("/api/auth");
     return new Response(
       JSON.stringify({
@@ -592,7 +598,7 @@ test("browser client preserves proxy defaults when runtime is partially overridd
 test("headless client completes OAuth manually and returns cleanup URL", async () => {
   const storage = createMemoryStorage();
   const convex = createConvexMock();
-  convex.action = vi.fn(async (_action: unknown, args: Record<string, unknown>) => {
+  convex.action = vi.fn(async (_action: unknown, args: ProxyArgs) => {
     if (args.provider === "google") {
       return {
         kind: "redirect",
@@ -601,7 +607,7 @@ test("headless client completes OAuth manually and returns cleanup URL", async (
       };
     }
 
-    if ((args.params as { code?: string } | undefined)?.code === "oauth-code") {
+    if (args.params?.code === "oauth-code") {
       expect(args.verifier).toBe("oauth-verifier");
       return {
         kind: "signedIn",

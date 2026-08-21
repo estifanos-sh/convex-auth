@@ -22,7 +22,7 @@ afterEach(() => {
 });
 
 test("BrowserLocksLive uses navigator.locks when available", async () => {
-  const request = vi.fn(async (_key: string, cb: () => Promise<unknown>) => await cb());
+  const request = vi.fn(async (_key: string, cb: () => Promise<string>) => await cb());
   vi.stubGlobal("navigator", { locks: { request } });
   const out = await BrowserLocksLive.withKey("k", async () => "ok");
   expect(out).toBe("ok");
@@ -40,21 +40,21 @@ test("BrowserLocksLive falls back to localMutex when navigator.locks.request thr
 });
 
 test("invite manager ready() waits for storage-restore before persistInvite reads", async () => {
-  const stored: Record<string, string> = {
-    "invite:token": "stored-token-abc",
-    "invite:email": "alice@example.com",
-  };
-  const written: Record<string, string> = {};
+  const stored = new Map([
+    ["invite:token", "stored-token-abc"],
+    ["invite:email", "alice@example.com"],
+  ]);
+  const written = new Map<string, string>();
 
   const mgr = createInviteManager({
     param: () => null,
-    storageGet: async (k) => stored[k] ?? null,
+    storageGet: async (k) => stored.get(k) ?? null,
     storageSet: async (k, v) => {
-      written[k] = v;
+      written.set(k, v);
       return true;
     },
     storageRemove: async (k) => {
-      delete stored[k];
+      stored.delete(k);
       return true;
     },
     cleanUrlParams: () => {},
@@ -69,5 +69,5 @@ test("invite manager ready() waits for storage-restore before persistInvite read
     email: "alice@example.com",
   });
   await mgr.persistInvite();
-  expect(written["invite:token"]).toBe("stored-token-abc");
+  expect(written.get("invite:token")).toBe("stored-token-abc");
 });

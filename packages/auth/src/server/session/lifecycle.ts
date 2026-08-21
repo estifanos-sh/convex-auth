@@ -135,7 +135,7 @@ export async function issueSession(
   },
 ): Promise<SessionIssuance> {
   const db = authDb(ctx, config);
-  const issued = (await db.sessions.create({
+  const issued = await db.sessions.create({
     userId: args.userId,
     sessionId: args.existingSessionId,
     replaceSessionId: args.replaceSessionId,
@@ -143,33 +143,26 @@ export async function issueSession(
     refreshTokenExpirationTime: args.generateTokens
       ? refreshTokenExpirationTime(config)
       : undefined,
-  })) as {
-    userId: string;
-    sessionId: string;
-    refreshTokenId?: string;
-    replacedSessionId?: string;
-    user: Doc<"User">;
-  };
-  const sessionId = issued.sessionId as GenericId<"Session">;
-  const refreshTokenId = issued.refreshTokenId as GenericId<"RefreshToken"> | undefined;
+  });
+  const { userId, sessionId, refreshTokenId } = issued;
   if (issued.replacedSessionId !== undefined) {
-    const replacedSessionId = issued.replacedSessionId as GenericId<"Session">;
+    const replacedSessionId = issued.replacedSessionId;
     await queueAuthEvent(ctx, config, {
       kind: "session.invalidated",
       actor: { type: "system" },
       subject: { type: "session", id: replacedSessionId },
       targets: [
-        { kind: "user", id: issued.userId as GenericId<"User"> },
+        { kind: "user", id: userId },
         { kind: "session", id: replacedSessionId },
       ],
       outcome: "success",
-      data: { userId: issued.userId, reason: "replaced" },
+      data: { userId, reason: "replaced" },
     });
   }
   return {
-    userId: issued.userId as GenericId<"User">,
+    userId,
     sessionId,
-    identity: buildSessionIdentity(issued.userId as GenericId<"User">, sessionId, issued.user),
+    identity: buildSessionIdentity(userId, sessionId, issued.user),
     refreshToken:
       args.generateTokens && refreshTokenId !== undefined
         ? encodeRefreshToken(refreshTokenId, sessionId)

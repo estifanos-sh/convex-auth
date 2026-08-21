@@ -13,6 +13,10 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+function fixtureAs<T>(value: unknown): T {
+  return value as T;
+}
+
 function createCredentialsMutationHarness(args: {
   emailVerified?: string;
   hasTotp?: boolean;
@@ -324,12 +328,16 @@ test("runtime enrichment preserves non-enumerable Convex action methods", async 
 
   expect(({ ...originalCtx } as Partial<FakeActionCtx>).runQuery).toBeUndefined();
 
-  const enriched = enrichActionCtx(originalCtx as unknown as GenericActionCtx<GenericDataModel>, {
-    getUserIdentity: authCtx.getUserIdentity.bind(authCtx),
-    config: { component: {} },
-  }) as unknown as FakeActionCtx & {
-    auth: typeof authCtx & { config: { component: Record<string, never> } };
-  };
+  const enriched = fixtureAs<
+    FakeActionCtx & {
+      auth: typeof authCtx & { config: { component: Record<string, never> } };
+    }
+  >(
+    enrichActionCtx(fixtureAs<GenericActionCtx<GenericDataModel>>(originalCtx), {
+      getUserIdentity: authCtx.getUserIdentity.bind(authCtx),
+      config: { component: {} },
+    }),
+  );
 
   expect(enriched.secretDescriptor).toBe("preserved");
   expect(await enriched.runQuery("get")).toBe("query:get");

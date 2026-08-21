@@ -92,3 +92,11 @@ test("OAuth scopes still cap resolved grants", async () => {
   expect(result.groupId).toBe("g1");
   expect(result.grants).toEqual(["issues.read"]);
 });
+
+test("getAuthContextForUser rejects an identity whose user was deleted", async () => {
+  const { resolver } = makeResolver({ user: null });
+
+  await expect(getAuthContextForUser(resolver, {} as any, "u1")).rejects.toMatchObject({
+    data: { code: "NOT_SIGNED_IN" },
+  });
+});

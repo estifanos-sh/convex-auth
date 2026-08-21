@@ -16,12 +16,26 @@ import type { MutationCtx } from "../_generated/server";
 import { mutation, query } from "../functions";
 import { recordSignInLimit, resetSignInLimit } from "../limits";
 import { vTotpFactorDoc, vUserDoc } from "../model";
-import { createSessionRows } from "../session";
+import { createSessionRows, type SessionRows } from "../session";
 
 const TOTP_LIST_BATCH = 32;
 const TOTP_VERIFIER_TTL_MS = 15 * 60 * 1000;
 
 type TotpIntent = "enrollment" | "challenge";
+type AcceptedTotpSignIn = Omit<SessionRows, "refreshTokenId"> & {
+  status: "accepted";
+  factorId: Id<"TotpFactor">;
+  refreshTokenId: Id<"RefreshToken">;
+};
+type TotpFactorPatch = {
+  lastUsedAt: number;
+  verified?: boolean;
+};
+type TotpVerifier = {
+  userId: string;
+  purpose?: "totp.setup";
+  totpId?: string;
+};
 
 /** Create a TOTP factor and its enrollment verifier atomically. */
 export const createEnrollment = mutation({
@@ -64,13 +78,24 @@ export const createEnrollment = mutation({
   },
 });
 
-function parseVerifier(signature: string | undefined): Record<string, unknown> | null {
+function parseVerifier(signature: string | undefined): TotpVerifier | null {
   if (signature === undefined) return null;
   try {
     const parsed: unknown = JSON.parse(signature);
-    return typeof parsed === "object" && parsed !== null
-      ? (parsed as Record<string, unknown>)
-      : null;
+    if (typeof parsed !== "object" || parsed === null) return null;
+    const candidate = parsed as {
+      userId?: unknown;
+      purpose?: unknown;
+      totpId?: unknown;
+    };
+    if (typeof candidate.userId !== "string" || candidate.userId.length === 0) return null;
+    if (candidate.purpose !== undefined && candidate.purpose !== "totp.setup") return null;
+    if (candidate.totpId !== undefined && typeof candidate.totpId !== "string") return null;
+
+    const verifier: TotpVerifier = { userId: candidate.userId };
+    if (candidate.purpose !== undefined) verifier.purpose = candidate.purpose;
+    if (candidate.totpId !== undefined) verifier.totpId = candidate.totpId;
+    return verifier;
   } catch {
     return null;
   }
@@ -112,9 +137,6 @@ async function resolveVerification(
     return { status: "ready" as const, userId: factor.userId, factor };
   }
 
-  if (typeof data.userId !== "string" || data.userId.length === 0) {
-    return { status: "invalid_verifier" as const };
-  }
   const userId = data.userId as Id<"User">;
   const factor = await ctx.db
     .query("TotpFactor")
@@ -184,10 +206,9 @@ export const completeVerification = mutation({
 
     await ctx.db.delete("AuthVerifier", args.verifierId);
     await resetSignInLimit(ctx, resolved.userId);
-    await ctx.db.patch("TotpFactor", resolved.factor._id, {
-      ...(args.intent === "enrollment" ? { verified: true } : {}),
-      lastUsedAt: args.now,
-    });
+    const patch: TotpFactorPatch = { lastUsedAt: args.now };
+    if (args.intent === "enrollment") patch.verified = true;
+    await ctx.db.patch("TotpFactor", resolved.factor._id, patch);
     const created = await createSessionRows(ctx, {
       userId: resolved.userId,
       replaceSessionId: args.replaceSessionId,
@@ -197,16 +218,17 @@ export const completeVerification = mutation({
     if (created === null || created.refreshTokenId === undefined) {
       return { status: "rejected" as const };
     }
-    return {
+    const result: AcceptedTotpSignIn = {
       status: "accepted" as const,
       user: created.user,
       factorId: resolved.factor._id,
       sessionId: created.sessionId,
       refreshTokenId: created.refreshTokenId,
-      ...(created.replacedSessionId === undefined
-        ? {}
-        : { replacedSessionId: created.replacedSessionId }),
     };
+    if (created.replacedSessionId !== undefined) {
+      result.replacedSessionId = created.replacedSessionId;
+    }
+    return result;
   },
 });
 

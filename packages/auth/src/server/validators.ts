@@ -42,8 +42,6 @@ import {
  * fields where the consumer's data model lacks the component's table tag.
  */
 const vIdString: IdValidatorFn = <T extends string>(_table: T) =>
-  // SAFETY: Convex serializes IDs as strings at cross-component boundaries;
-  // the table tag exists only at compile time.
   v.string() as unknown as VId<GenericId<T>, "required">;
 
 /**

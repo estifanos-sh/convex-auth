@@ -11,7 +11,7 @@ import {
   defaultLogoutResponseTemplate,
 } from "../template";
 import { constructSamlSignature } from "../signature";
-import { get, base64Encode } from "../encoding";
+import { getString, base64Encode } from "../encoding";
 import {
   getBindingField,
   type LoginEntity,
@@ -144,14 +144,14 @@ export async function base64LogoutResponse(
       rawSamlResponse = template.context;
     } else {
       id = initSetting.generateID!();
-      const tvalue: Record<string, unknown> = {
+      const tvalue = {
         ID: id,
         Destination: metadata.target.getSingleLogoutService("post"),
         EntityID: metadata.init.getEntityID(),
         Issuer: metadata.init.getEntityID(),
         IssueInstant: new Date().toISOString(),
         StatusCode: SAML_STATUS_SUCCESS,
-        InResponseTo: get(requestInfo, "extract.request.id", null),
+        InResponseTo: getString(requestInfo, "extract.request.id", null),
       };
       rawSamlResponse = replaceTagsByValue(defaultLogoutResponseTemplate.context, tvalue);
     }

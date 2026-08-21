@@ -318,18 +318,18 @@ const rsaSha256: XmlSignatureAlgorithm = {
   },
 };
 
-const HASH_ALGORITHMS: Record<string, XmlHashAlgorithm> = {
-  "http://www.w3.org/2000/09/xmldsig#sha1": sha1,
-  "http://www.w3.org/2001/04/xmlenc#sha256": sha256,
-};
+const HASH_ALGORITHMS = new Map<string, XmlHashAlgorithm>([
+  ["http://www.w3.org/2000/09/xmldsig#sha1", sha1],
+  ["http://www.w3.org/2001/04/xmlenc#sha256", sha256],
+]);
 
-const SIGNATURE_ALGORITHMS: Record<string, XmlSignatureAlgorithm> = {
-  "http://www.w3.org/2000/09/xmldsig#rsa-sha1": rsaSha1,
-  "http://www.w3.org/2001/04/xmldsig-more#rsa-sha256": rsaSha256,
-};
+const SIGNATURE_ALGORITHMS = new Map<string, XmlSignatureAlgorithm>([
+  ["http://www.w3.org/2000/09/xmldsig#rsa-sha1", rsaSha1],
+  ["http://www.w3.org/2001/04/xmldsig-more#rsa-sha256", rsaSha256],
+]);
 
 function findHashAlgorithm(name: string): XmlHashAlgorithm {
-  const algo = HASH_ALGORITHMS[name];
+  const algo = HASH_ALGORITHMS.get(name);
   if (!algo) {
     throw new Error(`hash algorithm '${name}' is not supported`);
   }
@@ -340,16 +340,16 @@ function findSignatureAlgorithm(name?: string): XmlSignatureAlgorithm {
   if (!name) {
     throw new Error("signatureAlgorithm is required");
   }
-  const algo = SIGNATURE_ALGORITHMS[name];
+  const algo = SIGNATURE_ALGORITHMS.get(name);
   if (!algo) {
     throw new Error(`signature algorithm '${name}' is not supported`);
   }
   return algo;
 }
 
-const defaultNsForPrefix: { [key: string]: string } = {
+const defaultNsForPrefix = {
   ds: "http://www.w3.org/2000/09/xmldsig#",
-};
+} satisfies Record<string, string>;
 
 function staticGetKeyInfoContent({
   publicCert,

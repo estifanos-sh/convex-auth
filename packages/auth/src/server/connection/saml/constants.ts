@@ -60,10 +60,10 @@ export const KeyEncryptionAlgorithm = {
 } as const;
 
 /** The digest algorithm URI paired with each signature algorithm URI. */
-export const DIGEST_BY_SIGNATURE: Record<string, string> = {
+export const DIGEST_BY_SIGNATURE = {
   "http://www.w3.org/2000/09/xmldsig#rsa-sha1": "http://www.w3.org/2000/09/xmldsig#sha1",
   "http://www.w3.org/2001/04/xmldsig-more#rsa-sha256": "http://www.w3.org/2001/04/xmlenc#sha256",
-};
+} as const satisfies Record<string, string>;
 
 /** Whether a message is signed-then-encrypted or encrypted-then-signed. */
 export const SigningOrder = {
@@ -93,7 +93,7 @@ export const DEFAULT_MAX_SAML_RESPONSE_SIZE = 500_000;
 export const DEFAULT_MAX_SAML_METADATA_SIZE = 500_000;
 
 /** Required child-element ordering of an SPSSODescriptor, per IdP vendor profile. */
-export const ElementsOrder: Record<"default" | "onelogin" | "shibboleth", string[]> = {
+export const ElementsOrder = {
   default: ["KeyDescriptor", "NameIDFormat", "SingleLogoutService", "AssertionConsumerService"],
   onelogin: ["KeyDescriptor", "NameIDFormat", "SingleLogoutService", "AssertionConsumerService"],
   shibboleth: [
@@ -103,4 +103,4 @@ export const ElementsOrder: Record<"default" | "onelogin" | "shibboleth", string
     "AssertionConsumerService",
     "AttributeConsumingService",
   ],
-};
+} satisfies Record<"default" | "onelogin" | "shibboleth", string[]>;

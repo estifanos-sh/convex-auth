@@ -32,43 +32,61 @@ export type WellKnownEndpoint =
   | "security.txt"
   | "change-password";
 
+/** App-link configuration for `/.well-known/apple-app-site-association`. */
+export type AppleAppSiteAssociationOptions = {
+  /** Override `IOS_APP_IDS`; e.g., `["ABC123DEF.com.example.app"]`. */
+  appIds?: string[];
+  /** Override `IOS_APPLINK_PATHS`; default `["/auth/*", "/callback/*"]`. */
+  applinkPaths?: string[];
+};
+
+/** Android application identity for `/.well-known/assetlinks.json`. */
+export type AssetLinkApp = {
+  packageName: string;
+  sha256Fingerprints: string[];
+};
+
+/** Android app-link configuration for `/.well-known/assetlinks.json`. */
+export type AssetLinksOptions = {
+  apps?: AssetLinkApp[];
+};
+
+/** `/.well-known/security.txt` configuration. */
+export type SecurityTxtOptions = {
+  /** Override `SECURITY_CONTACT`. Should be a `mailto:` or `https:` URI. */
+  contact?: string;
+  /** Override `SECURITY_TXT_EXPIRES_DAYS`. Default 365 days from now. */
+  expiresInDays?: number;
+  /** RFC 5646 language tags, e.g., `["en"]`. */
+  preferredLanguages?: string[];
+  /** Optional canonical URL of the security.txt file (for signed copies). */
+  canonical?: string;
+  /** Optional public key URL for encrypted reports. */
+  encryption?: string;
+  /** Optional acknowledgments URL. */
+  acknowledgments?: string;
+  /** Optional policy URL. */
+  policy?: string;
+  /** Optional hiring URL. */
+  hiring?: string;
+};
+
+/** `/.well-known/change-password` configuration. */
+export type ChangePasswordOptions = {
+  /** Override `CHANGE_PASSWORD_URL`. */
+  targetUrl?: string;
+};
+
 /** Explicit per-endpoint overrides for {@link wellKnown}, bypassing env vars. */
 export type WellKnownOptions = {
   /** Options for `/.well-known/apple-app-site-association`. */
-  appleAppSiteAssociation?: {
-    /** Override `IOS_APP_IDS`; e.g., `["ABC123DEF.com.example.app"]`. */
-    appIds?: string[];
-    /** Override `IOS_APPLINK_PATHS`; default `["/auth/*", "/callback/*"]`. */
-    applinkPaths?: string[];
-  };
+  appleAppSiteAssociation?: AppleAppSiteAssociationOptions;
   /** Options for `/.well-known/assetlinks.json`. */
-  assetLinks?: {
-    apps?: Array<{ packageName: string; sha256Fingerprints: string[] }>;
-  };
+  assetLinks?: AssetLinksOptions;
   /** Options for `/.well-known/security.txt`. */
-  securityTxt?: {
-    /** Override `SECURITY_CONTACT`. Should be a `mailto:` or `https:` URI. */
-    contact?: string;
-    /** Override `SECURITY_TXT_EXPIRES_DAYS`. Default 365 days from now. */
-    expiresInDays?: number;
-    /** RFC 5646 language tags, e.g., `["en"]`. */
-    preferredLanguages?: string[];
-    /** Optional canonical URL of the security.txt file (for signed copies). */
-    canonical?: string;
-    /** Optional public key URL for encrypted reports. */
-    encryption?: string;
-    /** Optional acknowledgments URL. */
-    acknowledgments?: string;
-    /** Optional policy URL. */
-    policy?: string;
-    /** Optional hiring URL. */
-    hiring?: string;
-  };
+  securityTxt?: SecurityTxtOptions;
   /** Options for `/.well-known/change-password`. */
-  changePassword?: {
-    /** Override `CHANGE_PASSWORD_URL`. */
-    targetUrl?: string;
-  };
+  changePassword?: ChangePasswordOptions;
 };
 
 const STATIC_CACHE = "public, max-age=300, stale-while-revalidate=3600, stale-if-error=86400";
@@ -159,11 +177,9 @@ function assetLinksResponse(opts?: WellKnownOptions["assetLinks"]): WellKnownRes
   return ok(body, "application/json");
 }
 
-function parseAndroidAppLinksEnv(
-  raw: string | undefined,
-): Array<{ packageName: string; sha256Fingerprints: string[] }> {
+function parseAndroidAppLinksEnv(raw: string | undefined): AssetLinkApp[] {
   if (raw === undefined) return [];
-  const apps: Array<{ packageName: string; sha256Fingerprints: string[] }> = [];
+  const apps: AssetLinkApp[] = [];
   for (const entry of raw.split(";")) {
     const trimmed = entry.trim();
     if (trimmed.length === 0) continue;
@@ -276,14 +292,13 @@ export function wellKnown(
   return WELL_KNOWN_HANDLERS[endpoint](options);
 }
 
-const WELL_KNOWN_HANDLERS: Record<
-  WellKnownEndpoint,
-  (options?: WellKnownOptions) => WellKnownResponse | null
-> = {
+type WellKnownHandler = (options?: WellKnownOptions) => WellKnownResponse | null;
+
+const WELL_KNOWN_HANDLERS = {
   "apple-app-site-association": (options) =>
     appleAppSiteAssociationResponse(options?.appleAppSiteAssociation),
   "assetlinks.json": (options) => assetLinksResponse(options?.assetLinks),
   webauthn: () => webAuthnResponse(),
   "security.txt": (options) => securityTxtResponse(options?.securityTxt),
   "change-password": (options) => changePasswordResponse(options?.changePassword),
-};
+} satisfies Record<WellKnownEndpoint, WellKnownHandler>;

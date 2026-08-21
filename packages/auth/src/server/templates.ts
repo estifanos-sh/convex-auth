@@ -15,17 +15,21 @@
  * Used by the auto-registered `email` provider when `email` is
  * configured in `defineAuth(...)`.
  */
-const HTML_ENTITIES: Record<string, string> = {
+const HTML_ENTITIES = {
   "&": "&amp;",
   "<": "&lt;",
   ">": "&gt;",
   '"': "&quot;",
   "'": "&#39;",
-};
+} as const;
+
+type HtmlEntityCharacter = keyof typeof HTML_ENTITIES;
 
 /** Escape a value for safe interpolation into HTML text and double-quoted attributes. */
 function escapeHtml(value: string): string {
-  return value.replace(/[&<>"']/g, (c) => HTML_ENTITIES[c]!);
+  return value.replace(/[&<>"']/g, (character) => {
+    return HTML_ENTITIES[character as HtmlEntityCharacter];
+  });
 }
 
 /** @internal */

@@ -96,6 +96,40 @@ export interface WebAuthnConfig {
  */
 export const webauthn = Object.assign(
   function webauthn(config: WebAuthnConfig = {}): WebAuthnProviderConfig {
+    const origin =
+      typeof config.origin === "string"
+        ? config.origin
+        : config.origin === undefined
+          ? undefined
+          : [...config.origin];
+    const registration: WebAuthnProviderConfig["options"]["registration"] = {
+      residentKey: config.registration?.residentKey ?? "preferred",
+      userVerification: config.registration?.userVerification ?? "required",
+      algorithms: [...(config.registration?.algorithms ?? [-7, -257])],
+    };
+    const authentication: WebAuthnProviderConfig["options"]["authentication"] = {
+      userVerification: config.authentication?.userVerification ?? "required",
+    };
+
+    if (config.securityKeysOnly) {
+      registration.authenticatorAttachment = "cross-platform";
+      registration.hints = ["security-key"];
+      authentication.hints = ["security-key"];
+    } else {
+      if (config.registration?.authenticatorAttachment !== undefined) {
+        registration.authenticatorAttachment = config.registration.authenticatorAttachment;
+      }
+      if (config.registration?.hints !== undefined) {
+        registration.hints = [...config.registration.hints];
+      }
+      if (config.authentication?.hints !== undefined) {
+        authentication.hints = [...config.authentication.hints];
+      }
+    }
+    if (config.registration?.attestation !== undefined) {
+      registration.attestation = config.registration.attestation;
+    }
+
     const provider: WebAuthnProviderConfig = {
       id: "webauthn",
       type: "webauthn",
@@ -105,40 +139,11 @@ export const webauthn = Object.assign(
       options: {
         rpName: config.rpName,
         rpId: config.rpId,
-        origin:
-          typeof config.origin === "string"
-            ? config.origin
-            : config.origin
-              ? [...config.origin]
-              : undefined,
+        origin,
         challengeExpirationMs: config.challengeExpirationMs ?? 300_000,
         securityKeysOnly: config.securityKeysOnly ?? false,
-        registration: {
-          residentKey: config.registration?.residentKey ?? "preferred",
-          userVerification: config.registration?.userVerification ?? "required",
-          algorithms: [...(config.registration?.algorithms ?? [-7, -257])],
-          ...(config.securityKeysOnly
-            ? { authenticatorAttachment: "cross-platform" as const }
-            : config.registration?.authenticatorAttachment
-              ? { authenticatorAttachment: config.registration.authenticatorAttachment }
-              : {}),
-          ...(config.securityKeysOnly
-            ? { hints: ["security-key" as const] }
-            : config.registration?.hints
-              ? { hints: [...config.registration.hints] }
-              : {}),
-          ...(config.registration?.attestation
-            ? { attestation: config.registration.attestation }
-            : {}),
-        },
-        authentication: {
-          userVerification: config.authentication?.userVerification ?? "required",
-          ...(config.securityKeysOnly
-            ? { hints: ["security-key" as const] }
-            : config.authentication?.hints
-              ? { hints: [...config.authentication.hints] }
-              : {}),
-        },
+        registration,
+        authentication,
       },
     };
     return provider;

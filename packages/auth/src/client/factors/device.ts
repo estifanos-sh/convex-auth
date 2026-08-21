@@ -2,6 +2,7 @@ import { ConvexError } from "convex/values";
 
 import type { DeviceClient, DevicePollParams, FactorDeps, SignInActionResult } from "../core/types";
 import type { AuthTokens } from "../../shared/results";
+import type { AuthParameters } from "../../shared/results";
 import { ErrorCode } from "../../shared/codes";
 
 function isSignedInResult(
@@ -14,9 +15,7 @@ function isSignedInResult(
 export function createDeviceClient(deps: FactorDeps): DeviceClient {
   const { proxy, convex, requireApiRefs, proxyFetch, setTokenAndMaybeWait } = deps;
 
-  const requestDeviceSignIn = async (
-    params: Record<string, unknown>,
-  ): Promise<SignInActionResult> => {
+  const requestDeviceSignIn = async (params: AuthParameters): Promise<SignInActionResult> => {
     return (
       proxy
         ? await proxyFetch({
@@ -47,7 +46,7 @@ export function createDeviceClient(deps: FactorDeps): DeviceClient {
         await new Promise((resolve) => setTimeout(resolve, currentIntervalMs));
         if (signal?.aborted) return;
 
-        const params: Record<string, unknown> = {
+        const params: AuthParameters = {
           flow: "poll",
           deviceCode: code.deviceCode,
         };
@@ -57,7 +56,7 @@ export function createDeviceClient(deps: FactorDeps): DeviceClient {
           pollResult = await requestDeviceSignIn(params);
         } catch (error) {
           if (error instanceof ConvexError) {
-            const errorCode = (error.data as Record<string, unknown> | undefined)?.code;
+            const errorCode = (error.data as { code?: unknown } | undefined)?.code;
             if (errorCode === "DEVICE_AUTHORIZATION_PENDING") {
               continue;
             }
@@ -100,7 +99,7 @@ export function createDeviceClient(deps: FactorDeps): DeviceClient {
     },
 
     verify: async (opts: { code: string }): Promise<void> => {
-      const params: Record<string, unknown> = {
+      const params: AuthParameters = {
         flow: "verify",
         userCode: opts.code,
       };

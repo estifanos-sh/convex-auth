@@ -23,6 +23,10 @@ import {
 } from "../model";
 
 type ApiKeyRateLimit = { maxRequests: number; windowMs: number };
+type ApiKeyUsePatch = {
+  rateLimitState?: { attemptsLeft: number; lastAttemptTime: number };
+  lastUsedAt?: number;
+};
 
 function isValidRateLimit(rateLimit: ApiKeyRateLimit): boolean {
   return (
@@ -233,10 +237,7 @@ export const recordUse = mutation({
     if (key.expiresAt !== undefined && key.expiresAt < now) {
       return { status: "expired" as const };
     }
-    const patch: {
-      rateLimitState?: { attemptsLeft: number; lastAttemptTime: number };
-      lastUsedAt?: number;
-    } = {};
+    const patch: ApiKeyUsePatch = {};
     if (key.rateLimit) {
       // Legacy rows may predate write-time validation. Treat malformed
       // configuration or bucket state as exhausted instead of letting NaN,

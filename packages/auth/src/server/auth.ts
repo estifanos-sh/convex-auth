@@ -4,9 +4,9 @@
  * @module
  */
 
-import type { GenericActionCtx, GenericDataModel, HttpRouter } from "convex/server";
+import type { HttpRouter } from "convex/server";
 import { ConvexError } from "convex/values";
-import type { GenericValidator } from "convex/values";
+import type { GenericValidator, Value } from "convex/values";
 
 import { ErrorCode } from "../shared/codes";
 import type { AuthApiRefs } from "../client/index";
@@ -16,10 +16,8 @@ import type {
   AuthConfig,
   AuthContext,
   AuthContextConfig,
-  AuthContextFacade,
   AuthContextFactory,
   AuthContextResolver,
-  AuthLike,
   InferAuth,
   OptionalAuthContext,
   OptionalAuthContextFactory,
@@ -30,10 +28,8 @@ import { Auth as AuthFactory } from "./runtime";
 import { createAuthValidators } from "./validators";
 import type { AuthExtendValidators, AuthValidators } from "./validators";
 import type {
-  AuthMemberInspectResult,
   AuthProviderConfig,
   ConvexAuthConfig,
-  Doc,
   Grant,
   HasDeviceProvider,
   HasWebAuthnProvider,
@@ -50,21 +46,20 @@ export type { AuthExtendValidators, AuthValidators };
  * from `string[]` to the permission-typed literal unions.
  */
 type MemberAccessResult<TPermissions extends PermissionsConfig | undefined> = Omit<
-  AuthMemberInspectResult,
+  Awaited<ReturnType<RuntimeAuthApi["member"]["assert"]>>,
   "roleIds" | "grants"
 > & {
   roleIds: RoleId<TPermissions>[];
   grants: Grant<TPermissions>[];
 };
 
-type MemberResolutionResult<TPermissions extends PermissionsConfig | undefined> =
-  MemberAccessResult<TPermissions> & {
-    matchedGroupId: string | null;
-    depth: number | null;
-    isDirect: boolean;
-    isInherited: boolean;
-    traversedGroupIds: string[];
-  };
+type MemberResolutionResult<TPermissions extends PermissionsConfig | undefined> = Omit<
+  Awaited<ReturnType<RuntimeAuthApi["member"]["resolve"]>>,
+  "roleIds" | "grants"
+> & {
+  roleIds: RoleId<TPermissions>[];
+  grants: Grant<TPermissions>[];
+};
 
 type MemberApiWithPermissions<TPermissions extends PermissionsConfig | undefined> = Omit<
   ReturnType<typeof AuthFactory>["auth"]["member"],
@@ -78,30 +73,16 @@ type MemberApiWithPermissions<TPermissions extends PermissionsConfig | undefined
         userId: string;
         roleIds?: RoleId<TPermissions>[];
         status?: string;
-        extend?: Record<string, unknown>;
+        extend?: Record<string, Value>;
       };
     },
   ) => Promise<string>;
-  list: (
-    ctx: Parameters<ReturnType<typeof AuthFactory>["auth"]["member"]["list"]>[0],
-    opts?: {
-      where?: { groupId?: string; userId?: string; status?: string };
-      paginationOpts?: { numItems: number; cursor: string | null };
-      orderBy?: "_creationTime" | "status";
-      order?: "asc" | "desc";
-    },
-  ) => Promise<{
-    page: Doc<"GroupMember">[];
-    isDone: boolean;
-    continueCursor: string;
-    splitCursor?: string | null;
-    pageStatus?: "SplitRecommended" | "SplitRequired" | null;
-  }>;
+  list: ReturnType<typeof AuthFactory>["auth"]["member"]["list"];
   update: (
     ctx: Parameters<ReturnType<typeof AuthFactory>["auth"]["member"]["update"]>[0],
     args: {
       id: string;
-      patch: Record<string, unknown> & { roleIds?: RoleId<TPermissions>[] };
+      patch: Record<string, Value> & { roleIds?: RoleId<TPermissions>[] };
     },
   ) => Promise<null>;
   get: {
@@ -130,6 +111,57 @@ type MemberApiWithPermissions<TPermissions extends PermissionsConfig | undefined
 };
 
 type RuntimeAuthApi = ReturnType<typeof AuthFactory>["auth"];
+
+function isDeclaredRole<TPermissions extends PermissionsConfig | undefined>(
+  permissions: TPermissions | undefined,
+  roleId: string,
+): roleId is RoleId<TPermissions> {
+  return permissions === undefined || Object.hasOwn(permissions.roles, roleId);
+}
+
+function isDeclaredGrant<TPermissions extends PermissionsConfig | undefined>(
+  permissions: TPermissions | undefined,
+  grant: string,
+): grant is Grant<TPermissions> {
+  return (
+    permissions === undefined ||
+    permissions.grants?.includes(grant) === true ||
+    Object.values(permissions.roles).some((role) => role.grants.includes(grant))
+  );
+}
+
+function narrowMemberAccess<TPermissions extends PermissionsConfig | undefined>(
+  result: Awaited<ReturnType<RuntimeAuthApi["member"]["assert"]>>,
+  permissions: TPermissions | undefined,
+): MemberAccessResult<TPermissions> {
+  const roleIds = result.roleIds.map((roleId) => {
+    if (!isDeclaredRole(permissions, roleId)) {
+      throw new ConvexError({
+        code: ErrorCode.INTERNAL_ERROR,
+        message: "Membership contains a role not declared in permissions.",
+      });
+    }
+    return roleId;
+  });
+  const grants = result.grants.map((grant) => {
+    if (!isDeclaredGrant(permissions, grant)) {
+      throw new ConvexError({
+        code: ErrorCode.INTERNAL_ERROR,
+        message: "Membership resolves a grant not declared in permissions.",
+      });
+    }
+    return grant;
+  });
+  return { ...result, roleIds, grants };
+}
+
+function narrowMemberResolution<TPermissions extends PermissionsConfig | undefined>(
+  result: Awaited<ReturnType<RuntimeAuthApi["member"]["resolve"]>>,
+  permissions: TPermissions | undefined,
+): MemberResolutionResult<TPermissions> {
+  const access = narrowMemberAccess(result, permissions);
+  return { ...result, roleIds: access.roleIds, grants: access.grants };
+}
 
 /** App-facing account management. Provider credential internals remain on provider callback ctx. */
 type PublicAccountApi = RuntimeAuthApi["accountManagement"];
@@ -528,7 +560,7 @@ export function defineAuth<
     ...config,
     component,
     providers: [...config.providers],
-  } as ConvexAuthConfig);
+  });
   const {
     domain: domainApi,
     scim: scimApi,
@@ -538,7 +570,7 @@ export function defineAuth<
     oidc: oidcApi,
     saml: samlApi,
     ...restConnection
-  } = authResult.auth.connection as InternalConnectionApi;
+  } = authResult.auth.connection;
 
   type SetGroupConnectionDomains = PublicGroupConnectionApi["domain"]["upsert"];
   type GroupConnectionDomainInput = Array<{
@@ -621,11 +653,7 @@ export function defineAuth<
         isPrimary: Boolean(nextDomain.isPrimary),
       });
       if (current?.verifiedAt !== undefined) {
-        await (
-          ctx as {
-            runMutation: GenericActionCtx<GenericDataModel>["runMutation"];
-          }
-        ).runMutation(component.connection.domain.verify, {
+        await ctx.runMutation(component.connection.domain.verify, {
           id: domainId,
           verifiedAt: current.verifiedAt,
         });
@@ -695,21 +723,56 @@ export function defineAuth<
 
   const accountApi: PublicAccountApi = authResult.auth.accountManagement;
 
+  function getMember(
+    ctx: Parameters<RuntimeAuthApi["member"]["get"]>[0],
+    args: { userId: string; groupId: string },
+  ): Promise<MemberAccessResult<TPermissions>>;
+  function getMember(
+    ctx: Parameters<RuntimeAuthApi["member"]["get"]>[0],
+    args: { userId: string; groupIds: readonly string[] },
+  ): Promise<MemberAccessResult<TPermissions>[]>;
+  async function getMember(
+    ctx: Parameters<RuntimeAuthApi["member"]["get"]>[0],
+    args: { userId: string; groupId: string } | { userId: string; groupIds: readonly string[] },
+  ) {
+    if ("groupIds" in args) {
+      const results = await authResult.auth.member.get(ctx, args);
+      return results.map((result) => narrowMemberAccess<TPermissions>(result, config.permissions));
+    }
+    const result = await authResult.auth.member.get(ctx, args);
+    return narrowMemberAccess<TPermissions>(result, config.permissions);
+  }
+
+  const memberApi: MemberApiWithPermissions<TPermissions> = {
+    ...authResult.auth.member,
+    get: getMember,
+    resolve: async (ctx, args) =>
+      narrowMemberResolution<TPermissions>(
+        await authResult.auth.member.resolve(ctx, args),
+        config.permissions,
+      ),
+    assert: async (ctx, args) =>
+      narrowMemberAccess<TPermissions>(
+        await authResult.auth.member.assert(ctx, args),
+        config.permissions,
+      ),
+  };
+
   const oauthApi: PublicOAuthApi = {
     authorize: authResult.auth.oauth.authorize,
     client: {
-      create: authResult.auth.oauth.client.create,
-      get: authResult.auth.oauth.client.get,
-      list: authResult.auth.oauth.client.list,
-      update: authResult.auth.oauth.client.update,
-      revoke: authResult.auth.oauth.client.revoke,
+      create: (ctx, args) => authResult.auth.oauth.client.create(ctx, args),
+      get: (ctx, args) => authResult.auth.oauth.client.get(ctx, args),
+      list: (ctx, args) => authResult.auth.oauth.client.list(ctx, args),
+      update: (ctx, args) => authResult.auth.oauth.client.update(ctx, args),
+      revoke: (ctx, args) => authResult.auth.oauth.client.revoke(ctx, args),
     },
   };
 
   const eventApi: PublicEventApi = authResult.auth.event;
 
-  const api = {
-    v: createAuthValidators(config.extend ?? ({} as TExtend)),
+  const api: ConvexAuthResult<P, TPermissions, TExtend> = {
+    v: createAuthValidators<TExtend>(config.extend),
     signIn: authResult.signIn,
     signOut: authResult.signOut,
     store: authResult.store,
@@ -719,7 +782,7 @@ export function defineAuth<
     account: accountApi,
     factor: authResult.auth.factor,
     group: groupApi,
-    member: authResult.auth.member,
+    member: memberApi,
     invite: authResult.auth.invite,
     key: authResult.auth.key,
     provider: authResult.auth.provider,
@@ -728,11 +791,7 @@ export function defineAuth<
     request: authResult.auth.request,
     connection: publicGroupConnection,
 
-    ...(createAuthContextFacade(authResult.auth as AuthLike) as AuthContextFacade),
-    // SAFETY: AuthFactory's runtime surface is refined here into the documented
-    // public facade; the provider tuple is declaration-only. The permissions
-    // facade is narrowed from its runtime string representation to its generic
-    // role and grant vocabulary.
-  } as unknown as ConvexAuthResult<P, TPermissions, TExtend>;
+    ...createAuthContextFacade(authResult.auth),
+  };
   return api;
 }

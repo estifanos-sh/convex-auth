@@ -42,6 +42,16 @@ interface BuildRedirectConfig {
   relayState?: string;
 }
 
+type LogoutResponseTags = {
+  ID: string;
+  Destination: string;
+  Issuer: string;
+  EntityID: string;
+  IssueInstant: string;
+  StatusCode: string;
+  InResponseTo?: string;
+};
+
 function pvPair(param: string, value: string, first?: boolean): string {
   return (first === true ? "?" : "&") + param + "=" + value;
 }
@@ -158,7 +168,7 @@ export async function logoutResponseRedirectURL(
       id = getBindingField(template, "id");
       rawSamlResponse = getBindingField(template, "context");
     } else {
-      const tvalue: Record<string, unknown> = {
+      const tvalue: LogoutResponseTags = {
         ID: id,
         Destination: base,
         Issuer: metadata.init.getEntityID(),

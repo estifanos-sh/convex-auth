@@ -108,7 +108,7 @@ test("custom oauth provider builds authorization URL from stable config", async 
 
 test("custom oauth provider exchanges code with configurable token request", async () => {
   vi.unstubAllGlobals();
-  const fetchMock = vi.fn(async () => {
+  const fetchMock = vi.fn<(url: string, init: RequestInit) => Promise<Response>>(async () => {
     return new Response(
       JSON.stringify({
         access_token: "access-token",
@@ -153,13 +153,16 @@ test("custom oauth provider exchanges code with configurable token request", asy
   });
 
   expect(fetchMock).toHaveBeenCalledTimes(1);
-  const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+  const [url, init] = fetchMock.mock.calls[0]!;
   expect(url).toBe("https://open.tiktokapis.com/v2/oauth/token/");
-  expect(init?.method).toBe("POST");
-  expect(init?.headers).toBeInstanceOf(Headers);
-  expect(init?.body).toBeInstanceOf(URLSearchParams);
+  expect(init.method).toBe("POST");
+  expect(init.headers).toBeInstanceOf(Headers);
+  expect(init.body).toBeInstanceOf(URLSearchParams);
 
-  const body = init?.body as URLSearchParams;
+  if (!(init.body instanceof URLSearchParams)) {
+    throw new Error("Expected OAuth token request body to be URLSearchParams.");
+  }
+  const body = init.body;
   expect(body.get("grant_type")).toBe("authorization_code");
   expect(body.get("code")).toBe("oauth-code");
   expect(body.get("redirect_uri")).toBe("https://app.example.com/api/auth/callback/tiktok");

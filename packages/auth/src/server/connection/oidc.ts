@@ -19,7 +19,7 @@ import { createCache } from "../utils/cache";
 import { retryWithBackoff } from "../utils/retry";
 import { withSpan } from "../utils/span";
 import { finalizeNormalizedProfile, normalizeStringArray } from "./profile";
-import { groupOidcProviderId, getGroupOidcUrls } from "./shared";
+import { asRecord, groupOidcProviderId, getGroupOidcUrls } from "./shared";
 
 const OIDC_JWKS_CACHE = createCache<string, ReturnType<typeof createRemoteJWKSet>>({
   capacity: 128,
@@ -64,7 +64,10 @@ function validateOidcDiscovery(data: unknown): OidcDiscovery {
   if (typeof data !== "object" || data === null) {
     throw new Error("OIDC discovery response is not an object.");
   }
-  const obj = data as Record<string, unknown>;
+  const obj = asRecord(data);
+  if (obj === null) {
+    throw new Error("OIDC discovery response is not an object.");
+  }
   if (typeof obj.issuer !== "string") {
     throw new Error("OIDC discovery is missing 'issuer'.");
   }
@@ -101,7 +104,10 @@ function validateOidcUserInfo(data: unknown): OidcUserInfo {
   if (typeof data !== "object" || data === null) {
     return {};
   }
-  const obj = data as Record<string, unknown>;
+  const obj = asRecord(data);
+  if (obj === null) {
+    return {};
+  }
   return {
     sub: typeof obj.sub === "string" ? obj.sub : undefined,
     email: typeof obj.email === "string" ? obj.email : undefined,
@@ -165,35 +171,21 @@ export type OidcConfigShape = {
   };
 };
 
-function getOidcSections(config: Record<string, unknown>) {
+function getOidcSections(config: unknown) {
+  const record = asRecord(config) ?? {};
   return {
-    discovery:
-      typeof config.discovery === "object" && config.discovery !== null
-        ? (config.discovery as Record<string, unknown>)
-        : {},
-    client:
-      typeof config.client === "object" && config.client !== null
-        ? (config.client as Record<string, unknown>)
-        : {},
-    request:
-      typeof config.request === "object" && config.request !== null
-        ? (config.request as Record<string, unknown>)
-        : {},
-    security:
-      typeof config.security === "object" && config.security !== null
-        ? (config.security as Record<string, unknown>)
-        : {},
-    profile:
-      typeof config.profile === "object" && config.profile !== null
-        ? (config.profile as Record<string, unknown>)
-        : {},
+    discovery: asRecord(record.discovery) ?? {},
+    client: asRecord(record.client) ?? {},
+    request: asRecord(record.request) ?? {},
+    security: asRecord(record.security) ?? {},
+    profile: asRecord(record.profile) ?? {},
   };
 }
 
 async function discoverOidcConfiguration(
   ctx: GenericActionCtx<GenericDataModel>,
   componentConnection: AuthComponentApi["connection"],
-  config: Record<string, unknown>,
+  config: unknown,
 ): Promise<OidcDiscovery> {
   const { discovery } = getOidcSections(config);
   const discoveryUrl =
@@ -518,10 +510,7 @@ export async function createGroupConnectionOidcProvider(
       if (typeof loginHint === "string") {
         url.searchParams.set("login_hint", loginHint);
       }
-      const authorizationParams =
-        typeof request.authorizationParams === "object" && request.authorizationParams !== null
-          ? (request.authorizationParams as Record<string, unknown>)
-          : {};
+      const authorizationParams = asRecord(request.authorizationParams) ?? {};
       const reservedAuthorizationParams = new Set([
         "response_type",
         "client_id",
@@ -583,7 +572,10 @@ export async function createGroupConnectionOidcProvider(
           `OIDC token exchange failed: ${response.status}${detail ? ` ${detail}` : ""}`,
         );
       }
-      const data = (await response.json()) as Record<string, unknown>;
+      const data = asRecord(await response.json());
+      if (data === null) {
+        throw new Error("OIDC token response is not an object.");
+      }
       return normalizeOAuthTokenResponse(data);
     },
   };
@@ -634,7 +626,10 @@ export async function createGroupConnectionOidcProvider(
         throw asError(error);
       }
 
-      const payload = verification.payload as Record<string, unknown>;
+      const payload = asRecord(verification.payload);
+      if (payload === null) {
+        throw new Error("OIDC ID token payload is not an object.");
+      }
       const tokenIssuerRaw = typeof payload.iss === "string" ? payload.iss : undefined;
       const tokenIssuer =
         typeof tokenIssuerRaw === "string" ? tokenIssuerRaw.replace(/\/$/, "") : undefined;

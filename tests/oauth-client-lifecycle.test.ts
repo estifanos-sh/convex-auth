@@ -16,7 +16,14 @@ import { convexTest } from "./convex/setup";
 
 const clientApi = () => components.auth.oauth.client as any;
 
-async function createClient(t: any, args: Record<string, unknown>) {
+type ClientFixture = {
+  clientId: string;
+  name: string;
+  scopes: string[];
+  allowedScopes?: string[];
+};
+
+async function createClient(t: any, args: ClientFixture) {
   return await t.run(async (ctx: any) => {
     return await ctx.runMutation(clientApi().create, {
       redirectUris: ["https://app.example.com/cb"],

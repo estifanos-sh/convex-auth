@@ -15,6 +15,10 @@ interface ExtractorField {
   shortcut?: string;
 }
 
+type ExtractedAttribute = Record<string, string>;
+type ExtractedValue = string | null | ExtractedAttribute | ExtractedValue[];
+type IndexedExtraction = Record<string, ExtractedValue>;
+
 export const loginRequestFields: ExtractorFields = [
   {
     key: "request",
@@ -338,14 +342,14 @@ function extractIndexed(
   attributes: string[],
   index: string[],
   attributePath: string[],
-): Record<string, unknown> {
+) {
   const indexAttr = index[0];
-  const obj: Record<string, unknown> = {};
+  const obj: IndexedExtraction = {};
   for (const parentNode of targetNodes) {
     const idxVal = parentNode.getAttribute ? parentNode.getAttribute(indexAttr) : null;
     if (!idxVal) continue;
     const childNodes = walkChildren(parentNode, attributePath);
-    const childValues: Array<string | null | Record<string, string>> = childNodes.map((c) => {
+    const childValues: ExtractedValue[] = childNodes.map((c) => {
       if (attributes.length === 0) return getTextContent(c);
       if (attributes.length === 1) return c.getAttribute ? c.getAttribute(attributes[0]) : null;
       const o: Record<string, string> = {};
@@ -442,8 +446,7 @@ export function extract<T = Record<string, unknown>>(context: string, fields: Ex
     }
   }
 
-  const value: unknown = result;
-  return value as T;
+  return result as T;
 }
 
 /**

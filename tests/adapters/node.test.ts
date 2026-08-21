@@ -34,9 +34,19 @@ import { ErrorCode } from "@estifanos-sh/convex-auth/client/errors";
 import { createWebAuthnClientCore } from "@estifanos-sh/convex-auth/client/factors/webauthn";
 import { expect, test } from "vite-plus/test";
 
+type SignInCall = {
+  continuation?: string;
+  params?: { code?: string; flow?: string };
+  provider?: string;
+  verifier?: string;
+};
+
 /** Build a branded {@link AuthTokens} pair for a mocked `signedIn` result. */
 function session(token: string, refreshToken: string): AuthTokens {
-  return { token, refreshToken } as unknown as AuthTokens;
+  return {
+    token: token as AuthTokens["token"],
+    refreshToken: refreshToken as AuthTokens["refreshToken"],
+  };
 }
 
 const MOCK_URL = "https://mock.convex.cloud";
@@ -188,10 +198,10 @@ test("totp.verify surfaces a typed failed result when the code is rejected", asy
 });
 
 test("password recovery automatically completes the returned passkey rotation", async () => {
-  const calls: Array<Record<string, unknown>> = [];
+  const calls: SignInCall[] = [];
   const { convex } = mockConvex(
     async (_ref, args) => {
-      calls.push(args as Record<string, unknown>);
+      calls.push(args as SignInCall);
       if (calls.length === 1) {
         return {
           kind: "webauthnOptions",

@@ -3,6 +3,7 @@ import type { ConvexError, Value } from "convex/values";
 
 import type { AccessToken } from "../../shared/brand";
 import type {
+  AuthParameters,
   AuthTokens,
   SignInFlowResult,
   SignInWebAuthnOptionsResult,
@@ -19,7 +20,7 @@ import type { ErrorCode } from "../../shared/codes";
  * during sign-out for a clean deauthentication.
  */
 export interface ConvexTransport {
-  action(action: unknown, args: unknown): Promise<unknown>;
+  action(action: unknown, args: unknown): Promise<Value>;
   setAuth(
     fetchToken: (args: { forceRefreshToken: boolean }) => Promise<string | null | undefined>,
     onChange?: (isAuthenticated: boolean) => void,
@@ -29,7 +30,7 @@ export interface ConvexTransport {
 
 /** Minimal action-only transport used for unauthenticated auth flows. */
 export interface ActionTransport {
-  action(action: unknown, args: unknown): Promise<unknown>;
+  action(action: unknown, args: unknown): Promise<Value>;
 }
 
 /** @internal */
@@ -75,7 +76,7 @@ interface MutexRuntime {
 
 /** Proxy request execution supplied by the host runtime. */
 interface ProxyRuntime {
-  fetch(body: Record<string, unknown>, proxyPath: string): Promise<Response>;
+  fetch(body: AuthParameters, proxyPath: string): Promise<Response>;
 }
 
 /**
@@ -112,7 +113,7 @@ export interface FactorDeps {
   proxy: string | undefined;
   convex: ConvexTransport;
   requireApiRefs: () => SignInApiRef;
-  proxyFetch: (body: Record<string, unknown>) => Promise<unknown>;
+  proxyFetch: (body: AuthParameters) => Promise<Value>;
   setTokenAndMaybeWait: (
     args:
       | {
@@ -625,10 +626,7 @@ export type SignInOverloads = <const P extends string | undefined>(
  *
  * @internal
  */
-export type SignInImpl = (
-  provider?: string,
-  params?: Record<string, unknown>,
-) => Promise<SignInResult>;
+export type SignInImpl = (provider?: string, params?: AuthParameters) => Promise<SignInResult>;
 
 /** Base auth client — always present. */
 interface AuthClientBase {

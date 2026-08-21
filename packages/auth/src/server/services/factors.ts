@@ -15,6 +15,7 @@ import { ConvexError, type GenericId, type Value } from "convex/values";
 
 import { ErrorCode } from "../../shared/codes";
 import type { configDefaults } from "../config";
+import { authDb } from "../db";
 import { emitAuthEvent } from "../events";
 
 const convexError = (data: Record<string, Value>) => new ConvexError(data);
@@ -29,9 +30,8 @@ export function createFactorUnlinkHelpers(config: ReturnType<typeof configDefaul
     ctx: GenericActionCtx<GenericDataModel>,
     args: { accountId: GenericId<"Account"> },
   ) => {
-    const accountDoc = (await ctx.runQuery(config.component.account.get, {
-      id: args.accountId,
-    })) as { _id: string; userId: string; provider: string } | null;
+    const db = authDb(ctx, config);
+    const accountDoc = await db.accounts.get({ id: args.accountId });
     if (accountDoc === null) {
       throw convexError({
         code: ErrorCode.ACCOUNT_NOT_FOUND,
@@ -41,7 +41,7 @@ export function createFactorUnlinkHelpers(config: ReturnType<typeof configDefaul
     await ctx.runMutation(config.component.account.remove, {
       id: args.accountId,
     });
-    const userId = accountDoc.userId as GenericId<"User">;
+    const userId = accountDoc.userId;
     const provider = accountDoc.provider;
     await emitAuthEvent(ctx, config, {
       kind: "account.unlinked",
@@ -61,9 +61,8 @@ export function createFactorUnlinkHelpers(config: ReturnType<typeof configDefaul
     ctx: GenericActionCtx<GenericDataModel>,
     args: { passkeyId: GenericId<"Passkey"> },
   ) => {
-    const passkeyDoc = (await ctx.runQuery(config.component.factor.passkey.get, {
-      id: args.passkeyId,
-    })) as { _id: string; userId: string } | null;
+    const db = authDb(ctx, config);
+    const passkeyDoc = await db.factors.getPasskey(args.passkeyId);
     if (passkeyDoc === null) {
       throw convexError({
         code: ErrorCode.PASSKEY_NOT_FOUND,
@@ -73,7 +72,7 @@ export function createFactorUnlinkHelpers(config: ReturnType<typeof configDefaul
     await ctx.runMutation(config.component.factor.passkey.remove, {
       id: args.passkeyId,
     });
-    const userId = passkeyDoc.userId as GenericId<"User">;
+    const userId = passkeyDoc.userId;
     await emitAuthEvent(ctx, config, {
       kind: "passkey.removed",
       actor: { type: "user", id: userId },
@@ -89,9 +88,8 @@ export function createFactorUnlinkHelpers(config: ReturnType<typeof configDefaul
     ctx: GenericActionCtx<GenericDataModel>,
     args: { totpId: GenericId<"TotpFactor"> },
   ) => {
-    const totpDoc = (await ctx.runQuery(config.component.factor.totp.get, {
-      id: args.totpId,
-    })) as { _id: string; userId: string } | null;
+    const db = authDb(ctx, config);
+    const totpDoc = await db.factors.getTotp(args.totpId);
     if (totpDoc === null) {
       throw convexError({
         code: ErrorCode.TOTP_NOT_FOUND,
@@ -101,7 +99,7 @@ export function createFactorUnlinkHelpers(config: ReturnType<typeof configDefaul
     await ctx.runMutation(config.component.factor.totp.remove, {
       id: args.totpId,
     });
-    const userId = totpDoc.userId as GenericId<"User">;
+    const userId = totpDoc.userId;
     await emitAuthEvent(ctx, config, {
       kind: "totp.removed",
       actor: { type: "user", id: userId },

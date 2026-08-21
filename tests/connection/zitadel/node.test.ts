@@ -631,10 +631,11 @@ test("group saml login interoperates with zitadel through api-driven flow", asyn
       throw new Error("ZITADEL SAML POST binding did not include samlResponse.");
     }
     const acsUrl = rewriteUrlForHostAccess(finalized.url, zitadelRuntimeBaseUrl, convexSiteUrl);
-    const formBody = buildFormBody({
-      SAMLResponse: samlResponse,
-      ...(relayState ? { RelayState: relayState } : {}),
-    });
+    const formBody = buildFormBody(
+      relayState
+        ? { SAMLResponse: samlResponse, RelayState: relayState }
+        : { SAMLResponse: samlResponse },
+    );
     acsResponse = await requestHttp(acsUrl, {
       method: "POST",
       headers: {

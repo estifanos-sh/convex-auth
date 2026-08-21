@@ -89,79 +89,32 @@ export const storeImpl = async (
     log(LOG_LEVELS.DEBUG, `\`auth:store\` type: ${args.type}`);
   }
 
-  const handlers: Record<string, (a: typeof args) => Promise<unknown>> = {
-    signIn: (a) =>
-      signInSessionImpl(ctx, a as Infer<typeof vSignInArgs> & { type: string }, config),
-    signOut: () => signOutImpl(ctx, config),
-    refreshSession: (a) =>
-      refreshSessionImpl(ctx, a as Infer<typeof vRefreshSessionArgs> & { type: string }, config),
-    verifyCodeAndSignIn: (a) =>
-      verifyCodeAndSignInImpl(
-        ctx,
-        a as Infer<typeof vVerifyCodeAndSignInArgs> & { type: string },
-        getProviderOrThrow,
-        config,
-      ),
-    verifier: (a) => verifierImpl(ctx, a as Infer<typeof vVerifierArgs> & { type: string }, config),
-    verifierSignature: (a) =>
-      verifierSignatureImpl(
-        ctx,
-        a as Infer<typeof vVerifierSignatureArgs> & { type: string },
-        config,
-      ),
-    userOAuth: (a) =>
-      userOAuthImpl(
-        ctx,
-        a as Infer<typeof vUserOAuthArgs> & { type: string },
-        getProviderOrThrow,
-        config,
-      ),
-    createVerificationCode: (a) =>
-      createVerificationCodeImpl(
-        ctx,
-        a as Infer<typeof vCreateVerificationCodeArgs> & { type: string },
-        getProviderOrThrow,
-        config,
-      ),
-    createAccountFromCredentials: (a) =>
-      createAccountFromCredentialsImpl(
-        ctx,
-        a as Infer<typeof vCreateAccountFromCredentialsArgs> & { type: string },
-        getProviderOrThrow,
-        config,
-      ),
-    retrieveAccountWithCredentials: (a) =>
-      retrieveAccountWithCredentialsImpl(
-        ctx,
-        a as Infer<typeof vRetrieveAccountWithCredentialsArgs> & { type: string },
-        getProviderOrThrow,
-        config,
-      ),
-    credentialsSignIn: (a) =>
-      credentialsSignInImpl(
-        ctx,
-        a as Infer<typeof vCredentialsSignInArgs> & { type: string },
-        getProviderOrThrow,
-        config,
-      ),
-    modifyAccount: (a) =>
-      modifyAccountImpl(
-        ctx,
-        a as Infer<typeof vModifyAccountArgs> & { type: string },
-        getProviderOrThrow,
-        config,
-      ),
-    invalidateSessions: (a) =>
-      invalidateSessionsImpl(
-        ctx,
-        a as Infer<typeof vInvalidateSessionsArgs> & { type: string },
-        config,
-      ),
-  };
-
-  const handler = handlers[args.type];
-  if (!handler) {
-    throw new Error(`Unknown store type: "${args.type}"`);
+  switch (args.type) {
+    case "signIn":
+      return await signInSessionImpl(ctx, args, config);
+    case "signOut":
+      return await signOutImpl(ctx, config);
+    case "refreshSession":
+      return await refreshSessionImpl(ctx, args, config);
+    case "verifyCodeAndSignIn":
+      return await verifyCodeAndSignInImpl(ctx, args, getProviderOrThrow, config);
+    case "verifier":
+      return await verifierImpl(ctx, args, config);
+    case "verifierSignature":
+      return await verifierSignatureImpl(ctx, args, config);
+    case "userOAuth":
+      return await userOAuthImpl(ctx, args, getProviderOrThrow, config);
+    case "createVerificationCode":
+      return await createVerificationCodeImpl(ctx, args, getProviderOrThrow, config);
+    case "createAccountFromCredentials":
+      return await createAccountFromCredentialsImpl(ctx, args, getProviderOrThrow, config);
+    case "retrieveAccountWithCredentials":
+      return await retrieveAccountWithCredentialsImpl(ctx, args, getProviderOrThrow, config);
+    case "credentialsSignIn":
+      return await credentialsSignInImpl(ctx, args, getProviderOrThrow, config);
+    case "modifyAccount":
+      return await modifyAccountImpl(ctx, args, getProviderOrThrow, config);
+    case "invalidateSessions":
+      return await invalidateSessionsImpl(ctx, args, config);
   }
-  return await handler(args);
 };

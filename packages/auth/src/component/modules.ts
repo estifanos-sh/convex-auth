@@ -1,4 +1,4 @@
-const modules: Record<string, () => Promise<unknown>> = {
+const modules = {
   "./component/_generated/api.ts": () => import("./_generated/api"),
   "./component/_generated/component.ts": () => import("./_generated/component"),
   "./component/_generated/dataModel.ts": () => import("./_generated/dataModel"),

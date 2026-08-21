@@ -27,12 +27,20 @@ function tokenIdentifierForUser(userId: string) {
   return typeof issuer === "string" && issuer.length > 0 ? `${userId}${issuer}` : userId;
 }
 
-const AUTH_IDENTITY_ATTRIBUTE_KEYS: Record<AuthTelemetryIdentityField, string> = {
+const AUTH_IDENTITY_ATTRIBUTE_KEYS = {
   userId: "auth.user.id",
   sessionId: "auth.session.id",
   refreshTokenId: "auth.refresh_token.id",
   email: "auth.user.email",
   tokenIdentifier: "auth.token_identifier",
+} as const satisfies Record<AuthTelemetryIdentityField, string>;
+
+type AuthIdentityValues = {
+  userId?: string;
+  sessionId?: string;
+  refreshTokenId?: string;
+  email?: string;
+  tokenIdentifier?: string;
 };
 
 function projectIdentityValue(
@@ -89,13 +97,13 @@ function buildKnownAuthIdentityAttributes(
   const mode = config.telemetry?.includeIdentity ?? "none";
   if (mode === "none") return {};
 
-  const values: Partial<Record<AuthTelemetryIdentityField, string>> = {
+  const values: AuthIdentityValues = {
     userId: args.userId,
     sessionId: args.sessionId,
     tokenIdentifier: tokenIdentifierForUser(args.userId),
-    ...(args.refreshTokenId === undefined ? {} : { refreshTokenId: args.refreshTokenId }),
-    ...(email === undefined ? {} : { email }),
   };
+  if (args.refreshTokenId !== undefined) values.refreshTokenId = args.refreshTokenId;
+  if (email !== undefined) values.email = email;
 
   const attributes: Attributes = {};
   for (const field of Object.keys(fields) as AuthTelemetryIdentityField[]) {

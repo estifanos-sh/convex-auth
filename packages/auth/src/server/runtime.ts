@@ -8,6 +8,7 @@ import {
 } from "convex/server";
 import type { RouteSpec } from "convex/server";
 import { ConvexError, v } from "convex/values";
+import type { GenericValidator } from "convex/values";
 
 import type { AuthTokens, SignInFlowResult } from "../shared/results";
 import { ErrorCode } from "../shared/codes";
@@ -191,7 +192,7 @@ export type SignOutAction = FunctionReferenceFromExport<ReturnType<typeof Auth>[
  * @returns An object with fields you should reexport from your
  *          `convex/auth.ts` file, plus the `http` router factory.
  */
-export function Auth(config_: ConvexAuthConfig) {
+export function Auth(config_: ConvexAuthConfig<any>) {
   const services = resolveServerServices(config_);
   const config = services.config;
   const delegatableGrants: string[] = [...(config.permissions?.grants ?? [])];
@@ -560,9 +561,9 @@ export function Auth(config_: ConvexAuthConfig) {
      * Tools are plain `{ description, scope, args, handler }` objects; each
      * handler's `args` are inferred from its Convex validator.
      */
-    mcp: (
+    mcp: <T extends Record<string, GenericValidator>>(
       http: HttpRouter,
-      tools: Record<string, McpToolDef>,
+      tools: { [K in keyof T]: McpToolDef<T[K]> },
       opts?: { name?: string; version?: string; mcpPath?: string },
     ): void => {
       if (config.oauth === undefined) {

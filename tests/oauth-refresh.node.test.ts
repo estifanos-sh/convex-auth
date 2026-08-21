@@ -22,10 +22,19 @@ type Appended = {
   targets: unknown;
 };
 
-function makeCtx(handlers: Map<unknown, (args: unknown) => unknown>) {
+type MutationResult =
+  | { created: boolean; eventId: string; createdTargets: never[]; projections: never[] }
+  | { status: "invalid" }
+  | { status: "reuse_detected"; userId: string; clientId: string }
+  | { status: "rotated"; userId: string; scopes: string[] }
+  | { userId: string; clientId: string }
+  | null;
+type TestRef = { fn: string };
+
+function makeCtx(handlers: Map<TestRef, (args: { event?: Appended }) => MutationResult>) {
   const appended: Appended[] = [];
   const ctx = {
-    runMutation: async (ref: unknown, args: { event?: Appended }) => {
+    runMutation: async (ref: TestRef, args: { event?: Appended }): Promise<MutationResult> => {
       if (ref === refs.append) {
         appended.push(args.event!);
         return { created: true, eventId: "evt", createdTargets: [], projections: [] };

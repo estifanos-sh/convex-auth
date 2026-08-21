@@ -36,7 +36,7 @@ import {
   type SignInResult,
 } from "./core/types";
 import type { AccessToken } from "../shared/brand";
-import type { AuthTokens } from "../shared/results";
+import type { AuthParameters, AuthTokens } from "../shared/results";
 import { createHandshakeError } from "./errors";
 import { createDeviceClient } from "./factors/device";
 import { createTotpClient } from "./factors/totp";
@@ -47,7 +47,9 @@ import {
   isRetriableProxyRefreshError,
   isTransientNetworkError,
   parseProxyErrorBody,
+  parseProxyResponseBody,
   ProxyRequestError,
+  type ProxyErrorBody,
 } from "./runtime/proxy";
 import { createStorageHelpers } from "./runtime/storage";
 
@@ -147,7 +149,7 @@ function stableStringify(value: unknown, depth = 0): string {
     return `[${value.map((item) => stableStringify(item, depth + 1)).join(",")}]`;
   }
   if (value !== null && typeof value === "object") {
-    const entries = Object.entries(value as Record<string, unknown>)
+    const entries = Object.entries(value)
       .filter(([, entryValue]) => entryValue !== undefined)
       .sort(([left], [right]) => left.localeCompare(right));
     return `{${entries
@@ -365,33 +367,25 @@ export function client<Api extends AuthApiRefs<boolean, boolean, boolean> = Auth
       ? await runtime.mutex.withKey(mutexKey, callback)
       : await localMutex(mutexKey, callback);
   };
-  const proxyFetch = async (body: Record<string, unknown>) => {
+  const proxyFetch = async (body: AuthParameters): Promise<Value> => {
     if (!proxy) {
       throw new Error("Proxy fetch requested without proxyPath.");
     }
     const response = await proxyRuntime!.fetch(body, proxy);
     if (!response.ok) {
-      let errorBody: Record<string, unknown> = {};
+      let errorBody: ProxyErrorBody = {};
       try {
-        errorBody = parseProxyErrorBody(await response.json()) as Record<string, unknown>;
+        errorBody = parseProxyErrorBody(await response.json());
       } catch {
         errorBody = {};
       }
-      if (
-        typeof errorBody === "object" &&
-        errorBody !== null &&
-        "authError" in errorBody &&
-        typeof (errorBody as Record<string, unknown>).authError === "object"
-      ) {
-        throw new ConvexError((errorBody as Record<string, unknown>).authError as Value);
+      if (errorBody.authError !== undefined) {
+        throw new ConvexError(errorBody.authError);
       }
-      throw new ProxyRequestError(
-        response.status,
-        (errorBody as Record<string, unknown>).error as string | undefined,
-      );
+      throw new ProxyRequestError(response.status, errorBody.error);
     }
     try {
-      return await response.json();
+      return parseProxyResponseBody(await response.json());
     } catch {
       throw new Error("Proxy response was not valid JSON");
     }
@@ -1469,7 +1463,7 @@ export function client<Api extends AuthApiRefs<boolean, boolean, boolean> = Auth
       setTokenAndMaybeWait,
     });
 
-  return {
+  const auth = {
     /** Restore persisted auth state for the current runtime. */
     initialize,
     /** SSR-safe URL param reader. */
@@ -1536,6 +1530,7 @@ export function client<Api extends AuthApiRefs<boolean, boolean, boolean> = Auth
       disposeStorageListener?.();
       subscribers.clear();
     },
-    ...(webauthnAdapter ? { webauthn: webauthnAdapter } : {}),
-  } as AuthClient<Api>;
+  } as AuthClient<Api> & { webauthn?: NonNullable<ClientAdapters["webauthn"]> };
+  if (webauthnAdapter !== undefined) auth.webauthn = webauthnAdapter;
+  return auth;
 }

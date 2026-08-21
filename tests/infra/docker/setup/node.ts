@@ -288,7 +288,7 @@ async function warmUpAnonymousSignIn(baseUrl: string, timeoutMs: number) {
     logger: false,
   });
   const deadline = Date.now() + timeoutMs;
-  let lastError: unknown = null;
+  let lastError: Error | null = null;
   while (Date.now() < deadline) {
     try {
       const result = (await convexClient.action(api.auth.signIn, {
@@ -301,14 +301,12 @@ async function warmUpAnonymousSignIn(baseUrl: string, timeoutMs: number) {
         `Anonymous sign-in warm-up returned unexpected kind: ${String(result.kind)}`,
       );
     } catch (error) {
-      lastError = error;
+      lastError = error instanceof Error ? error : new Error(String(error));
     }
     await delay(500);
   }
   throw new Error(
-    `Timed out warming up anonymous sign-in: ${
-      lastError instanceof Error ? lastError.message : String(lastError)
-    }`,
+    `Timed out warming up anonymous sign-in: ${lastError?.message ?? "unknown failure"}`,
   );
 }
 
