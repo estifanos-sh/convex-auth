@@ -26,9 +26,6 @@ import { ConvexError } from "convex/values";
 import { afterEach, expect, test, vi } from "vite-plus/test";
 
 const CONVEX_URL = "https://example.convex.cloud";
-type JwtClaim = boolean | number | string | null | JwtClaim[] | { [key: string]: JwtClaim };
-type JwtClaims = Record<string, JwtClaim>;
-type ProxyBody = { args?: { refreshToken?: boolean } };
 
 function createConvexMock(): any {
   const authRegistrations: Array<{
@@ -79,8 +76,8 @@ function createSyncStorage(seed: { jwt?: string; refresh?: string } = {}) {
 }
 
 /** Build an unsigned JWT string carrying `sub` (plus optional extra claims). */
-function makeJwt(sub: string, extra: JwtClaims = {}): string {
-  const b64url = (obj: JwtClaims) =>
+function makeJwt(sub: string, extra: Record<string, unknown> = {}): string {
+  const b64url = (obj: unknown) =>
     btoa(JSON.stringify(obj)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
   return `${b64url({ alg: "none", typ: "JWT" })}.${b64url({ sub, ...extra })}.sig`;
 }
@@ -156,8 +153,8 @@ test("signOut wins a race against an in-flight forced refresh (proxy)", async ()
   const refreshGate = new Promise<void>((resolve) => {
     releaseRefresh = resolve;
   });
-  const proxyFetch = vi.fn(async (body: ProxyBody) => {
-    if (body.args?.refreshToken) {
+  const proxyFetch = vi.fn(async (body: Record<string, unknown>) => {
+    if ((body.args as { refreshToken?: boolean } | undefined)?.refreshToken) {
       await refreshGate;
       return jsonResponse({
         kind: "signedIn",

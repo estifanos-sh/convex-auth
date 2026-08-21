@@ -19,7 +19,7 @@ import {
   type HttpRouter,
   httpActionGeneric,
 } from "convex/server";
-import type { GenericValidator, Infer, JSONValue } from "convex/values";
+import type { GenericValidator, Infer } from "convex/values";
 import { validate, ValidationError } from "convex-helpers/validators";
 
 import { registerCorsPreflight, withCors } from "./cors";
@@ -34,7 +34,7 @@ export type McpToolDef<V extends GenericValidator = GenericValidator, S extends 
   description: string;
   scope: S;
   args: V;
-  handler: (ctx: GenericActionCtx<GenericDataModel>, args: Infer<V>) => Promise<JSONValue>;
+  handler: (ctx: GenericActionCtx<GenericDataModel>, args: Infer<V>) => Promise<unknown>;
 };
 
 /** Runtime tool map (argument types erased) + the server identity for `initialize`. */
@@ -45,37 +45,16 @@ type McpServer = {
 };
 
 const PROTOCOL_VERSION = "2025-06-18";
-const MCP_METHODS = [
-  "initialize",
-  "notifications/initialized",
-  "ping",
-  "tools/list",
-  "tools/call",
-] as const;
-type McpMethod = (typeof MCP_METHODS)[number];
-
-type JsonObject = { [key: string]: JSONValue };
-type McpSchema =
-  | Record<never, never>
-  | { type: "string" | "number" | "integer" | "boolean" | "null" }
-  | { const: JSONValue }
-  | { type: "array"; items: McpSchema }
-  | { type: "object"; additionalProperties: McpSchema }
-  | { enum: JSONValue[] }
-  | { anyOf: McpSchema[] }
-  | { type: "object"; properties: Record<string, McpSchema>; required?: string[] };
-type McpSchemaProperties = Record<string, McpSchema>;
-
 /**
  * JSON Schema for each Convex validator `kind`, keyed by `kind` rather than a
  * `switch`: the mapped type forces every `kind` to be handled and narrows each
  * entry's `validator` to its exact variant (`.fields`, `.element`, `.members`).
  */
-type ValidatorSchemaByKind = {
-  [K in GenericValidator["kind"]]: (validator: Extract<GenericValidator, { kind: K }>) => McpSchema;
-};
-
-const SCHEMA_BY_KIND = {
+const SCHEMA_BY_KIND: {
+  [K in GenericValidator["kind"]]: (
+    validator: Extract<GenericValidator, { kind: K }>,
+  ) => Record<string, unknown>;
+} = {
   id: () => ({ type: "string" }),
   string: () => ({ type: "string" }),
   bytes: () => ({ type: "string" }),
@@ -91,29 +70,30 @@ const SCHEMA_BY_KIND = {
     type: "object",
     additionalProperties: validatorToSchema(validator.value),
   }),
-  union: (validator): McpSchema => {
-    if (validator.members.every((member) => member.kind === "literal")) {
-      return {
-        enum: validator.members.map((member) => (member.kind === "literal" ? member.value : null)),
-      };
-    }
-    return { anyOf: validator.members.map(validatorToSchema) };
-  },
-  object: (validator): McpSchema => {
-    const properties: McpSchemaProperties = {};
+  union: (validator) =>
+    validator.members.every((member) => member.kind === "literal")
+      ? {
+          enum: validator.members.map((member) =>
+            member.kind === "literal" ? member.value : null,
+          ),
+        }
+      : { anyOf: validator.members.map(validatorToSchema) },
+  object: (validator) => {
+    const properties: Record<string, unknown> = {};
     const required: string[] = [];
     for (const [key, field] of Object.entries(validator.fields)) {
       properties[key] = validatorToSchema(field);
       if (field.isOptional === "required") required.push(key);
     }
-    if (required.length > 0) return { type: "object", properties, required };
-    return { type: "object", properties };
+    return { type: "object", properties, ...(required.length > 0 ? { required } : {}) };
   },
-} satisfies ValidatorSchemaByKind;
+};
 
 /** Derive the JSON Schema for a Convex validator, the MCP tool `inputSchema`. */
-function validatorToSchema(validator: GenericValidator): McpSchema {
-  const toSchema = SCHEMA_BY_KIND[validator.kind] as (v: GenericValidator) => McpSchema;
+function validatorToSchema(validator: GenericValidator): Record<string, unknown> {
+  const toSchema = SCHEMA_BY_KIND[validator.kind] as (
+    v: GenericValidator,
+  ) => Record<string, unknown>;
   return toSchema(validator);
 }
 
@@ -140,30 +120,14 @@ function headerIdPart(id: unknown): string {
   return typeof id === "string" || typeof id === "number" ? String(id) : "0";
 }
 
-function isJsonValue(value: unknown): value is JSONValue {
-  return (
-    value === null ||
-    typeof value === "boolean" ||
-    typeof value === "number" ||
-    typeof value === "string" ||
-    (Array.isArray(value) && value.every(isJsonValue)) ||
-    isJsonObject(value)
-  );
-}
-
-function isJsonObject(value: unknown): value is JsonObject {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    !Array.isArray(value) &&
-    Object.values(value).every(isJsonValue)
-  );
+function isJsonObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 type McpRequest = {
   id?: unknown;
   method?: string;
-  params?: JSONValue;
+  params?: unknown;
 };
 
 function parseMcpRequest(value: unknown): McpRequest | null {
@@ -172,16 +136,12 @@ function parseMcpRequest(value: unknown): McpRequest | null {
   return { id: value.id, method: value.method, params: value.params };
 }
 
-function isMcpMethod(value: string | undefined): value is McpMethod {
-  return value !== undefined && MCP_METHODS.some((method) => method === value);
-}
-
 type ToolCallParams = {
   name?: string;
-  arguments: JsonObject;
+  arguments: Record<string, unknown>;
 };
 
-function parseToolCallParams(value: JSONValue | undefined): ToolCallParams | null {
+function parseToolCallParams(value: unknown): ToolCallParams | null {
   if (value === undefined) return { arguments: {} };
   if (!isJsonObject(value) || (value.name !== undefined && typeof value.name !== "string")) {
     return null;
@@ -233,7 +193,7 @@ async function callTool(
   id: unknown,
   scopes: readonly string[],
   tools: Record<string, McpToolDef<any>>,
-  rawParams: JSONValue | undefined,
+  rawParams: unknown,
 ): Promise<Response> {
   const params = parseToolCallParams(rawParams);
   if (params === null) return rpcError(id, -32602, "Invalid tool parameters.");
@@ -288,7 +248,7 @@ async function handleMcp(
   const id = body.id ?? null;
   const sessionHeader = { "Mcp-Session-Id": `${PROTOCOL_VERSION}-${headerIdPart(id)}` };
 
-  const methods = {
+  const methods: Record<string, () => Response | Promise<Response>> = {
     initialize: () =>
       json(
         {
@@ -320,9 +280,9 @@ async function handleMcp(
         },
       }),
     "tools/call": () => callTool(ctx, id, scopes, server.tools, body.params),
-  } satisfies Record<McpMethod, () => Response | Promise<Response>>;
+  };
 
-  const handler = isMcpMethod(body.method) ? methods[body.method] : undefined;
+  const handler = body.method ? methods[body.method] : undefined;
   if (!handler) return rpcError(id, -32601, `Unknown MCP method: ${body.method ?? "(none)"}`);
   return handler();
 }

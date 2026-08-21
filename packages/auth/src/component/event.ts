@@ -5,12 +5,7 @@
  */
 
 import { paginator } from "convex-helpers/server/pagination";
-import {
-  paginationOptsValidator,
-  type DataModelFromSchemaDefinition,
-  type GenericDatabaseReader,
-  type IndexRange,
-} from "convex/server";
+import { paginationOptsValidator } from "convex/server";
 import { ConvexError, v, type Infer } from "convex/values";
 
 import { ErrorCode } from "../shared/codes";
@@ -29,17 +24,6 @@ import schema from "./schema";
 type AuthEvent = Infer<typeof vAuthEvent>;
 type AuthEventTarget = Infer<typeof vAuthEventTarget>;
 type AuthEventWhere = Infer<typeof vAuthEventWhere>;
-type ComponentDataModel = DataModelFromSchemaDefinition<typeof schema>;
-type ProjectionTimeUpperRange = IndexRange & {
-  lt: (field: "occurredAt", value: number) => IndexRange;
-  lte: (field: "occurredAt", value: number) => IndexRange;
-};
-type ProjectionTimeRange = IndexRange & {
-  gt: (field: "occurredAt", value: number) => ProjectionTimeUpperRange;
-  gte: (field: "occurredAt", value: number) => ProjectionTimeUpperRange;
-  lt: (field: "occurredAt", value: number) => IndexRange;
-  lte: (field: "occurredAt", value: number) => IndexRange;
-};
 
 const MAX_EVENT_TARGETS = 64;
 
@@ -206,29 +190,17 @@ function upperBound(where: AuthEventWhere) {
   return null;
 }
 
-function applyTimeBounds(q: ProjectionTimeRange, where: AuthEventWhere): IndexRange {
+function applyTimeBounds(q: any, where: AuthEventWhere) {
   const lower = lowerBound(where);
   const upper = upperBound(where);
-  if (lower?.op === "gt") {
-    return upper?.op === "lt"
-      ? q.gt("occurredAt", lower.value).lt("occurredAt", upper.value)
-      : upper?.op === "lte"
-        ? q.gt("occurredAt", lower.value).lte("occurredAt", upper.value)
-        : q.gt("occurredAt", lower.value);
-  }
-  if (lower?.op === "gte") {
-    return upper?.op === "lt"
-      ? q.gte("occurredAt", lower.value).lt("occurredAt", upper.value)
-      : upper?.op === "lte"
-        ? q.gte("occurredAt", lower.value).lte("occurredAt", upper.value)
-        : q.gte("occurredAt", lower.value);
-  }
-  if (upper?.op === "lt") return q.lt("occurredAt", upper.value);
-  if (upper?.op === "lte") return q.lte("occurredAt", upper.value);
+  if (lower?.op === "gt") q = q.gt("occurredAt", lower.value);
+  if (lower?.op === "gte") q = q.gte("occurredAt", lower.value);
+  if (upper?.op === "lt") q = q.lt("occurredAt", upper.value);
+  if (upper?.op === "lte") q = q.lte("occurredAt", upper.value);
   return q;
 }
 
-function projectionQuery(ctx: GenericDatabaseReader<ComponentDataModel>, where: AuthEventWhere) {
+function projectionQuery(ctx: any, where: AuthEventWhere) {
   const selectors = [
     where.target !== undefined ? "target" : null,
     where.kind !== undefined ? "kind" : null,

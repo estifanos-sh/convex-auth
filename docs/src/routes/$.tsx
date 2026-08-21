@@ -1,5 +1,5 @@
 import { createFileRoute, notFound } from "@tanstack/solid-router";
-import { documentationBySlug, documentationLoaderBySlug } from "../generated/docs";
+import { documentationBySlug, documentationLoaders } from "../generated/docs";
 import { DocsShell } from "../components/shell";
 
 export const Route = createFileRoute("/$")({
@@ -8,7 +8,7 @@ export const Route = createFileRoute("/$")({
     if (!documentationBySlug.has(slug)) throw notFound();
   },
   loader: async ({ params }) => {
-    const load = documentationLoaderBySlug.get(pageSlug(params._splat));
+    const load = documentationLoaders[pageSlug(params._splat)];
     if (!load) throw notFound();
     return load();
   },

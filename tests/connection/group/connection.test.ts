@@ -35,17 +35,6 @@ import { afterEach, expect, test, vi } from "vite-plus/test";
 
 import { convexTest } from "../../convex/setup";
 
-type ScimConnectionConfig = { connectionId?: string; hasToken?: boolean };
-type WebhookEndpoint = { connectionId?: string; endpointId?: string; url?: string };
-type PublicServiceProvider = {
-  entityId?: string;
-  signingCert?: string;
-  privateKey?: string;
-  privateKeyPass?: string;
-  encPrivateKey?: string;
-  encPrivateKeyPass?: string;
-};
-
 const GROUP_CONNECTION_SITE_URL = "https://convex-auth.example.com";
 const GROUP_CONNECTION_AUTH_SITE_URL = `${GROUP_CONNECTION_SITE_URL}/auth`;
 
@@ -562,10 +551,10 @@ test("group connection component stores scim config, audit events, and webhook d
 
   const scimGet = (await t.run(async (ctx) => {
     return await auth.connection.scim.get(ctx, { connectionId });
-  })) as ScimConnectionConfig | null;
+  })) as Record<string, unknown> | null;
   const webhookList = (await t.run(async (ctx) => {
     return await auth.connection.webhook.endpoint.list(ctx, { connectionId });
-  })) as WebhookEndpoint[];
+  })) as Array<Record<string, unknown>>;
 
   expect(scimConfigId).toBeDefined();
   expect(identityId).toBeDefined();
@@ -1185,7 +1174,7 @@ test("public group connection SAML config omits the service-provider private key
     },
   });
 
-  const sp = config.serviceProvider as PublicServiceProvider | undefined;
+  const sp = config.serviceProvider as Record<string, unknown> | undefined;
   expect(sp?.entityId).toBe("https://sp.example.com");
   expect(sp?.signingCert).toBe("PUBLIC-CERT");
   expect(sp?.privateKey).toBeUndefined();

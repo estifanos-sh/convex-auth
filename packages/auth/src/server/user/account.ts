@@ -33,12 +33,6 @@ type UserData = AuthProfile & {
   phoneVerificationTime?: number;
 };
 
-type AccountPatchData = {
-  extend?: AuthAccountExtend;
-  emailVerified?: string;
-  phoneVerified?: string;
-};
-
 function mergeExtend(
   existing: AuthAccountExtend | undefined,
   incoming: AuthAccountExtend | undefined,
@@ -85,7 +79,7 @@ function isUserFieldMissing(value: unknown) {
 }
 
 function buildUserPatchData(args: {
-  currentUser: object;
+  currentUser: Record<string, unknown>;
   nextUser: UserData;
   mode: "never" | "missing" | "always";
 }) {
@@ -100,10 +94,7 @@ function buildUserPatchData(args: {
       if (value === undefined) {
         return false;
       }
-      const currentField = Object.entries(args.currentUser).find(
-        ([currentKey]) => currentKey === key,
-      );
-      return isUserFieldMissing(currentField?.[1]);
+      return isUserFieldMissing(args.currentUser[key]);
     }),
   );
 }
@@ -396,9 +387,11 @@ async function defaultCreateOrUpdateUser(
     }
   }
 
-  const userData: UserData = { ...profile };
-  if (emailVerified) userData.emailVerificationTime = Date.now();
-  if (phoneVerified) userData.phoneVerificationTime = Date.now();
+  const userData: UserData = {
+    ...(emailVerified ? { emailVerificationTime: Date.now() } : null),
+    ...(phoneVerified ? { phoneVerificationTime: Date.now() } : null),
+    ...profile,
+  };
   const existingOrLinkedUserId = userId;
 
   if (userId !== null) {
@@ -511,21 +504,18 @@ async function createOrUpdateAccount(
     "existingAccount" in account
       ? mergeExtend(account.existingAccount.extend, args.accountExtend)
       : args.accountExtend;
-  let accountId: GenericId<"Account">;
-  let linkedProviderAccountId: string | undefined;
-  if ("existingAccount" in account) {
-    accountId = account.existingAccount._id;
-  } else {
-    linkedProviderAccountId = account.providerAccountId;
-    accountId = (await db.accounts.create({
-      userId,
-      provider: args.provider.id,
-      providerAccountId: linkedProviderAccountId,
-      secret: account.secret,
-      extend: mergedExtend,
-    })) as GenericId<"Account">;
-  }
-  if (linkedProviderAccountId !== undefined) {
+  const isNewAccount = !("existingAccount" in account);
+  const accountId =
+    "existingAccount" in account
+      ? account.existingAccount._id
+      : ((await db.accounts.create({
+          userId,
+          provider: args.provider.id,
+          providerAccountId: account.providerAccountId,
+          secret: account.secret,
+          extend: mergedExtend,
+        })) as GenericId<"Account">);
+  if (isNewAccount) {
     await queueAuthEvent(ctx, config, {
       kind: "account.linked",
       actor: { type: "user", id: userId },
@@ -534,14 +524,14 @@ async function createOrUpdateAccount(
       outcome: "success",
       data: {
         provider: args.provider.id,
-        providerAccountId: linkedProviderAccountId,
+        providerAccountId: (account as { providerAccountId: string }).providerAccountId,
       },
     });
   }
   if ("existingAccount" in account && account.existingAccount.userId !== userId) {
     await db.accounts.update(accountId, { userId });
   }
-  const accountPatchData: AccountPatchData = {};
+  const accountPatchData: Record<string, unknown> = {};
   if (mergedExtend) {
     accountPatchData.extend = mergedExtend;
   }

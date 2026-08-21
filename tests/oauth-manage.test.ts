@@ -7,18 +7,6 @@ import { createClientManagementHandler } from "../packages/auth/src/server/oauth
 const ALLOWED = ["workspace:read", "workspace:write"];
 const ctx = {} as GenericActionCtx<GenericDataModel>;
 
-type ManagementRequest = Record<string, boolean | number | string | string[]>;
-type ManagementResponse = {
-  client_id?: string;
-  client_name?: string;
-  client_secret?: string;
-  redirect_uris?: string[];
-  token_endpoint_auth_method?: string;
-  scope?: string;
-  registration_access_token?: string;
-  registration_client_uri?: string;
-};
-
 function clientDoc(overrides: Partial<OAuthClientDoc> = {}): OAuthClientDoc {
   return {
     _id: "doc_1" as OAuthClientDoc["_id"],
@@ -60,11 +48,7 @@ function makeHandler(opts?: {
   });
 }
 
-function req(
-  clientId: string,
-  method: string,
-  opts?: { token?: string; body?: ManagementRequest },
-): Request {
+function req(clientId: string, method: string, opts?: { token?: string; body?: unknown }): Request {
   const headers: Record<string, string> = {};
   if (opts?.token !== undefined) headers.authorization = `Bearer ${opts.token}`;
   if (opts?.body !== undefined) headers["content-type"] = "application/json";
@@ -78,7 +62,7 @@ function req(
 test("GET returns the client metadata without re-disclosing secrets", async () => {
   const res = await makeHandler()(ctx, req("oc_1", "GET", { token: "reg_good" }));
   expect(res.status).toBe(200);
-  const json = (await res.json()) as ManagementResponse;
+  const json = (await res.json()) as Record<string, unknown>;
   expect(json.client_id).toBe("oc_1");
   expect(json.token_endpoint_auth_method).toBe("client_secret_post");
   expect(json.scope).toBe("workspace:read");
@@ -117,7 +101,7 @@ test("PUT replaces metadata and clamps scopes to the allowed set", async () => {
     }),
   );
   expect(res.status).toBe(200);
-  const json = (await res.json()) as ManagementResponse;
+  const json = (await res.json()) as Record<string, unknown>;
   expect(json.client_name).toBe("renamed");
   expect(json.redirect_uris).toEqual(["https://app.example.com/next"]);
   expect(json.scope).toBe("workspace:read workspace:write");

@@ -96,24 +96,18 @@ function requireConvexUrl() {
   return url;
 }
 
-function isRecord(value: unknown): value is object {
+function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
 function isDeviceCodeResult(value: unknown): value is DeviceCodeResult {
   return (
     isRecord(value) &&
-    "deviceCode" in value &&
     typeof value.deviceCode === "string" &&
-    "userCode" in value &&
     typeof value.userCode === "string" &&
-    "verificationUri" in value &&
     typeof value.verificationUri === "string" &&
-    "verificationUriComplete" in value &&
     typeof value.verificationUriComplete === "string" &&
-    "expiresIn" in value &&
     typeof value.expiresIn === "number" &&
-    "interval" in value &&
     typeof value.interval === "number"
   );
 }
@@ -121,7 +115,6 @@ function isDeviceCodeResult(value: unknown): value is DeviceCodeResult {
 function isStoredSession(value: unknown): value is SessionShape {
   return (
     isRecord(value) &&
-    "token" in value &&
     typeof value.token === "string" &&
     (!("refreshToken" in value) || typeof value.refreshToken === "string")
   );
@@ -130,9 +123,7 @@ function isStoredSession(value: unknown): value is SessionShape {
 function isSignedInResult(value: unknown): value is StoredSessionSignInResult {
   return (
     isRecord(value) &&
-    "kind" in value &&
     value.kind === "signedIn" &&
-    "session" in value &&
     (value.session === null || isStoredSession(value.session))
   );
 }
@@ -227,9 +218,7 @@ async function doAuthLogin() {
     } catch (error) {
       if (
         isRecord(error) &&
-        "data" in error &&
         isRecord(error.data) &&
-        "code" in error.data &&
         (error.data.code === "DEVICE_AUTHORIZATION_PENDING" ||
           error.data.code === "DEVICE_SLOW_DOWN")
       ) {
@@ -288,19 +277,12 @@ async function doProjectsCreate() {
       onCancel: () => cancelCli(),
     },
   );
-  interface ProjectInput {
-    groupId: string;
-    name: string;
-    identifier: string;
-    description?: string;
-  }
-  const input: ProjectInput = {
+  const result = await client.mutation(api.projects.create, {
     groupId: group.groupId,
     name: group.name,
     identifier: group.identifier,
-  };
-  if (group.description) input.description = group.description;
-  const result = await client.mutation(api.projects.create, input);
+    ...(group.description ? { description: group.description } : {}),
+  });
   p.log.success("Project created.");
   console.log(JSON.stringify(result, null, 2));
 }

@@ -16,21 +16,12 @@ import type { MutationCtx } from "../_generated/server";
 import { mutation, query } from "../functions";
 import { recordSignInLimit, resetSignInLimit } from "../limits";
 import { vTotpFactorDoc, vUserDoc } from "../model";
-import { createSessionRows, type SessionRows } from "../session";
+import { createSessionRows } from "../session";
 
 const TOTP_LIST_BATCH = 32;
 const TOTP_VERIFIER_TTL_MS = 15 * 60 * 1000;
 
 type TotpIntent = "enrollment" | "challenge";
-type AcceptedTotpSignIn = Omit<SessionRows, "refreshTokenId"> & {
-  status: "accepted";
-  factorId: Id<"TotpFactor">;
-  refreshTokenId: Id<"RefreshToken">;
-};
-type TotpFactorPatch = {
-  lastUsedAt: number;
-  verified?: boolean;
-};
 type TotpVerifier = {
   userId: string;
   purpose?: "totp.setup";
@@ -206,9 +197,10 @@ export const completeVerification = mutation({
 
     await ctx.db.delete("AuthVerifier", args.verifierId);
     await resetSignInLimit(ctx, resolved.userId);
-    const patch: TotpFactorPatch = { lastUsedAt: args.now };
-    if (args.intent === "enrollment") patch.verified = true;
-    await ctx.db.patch("TotpFactor", resolved.factor._id, patch);
+    await ctx.db.patch("TotpFactor", resolved.factor._id, {
+      ...(args.intent === "enrollment" ? { verified: true } : {}),
+      lastUsedAt: args.now,
+    });
     const created = await createSessionRows(ctx, {
       userId: resolved.userId,
       replaceSessionId: args.replaceSessionId,
@@ -218,17 +210,16 @@ export const completeVerification = mutation({
     if (created === null || created.refreshTokenId === undefined) {
       return { status: "rejected" as const };
     }
-    const result: AcceptedTotpSignIn = {
+    return {
       status: "accepted" as const,
       user: created.user,
       factorId: resolved.factor._id,
       sessionId: created.sessionId,
       refreshTokenId: created.refreshTokenId,
+      ...(created.replacedSessionId === undefined
+        ? {}
+        : { replacedSessionId: created.replacedSessionId }),
     };
-    if (created.replacedSessionId !== undefined) {
-      result.replacedSessionId = created.replacedSessionId;
-    }
-    return result;
   },
 });
 

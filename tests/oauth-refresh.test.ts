@@ -4,8 +4,6 @@ import { expect, test } from "vite-plus/test";
 
 import { convexTest } from "./convex/setup";
 
-type RefreshReuseData = { clientId?: string; userId?: string };
-
 async function makeUser(t: ReturnType<typeof convexTest>, email: string) {
   return await t.run(async (ctx) => {
     return await ctx.runMutation(components.auth.user.create, { data: { email } });
@@ -627,7 +625,7 @@ test("oauth.refresh.reuse_detected keeps clientId and userId through the project
   });
   const row = projection.page.find(
     (p: { kind: string }) => p.kind === "oauth.refresh.reuse_detected",
-  ) as { data?: RefreshReuseData } | undefined;
+  ) as { data?: Record<string, unknown> } | undefined;
   expect(row).toBeDefined();
   expect(row?.data).toMatchObject({ clientId: "oc_audit", userId });
 });

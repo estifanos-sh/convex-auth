@@ -59,32 +59,6 @@ export interface ValidatedClientMetadata {
   tokenEndpointAuthMethod: OAuthTokenEndpointAuthMethod;
 }
 
-export type OAuthClientMetadataInput = {
-  client_id?: unknown;
-  client_name?: unknown;
-  redirect_uris?: unknown;
-  scope?: unknown;
-  token_endpoint_auth_method?: unknown;
-};
-
-type OAuthClientMetadataBody = {
-  client_id: string;
-  client_name: string;
-  redirect_uris: string[];
-  grant_types: string[];
-  response_types: string[];
-  token_endpoint_auth_method: OAuthTokenEndpointAuthMethod;
-  scope: string;
-  registration_client_uri: string;
-};
-
-type OAuthRegistrationResponse = OAuthClientMetadataBody & {
-  client_id_issued_at: number;
-  client_secret?: string;
-  client_secret_expires_at?: number;
-  registration_access_token: string;
-};
-
 const AUTH_METHODS = ["client_secret_basic", "client_secret_post", "none"] as const;
 
 /**
@@ -97,7 +71,7 @@ const AUTH_METHODS = ["client_secret_basic", "client_secret_post", "none"] as co
  * read from the request.
  */
 export function validateClientMetadata(
-  body: OAuthClientMetadataInput,
+  body: Record<string, unknown>,
   allowedScopes: string[],
 ): { ok: true; value: ValidatedClientMetadata } | { ok: false; response: Response } {
   const redirectUris = Array.isArray(body.redirect_uris)
@@ -155,9 +129,9 @@ export function validateClientMetadata(
 }
 
 /** Parse an RFC 7591/7592 request body before validating its supported fields. */
-export function parseClientMetadata(value: unknown): OAuthClientMetadataInput | null {
+export function parseClientMetadata(value: unknown): Record<string, unknown> | null {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
-  return value as OAuthClientMetadataInput;
+  return value as Record<string, unknown>;
 }
 
 /**
@@ -173,7 +147,7 @@ export function clientMetadataBody(opts: {
   scopes: string[];
   tokenEndpointAuthMethod: OAuthTokenEndpointAuthMethod;
   registrationClientUri: string;
-}): OAuthClientMetadataBody {
+}): Record<string, unknown> {
   return {
     client_id: opts.clientId,
     client_name: opts.name,
@@ -203,7 +177,7 @@ export function createRegisterHandler(deps: OAuthRegisterDeps) {
     ctx: GenericActionCtx<GenericDataModel>,
     request: Request,
   ): Promise<Response> {
-    let body: OAuthClientMetadataInput | null;
+    let body: Record<string, unknown> | null;
     try {
       body = parseClientMetadata(await request.json());
     } catch {
@@ -234,18 +208,19 @@ export function createRegisterHandler(deps: OAuthRegisterDeps) {
       registrationClientUri: deps.registrationClientUri(clientId),
     });
 
-    const response: OAuthRegistrationResponse = {
-      ...metadata,
-      client_id_issued_at: Math.floor(Date.now() / 1000),
-      registration_access_token: registrationAccessToken,
-    };
-    if (clientSecret !== undefined) {
-      response.client_secret = clientSecret;
-      response.client_secret_expires_at = 0;
-    }
-    return new Response(JSON.stringify(response), {
-      status: 201,
-      headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
-    });
+    return new Response(
+      JSON.stringify({
+        ...metadata,
+        client_id_issued_at: Math.floor(Date.now() / 1000),
+        ...(clientSecret === undefined
+          ? {}
+          : { client_secret: clientSecret, client_secret_expires_at: 0 }),
+        registration_access_token: registrationAccessToken,
+      }),
+      {
+        status: 201,
+        headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
+      },
+    );
   };
 }

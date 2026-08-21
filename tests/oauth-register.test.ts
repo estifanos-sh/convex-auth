@@ -7,18 +7,6 @@ import { createRegisterHandler } from "../packages/auth/src/server/oauth/registe
 const ALLOWED = ["workspace:read", "workspace:write"];
 const ctx = {} as GenericActionCtx<GenericDataModel>;
 
-type RegistrationRequest = Record<string, boolean | number | string | string[]>;
-type RegistrationResponse = {
-  client_id?: string;
-  client_secret?: string;
-  client_secret_expires_at?: number;
-  token_endpoint_auth_method?: string;
-  scope?: string;
-  registration_access_token?: string;
-  registration_client_uri?: string;
-  error?: string;
-};
-
 type CreateOpts = {
   name: string;
   redirectUris: string[];
@@ -31,7 +19,7 @@ function registrationClientUri(clientId: string): string {
   return `https://app.convex.site/auth/oauth2/register/${clientId}`;
 }
 
-function request(body: RegistrationRequest): Request {
+function request(body: unknown): Request {
   return new Request("https://app.convex.site/auth/oauth2/register", {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -65,7 +53,7 @@ test("DCR registers a confidential client and clamps scopes to the allowed set",
   );
 
   expect(res.status).toBe(201);
-  const json = (await res.json()) as RegistrationResponse;
+  const json = (await res.json()) as Record<string, unknown>;
   expect(json.client_id).toBe("oc_test");
   expect(json.client_secret).toBe("cs_test");
   expect(json.client_secret_expires_at).toBe(0);
@@ -102,7 +90,7 @@ test("DCR registers a public client (none): no secret, PKCE-only, still gets a r
   );
 
   expect(res.status).toBe(201);
-  const json = (await res.json()) as RegistrationResponse;
+  const json = (await res.json()) as Record<string, unknown>;
   expect(json.client_id).toBe("oc_pub");
   expect(json.client_secret).toBeUndefined();
   expect(json.client_secret_expires_at).toBeUndefined();
@@ -171,6 +159,6 @@ test("DCR rejects an unsupported token_endpoint_auth_method", async () => {
     }),
   );
   expect(res.status).toBe(400);
-  const json = (await res.json()) as RegistrationResponse;
+  const json = (await res.json()) as Record<string, unknown>;
   expect(json.error).toBe("invalid_client_metadata");
 });

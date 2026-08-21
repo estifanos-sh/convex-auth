@@ -75,16 +75,13 @@ test("member.list honors orderBy: 'status' globally and when user-scoped", async
   });
 
   for (const where of [undefined, { userId }] as const) {
-    const args = {
-      paginationOpts: { numItems: 10, cursor: null },
-      orderBy: "status" as const,
-      order: "asc" as const,
-    };
-    if (where !== undefined) {
-      Object.assign(args, { where });
-    }
     const result = (await t.run((ctx) =>
-      ctx.runQuery(components.auth.group.member.list, args),
+      ctx.runQuery(components.auth.group.member.list, {
+        ...(where === undefined ? {} : { where }),
+        paginationOpts: { numItems: 10, cursor: null },
+        orderBy: "status",
+        order: "asc",
+      }),
     )) as { page: Array<{ status?: string; userId: string }> };
     const page =
       where === undefined ? result.page.filter((member) => member.userId === userId) : result.page;

@@ -9,26 +9,6 @@ export type ProxyErrorBody = {
   authError?: Value;
 };
 
-function isConvexValue(value: unknown): value is Value {
-  if (
-    value === null ||
-    typeof value === "string" ||
-    typeof value === "number" ||
-    typeof value === "boolean" ||
-    typeof value === "bigint" ||
-    value instanceof ArrayBuffer
-  ) {
-    return true;
-  }
-  if (Array.isArray(value)) return value.every(isConvexValue);
-  if (typeof value !== "object" || value === null) return false;
-  const prototype = Object.getPrototypeOf(value);
-  return (
-    (prototype === Object.prototype || prototype === null) &&
-    Object.values(value).every(isConvexValue)
-  );
-}
-
 /**
  * Error codes that mean a forced refresh was definitively rejected — the
  * presented refresh credential is invalid, so the session must be signed out
@@ -108,14 +88,11 @@ export function parseProxyErrorBody(value: unknown): ProxyErrorBody {
   const obj = value as { error?: unknown; authError?: unknown };
   return {
     error: typeof obj.error === "string" ? obj.error : undefined,
-    authError: isConvexValue(obj.authError) ? obj.authError : undefined,
+    authError: obj.authError as Value | undefined,
   };
 }
 
 /** @internal */
 export function parseProxyResponseBody(value: unknown): Value {
-  if (!isConvexValue(value)) {
-    throw new Error("Proxy response contained an unsupported Convex value");
-  }
-  return value;
+  return value as Value;
 }

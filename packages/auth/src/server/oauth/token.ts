@@ -3,32 +3,20 @@ import { decodeBase64, encodeBase64urlNoPadding } from "@oslojs/encoding";
 import type { GenericActionCtx, GenericDataModel } from "convex/server";
 
 import { sha256 as sha256Hex } from "../random";
-import type { EmitAuthEventInput, emitAuthEvent } from "../events";
+import type { EmitAuthEventInput } from "../events";
 import { OAUTH_ACCESS_TOKEN_DURATION_S, generateOAuthToken } from "../tokens";
 import type { OAuthClientDoc } from "./client";
-import type { OAuthCodeDomain, OAuthCodeRecord } from "./code";
+import type { OAuthCodeRecord } from "./code";
 import { checkOAuthGrant, type OAuthGrantDenial } from "./grant";
-import type { OAuthRefreshDomain } from "./refresh";
+import type { OAuthRefreshGrant } from "./refresh";
 
 export type { OAuthCodeRecord };
 
 const utf8Encoder = new TextEncoder();
 const utf8Decoder = new TextDecoder();
 
-type OAuthRefreshExchange = Awaited<ReturnType<OAuthRefreshDomain["exchange"]>>;
-type OAuthCodeRefresh = Parameters<OAuthCodeDomain["accept"]>[1]["refresh"];
-type OAuthTokenEventReceipt = Awaited<ReturnType<typeof emitAuthEvent>>;
-
 /** A rotated refresh token plus the {@link OAuthRefreshGrant} it carries. */
-export type OAuthRefreshRotation = Exclude<OAuthRefreshExchange, { scopeExceeded: true } | null>;
-
-type OAuthTokenResponse = {
-  access_token: string;
-  token_type: "Bearer";
-  expires_in: typeof OAUTH_ACCESS_TOKEN_DURATION_S;
-  scope: string;
-  refresh_token?: string;
-};
+export type OAuthRefreshRotation = { refreshToken: string; expiresAt: number } & OAuthRefreshGrant;
 
 /** Dependencies injected by the runtime into the token handler. */
 export interface OAuthTokenDeps {
@@ -59,14 +47,14 @@ export interface OAuthTokenDeps {
     clientId: string,
     redirectUri: string,
     codeChallenge: string,
-    refresh?: OAuthCodeRefresh,
+    refresh?: { tokenHash: string; expiresAt: number },
   ) => Promise<OAuthCodeRecord | null>;
   /**
    * Generate a refresh secret + lookup hash + expiry without persisting it, so
    * the token exchange can hand `{ tokenHash, expiresAt }` to `acceptCode` and
    * have the refresh grant/token minted in the code-consumption transaction.
    */
-  mintRefresh: OAuthRefreshDomain["mint"];
+  mintRefresh: () => Promise<{ refreshToken: string; tokenHash: string; expiresAt: number }>;
   /**
    * Rotate a presented refresh token; `null` if invalid/expired/replayed, or
    * `{ scopeExceeded: true }` (without rotating) if `requestedScopes` is broader
@@ -79,7 +67,7 @@ export interface OAuthTokenDeps {
   emitEvent?: <K extends EmitAuthEventInput["kind"]>(
     ctx: GenericActionCtx<GenericDataModel>,
     event: EmitAuthEventInput<K>,
-  ) => Promise<OAuthTokenEventReceipt>;
+  ) => Promise<unknown>;
 }
 
 /**
@@ -89,12 +77,12 @@ export interface OAuthTokenDeps {
  * a supported auth method).
  */
 function jsonError(status: number, error: string, description: string): Response {
-  const headers = new Headers({
+  const headers: Record<string, string> = {
     "Content-Type": "application/json",
     "Cache-Control": "no-store",
-  });
+  };
   if (status === 401 && error === "invalid_client") {
-    headers.set("WWW-Authenticate", 'Basic realm="token"');
+    headers["WWW-Authenticate"] = 'Basic realm="token"';
   }
   return new Response(JSON.stringify({ error, error_description: description }), {
     status,
@@ -102,7 +90,7 @@ function jsonError(status: number, error: string, description: string): Response
   });
 }
 
-function jsonOk(body: OAuthTokenResponse): Response {
+function jsonOk(body: Record<string, unknown>): Response {
   return new Response(JSON.stringify(body), {
     status: 200,
     headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
@@ -114,14 +102,13 @@ function tokenResponse(args: {
   scopes: string[];
   refreshToken?: string;
 }): Response {
-  const body: OAuthTokenResponse = {
+  return jsonOk({
     access_token: args.accessToken,
     token_type: "Bearer",
     expires_in: OAUTH_ACCESS_TOKEN_DURATION_S,
     scope: args.scopes.join(" "),
-  };
-  if (args.refreshToken !== undefined) body.refresh_token = args.refreshToken;
-  return jsonOk(body);
+    ...(args.refreshToken === undefined ? {} : { refresh_token: args.refreshToken }),
+  });
 }
 
 /**
@@ -412,11 +399,11 @@ async function handleRefreshToken(
 }
 
 /** Client-credentials grant denial → its RFC 6749 token-error response. */
-const CLIENT_CREDENTIALS_DENIAL = {
+const CLIENT_CREDENTIALS_DENIAL: Partial<Record<OAuthGrantDenial["reason"], () => Response>> = {
   grant_type_not_allowed: () =>
     jsonError(400, "unauthorized_client", "Grant type not allowed for this client."),
   scope_not_allowed: () => jsonError(400, "invalid_scope", "Scope not permitted."),
-} as const satisfies Partial<Record<OAuthGrantDenial["reason"], () => Response>>;
+};
 
 async function handleClientCredentials(
   ctx: GenericActionCtx<GenericDataModel>,
@@ -437,13 +424,8 @@ async function handleClientCredentials(
   const requestedScopes = scope ? scope.split(" ").filter(Boolean) : [];
   const check = checkOAuthGrant({ client, grantType: "client_credentials", requestedScopes });
   if (!check.ok) {
-    if (check.denial.reason === "grant_type_not_allowed") {
-      return CLIENT_CREDENTIALS_DENIAL.grant_type_not_allowed();
-    }
-    if (check.denial.reason === "scope_not_allowed") {
-      return CLIENT_CREDENTIALS_DENIAL.scope_not_allowed();
-    }
-    return jsonError(401, "invalid_client", "Client authentication failed.");
+    const respond = CLIENT_CREDENTIALS_DENIAL[check.denial.reason];
+    return respond ? respond() : jsonError(401, "invalid_client", "Client authentication failed.");
   }
   const effectiveScopes = check.scopes;
 
@@ -483,25 +465,18 @@ async function handleClientCredentials(
  * @see https://www.rfc-editor.org/rfc/rfc7636
  * @internal
  */
-const GRANT_TYPES = ["authorization_code", "refresh_token", "client_credentials"] as const;
-type OAuthGrantType = (typeof GRANT_TYPES)[number];
-
-function isOAuthGrantType(value: string): value is OAuthGrantType {
-  return GRANT_TYPES.includes(value as OAuthGrantType);
-}
-
-const GRANT_HANDLERS = {
-  authorization_code: handleAuthorizationCode,
-  refresh_token: handleRefreshToken,
-  client_credentials: handleClientCredentials,
-} satisfies Record<
-  OAuthGrantType,
+const GRANT_HANDLERS: Record<
+  string,
   (
     ctx: GenericActionCtx<GenericDataModel>,
     params: URLSearchParams,
     deps: OAuthTokenDeps,
   ) => Promise<Response>
->;
+> = {
+  authorization_code: handleAuthorizationCode,
+  refresh_token: handleRefreshToken,
+  client_credentials: handleClientCredentials,
+};
 
 export function createTokenHandler(deps: OAuthTokenDeps) {
   return async (ctx: GenericActionCtx<GenericDataModel>, request: Request): Promise<Response> => {
@@ -512,8 +487,7 @@ export function createTokenHandler(deps: OAuthTokenDeps) {
     applyBasicAuthCredentials(request, params);
 
     const grantType = params.get("grant_type");
-    const handle =
-      grantType !== null && isOAuthGrantType(grantType) ? GRANT_HANDLERS[grantType] : undefined;
+    const handle = grantType === null ? undefined : GRANT_HANDLERS[grantType];
     return handle
       ? handle(ctx, params, deps)
       : jsonError(400, "unsupported_grant_type", "Unsupported grant_type.");

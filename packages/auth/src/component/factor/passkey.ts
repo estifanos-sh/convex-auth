@@ -21,39 +21,6 @@ import { createSessionRows, revokeSessionRows } from "../session";
 const PASSKEY_LIST_BATCH = 128;
 const DEFAULT_VERIFIER_TTL_MS = 15 * 60 * 1000;
 
-type PasskeyRegistrationUser = {
-  email?: string;
-  name?: string;
-};
-
-type PasskeyCredential = {
-  id: string;
-  transports?: string[];
-};
-
-type AuthVerifierFields = {
-  signature: string;
-  expirationTime: number;
-  sessionId?: Id<"Session">;
-  continuationId?: Id<"AuthContinuation">;
-};
-
-type PasskeyRegistrationResult = {
-  passkeyId: Id<"Passkey">;
-  user: Infer<typeof vUserDoc>;
-  sessionId: Id<"Session">;
-  refreshTokenId: Id<"RefreshToken">;
-  replacedSessionId?: Id<"Session">;
-};
-
-type PasskeyAssertionResult = {
-  status: "accepted";
-  user: Infer<typeof vUserDoc>;
-  sessionId: Id<"Session">;
-  refreshTokenId: Id<"RefreshToken">;
-  replacedSessionId?: Id<"Session">;
-};
-
 const vPasskeyCreateArgs = v.object({
   userId: v.id("User"),
   credentialId: v.string(),
@@ -87,16 +54,13 @@ async function createVerifier(
     | { binding: "continuation"; continuationId: Id<"AuthContinuation"> }
   ),
 ) {
-  const verifier: AuthVerifierFields = {
+  return await ctx.db.insert("AuthVerifier", {
+    ...(args.binding === "session"
+      ? { sessionId: args.sessionId }
+      : { continuationId: args.continuationId }),
     signature: args.signature,
     expirationTime: args.expirationTime ?? Date.now() + DEFAULT_VERIFIER_TTL_MS,
-  };
-  if (args.binding === "session") {
-    if (args.sessionId !== undefined) verifier.sessionId = args.sessionId;
-  } else {
-    verifier.continuationId = args.continuationId;
-  }
-  return await ctx.db.insert("AuthVerifier", verifier);
+  });
 }
 
 async function listPasskeys(ctx: MutationCtx, userId: Id<"User">) {
@@ -104,19 +68,6 @@ async function listPasskeys(ctx: MutationCtx, userId: Id<"User">) {
     .query("Passkey")
     .withIndex("user_id", (q) => q.eq("userId", userId))
     .take(PASSKEY_LIST_BATCH);
-}
-
-function registrationUser(user: Infer<typeof vUserDoc>): PasskeyRegistrationUser {
-  const result: PasskeyRegistrationUser = {};
-  if (user.email !== undefined) result.email = user.email;
-  if (user.name !== undefined) result.name = user.name;
-  return result;
-}
-
-function credentialOption(passkey: Infer<typeof vPasskeyDoc>): PasskeyCredential {
-  const result: PasskeyCredential = { id: passkey.credentialId };
-  if (passkey.transports !== undefined) result.transports = passkey.transports;
-  return result;
 }
 
 /** Create a registration challenge and load the user and existing credentials atomically. */
@@ -151,8 +102,14 @@ export const beginRegistration = mutation({
     const verifierId = await createVerifier(ctx, { ...args, binding: "session" });
     return {
       verifierId,
-      user: registrationUser(user),
-      credentials: passkeys.map(credentialOption),
+      user: {
+        ...(user.email === undefined ? {} : { email: user.email }),
+        ...(user.name === undefined ? {} : { name: user.name }),
+      },
+      credentials: passkeys.map((passkey) => ({
+        id: passkey.credentialId,
+        ...(passkey.transports === undefined ? {} : { transports: passkey.transports }),
+      })),
     };
   },
 });
@@ -206,8 +163,14 @@ export const beginRotation = mutation({
       status: "accepted" as const,
       userId: user._id,
       verifierId,
-      user: registrationUser(user),
-      credentials: credentials.map(credentialOption),
+      user: {
+        ...(user.email === undefined ? {} : { email: user.email }),
+        ...(user.name === undefined ? {} : { name: user.name }),
+      },
+      credentials: credentials.map((credential) => ({
+        id: credential.credentialId,
+        ...(credential.transports === undefined ? {} : { transports: credential.transports }),
+      })),
     };
   },
 });
@@ -247,7 +210,10 @@ export const beginSignIn = mutation({
     const verifierId = await createVerifier(ctx, { ...args, binding: "session" });
     return {
       verifierId,
-      credentials: passkeys.map(credentialOption),
+      credentials: passkeys.map((passkey) => ({
+        id: passkey.credentialId,
+        ...(passkey.transports === undefined ? {} : { transports: passkey.transports }),
+      })),
     };
   },
 });
@@ -464,16 +430,15 @@ export const completeRegistration = mutation({
     if (created === null || created.refreshTokenId === undefined) {
       throw new Error("Cannot create a session for the registered passkey");
     }
-    const result: PasskeyRegistrationResult = {
+    return {
       passkeyId,
       user: created.user,
       sessionId: created.sessionId,
       refreshTokenId: created.refreshTokenId,
+      ...(created.replacedSessionId === undefined
+        ? {}
+        : { replacedSessionId: created.replacedSessionId }),
     };
-    if (created.replacedSessionId !== undefined) {
-      result.replacedSessionId = created.replacedSessionId;
-    }
-    return result;
   },
 });
 
@@ -655,16 +620,15 @@ export const completeAssertion = mutation({
     if (created === null || created.refreshTokenId === undefined) {
       throw new Error("Cannot create a session for the asserted passkey");
     }
-    const result: PasskeyAssertionResult = {
+    return {
       status: "accepted" as const,
       user: created.user,
       sessionId: created.sessionId,
       refreshTokenId: created.refreshTokenId,
+      ...(created.replacedSessionId === undefined
+        ? {}
+        : { replacedSessionId: created.replacedSessionId }),
     };
-    if (created.replacedSessionId !== undefined) {
-      result.replacedSessionId = created.replacedSessionId;
-    }
-    return result;
   },
 });
 

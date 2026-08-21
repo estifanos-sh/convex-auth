@@ -94,17 +94,16 @@ type AuthEventProjection = {
   subjectId?: string;
 };
 
-type JwtPayload = { sub?: string };
-type ConnectionSignInParams = { connectionId: string; protocol?: "oidc" | "saml" };
-
-function parseJwtPayload(token: string): JwtPayload {
+function parseJwtPayload(token: string): { sub?: string } {
   const payload = token.split(".")[1];
   if (!payload) {
     return {};
   }
   const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
   const padded = normalized.padEnd(normalized.length + ((4 - (normalized.length % 4)) % 4), "=");
-  return JSON.parse(Buffer.from(padded, "base64").toString("utf8")) as JwtPayload;
+  return JSON.parse(Buffer.from(padded, "base64").toString("utf8")) as {
+    sub?: string;
+  };
 }
 
 function parseUserIdFromToken(token: string) {
@@ -161,13 +160,9 @@ async function startConnectionSignIn(
   connectionId: string,
   protocol?: "oidc" | "saml",
 ) {
-  const params: ConnectionSignInParams = { connectionId };
-  if (protocol !== undefined) {
-    params.protocol = protocol;
-  }
   const ssoResult = (await convexClient.action(api.auth.signIn, {
     provider: "connection",
-    params,
+    params: { connectionId, ...(protocol ? { protocol } : {}) },
   })) as ConvexConnectionStartResult;
   expect(ssoResult.kind).toBe("redirect");
   expect(ssoResult.redirect).toBeTruthy();
@@ -690,11 +685,10 @@ test("SCIM + SAML reuses provisioned userId", async () => {
           "Content-Type": "application/x-www-form-urlencoded",
           Cookie: cookieHeader(convexCookies) ?? "",
         },
-        body: buildFormBody(
-          postBinding.relayState
-            ? { SAMLResponse: postBinding.samlResponse, RelayState: postBinding.relayState }
-            : { SAMLResponse: postBinding.samlResponse },
-        ),
+        body: buildFormBody({
+          SAMLResponse: postBinding.samlResponse,
+          ...(postBinding.relayState ? { RelayState: postBinding.relayState } : {}),
+        }),
       },
     );
   } else {

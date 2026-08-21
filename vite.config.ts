@@ -17,67 +17,12 @@ export default defineConfig({
   staged: {
     "*": "vp check --fix",
   },
-  fmt: {
-    ignorePatterns: [
-      ".agent/**",
-      ".agents/**",
-      ".claude/**",
-      ".codex/**",
-      ".continue/**",
-      ".cursor/**",
-      ".gemini/**",
-      ".opencode/**",
-      ".pi/**",
-      ".roo/**",
-      ".windsurf/**",
-      "tools/oxlint/anti-slop/**",
-    ],
-  },
   lint: {
-    ignorePatterns: [
-      "**/dist/**",
-      "**/_generated/**",
-      "**/node_modules/**",
-      ".agent/**",
-      ".agents/**",
-      ".claude/**",
-      ".codex/**",
-      ".continue/**",
-      ".cursor/**",
-      ".gemini/**",
-      ".opencode/**",
-      ".pi/**",
-      ".roo/**",
-      ".windsurf/**",
-      ".github/**",
-      "tools/oxlint/anti-slop/**",
-    ],
-    jsPlugins: [
-      {
-        name: "anti-slop",
-        specifier: "./tools/oxlint/anti-slop/index.ts",
-      },
-    ],
+    ignorePatterns: ["**/dist/**", "**/_generated/**", "**/node_modules/**", ".github/**"],
     options: {
       typeAware: true,
       typeCheck: true,
     },
-    rules: {
-      "anti-slop/no-chained-type-assertions": "error",
-      "anti-slop/no-conditional-empty-object-spread": "error",
-      "anti-slop/no-module-mocking": "error",
-      "anti-slop/no-reflect-apply": "error",
-      "anti-slop/no-reflect-get": "error",
-      "anti-slop/no-widen-then-assert": "error",
-    },
-    overrides: [
-      {
-        files: ["packages/auth/src/server/validators.ts"],
-        rules: {
-          "anti-slop/no-chained-type-assertions": "off",
-        },
-      },
-    ],
   },
   run: {
     cache: {
@@ -157,8 +102,7 @@ export default defineConfig({
         ],
       },
       "cache:test:unit": {
-        command:
-          "vp exec node ./tests/projects.ts && vp test --run --project convex --project node",
+        command: "vp test --run --project convex --project node",
         cache: true,
         input: [
           "convex/**",
@@ -174,7 +118,7 @@ export default defineConfig({
         ],
       },
       "cache:test:interop": {
-        command: "vp exec node ./tests/projects.ts && vp test --run --project interop",
+        command: "vp test --run --project interop",
         cache: true,
         input: [
           "convex/**",

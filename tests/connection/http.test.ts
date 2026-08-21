@@ -19,8 +19,6 @@ type RouteSpec = {
   pathPrefix?: string;
 };
 
-type JwtPayload = { sub?: string };
-
 function collectAuthRoutes() {
   const routes: RouteSpec[] = [];
   const router = {
@@ -101,7 +99,7 @@ function assertNoRouteCollisions(routes: RouteSpec[]) {
   }
 }
 
-function parseJwtPayload(token: string): JwtPayload {
+function parseJwtPayload(token: string): { sub?: string } {
   const payload = token.split(".")[1];
   if (!payload) {
     return {};
@@ -109,7 +107,7 @@ function parseJwtPayload(token: string): JwtPayload {
   const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
   const padded = normalized.padEnd(normalized.length + ((4 - (normalized.length % 4)) % 4), "=");
   const json = atob(padded);
-  return JSON.parse(json) as JwtPayload;
+  return JSON.parse(json) as { sub?: string };
 }
 
 async function groupAdmin(t: any) {

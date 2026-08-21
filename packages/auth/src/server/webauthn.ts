@@ -99,34 +99,6 @@ interface RpOptions {
   authentication: WebAuthnProviderConfig["options"]["authentication"];
 }
 
-type RegistrationAuthenticatorSelection = {
-  residentKey: WebAuthnProviderConfig["options"]["registration"]["residentKey"];
-  requireResidentKey: boolean;
-  userVerification: WebAuthnProviderConfig["options"]["registration"]["userVerification"];
-  authenticatorAttachment?: WebAuthnProviderConfig["options"]["registration"]["authenticatorAttachment"];
-};
-
-type RegistrationChallengeOptions = {
-  rp: { name: string; id: string };
-  user: { id: string; name: string; displayName: string };
-  challenge: string;
-  pubKeyCredParams: Array<{ type: "public-key"; alg: number }>;
-  timeout: number;
-  hints?: string[];
-  attestation: string;
-  authenticatorSelection: RegistrationAuthenticatorSelection;
-  excludeCredentials: AllowCredential[];
-};
-
-type AuthenticationChallengeOptions = {
-  challenge: string;
-  timeout: number;
-  rpId: string;
-  userVerification: WebAuthnProviderConfig["options"]["authentication"]["userVerification"];
-  hints?: string[];
-  allowCredentials?: AllowCredential[];
-};
-
 type WebAuthnResult =
   | SignInSessionResult<SessionInfo<AuthTokens | null> | null>
   | SignInWebAuthnOptionsResult;
@@ -606,22 +578,21 @@ function registrationData(
   attestation: WebAuthnAttestationEvidence | undefined,
   ctx: EnrichedActionCtx,
 ): PasskeyRegistrationData {
-  const data: PasskeyRegistrationData = {
+  return {
     userId,
     credentialId,
     publicKey: copyArrayBuffer(publicKey),
     algorithm,
     counter,
+    ...(params.transports === undefined ? {} : { transports: params.transports }),
     deviceType: backupState.deviceType,
     backedUp: backupState.backedUp,
+    ...(params.passkeyName === undefined ? {} : { name: params.passkeyName }),
+    ...(attestation === undefined ? {} : { attestation }),
     createdAt: Date.now(),
     sessionExpirationTime: sessionExpirationTime(ctx.auth.config),
     refreshTokenExpirationTime: refreshTokenExpirationTime(ctx.auth.config),
   };
-  if (params.transports !== undefined) data.transports = params.transports;
-  if (params.passkeyName !== undefined) data.name = params.passkeyName;
-  if (attestation !== undefined) data.attestation = attestation;
-  return data;
 }
 
 async function finalizePasskeySession(
@@ -915,20 +886,17 @@ async function deriveEmailAllowCredentials(
     id: string,
     discriminator: string,
     transports?: string[],
-  ): Promise<AllowCredential & { order: string }> => {
-    const credential: AllowCredential & { order: string } = {
-      type: "public-key",
-      id,
-      order: encodeBase64urlNoPadding(
-        await keyedDigest(
-          key,
-          `convex-auth:webauthn-order:v2:${rpId}:${emailSeed}:${discriminator}:${id}`,
-        ),
+  ): Promise<AllowCredential & { order: string }> => ({
+    type: "public-key",
+    id,
+    ...(transports === undefined ? {} : { transports }),
+    order: encodeBase64urlNoPadding(
+      await keyedDigest(
+        key,
+        `convex-auth:webauthn-order:v2:${rpId}:${emailSeed}:${discriminator}:${id}`,
       ),
-    };
-    if (transports !== undefined) credential.transports = transports;
-    return credential;
-  };
+    ),
+  });
 
   const lengthSeed = await keyedDigest(key, `convex-auth:webauthn-lengths:v2:${rpId}:${emailSeed}`);
   const credentialPairs = await Promise.all(
@@ -969,11 +937,11 @@ async function deriveEmailAllowCredentials(
   );
   const credentials = credentialPairs.flat();
   credentials.sort((a, b) => a.order.localeCompare(b.order));
-  return credentials.map(({ type, id, transports }) => {
-    const credential: AllowCredential = { type, id };
-    if (transports !== undefined) credential.transports = transports;
-    return credential;
-  });
+  return credentials.map(({ type, id, transports }) => ({
+    type,
+    id,
+    ...(transports === undefined ? {} : { transports }),
+  }));
 }
 
 /**
@@ -1329,48 +1297,41 @@ export async function handleWebAuthn(
           `A user can register at most ${MAX_WEBAUTHN_CREDENTIALS_PER_USER} WebAuthn credentials.`,
         );
       }
-      const excludeCredentials = existing.map((credential) => {
-        const option: AllowCredential = { type: "public-key", id: credential.id };
-        if (credential.transports !== undefined) option.transports = credential.transports;
-        return option;
-      });
+      const excludeCredentials = existing.map((credential) => ({
+        id: credential.id,
+        transports: credential.transports,
+      }));
 
       const userHandle = encodeBase64urlNoPadding(new TextEncoder().encode(userId));
 
-      const authenticatorSelection: RegistrationAuthenticatorSelection = {
-        residentKey: rp.registration.residentKey,
-        requireResidentKey: rp.registration.residentKey === "required",
-        userVerification: rp.registration.userVerification,
-      };
-      if (rp.registration.authenticatorAttachment !== undefined) {
-        authenticatorSelection.authenticatorAttachment = rp.registration.authenticatorAttachment;
-      }
-      const options: RegistrationChallengeOptions = {
-        rp: { name: rp.rpName, id: rp.rpId },
-        user: {
-          id: userHandle,
-          name: userName,
-          displayName: userDisplayName,
-        },
-        challenge: encodeBase64urlNoPadding(challenge),
-        pubKeyCredParams: rp.registration.algorithms.map((alg) => ({
-          type: "public-key" as const,
-          alg,
-        })),
-        timeout: rp.challengeExpirationMs,
-        attestation: rp.registration.attestation?.conveyance ?? "none",
-        authenticatorSelection,
-        excludeCredentials,
-      };
-      if (rp.registration.hints !== undefined) options.hints = rp.registration.hints;
-
-      const result = {
+      return {
         kind: "webauthnOptions" as const,
-        options,
+        options: {
+          rp: { name: rp.rpName, id: rp.rpId },
+          user: { id: userHandle, name: userName, displayName: userDisplayName },
+          challenge: encodeBase64urlNoPadding(challenge),
+          pubKeyCredParams: rp.registration.algorithms.map((alg) => ({
+            type: "public-key" as const,
+            alg,
+          })),
+          timeout: rp.challengeExpirationMs,
+          ...(rp.registration.hints === undefined ? {} : { hints: rp.registration.hints }),
+          attestation: rp.registration.attestation?.conveyance ?? "none",
+          authenticatorSelection: {
+            residentKey: rp.registration.residentKey,
+            requireResidentKey: rp.registration.residentKey === "required",
+            userVerification: rp.registration.userVerification,
+            ...(rp.registration.authenticatorAttachment === undefined
+              ? {}
+              : { authenticatorAttachment: rp.registration.authenticatorAttachment }),
+          },
+          excludeCredentials,
+        },
         verifier: registration.verifierId,
+        ...(args.continuation === undefined
+          ? {}
+          : { continuation: args.continuation, operation: "rotate" as const }),
       };
-      if (args.continuation === undefined) return result;
-      return { ...result, continuation: args.continuation, operation: "rotate" as const };
     },
 
     signIn: async () => {
@@ -1385,13 +1346,12 @@ export async function handleWebAuthn(
       const sessionId = (await getAuthSessionId(ctx)) ?? undefined;
       let signIn;
       try {
-        const start: Parameters<typeof mutatePasskeyBeginSignIn>[1] = {
+        signIn = await mutatePasskeyBeginSignIn(ctx, {
           sessionId,
           signature: challengeHash,
           expirationTime: Date.now() + rp.challengeExpirationMs,
-        };
-        if (email !== undefined) start.verifiedEmail = email;
-        signIn = await mutatePasskeyBeginSignIn(ctx, start);
+          ...(email === undefined ? {} : { verifiedEmail: email }),
+        });
       } catch (err) {
         logPasskeyError(err);
         throw convexError(ErrorCode.INTERNAL_ERROR, "An unexpected error occurred.");
@@ -1414,22 +1374,17 @@ export async function handleWebAuthn(
           : credentialAuthenticationHints(eligibleCredentials);
       }
 
-      const options: AuthenticationChallengeOptions = {
-        challenge: encodeBase64urlNoPadding(challenge),
-        timeout: rp.challengeExpirationMs,
-        rpId: rp.rpId,
-        userVerification: rp.authentication.userVerification,
-      };
-
       const hints = rp.authentication.hints ?? credentialHints;
-      if (hints !== undefined) options.hints = hints;
-      if (allowCredentials) {
-        options.allowCredentials = allowCredentials;
-      }
-
       return {
         kind: "webauthnOptions" as const,
-        options,
+        options: {
+          challenge: encodeBase64urlNoPadding(challenge),
+          timeout: rp.challengeExpirationMs,
+          rpId: rp.rpId,
+          userVerification: rp.authentication.userVerification,
+          ...(hints === undefined ? {} : { hints }),
+          ...(allowCredentials === undefined ? {} : { allowCredentials }),
+        },
         verifier: signIn.verifierId,
       };
     },

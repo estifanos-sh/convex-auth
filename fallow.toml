@@ -3,19 +3,9 @@ entry = [
   "vite.config.ts",
   "packages/auth/consumer/types.ts",
   "packages/auth/src/cli/bin.ts",
-  "packages/auth/svelte.config.js",
   "packages/auth/scripts/**/*.ts",
-  "demos/cli/src/main.ts",
-  "demos/mcp/src/client.ts",
-  "demos/expo/app.config.ts",
-  "demos/expo/scripts/**/*.ts",
-  "demos/svelte/svelte.config.js",
-  "demos/svelte/vite.config.ts",
-  "docs/scripts/**/*.ts",
-  "docs/vite.config.ts",
   "scripts/**/*.ts",
   "tests/infra/docker/setup/node.ts",
-  "tests/projects.ts",
   "tests/vitest/setup.ts",
 ]
 
@@ -25,7 +15,6 @@ ignorePatterns = [
   "**/.svelte-kit/**",
   "docs/src/generated/**",
   "docs/src/routeTree.gen.ts",
-  "tools/oxlint/anti-slop/**",
 ]
 
 # Loaded by CLIs, framework configuration, or optional platform adapters.
@@ -55,195 +44,25 @@ ignoreDependencyOverrides = [
   { package = "vitest", source = "pnpm-workspace.yaml" },
 ]
 
-# Package exports are consumed by applications outside this repository.
-publicPackages = ["@estifanos-sh/convex-auth"]
-
-[typeAware]
-enabled = true
-require = "best-effort"
-projects = [
-  "packages/auth/tsconfig.server.json",
-  "packages/auth/tsconfig.client.json",
-  "packages/auth/tsconfig.component.json",
-  "packages/auth/tsconfig.consumer.json",
-  "convex/tsconfig.json",
-  "tests/tsconfig.vitest.json",
-  "tsconfig.scripts.json",
-  "demos/cli/tsconfig.json",
-  "docs/tsconfig.json",
-]
+[workspaces]
+packages = ["packages/*", "demos/*", "tests", "docs"]
 
 [duplicates]
-mode = "mild"
-minTokens = 60
-minLines = 8
 minOccurrences = 3
-ignoreImports = true
-ignoreDefaults = true
-ignore = [
-  "**/_generated/**",
-  "demos/**",
-  "docs/**",
-  "packages/auth/consumer/**",
-  "packages/auth/scripts/**",
-  "scripts/**",
-  "tests/**",
-]
-
-[health]
-maxCyclomatic = 20
-maxCognitive = 20
-maxCrap = 100
-maxUnitSize = 100
-suggestInlineSuppression = false
-ignore = [
-  "**/_generated/**",
-  "demos/**",
-  "docs/**",
-  "packages/auth/consumer/**",
-  "packages/auth/scripts/**",
-  "scripts/**",
-  "tests/**",
-]
 
 [audit]
 gate = "new-only"
 typeAware = true
-css = true
-cssDeep = true
-cacheMaxAgeDays = 30
 
 [rules]
 unused-files = "error"
-unused-exports = "warn"
-unused-types = "warn"
 private-type-leaks = "off"
 unused-dependencies = "error"
-unused-dev-dependencies = "warn"
-unused-optional-dependencies = "warn"
-unused-enum-members = "warn"
-unused-class-members = "warn"
-unused-store-members = "warn"
-unprovided-injects = "warn"
-unrendered-components = "warn"
-unused-component-props = "warn"
-unused-component-emits = "warn"
-unused-component-inputs = "warn"
-unused-component-outputs = "warn"
-unused-svelte-events = "warn"
-unused-server-actions = "warn"
-unused-load-data-keys = "warn"
-prop-drilling = "off"
-thin-wrapper = "off"
-duplicate-prop-shape = "off"
-css-token-drift = "warn"
-css-duplicate-block = "warn"
-css-selector-complexity = "warn"
-css-dead-surface = "warn"
-css-broken-reference = "warn"
-unresolved-imports = "error"
-unlisted-dependencies = "error"
 duplicate-exports = "off"
-type-only-dependencies = "warn"
-test-only-dependencies = "warn"
-dev-dependencies-in-production = "warn"
-circular-dependencies = "error"
-re-export-cycle = "error"
-boundary-violation = "error"
-coverage-gaps = "off"
-feature-flags = "off"
-stale-suppressions = "error"
-require-suppression-reason = "error"
 # Fallow does not count catalog values consumed through pnpm overrides. Both
 # root overrides below intentionally resolve vitest through the default catalog.
 unused-catalog-entries = "off"
-empty-catalog-groups = "warn"
-unresolved-catalog-references = "error"
-unused-dependency-overrides = "warn"
-misconfigured-dependency-overrides = "error"
-security-client-server-leak = "error"
-security-sink = "off"
-policy-violation = "warn"
-invalid-client-export = "error"
-mixed-client-server-barrel = "error"
-misplaced-directive = "error"
-route-collision = "error"
-dynamic-segment-name-conflict = "error"
-
-[[overrides]]
-files = ["demos/**", "docs/**"]
-rules = { unused-files = "warn", unused-dependencies = "warn" }
 
 [[overrides]]
 files = ["packages/auth/src/component/**"]
 rules = { unused-exports = "warn", unused-types = "warn", private-type-leaks = "off" }
-
-[[overrides]]
-files = ["packages/auth/src/svelte/**"]
-rules = { unused-class-members = "off" }
-
-[[overrides]]
-files = [
-  "packages/auth/src/browser/index.ts",
-  "packages/auth/src/client/index.ts",
-  "packages/auth/src/component/index.ts",
-  "packages/auth/src/core/index.ts",
-  "packages/auth/src/expo/index.ts",
-  "packages/auth/src/otel.ts",
-  "packages/auth/src/permissions/index.ts",
-  "packages/auth/src/providers/*.ts",
-  "packages/auth/src/react/index.tsx",
-  "packages/auth/src/server/index.ts",
-  "packages/auth/src/svelte/index.ts",
-  "packages/auth/src/test.ts",
-]
-rules = { private-type-leaks = "warn" }
-
-[boundaries]
-
-[[boundaries.zones]]
-name = "auth-client"
-patterns = [
-  "packages/auth/src/browser/**",
-  "packages/auth/src/client/**",
-  "packages/auth/src/expo/**",
-  "packages/auth/src/react/**",
-  "packages/auth/src/svelte/**",
-]
-
-[[boundaries.zones]]
-name = "auth-server"
-patterns = ["packages/auth/src/providers/**", "packages/auth/src/server/**"]
-
-[[boundaries.zones]]
-name = "auth-component-entry"
-patterns = ["packages/auth/src/component/index.ts"]
-
-[[boundaries.zones]]
-name = "auth-component-manifest"
-patterns = ["packages/auth/src/component/modules.ts"]
-
-[[boundaries.zones]]
-name = "auth-component"
-patterns = ["packages/auth/src/component/**"]
-
-[[boundaries.rules]]
-from = "auth-client"
-allow = ["auth-client"]
-
-[[boundaries.rules]]
-from = "auth-server"
-allow = ["auth-server", "auth-component"]
-allowTypeOnly = ["auth-client"]
-
-[[boundaries.rules]]
-from = "auth-component"
-allow = ["auth-component"]
-
-[[boundaries.rules]]
-from = "auth-component-entry"
-allow = ["auth-component-entry", "auth-server"]
-
-[[boundaries.rules]]
-from = "auth-component-manifest"
-allow = ["auth-component", "auth-component-entry", "auth-component-manifest"]

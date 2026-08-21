@@ -112,57 +112,6 @@ type MemberApiWithPermissions<TPermissions extends PermissionsConfig | undefined
 
 type RuntimeAuthApi = ReturnType<typeof AuthFactory>["auth"];
 
-function isDeclaredRole<TPermissions extends PermissionsConfig | undefined>(
-  permissions: TPermissions | undefined,
-  roleId: string,
-): roleId is RoleId<TPermissions> {
-  return permissions === undefined || Object.hasOwn(permissions.roles, roleId);
-}
-
-function isDeclaredGrant<TPermissions extends PermissionsConfig | undefined>(
-  permissions: TPermissions | undefined,
-  grant: string,
-): grant is Grant<TPermissions> {
-  return (
-    permissions === undefined ||
-    permissions.grants?.includes(grant) === true ||
-    Object.values(permissions.roles).some((role) => role.grants.includes(grant))
-  );
-}
-
-function narrowMemberAccess<TPermissions extends PermissionsConfig | undefined>(
-  result: Awaited<ReturnType<RuntimeAuthApi["member"]["assert"]>>,
-  permissions: TPermissions | undefined,
-): MemberAccessResult<TPermissions> {
-  const roleIds = result.roleIds.map((roleId) => {
-    if (!isDeclaredRole(permissions, roleId)) {
-      throw new ConvexError({
-        code: ErrorCode.INTERNAL_ERROR,
-        message: "Membership contains a role not declared in permissions.",
-      });
-    }
-    return roleId;
-  });
-  const grants = result.grants.map((grant) => {
-    if (!isDeclaredGrant(permissions, grant)) {
-      throw new ConvexError({
-        code: ErrorCode.INTERNAL_ERROR,
-        message: "Membership resolves a grant not declared in permissions.",
-      });
-    }
-    return grant;
-  });
-  return { ...result, roleIds, grants };
-}
-
-function narrowMemberResolution<TPermissions extends PermissionsConfig | undefined>(
-  result: Awaited<ReturnType<RuntimeAuthApi["member"]["resolve"]>>,
-  permissions: TPermissions | undefined,
-): MemberResolutionResult<TPermissions> {
-  const access = narrowMemberAccess(result, permissions);
-  return { ...result, roleIds: access.roleIds, grants: access.grants };
-}
-
 /** App-facing account management. Provider credential internals remain on provider callback ctx. */
 type PublicAccountApi = RuntimeAuthApi["accountManagement"];
 
@@ -723,40 +672,7 @@ export function defineAuth<
 
   const accountApi: PublicAccountApi = authResult.auth.accountManagement;
 
-  function getMember(
-    ctx: Parameters<RuntimeAuthApi["member"]["get"]>[0],
-    args: { userId: string; groupId: string },
-  ): Promise<MemberAccessResult<TPermissions>>;
-  function getMember(
-    ctx: Parameters<RuntimeAuthApi["member"]["get"]>[0],
-    args: { userId: string; groupIds: readonly string[] },
-  ): Promise<MemberAccessResult<TPermissions>[]>;
-  async function getMember(
-    ctx: Parameters<RuntimeAuthApi["member"]["get"]>[0],
-    args: { userId: string; groupId: string } | { userId: string; groupIds: readonly string[] },
-  ) {
-    if ("groupIds" in args) {
-      const results = await authResult.auth.member.get(ctx, args);
-      return results.map((result) => narrowMemberAccess<TPermissions>(result, config.permissions));
-    }
-    const result = await authResult.auth.member.get(ctx, args);
-    return narrowMemberAccess<TPermissions>(result, config.permissions);
-  }
-
-  const memberApi: MemberApiWithPermissions<TPermissions> = {
-    ...authResult.auth.member,
-    get: getMember,
-    resolve: async (ctx, args) =>
-      narrowMemberResolution<TPermissions>(
-        await authResult.auth.member.resolve(ctx, args),
-        config.permissions,
-      ),
-    assert: async (ctx, args) =>
-      narrowMemberAccess<TPermissions>(
-        await authResult.auth.member.assert(ctx, args),
-        config.permissions,
-      ),
-  };
+  const memberApi = authResult.auth.member as MemberApiWithPermissions<TPermissions>;
 
   const oauthApi: PublicOAuthApi = {
     authorize: authResult.auth.oauth.authorize,
