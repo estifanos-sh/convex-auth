@@ -52,6 +52,30 @@
       lastName?: string;
     };
   };
+  type ConfigValue = string | number | boolean | null | ConfigValue[] | ConfigRecord;
+  type ConfigRecord = { [key: string]: ConfigValue | undefined };
+
+  function isConfigValue(value: unknown): value is ConfigValue {
+    if (
+      value === null ||
+      typeof value === "string" ||
+      typeof value === "number" ||
+      typeof value === "boolean"
+    ) {
+      return true;
+    }
+    if (Array.isArray(value)) return value.every(isConfigValue);
+    return (
+      typeof value === "object" &&
+      Object.values(value).every(isConfigValue)
+    );
+  }
+
+  function configRecord(value: unknown): ConfigRecord | null {
+    return isConfigValue(value) && !Array.isArray(value) && value !== null
+      ? value as ConfigRecord
+      : null;
+  }
 
   type Tab = "config" | "domains" | "scim";
   let activeTab = $state<Tab>("config");
@@ -93,8 +117,8 @@
   const primaryDomain = $derived(domains.find((domain) => domain.isPrimary) ?? domains[0] ?? null);
   const samlStoredConfig = $derived(readSamlStoredConfig(connection?.config));
   const connectionName = $derived(
-    typeof (connection as unknown as { name?: unknown } | null)?.name === "string"
-      ? (connection as unknown as { name: string }).name
+    connection && "name" in connection && typeof connection.name === "string"
+      ? connection.name
       : "Untitled connection",
   );
   const oidcDiscoveryUrl = $derived(
@@ -159,24 +183,14 @@
   }
 
   function readSamlStoredConfig(config: unknown): SamlStoredConfig | null {
-    if (!config || typeof config !== "object") return null;
-    const protocols = "protocols" in config ? config.protocols : undefined;
-    if (!protocols || typeof protocols !== "object") return null;
-    const saml = "saml" in protocols ? protocols.saml : undefined;
-    if (!saml || typeof saml !== "object") return null;
-    const record = saml as Record<string, unknown>;
-    const idp =
-      typeof record.idp === "object" && record.idp !== null
-        ? (record.idp as Record<string, unknown>)
-        : undefined;
-    const profile =
-      typeof record.profile === "object" && record.profile !== null
-        ? (record.profile as Record<string, unknown>)
-        : undefined;
-    const attributeMapping =
-      typeof profile?.mapping === "object" && profile.mapping !== null
-        ? (profile.mapping as Record<string, unknown>)
-        : undefined;
+    const root = configRecord(config);
+    const protocols = configRecord(root?.protocols);
+    const record = configRecord(protocols?.saml);
+    if (!record) return null;
+    const idp = configRecord(record.idp);
+    const profile = configRecord(record.profile);
+    const attributeMapping = configRecord(profile?.mapping);
+    const request = configRecord(record.request);
     return {
       idp:
         idp !== undefined
@@ -188,11 +202,11 @@
             }
           : undefined,
       request:
-        typeof record.request === "object" && record.request !== null
+        request !== null
           ? {
               signAuthnRequests:
-                typeof (record.request as { signAuthnRequests?: unknown }).signAuthnRequests === "boolean"
-                  ? (record.request as { signAuthnRequests: boolean }).signAuthnRequests
+                typeof request.signAuthnRequests === "boolean"
+                  ? request.signAuthnRequests
                   : undefined,
             }
           : undefined,
@@ -227,16 +241,10 @@
   }
 
   function readOidcConfig(config: unknown): OidcConfigDraft | null {
-    if (!config || typeof config !== "object") return null;
-    const record = config as Record<string, unknown>;
-    const discovery =
-      typeof record.discovery === "object" && record.discovery !== null
-        ? (record.discovery as Record<string, unknown>)
-        : undefined;
-    const client =
-      typeof record.client === "object" && record.client !== null
-        ? (record.client as Record<string, unknown>)
-        : undefined;
+    const record = configRecord(config);
+    if (!record) return null;
+    const discovery = configRecord(record.discovery);
+    const client = configRecord(record.client);
     return {
       discoveryUrl:
         typeof discovery?.discoveryUrl === "string"

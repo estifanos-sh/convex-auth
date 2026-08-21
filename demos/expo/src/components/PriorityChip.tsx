@@ -5,13 +5,13 @@ import { priorityColors, fontSize, spacing } from "@/src/theme";
 
 type IssuePriority = "none" | "low" | "medium" | "high" | "urgent";
 
-const PRIORITY_LABELS: Record<IssuePriority, string> = {
+const PRIORITY_LABELS = {
   none: "",
   low: "Low",
   medium: "Med",
   high: "High",
   urgent: "Urgent",
-};
+} as const satisfies Record<IssuePriority, string>;
 
 export const PriorityChip = React.memo(function PriorityChip({
   priority,

@@ -8,15 +8,18 @@
   import { errorText } from "$lib/errors";
   import ChangePasswordForm from "./ChangePasswordForm.svelte";
 
+  type AuthParameters = Record<string, string | number | boolean | undefined>;
+  type WebAuthnRegistrationOptions = { name?: string };
+
   type AuthContext = {
     signOut: () => Promise<void>;
     signIn: (
       provider: string,
-      args?: Record<string, unknown>,
+      args?: AuthParameters,
     ) => Promise<{ kind: "signedIn" | "redirect"; redirect?: URL | string }>;
     webauthn?: {
       isSupported: () => boolean;
-      register: (opts?: Record<string, unknown>) => Promise<{
+      register: (opts?: WebAuthnRegistrationOptions) => Promise<{
         kind: "signedIn" | "redirect";
         redirect?: URL | string;
       }>;

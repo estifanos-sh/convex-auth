@@ -25,14 +25,29 @@ interface DocumentationPage {
   title: string;
 }
 
+interface MdxExpression {
+  type: string;
+  value?: string;
+}
+type MdxAttributeValue = string | MdxExpression | null;
+type HtmlPropertyValue =
+  | string
+  | number
+  | boolean
+  | MdxExpression
+  | Array<string | number>
+  | null
+  | undefined;
+type HtmlProperties = Record<string, HtmlPropertyValue>;
+
 interface MutableNode {
-  attributes?: Array<{ name: string; type: string; value?: unknown }>;
+  attributes?: Array<{ name: string; type: string; value?: MdxAttributeValue }>;
   children?: MutableNode[];
   depth?: number;
   lang?: string;
   meta?: string;
   name?: string;
-  properties?: Record<string, unknown>;
+  properties?: HtmlProperties;
   tagName?: string;
   type: string;
   value?: string;
@@ -82,7 +97,9 @@ function removeSveltePrelude(source: string): string {
     .replace(/^\s*<svelte:head>[\s\S]*?<\/svelte:head>\s*/u, "");
 }
 
-function componentAttributes(attributes: MutableNode["attributes"] = []): Record<string, unknown> {
+function componentAttributes(
+  attributes: MutableNode["attributes"] = [],
+): Record<string, MdxAttributeValue> {
   return Object.fromEntries(
     attributes
       .filter((attribute) => attribute.type === "mdxJsxAttribute")
@@ -123,11 +140,14 @@ function markdownComponents() {
           properties: { className: ["tab-panel"], dataTab: attributes.label || "Tab" },
         },
       };
-      const definition = node.name
-        ? (definitions as Record<string, { properties: Record<string, unknown>; tagName: string }>)[
-            node.name
-          ]
-        : undefined;
+      const definition =
+        node.name === "CardGrid"
+          ? definitions.CardGrid
+          : node.name === "Tabs"
+            ? definitions.Tabs
+            : node.name === "TabItem"
+              ? definitions.TabItem
+              : undefined;
 
       if (node.name === "Card") {
         node.type = "element";
@@ -259,11 +279,12 @@ writeFileSync(
     `export interface DocumentationPageMeta { title: string; description: string; slug: string; }\n` +
     `export const documentationPages: DocumentationPageMeta[] = ${JSON.stringify(pages.map(({ html: _html, markdown: _markdown, ...page }) => page))};\n` +
     `export const documentationBySlug = new Map(documentationPages.map((page) => [page.slug, page]));\n` +
-    `export const documentationLoaders: Record<string, () => Promise<DocumentationPage>> = {\n${pageEntries
+    `export const documentationLoaders = {\n${pageEntries
       .map(
         ({ filename, page }) =>
           `  ${JSON.stringify(page.slug)}: () => import("./pages/${filename}").then((module) => module.default),`,
       )
-      .join("\n")}\n};\n`,
+      .join("\n")}\n} satisfies Record<string, () => Promise<DocumentationPage>>;\n` +
+    `export const documentationLoaderBySlug = new Map<string, () => Promise<DocumentationPage>>(Object.entries(documentationLoaders));\n`,
 );
 writeFileSync(generatedJson, `${JSON.stringify(pages, null, 2)}\n`);

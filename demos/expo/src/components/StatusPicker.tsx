@@ -4,20 +4,21 @@ import { View, Text, Pressable, ScrollView } from "react-native";
 import { colors, statusColors, spacing, fontSize, radius } from "@/src/theme";
 
 const STATUSES = ["in_progress", "todo", "backlog", "done", "cancelled"] as const;
-const LABELS: Record<string, string> = {
+type Status = (typeof STATUSES)[number];
+const LABELS = {
   in_progress: "In Progress",
   todo: "Todo",
   backlog: "Backlog",
   done: "Done",
   cancelled: "Cancelled",
-};
+} as const satisfies Record<(typeof STATUSES)[number], string>;
 
 export const StatusPicker = React.memo(function StatusPicker({
   value,
   onSelect,
 }: {
-  value: string;
-  onSelect: (status: string) => void;
+  value: Status;
+  onSelect: (status: Status) => void;
 }) {
   return (
     <ScrollView

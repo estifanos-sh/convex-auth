@@ -224,7 +224,7 @@ export const documentationPages: DocumentationPageMeta[] = [
   },
 ];
 export const documentationBySlug = new Map(documentationPages.map((page) => [page.slug, page]));
-export const documentationLoaders: Record<string, () => Promise<DocumentationPage>> = {
+export const documentationLoaders = {
   "/ai/agent-skills": () => import("./pages/00-ai-agent-skills").then((module) => module.default),
   "/api/account": () => import("./pages/01-api-account").then((module) => module.default),
   "/api/factor": () => import("./pages/02-api-factor").then((module) => module.default),
@@ -284,4 +284,7 @@ export const documentationLoaders: Record<string, () => Promise<DocumentationPag
   "/ssr/overview": () => import("./pages/38-ssr-overview").then((module) => module.default),
   "/ssr/sveltekit": () => import("./pages/39-ssr-sveltekit").then((module) => module.default),
   "/ssr/tanstack": () => import("./pages/40-ssr-tanstack").then((module) => module.default),
-};
+} satisfies Record<string, () => Promise<DocumentationPage>>;
+export const documentationLoaderBySlug = new Map<string, () => Promise<DocumentationPage>>(
+  Object.entries(documentationLoaders),
+);

@@ -10,6 +10,8 @@ import { useDemoAuth } from "./auth";
 import { useAppClient } from "./client";
 import { colors, spacing, fontSize, radius, shadows } from "./theme";
 
+type AuthParameters = Record<string, string | number | boolean | undefined>;
+
 function useAuthForm() {
   const { auth, signIn } = useDemoAuth();
   const client = useAppClient();
@@ -24,7 +26,7 @@ function useAuthForm() {
   ).webauthn;
 
   const submit = React.useCallback(
-    async (provider: string, params?: Record<string, unknown>) => {
+    async (provider: string, params?: AuthParameters) => {
       setIsSubmitting(provider);
       setError(null);
       try {

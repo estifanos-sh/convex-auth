@@ -6,11 +6,12 @@ import React from "react";
 import { getClient } from "./client";
 
 type DemoAuthClient = AuthClient<typeof api.auth>;
+type AuthParameters = Record<string, string | number | boolean | undefined>;
 
 type DemoAuthContextValue = {
   auth: DemoAuthClient;
   state: AuthState;
-  signIn: (provider: string, params?: Record<string, unknown>) => Promise<SignInResult>;
+  signIn: (provider: string, params?: AuthParameters) => Promise<SignInResult>;
   signOut: () => Promise<void>;
 };
 

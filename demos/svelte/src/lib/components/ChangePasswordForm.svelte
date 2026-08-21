@@ -2,11 +2,12 @@
 	import { getContext } from "svelte";
 	import { toast } from "svelte-sonner";
 	import { errorText } from "$lib/errors";
+	type AuthParameters = Record<string, string | number | boolean | undefined>;
 
 	type AuthContext = {
 		signIn: (
 			provider: string,
-			args?: Record<string, unknown>,
+			args?: AuthParameters,
 		) => Promise<{ kind: "signedIn" | "redirect"; redirect?: URL | string }>;
 	};
 

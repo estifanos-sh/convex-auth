@@ -61,10 +61,16 @@ export default function IssueDetail() {
   );
 
   type CommentItem = NonNullable<typeof commentsData>[number];
+  type IssuePatch = {
+    title?: string;
+    status?: "backlog" | "cancelled" | "done" | "in_progress" | "todo";
+    priority?: "high" | "low" | "medium" | "none" | "urgent";
+    assigneeUserId?: string | null;
+  };
   const comments = commentsData ?? [];
 
   const updateIssue = useCallback(
-    (patch: Record<string, unknown>) => {
+    (patch: IssuePatch) => {
       if (!issue) return;
       void client.mutation(api.issues.update, { issueId: issue._id, patch });
     },

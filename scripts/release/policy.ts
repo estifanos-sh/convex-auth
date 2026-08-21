@@ -17,7 +17,7 @@ interface ParsedVersion {
 }
 
 interface RegistryMetadata {
-  versions?: Record<string, unknown>;
+  versions?: Record<string, { version?: string }>;
   "dist-tags"?: Record<string, string>;
 }
 
@@ -104,13 +104,13 @@ function writeOutputs(values: ReleaseValues): void {
   );
 }
 
-function releaseValues(packageJson: PackageJson, published: boolean): ReleaseValues {
+function releaseValues(packageJson: PackageJson, published: boolean) {
   return {
     package: packageJson.name,
     version: packageJson.version,
     tag: `v${packageJson.version}`,
     published: String(published),
-  };
+  } satisfies ReleaseValues;
 }
 
 async function readiness(): Promise<void> {
@@ -170,11 +170,11 @@ async function verify(): Promise<void> {
   );
 }
 
-const commands: Record<string, () => Promise<void>> = { metadata, readiness, verify };
+const commands = { metadata, readiness, verify } satisfies Record<string, () => Promise<void>>;
 const command = process.argv[2];
 
 try {
-  if (!commands[command]) {
+  if (command !== "metadata" && command !== "readiness" && command !== "verify") {
     throw new Error("Usage: node scripts/release/policy.ts <readiness|metadata|verify>");
   }
   await commands[command]();
