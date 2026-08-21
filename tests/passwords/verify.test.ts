@@ -63,6 +63,23 @@ test("reset verification returns a passkey rotation without issuing a session", 
     }),
   );
   expect(accountAfter?.secret).toBe(accountBefore?.secret);
+  if (accountAfter === null) throw new Error("expected password account");
+  const sessions = await t.run((ctx) =>
+    ctx.runQuery(components.auth.session.list, { userId: accountAfter.userId }),
+  );
+  expect(sessions).toHaveLength(1);
+
+  await expect(
+    t.action(api.auth.signIn, {
+      provider: "password",
+      params: {
+        email,
+        code: resetCapture.code(),
+        newPassword: NEW_PASSWORD,
+        flow: "recover",
+      },
+    }),
+  ).rejects.toThrow("Invalid code");
 });
 
 test("verify without newPassword completes post-signup email confirmation", async () => {

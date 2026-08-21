@@ -427,24 +427,32 @@ test("passkey rotation commits a staged password reset and revokes prior auth at
       sessionExpirationTime: Date.now() + 60_000,
       refreshTokenExpirationTime: Date.now() + 120_000,
     });
-    const continuationId = await ctx.runMutation(
-      components.auth.token.continuation.createPasswordReset,
-      {
-        userId,
-        accountId,
-        provider: "webauthn",
-        operation: "rotate",
-        secret: "new-secret",
-        expirationTime: Date.now() + 60_000,
-      },
-    );
+    await ctx.runMutation(components.auth.token.verification.create, {
+      accountId,
+      provider: "email",
+      code: "recovery-reset-code",
+      expirationTime: Date.now() + 60_000,
+    });
+    const recovery = await ctx.runMutation(components.auth.token.continuation.recover, {
+      accountId,
+      code: "recovery-reset-code",
+      maxAttemptsPerHour: 10,
+      now: Date.now(),
+      passwordProvider: "password",
+      provider: "webauthn",
+      resetProvider: "email",
+      operation: "rotate",
+      secret: "new-secret",
+      expirationTime: Date.now() + 60_000,
+    });
+    if (recovery.status !== "accepted") throw new Error("expected accepted recovery");
     return {
       userId,
       accountId,
       oldPasskeyId,
       firstSessionId: firstSession.sessionId,
       secondSessionId: secondSession.sessionId,
-      continuationId,
+      continuationId: recovery.continuationId,
     };
   });
 

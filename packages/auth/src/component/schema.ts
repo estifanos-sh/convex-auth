@@ -173,7 +173,14 @@ export default defineSchema({
     provider: v.string(),
     operation: v.literal("rotate"),
     expirationTime: v.number(),
-  }).index("expiration_time", ["expirationTime"]),
+  })
+    .index("expiration_time", ["expirationTime"])
+    .index("user_id_provider_operation_expiration_time", [
+      "userId",
+      "provider",
+      "operation",
+      "expirationTime",
+    ]),
 
   PasswordReset: defineTable({
     continuationId: v.id("AuthContinuation"),

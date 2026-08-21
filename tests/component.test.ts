@@ -430,6 +430,72 @@ test("session replacement cannot delete a session owned by another user", async 
   expect(other?._id).toBe(otherSessionId);
 });
 
+test("password recovery consumes one reset code and stages no session before rotation", async () => {
+  const t = convexTest(schema);
+  const { userId, accountId } = await t.run(async (ctx) => {
+    const userId = await ctx.runMutation(components.auth.user.create, {
+      data: { email: "recovery-atomic@example.com" },
+    });
+    const accountId = await ctx.runMutation(components.auth.account.create, {
+      userId,
+      provider: "password",
+      providerAccountId: "recovery-atomic@example.com",
+      secret: "old-secret",
+    });
+    await Promise.all(
+      ["recovery-code-one", "recovery-code-two"].map((code) =>
+        ctx.runMutation(components.auth.token.verification.create, {
+          accountId,
+          provider: "email",
+          code,
+          expirationTime: Date.now() + 60_000,
+        }),
+      ),
+    );
+    return { userId, accountId };
+  });
+
+  const recover = async (code: string) =>
+    await t.run((ctx) =>
+      ctx.runMutation(components.auth.token.continuation.recover, {
+        accountId,
+        code,
+        maxAttemptsPerHour: 10,
+        now: Date.now(),
+        passwordProvider: "password",
+        provider: "webauthn",
+        resetProvider: "email",
+        operation: "rotate",
+        secret: "new-secret",
+        expirationTime: Date.now() + 60_000,
+      }),
+    );
+
+  const [first, second] = await Promise.all([
+    recover("recovery-code-one"),
+    recover("recovery-code-two"),
+  ]);
+  const accepted = [first, second].filter(
+    (result): result is Extract<typeof result, { status: "accepted" }> =>
+      result.status === "accepted",
+  );
+  expect(accepted).toHaveLength(1);
+
+  const stored = await t.run(async (ctx) => ({
+    account: await ctx.runQuery(components.auth.account.get, { id: accountId }),
+    sessions: await ctx.runQuery(components.auth.session.list, { userId }),
+    continuation: await ctx.runQuery(components.auth.token.continuation.get, {
+      id: accepted[0]!.continuationId,
+    }),
+  }));
+  expect(stored.account?.secret).toBe("old-secret");
+  expect(stored.sessions).toEqual([]);
+  expect(stored.continuation?.userId).toBe(userId);
+
+  const replay = await recover("recovery-code-one");
+  expect(replay.status).toBe("rejected");
+});
+
 test("auth verifier lookups ignore expired verifiers", async () => {
   const t = convexTest(schema);
 
@@ -542,14 +608,26 @@ test("pruneExpired deletes expired provider continuations", async () => {
       providerAccountId: "expired-continuation@example.com",
       secret: "old-secret",
     });
-    return await ctx.runMutation(components.auth.token.continuation.createPasswordReset, {
-      userId,
+    await ctx.runMutation(components.auth.token.verification.create, {
       accountId,
+      provider: "email",
+      code: "expired-recovery-code",
+      expirationTime: Date.now() + 60_000,
+    });
+    const recovery = await ctx.runMutation(components.auth.token.continuation.recover, {
+      accountId,
+      code: "expired-recovery-code",
+      maxAttemptsPerHour: 10,
+      now: Date.now(),
+      passwordProvider: "password",
       provider: "webauthn",
+      resetProvider: "email",
       operation: "rotate",
       secret: "staged-secret",
       expirationTime: Date.now() - 1,
     });
+    if (recovery.status !== "accepted") throw new Error("expected accepted recovery");
+    return recovery.continuationId;
   });
 
   const result = await t.run((ctx) =>

@@ -53,11 +53,7 @@ import { extractBearerToken } from "./utils/bearer";
 import { encryptSecret } from "./secret";
 import { createGroupService } from "./connection/group/service";
 import { createFactorUnlinkHelpers } from "./services/factors";
-import {
-  mutateContinuationCreate,
-  mutatePasswordResetContinuationCreate,
-  queryContinuation,
-} from "./component/factor/db";
+import { mutateContinuationCreate, queryContinuation } from "./component/factor/db";
 import { resolveServerServices } from "./services/resolve";
 import { signInImpl } from "./signin/flow";
 import { createGroupConnectionDomain } from "./connection/domain";
@@ -237,32 +233,14 @@ export function Auth(config_: ConvexAuthConfig<any>) {
     connection: ReturnType<typeof createGroupConnectionDomain>;
   };
 
-  type PasswordResetContinuationRequest = AuthProviderContinueArgs & {
-    commit: "passwordReset";
-    accountId: string;
-    secret: string;
-  };
+  type RecoveryContinuationRequest = AuthProviderContinueArgs & { continuationId: string };
 
-  const continueWithProvider = async <DataModel extends GenericDataModel>(
+  const beginProviderContinuation = async <DataModel extends GenericDataModel>(
     ctx: GenericActionCtx<DataModel>,
-    continuationRequest: AuthProviderContinueArgs | PasswordResetContinuationRequest,
+    operation: AuthProviderContinueArgs["operation"],
+    continuation: string,
   ) => {
-    const { userId, operation } = continuationRequest;
     const enriched = bridgeRuntimeType<Parameters<typeof signInImpl>[0]>(enrichCtx(ctx));
-    const continuationArgs = {
-      userId,
-      provider: operation.provider.id,
-      operation: operation.operation,
-      expirationTime: Date.now() + (operation.provider.options.challengeExpirationMs ?? 300_000),
-    };
-    const continuation =
-      "commit" in continuationRequest && continuationRequest.commit === "passwordReset"
-        ? await mutatePasswordResetContinuationCreate(enriched, {
-            ...continuationArgs,
-            accountId: continuationRequest.accountId,
-            secret: continuationRequest.secret,
-          })
-        : await mutateContinuationCreate(enriched, continuationArgs);
     const result = await signInImpl(
       enriched,
       operation.provider,
@@ -280,6 +258,28 @@ export function Auth(config_: ConvexAuthConfig<any>) {
     }
     return result;
   };
+
+  const continueWithProvider = async <DataModel extends GenericDataModel>(
+    ctx: GenericActionCtx<DataModel>,
+    args: AuthProviderContinueArgs,
+  ) => {
+    const continuation = await mutateContinuationCreate(
+      bridgeRuntimeType<Parameters<typeof signInImpl>[0]>(enrichCtx(ctx)),
+      {
+        userId: args.userId,
+        provider: args.operation.provider.id,
+        operation: args.operation.operation,
+        expirationTime:
+          Date.now() + (args.operation.provider.options.challengeExpirationMs ?? 300_000),
+      },
+    );
+    return await beginProviderContinuation(ctx, args.operation, continuation);
+  };
+
+  const continueRecovery = async <DataModel extends GenericDataModel>(
+    ctx: GenericActionCtx<DataModel>,
+    args: RecoveryContinuationRequest,
+  ) => await beginProviderContinuation(ctx, args.operation, args.continuationId);
 
   const authBase: AuthRuntimeBase = {
     ...createCoreDomains({
@@ -650,10 +650,10 @@ export function Auth(config_: ConvexAuthConfig<any>) {
       member: auth.member,
       provider: {
         ...auth.provider,
-        continuePasswordReset: async (
+        continueRecovery: async (
           continuationCtx: GenericActionCtx<DataModel>,
-          args: Omit<PasswordResetContinuationRequest, "commit">,
-        ) => await continueWithProvider(continuationCtx, { ...args, commit: "passwordReset" }),
+          args: RecoveryContinuationRequest,
+        ) => await continueRecovery(continuationCtx, args),
       },
       event: auth.event,
     });

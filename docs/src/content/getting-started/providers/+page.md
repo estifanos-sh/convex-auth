@@ -347,6 +347,12 @@ single completion transaction replaces the user's passkeys, revokes prior
 sessions, commits the password, and issues the final session. No restricted or
 normal session exists between OTP verification and passkey registration.
 
+Recovery consumes the OTP and creates its rotation continuation in one
+transaction. A retry cannot reuse that OTP, and a second valid reset cannot
+replace an already pending rotation. If the browser ceremony expires or is
+abandoned, the staged password is never applied; start recovery again with a
+new reset email.
+
 ## Magic Links (Email)
 
 ```ts
