@@ -62,3 +62,34 @@ test("rate limit on password", async () => {
   );
   expect(tokens).not.toBeNull();
 });
+
+test("unknown credentials attempts consume the same opaque bucket after signup", async () => {
+  vi.useFakeTimers();
+  const t = convexTest(schema);
+  const email = "unknown-rate-limit@example.com";
+
+  for (let i = 0; i < 10; i++) {
+    await expect(
+      t.action(api.auth.signIn, {
+        provider: "password",
+        params: {
+          email: email.toUpperCase(),
+          password: "incorrect-password",
+          flow: "signIn",
+        },
+      }),
+    ).rejects.toThrow(/ACCOUNT_NOT_FOUND|Invalid credentials|RATE_LIMITED/);
+  }
+
+  await t.action(api.auth.signIn, {
+    provider: "password",
+    params: { email, password: TEST_PASSWORD, flow: "signUp" },
+  });
+
+  await expect(
+    t.action(api.auth.signIn, {
+      provider: "password",
+      params: { email, password: TEST_PASSWORD, flow: "signIn" },
+    }),
+  ).rejects.toThrow(/RATE_LIMITED/);
+});

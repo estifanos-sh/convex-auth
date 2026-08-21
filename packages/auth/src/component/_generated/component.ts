@@ -28,6 +28,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       "internal",
       {
         includeTotp: boolean;
+        limitIdentifier: string;
         maxAttemptsPerHour: number;
         provider: string;
         providerAccountId: string;
@@ -74,6 +75,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         accountId: string;
         generateTokens: boolean;
         issueSession: boolean;
+        limitIdentifier: string;
         refreshTokenExpirationTime: number;
         replaceSessionId?: string;
         sessionExpirationTime: number;

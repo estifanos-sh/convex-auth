@@ -1351,7 +1351,6 @@ export function createGroupConnectionDomain<TDeps extends DomainDeps>(deps: TDep
           };
           security?: {
             clockToleranceSeconds?: number;
-            strictIssuer?: boolean;
           };
           profile?: {
             mapping?: OIDCClaimMapping;
@@ -1404,7 +1403,6 @@ export function createGroupConnectionDomain<TDeps extends DomainDeps>(deps: TDep
           },
           security: {
             clockToleranceSeconds: data.security?.clockToleranceSeconds,
-            strictIssuer: data.security?.strictIssuer,
           },
           profile: {
             mapping: data.profile?.mapping,
@@ -1758,6 +1756,11 @@ export function createGroupConnectionDomain<TDeps extends DomainDeps>(deps: TDep
               const json = (await res.json()) as Record<string, unknown>;
               if (typeof json.issuer !== "string") {
                 discoveryMessage = "Discovery document is missing issuer field.";
+              } else if (
+                typeof discoveryConfig.issuer === "string" &&
+                discoveryConfig.issuer !== json.issuer
+              ) {
+                discoveryMessage = "Configured issuer does not match discovery issuer.";
               } else if (typeof json.authorization_endpoint !== "string") {
                 discoveryMessage = "Discovery document is missing authorization_endpoint.";
               } else if (typeof json.token_endpoint !== "string") {

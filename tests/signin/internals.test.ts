@@ -1,5 +1,6 @@
 import { password } from "@estifanos-sh/convex-auth/providers/password";
 import * as events from "@estifanos-sh/convex-auth/server/events";
+import { credentialsSignInLimitIdentifier } from "@estifanos-sh/convex-auth/server/limits";
 import { credentialsSignInImpl } from "@estifanos-sh/convex-auth/server/mutations/credentials/signin";
 import * as mutations from "@estifanos-sh/convex-auth/server/mutations/calls";
 import { signInSessionImpl } from "@estifanos-sh/convex-auth/server/mutations/signin";
@@ -11,6 +12,29 @@ import { afterEach, expect, test, vi } from "vite-plus/test";
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllEnvs();
+});
+
+const TEST_AUTH_KEYS = JSON.stringify({
+  version: 1,
+  jwtPrivateKey: "test-jwt-key",
+  jwks: { keys: [{}] },
+  secretEncryptionKey: "test-secret-key",
+  webauthnMaskingKey: "test-limit-key",
+});
+
+function setupAuthKeys() {
+  vi.stubEnv("AUTH_KEYS", TEST_AUTH_KEYS);
+}
+
+test("credentials rate-limit identifiers are opaque, canonical, and provider-scoped", () => {
+  setupAuthKeys();
+  const identifier = credentialsSignInLimitIdentifier("password", " USER@example.com ");
+
+  expect(identifier).toMatch(/^[a-f0-9]{64}$/);
+  expect(identifier).toBe(credentialsSignInLimitIdentifier("password", "user@example.com"));
+  expect(identifier).not.toContain("user@example.com");
+  expect(identifier).not.toBe(credentialsSignInLimitIdentifier("recovery", "user@example.com"));
 });
 
 function createCredentialsMutationHarness(args: {
@@ -25,6 +49,7 @@ function createCredentialsMutationHarness(args: {
   totpDoc?: { _id: string } | null;
   accountMissing?: boolean;
 }) {
+  setupAuthKeys();
   const refs = {
     beginCredentialsSignIn: Symbol("beginCredentialsSignIn"),
     completeCredentialsSignIn: Symbol("completeCredentialsSignIn"),
@@ -516,6 +541,12 @@ test("credentialsSignIn verifies against a dummy hash when the account is missin
   expect(verifySecret).toHaveBeenCalledTimes(1);
   // Verified against the constant throwaway dummy scrypt hash, never a real one.
   expect(verifySecret).toHaveBeenCalledWith("attempt-secret", expect.stringContaining("scrypt:"));
+  expect(harness.runMutation).toHaveBeenCalledWith(
+    harness.refs.beginCredentialsSignIn,
+    expect.objectContaining({
+      limitIdentifier: credentialsSignInLimitIdentifier("password", "ghost@example.com"),
+    }),
+  );
   // The missing-account branch must never issue a session.
   expect(harness.runMutation).not.toHaveBeenCalledWith(
     harness.refs.sessionCreate,

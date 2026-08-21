@@ -1,5 +1,9 @@
+import { hmac } from "@oslojs/crypto/hmac";
+import { SHA256 } from "@oslojs/crypto/sha2";
+import { encodeHexLowerCase } from "@oslojs/encoding";
 import type { FunctionReference, FunctionReturnType, OptionalRestArgs } from "convex/server";
 
+import { requireAuthKey } from "./env";
 import type { ConvexAuthConfig } from "./types";
 
 const DEFAULT_MAX_SIGN_IN_ATTEMPTS_PER_HOUR = 10;
@@ -37,6 +41,28 @@ export type SignInLimitConfig = Pick<ConvexAuthConfig, "component" | "signIn">;
 /** Resolve the configured guessable-secret attempt capacity. @internal */
 export function maxSignInAttempts(config: SignInLimitConfig) {
   return config.signIn?.maxFailedAttemptsPerHour ?? DEFAULT_MAX_SIGN_IN_ATTEMPTS_PER_HOUR;
+}
+
+/**
+ * Produce the opaque token-bucket key for a credentials sign-in identity.
+ *
+ * The component persists this value, so it must never contain the submitted
+ * account identifier. It is deliberately derived before account lookup: known
+ * and unknown accounts then consume the same bucket. The normalized identifier
+ * treats user-facing credential IDs consistently without changing provider
+ * account lookup semantics.
+ *
+ * @internal
+ */
+export function credentialsSignInLimitIdentifier(provider: string, accountId: string) {
+  const canonical = JSON.stringify([provider, accountId.trim().toLowerCase()]);
+  return encodeHexLowerCase(
+    hmac(
+      SHA256,
+      new TextEncoder().encode(requireAuthKey("webauthnMaskingKey")),
+      new TextEncoder().encode(`credentials-sign-in:${canonical}`),
+    ),
+  );
 }
 
 /**

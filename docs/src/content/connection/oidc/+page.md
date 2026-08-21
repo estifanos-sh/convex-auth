@@ -66,7 +66,6 @@ await auth.connection.oidc.upsert(ctx, {
   },
   security: {
     clockToleranceSeconds: 300,
-    strictIssuer: true,
   },
   profile: {
     mapping: {
@@ -84,6 +83,10 @@ await auth.connection.oidc.upsert(ctx, {
 ```
 
 ## Claim mapping
+
+When `discovery.issuer` is supplied, it must exactly match the issuer returned
+by the discovery document. Convex Auth then requires that exact issuer in every
+ID token; there is no compatibility switch for accepting a second issuer.
 
 Use `profile.mapping` to override the core OIDC claims used for the built-in
 profile:
