@@ -1,7 +1,7 @@
 import { For, Show, createSignal, onCleanup, onMount, type JSX } from "solid-js";
 import { useRouterState } from "@tanstack/solid-router";
 import { sidebar } from "../config/sidebar";
-import { CloseIcon, GitHubIcon, MenuIcon, MoonIcon, SearchIcon, SunIcon } from "./icons";
+import { CloseIcon, MenuIcon, MoonIcon, SearchIcon, SunIcon } from "./icons";
 
 interface SearchResult {
   excerpt: string;
@@ -115,57 +115,48 @@ export function Chrome(props: { children: JSX.Element; landing?: boolean; withSi
         Skip to content
       </a>
       <header class="masthead">
-        <div class="masthead-inner">
-          <a class="brand-lockup" href="/convex-auth/">
-            <img
-              alt="Convex"
-              class="brand-wordmark"
-              height="36"
-              src="/convex-auth/brand/convex-logo-white.svg"
-              width="92"
-            />
-            <span class="brand-title">convex-auth</span>
-          </a>
+        <a class="brand-lockup" href="/convex-auth/">
+          <img
+            alt="Convex"
+            class="brand-wordmark"
+            height="36"
+            src="/convex-auth/brand/convex-logo-white.svg"
+            width="92"
+          />
+          <span class="brand-title">convex-auth</span>
+        </a>
+        <div class="masthead-actions">
           <nav aria-label="Site" class="masthead-links">
             <a href="/convex-auth/getting-started/installation/">Docs</a>
-            <a href="https://docs.convex.dev">Convex</a>
+            <a href="https://github.com/estifanos-sh/convex-auth">GitHub</a>
           </nav>
-          <div class="masthead-actions">
-            <button class="search-chip" onClick={openSearch} type="button">
-              <SearchIcon />
-              <span>Search</span>
-              <kbd>⌘K</kbd>
-            </button>
-            <a class="gh-pill" href="https://github.com/estifanos-sh/convex-auth">
-              <GitHubIcon />
-              <span>GitHub</span>
-            </a>
-            <a class="cta-dark" href="/convex-auth/getting-started/installation/">
-              Start building
-            </a>
+          <button class="search-chip" onClick={openSearch} type="button">
+            <SearchIcon />
+            <span>Search</span>
+            <kbd>⌘K</kbd>
+          </button>
+          <button
+            aria-label={theme() === "dark" ? "Switch to light theme" : "Switch to dark theme"}
+            class="theme-switcher"
+            onClick={toggleTheme}
+            type="button"
+          >
+            <Show when={theme() === "dark"} fallback={<MoonIcon />}>
+              <SunIcon />
+            </Show>
+          </button>
+          <Show when={props.withSidebar}>
             <button
-              aria-label={theme() === "dark" ? "Switch to light theme" : "Switch to dark theme"}
-              class="icon-btn"
-              onClick={toggleTheme}
+              aria-controls="mobile-docs-nav"
+              aria-expanded={menuOpen()}
+              aria-label="Open documentation menu"
+              class="icon-btn menu-btn"
+              onClick={() => setMenuOpen(!menuOpen())}
               type="button"
             >
-              <Show when={theme() === "dark"} fallback={<MoonIcon />}>
-                <SunIcon />
-              </Show>
+              <MenuIcon />
             </button>
-            <Show when={props.withSidebar}>
-              <button
-                aria-controls="mobile-docs-nav"
-                aria-expanded={menuOpen()}
-                aria-label="Open documentation menu"
-                class="icon-btn menu-btn"
-                onClick={() => setMenuOpen(!menuOpen())}
-                type="button"
-              >
-                <MenuIcon />
-              </button>
-            </Show>
-          </div>
+          </Show>
         </div>
       </header>
       <div classList={{ "docs-frame": true, "docs-frame-home": !props.withSidebar }}>

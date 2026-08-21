@@ -42,6 +42,10 @@
   --control-focus: #f26b1d;
   --page-gutter: clamp(20px, 5vw, 72px);
   --page-width: 1400px;
+  --page-inline: max(
+    var(--page-gutter),
+    calc((100vw - var(--page-width)) / 2 + var(--page-gutter))
+  );
   --header-h: 68px;
   --rail-w: 260px;
   --outline-w: 200px;
@@ -137,24 +141,18 @@ html.dark ::selection {
   position: sticky;
   top: 0;
   z-index: 40;
+  display: flex;
+  width: 100%;
+  max-width: none;
   min-height: var(--header-h);
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 14px var(--page-inline);
   border-bottom: 1px solid rgba(255, 250, 240, 0.16);
   background: rgba(33, 23, 24, 0.96);
   color: #fffaf0;
   backdrop-filter: blur(18px);
-}
-
-.masthead-inner {
-  display: flex;
-  width: 100%;
-  min-height: var(--header-h);
-  margin: 0 auto;
-  padding-inline: max(
-    var(--page-gutter),
-    calc((100vw - var(--page-width)) / 2 + var(--page-gutter))
-  );
-  align-items: center;
-  gap: 18px;
 }
 
 .brand-lockup {
@@ -185,8 +183,7 @@ html.dark ::selection {
 .masthead-links {
   display: flex;
   align-items: center;
-  gap: 4px;
-  margin-right: auto;
+  gap: 8px;
 }
 
 .masthead-links a {
@@ -213,11 +210,10 @@ html.dark ::selection {
 }
 
 .search-chip,
-.gh-pill,
-.cta-dark,
 .cta-ghost,
 .cta-solid,
 .icon-btn,
+.theme-switcher,
 .path-card {
   display: inline-flex;
   align-items: center;
@@ -227,8 +223,8 @@ html.dark ::selection {
 }
 
 .search-chip,
-.gh-pill,
-.icon-btn {
+.icon-btn,
+.theme-switcher {
   min-height: 44px;
   border-color: rgba(255, 250, 240, 0.24);
   background: transparent;
@@ -237,8 +233,7 @@ html.dark ::selection {
 
 .search-chip {
   gap: 8px;
-  width: min(240px, 28vw);
-  padding: 0 10px 0 14px;
+  padding: 0 14px;
   border-radius: var(--pill);
   color: rgba(255, 250, 240, 0.72);
   font-size: 13px;
@@ -246,8 +241,8 @@ html.dark ::selection {
 }
 
 .search-chip:hover,
-.gh-pill:hover,
-.icon-btn:hover {
+.icon-btn:hover,
+.theme-switcher:hover {
   background: rgba(255, 250, 240, 0.1);
   border-color: rgba(255, 250, 240, 0.44);
 }
@@ -261,15 +256,6 @@ html.dark ::selection {
   letter-spacing: 0.04em;
 }
 
-.gh-pill {
-  gap: 8px;
-  padding: 0 14px;
-  border-radius: var(--pill);
-  font-size: 13px;
-  font-weight: 500;
-}
-
-.cta-dark,
 .cta-ghost,
 .cta-solid {
   min-height: 44px;
@@ -280,14 +266,12 @@ html.dark ::selection {
   justify-content: center;
 }
 
-.cta-dark,
 .cta-solid {
   background: var(--signal-coral);
   border-color: var(--signal-coral);
   color: #fff;
 }
 
-.cta-dark:hover,
 .cta-solid:hover {
   background: var(--signal-coral-dark);
   border-color: var(--signal-coral-dark);
@@ -299,10 +283,11 @@ html.dark ::selection {
   color: #fffaf0;
 }
 
-.icon-btn {
+.icon-btn,
+.theme-switcher {
   width: 44px;
   justify-content: center;
-  border-radius: var(--pill);
+  border-radius: 50%;
 }
 
 .docs-frame {
@@ -311,11 +296,13 @@ html.dark ::selection {
   width: 100%;
   min-height: calc(100svh - var(--header-h));
   margin: 0;
+  padding-inline: var(--page-inline);
 }
 
 .docs-frame-home {
   display: block;
   width: 100%;
+  padding: 0;
 }
 
 .rail {
@@ -325,7 +312,6 @@ html.dark ::selection {
   padding: 24px 12px 48px 0;
   overflow: auto;
   border-right: 1px solid var(--line-whisper);
-  margin-left: max(var(--page-gutter), calc((100vw - var(--page-width)) / 2 + var(--page-gutter)));
 }
 
 .rail-group {
@@ -395,7 +381,7 @@ html.dark .rail-group a.active {
 
 .doc-pane {
   min-width: 0;
-  padding: 40px var(--page-gutter) 96px;
+  padding: 40px 0 96px 28px;
 }
 
 .doc-grid {
@@ -605,6 +591,8 @@ html.dark .rail-group a.active {
 }
 
 .site-foot {
+  width: 100%;
+  max-width: none;
   border-top: 1px solid rgba(255, 250, 240, 0.16);
   background: #211718;
   color: rgba(255, 250, 240, 0.7);
@@ -614,9 +602,7 @@ html.dark .rail-group a.active {
   display: grid;
   grid-template-columns: 1.2fr 1fr;
   gap: 48px;
-  width: min(100%, var(--page-width));
-  margin: 0 auto;
-  padding: 48px var(--page-gutter) 64px;
+  padding: 48px var(--page-inline) 64px;
 }
 
 .site-foot-brand {
@@ -803,8 +789,7 @@ html.dark .rail-group a.active {
   align-items: end;
   gap: clamp(32px, 6vw, 80px);
   min-height: 280px;
-  padding: clamp(28px, 3.5vw, 40px)
-    max(var(--page-gutter), calc((100vw - var(--page-width)) / 2 + var(--page-gutter))) 28px;
+  padding: clamp(28px, 3.5vw, 40px) var(--page-inline) 28px;
   overflow: hidden;
   background-color: #211718;
   background-image: url("/convex-auth/brand/convex-racing-lines.png");
@@ -940,9 +925,12 @@ html.dark .rail-group a.active {
 }
 
 .home-rest {
-  width: min(100%, var(--page-width));
+  width: min(
+    calc(100% - (var(--page-gutter) * 2)),
+    calc(var(--page-width) - (var(--page-gutter) * 2))
+  );
   margin: 0 auto;
-  padding: 48px var(--page-gutter) 0;
+  padding: 48px 0 0;
 }
 
 .home-paths {
@@ -997,13 +985,12 @@ html.dark .rail-group a.active {
     display: block;
   }
 
-  .rail,
-  .masthead-links {
+  .rail {
     display: none;
   }
 
   .doc-pane {
-    padding: 28px 20px 64px;
+    padding: 28px 0 64px;
   }
 
   .home-hero,
@@ -1013,13 +1000,14 @@ html.dark .rail-group a.active {
   }
 
   .search-chip {
-    width: auto;
-    padding: 0 10px;
+    width: 44px;
+    padding: 0;
+    justify-content: center;
+    border-radius: 50%;
   }
 
   .search-chip span,
-  .search-chip kbd,
-  .gh-pill span {
+  .search-chip kbd {
     display: none;
   }
 }
@@ -1037,6 +1025,10 @@ html.dark .rail-group a.active {
 }
 
 @media (max-width: 760px) {
+  .masthead-links {
+    display: none;
+  }
+
   .brand-wordmark {
     width: 78px;
     height: 30px;
@@ -1059,13 +1051,6 @@ html.dark .rail-group a.active {
 }
 
 @media (max-width: 34rem) {
-  .masthead-inner,
-  .home-rest,
-  .site-foot-inner {
-    padding-left: 16px;
-    padding-right: 16px;
-  }
-
   .pager,
   .site-foot-cols {
     grid-template-columns: 1fr;
