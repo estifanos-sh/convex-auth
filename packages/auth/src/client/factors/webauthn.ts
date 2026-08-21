@@ -18,6 +18,14 @@ import type {
   SignInActionResult,
   SignInResult,
 } from "../core/types";
+import type { AuthParameters } from "../../shared/results";
+
+type WebAuthnSignInRequest = {
+  provider: "webauthn";
+  params: AuthParameters;
+  verifier?: string;
+  continuation?: string;
+};
 
 /**
  * Platform-specific WebAuthn ceremony hooks. Each returns the phase-2 params
@@ -33,18 +41,12 @@ export interface WebAuthnCeremony {
    * Run the credential-creation ceremony for the given server options and
    * registration hints, returning the phase-2 verification params.
    */
-  register(
-    options: Record<string, unknown>,
-    opts: WebAuthnRegisterOptions | undefined,
-  ): Promise<Record<string, unknown>>;
+  register(options: unknown, opts: WebAuthnRegisterOptions | undefined): Promise<AuthParameters>;
   /**
    * Run the credential-assertion ceremony for the given server options and
    * sign-in hints, returning the phase-2 verification params.
    */
-  signIn(
-    options: Record<string, unknown>,
-    opts: WebAuthnSignInOptions | undefined,
-  ): Promise<Record<string, unknown>>;
+  signIn(options: unknown, opts: WebAuthnSignInOptions | undefined): Promise<AuthParameters>;
 }
 
 /**
@@ -59,27 +61,20 @@ export function createWebAuthnClientCore(
   const { proxy, convex, requireApiRefs, proxyFetch, setTokenAndMaybeWait } = deps;
 
   const requestSignIn = async (
-    params: Record<string, unknown>,
+    params: AuthParameters,
     verifier?: string,
     continuation?: string,
   ): Promise<SignInActionResult> => {
+    const args: WebAuthnSignInRequest = { provider: "webauthn", params };
+    if (verifier !== undefined) args.verifier = verifier;
+    if (continuation !== undefined) args.continuation = continuation;
     if (proxy) {
       return (await proxyFetch({
         action: "auth:signIn",
-        args: {
-          provider: "webauthn",
-          params,
-          ...(verifier ? { verifier } : {}),
-          ...(continuation ? { continuation } : {}),
-        },
+        args,
       })) as SignInActionResult;
     }
-    return (await convex.action(requireApiRefs().signIn, {
-      provider: "webauthn",
-      params,
-      ...(verifier ? { verifier } : {}),
-      ...(continuation ? { continuation } : {}),
-    })) as SignInActionResult;
+    return (await convex.action(requireApiRefs().signIn, args)) as SignInActionResult;
   };
 
   const handleSignedInResult = async (

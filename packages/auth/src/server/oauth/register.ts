@@ -128,6 +128,12 @@ export function validateClientMetadata(
   };
 }
 
+/** Parse an RFC 7591/7592 request body before validating its supported fields. */
+export function parseClientMetadata(value: unknown): Record<string, unknown> | null {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
+  return value as Record<string, unknown>;
+}
+
 /**
  * Build the public RFC 7591/7592 client-metadata JSON shared by registration
  * and management responses. One-time credentials (`client_secret`,
@@ -171,11 +177,14 @@ export function createRegisterHandler(deps: OAuthRegisterDeps) {
     ctx: GenericActionCtx<GenericDataModel>,
     request: Request,
   ): Promise<Response> {
-    let body: Record<string, unknown>;
+    let body: Record<string, unknown> | null;
     try {
-      body = (await request.json()) as Record<string, unknown>;
+      body = parseClientMetadata(await request.json());
     } catch {
       return jsonError(400, "invalid_client_metadata", "Request body must be JSON.");
+    }
+    if (body === null) {
+      return jsonError(400, "invalid_client_metadata", "Request body must be an object.");
     }
 
     const validated = validateClientMetadata(body, deps.allowedScopes);
@@ -203,9 +212,9 @@ export function createRegisterHandler(deps: OAuthRegisterDeps) {
       JSON.stringify({
         ...metadata,
         client_id_issued_at: Math.floor(Date.now() / 1000),
-        ...(clientSecret !== undefined
-          ? { client_secret: clientSecret, client_secret_expires_at: 0 }
-          : {}),
+        ...(clientSecret === undefined
+          ? {}
+          : { client_secret: clientSecret, client_secret_expires_at: 0 }),
         registration_access_token: registrationAccessToken,
       }),
       {

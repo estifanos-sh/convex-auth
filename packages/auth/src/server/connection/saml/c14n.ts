@@ -59,31 +59,31 @@ const CDATA_SECTION_NODE = 4;
 const PROCESSING_INSTRUCTION_NODE = 7;
 const COMMENT_NODE = 8;
 
-const xmlSpecialToEncodedAttribute: { [key: string]: string } = {
-  "&": "&amp;",
-  "<": "&lt;",
-  '"': "&quot;",
-  "\r": "&#xD;",
-  "\n": "&#xA;",
-  "\t": "&#x9;",
-};
+const xmlSpecialToEncodedAttribute = new Map<string, string>([
+  ["&", "&amp;"],
+  ["<", "&lt;"],
+  ['"', "&quot;"],
+  ["\r", "&#xD;"],
+  ["\n", "&#xA;"],
+  ["\t", "&#x9;"],
+]);
 
-const xmlSpecialToEncodedText: { [key: string]: string } = {
-  "&": "&amp;",
-  "<": "&lt;",
-  ">": "&gt;",
-  "\r": "&#xD;",
-};
+const xmlSpecialToEncodedText = new Map<string, string>([
+  ["&", "&amp;"],
+  ["<", "&lt;"],
+  [">", "&gt;"],
+  ["\r", "&#xD;"],
+]);
 
 function encodeSpecialCharactersInAttribute(attributeValue: string): string {
   return attributeValue.replace(
     /([&<"\r\n\t])/g,
-    (_str, item) => xmlSpecialToEncodedAttribute[item],
+    (_str, item) => xmlSpecialToEncodedAttribute.get(item)!,
   );
 }
 
 function encodeSpecialCharactersInText(text: string): string {
-  return text.replace(/([&<>\r])/g, (_str, item) => xmlSpecialToEncodedText[item]);
+  return text.replace(/([&<>\r])/g, (_str, item) => xmlSpecialToEncodedText.get(item)!);
 }
 
 function isElementNode(node: CanonicalNode): boolean {
@@ -217,13 +217,15 @@ function exclusiveRenderAttrs(node: CanonicalNode): string {
   return res.join("");
 }
 
+type NamespaceRender = { rendered: string; newDefaultNs: string };
+
 function exclusiveRenderNs(
   node: CanonicalNode,
   scope: Set<string>,
   defaultNs: string,
   defaultNsForPrefix: { [key: string]: string },
   inclusiveNamespacesPrefixList: string[],
-): { rendered: string; newDefaultNs: string } {
+): NamespaceRender {
   const res: string[] = [];
   let newDefaultNs = defaultNs;
   const nsListToRender: NamespaceEntry[] = [];
@@ -414,14 +416,14 @@ const envelopedSignature: TransformAlgorithm = {
 };
 
 /** XML-dsig transform algorithm URI → its implementation. */
-const TRANSFORM_ALGORITHMS: Record<string, TransformAlgorithm> = {
-  "http://www.w3.org/2001/10/xml-exc-c14n#": exclusiveCanonicalization,
-  "http://www.w3.org/2000/09/xmldsig#enveloped-signature": envelopedSignature,
-};
+const TRANSFORM_ALGORITHMS = new Map<string, TransformAlgorithm>([
+  ["http://www.w3.org/2001/10/xml-exc-c14n#", exclusiveCanonicalization],
+  ["http://www.w3.org/2000/09/xmldsig#enveloped-signature", envelopedSignature],
+]);
 
 /** Resolve an XML-dsig transform algorithm URI to its implementation. */
 export function getTransformByAlgorithm(algorithm: string): TransformAlgorithm {
-  const transform = TRANSFORM_ALGORITHMS[algorithm];
+  const transform = TRANSFORM_ALGORITHMS.get(algorithm);
   if (transform === undefined) {
     throw new Error(`canonicalization algorithm '${algorithm}' is not supported`);
   }

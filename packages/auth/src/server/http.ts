@@ -184,22 +184,19 @@ function createNotSignedInError() {
 /** A `{ code, message }` error body for the non-OAuth JSON HTTP surface. */
 export type JsonErrorBody = { code: string; message: string };
 
+function isJsonErrorBody(value: unknown): value is JsonErrorBody {
+  if (typeof value !== "object" || value === null) return false;
+  if (!("code" in value) || !("message" in value)) return false;
+  return typeof value.code === "string" && typeof value.message === "string";
+}
+
 /**
  * Extract a `{ code, message }` body from a thrown value for the non-OAuth JSON
  * HTTP surface. A structured `ConvexError` carrying `code`/`message` is surfaced
  * verbatim; anything else collapses to an opaque `INTERNAL_ERROR`.
  */
 export function convexErrorToBody(error: unknown): JsonErrorBody {
-  if (
-    error instanceof ConvexError &&
-    typeof error.data === "object" &&
-    error.data !== null &&
-    "code" in error.data &&
-    "message" in error.data
-  ) {
-    const { code, message } = error.data as { code: string; message: string };
-    return { code, message };
-  }
+  if (error instanceof ConvexError && isJsonErrorBody(error.data)) return error.data;
   return { code: ErrorCode.INTERNAL_ERROR, message: "An unexpected error occurred." };
 }
 
@@ -266,10 +263,10 @@ async function getHttpOAuthContext(
 ): Promise<HttpAuthContext | null> {
   const token = extractBearerToken(request);
   if (token === null || token.startsWith("sk_")) return null;
-  const oauthPayload = await verifyOAuthToken(token, {
-    ...(issuer !== undefined ? { issuer } : {}),
-    ...(resource !== undefined ? { resource } : {}),
-  });
+  const tokenOptions: NonNullable<Parameters<typeof verifyOAuthToken>[1]> = {};
+  if (issuer !== undefined) tokenOptions.issuer = issuer;
+  if (resource !== undefined) tokenOptions.resource = resource;
+  const oauthPayload = await verifyOAuthToken(token, tokenOptions);
   if (!oauthPayload) return null;
   try {
     const authContext = await getAuthContextForUser(

@@ -6,7 +6,7 @@
   import { errorText } from "$lib/errors";
   import IssueDetailPanel from "./IssueDetailPanel.svelte";
 
-  let { project, permissions, members, currentUserId, groupId, client } = $props<{
+  let { project, permissions, members, currentUserId, client } = $props<{
     project: {
       projectId: string;
       name: string;
@@ -25,7 +25,6 @@
     };
     members: Array<{ userId: string; name: string }>;
     currentUserId: string;
-    groupId: string;
     client: ConvexClient;
   }>();
 
@@ -47,40 +46,40 @@
 
   const statusOrder = ["in_progress", "todo", "backlog", "done", "cancelled"] as const;
 
-  const statusLabels: Record<string, string> = {
+  const statusLabels = {
     backlog: "Backlog",
     todo: "Todo",
     in_progress: "In progress",
     done: "Done",
     cancelled: "Cancelled",
-  };
+  } as const satisfies Record<(typeof statusOrder)[number], string>;
 
-  const statusColors: Record<string, string> = {
+  const statusColors = {
     backlog: "text-content-tertiary",
     todo: "text-content-secondary",
     in_progress: "text-content-accent",
     done: "text-content-success",
     cancelled: "text-border-transparent",
-  };
+  } as const satisfies Record<(typeof statusOrder)[number], string>;
 
-  const priorityWeight: Record<string, number> = {
+  const priorityWeight = {
     urgent: 0,
     high: 1,
     medium: 2,
     low: 3,
     none: 4,
-  };
+  } as const;
 
-  const priorityLabels: Record<string, string> = {
+  const priorityLabels = {
     urgent: "Urgent",
     high: "High",
     medium: "Med",
     low: "Low",
     none: "",
-  };
+  } as const;
 
   type IssueType = (typeof issues)[number];
-  type StatusGroup = { status: string; label: string; issues: IssueType[] };
+  type StatusGroup = { status: (typeof statusOrder)[number]; label: string; issues: IssueType[] };
 
   const groupedIssues = $derived.by(() => {
     const groups: StatusGroup[] = [];
@@ -217,7 +216,6 @@
                 {permissions}
                 {members}
                 {currentUserId}
-                {groupId}
                 {client}
                 onclose={() => { expandedIssueId = null; }}
               />

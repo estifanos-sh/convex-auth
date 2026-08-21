@@ -103,32 +103,32 @@ test("proxy sign up can immediately accept invite", async () => {
     url: "https://example.convex.cloud",
     runtime: {
       proxy: {
-        fetch: vi.fn(async (body: Record<string, unknown>) => {
-          const payload = body as {
+        fetch: vi.fn(
+          async (payload: {
             action?: string;
-            args?: Record<string, unknown>;
-          };
+            args?: { refreshToken?: string; params?: { inviteToken?: string } };
+          }) => {
+            if (payload.action !== "auth:signIn") {
+              return new Response(JSON.stringify({ error: "Unsupported action" }), {
+                status: 400,
+                headers: { "Content-Type": "application/json" },
+              });
+            }
 
-          if (payload.action !== "auth:signIn") {
-            return new Response(JSON.stringify({ error: "Unsupported action" }), {
-              status: 400,
-              headers: { "Content-Type": "application/json" },
-            });
-          }
+            if (payload.args?.refreshToken !== undefined) {
+              return new Response(JSON.stringify({ kind: "signedIn", session: null }), {
+                status: 200,
+                headers: { "Content-Type": "application/json" },
+              });
+            }
 
-          if (payload.args?.refreshToken === true) {
-            return new Response(JSON.stringify({ kind: "signedIn", session: null }), {
+            const result = await t.action(api.auth.signIn, payload.args ?? {});
+            return new Response(JSON.stringify(result), {
               status: 200,
               headers: { "Content-Type": "application/json" },
             });
-          }
-
-          const result = await t.action(api.auth.signIn, payload.args ?? {});
-          return new Response(JSON.stringify(result), {
-            status: 200,
-            headers: { "Content-Type": "application/json" },
-          });
-        }),
+          },
+        ),
       },
     },
   });

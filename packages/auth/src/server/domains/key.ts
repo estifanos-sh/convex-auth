@@ -177,7 +177,7 @@ export function createKeyDomain(deps: KeyDeps) {
         id: doc._id,
         now: Date.now(),
         coarsenMs: LAST_USED_COARSEN_MS,
-      })) as unknown as
+      })) as
         | { status: "invalid" | "revoked" | "expired" | "limited" }
         | {
             status: "verified";

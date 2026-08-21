@@ -30,10 +30,13 @@ export function normalizeStringArray(value: unknown): string[] | undefined {
 
 /** @internal */
 export function finalizeNormalizedProfile<T extends NormalizedProfileInput>(input: T) {
-  return {
+  const profile = {
     ...input,
     groups: normalizeStringArray(input.groups),
     roles: normalizeStringArray(input.roles),
-    ...(input.extend && Object.keys(input.extend).length > 0 ? { extend: input.extend } : {}),
   };
+  if (input.extend && Object.keys(input.extend).length > 0) {
+    return { ...profile, extend: input.extend };
+  }
+  return profile;
 }

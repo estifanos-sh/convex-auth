@@ -13,9 +13,11 @@ import { ErrorCode } from "../shared/codes";
 import { recordSignInLimit, resetSignInLimit } from "./limits";
 import { mutation, query } from "./functions";
 import { vAccountDoc, vUserDoc } from "./model";
-import { createSessionRows } from "./session";
+import { createSessionRows, type SessionRows } from "./session";
 
 const ACCOUNT_LIST_BATCH = 128;
+
+type AcceptedCredentialsSignIn = SessionRows & { status: "accepted" };
 
 /** Reserve a password attempt and load all sign-in state in one transaction. */
 export const beginCredentialsSignIn = mutation({
@@ -107,15 +109,16 @@ export const completeCredentialsSignIn = mutation({
       refreshTokenExpirationTime: args.generateTokens ? args.refreshTokenExpirationTime : undefined,
     });
     if (created === null) return { status: "rejected" as const };
-    return {
+    const result: AcceptedCredentialsSignIn = {
       status: "accepted" as const,
       user: created.user,
       sessionId: created.sessionId,
-      ...(created.refreshTokenId === undefined ? {} : { refreshTokenId: created.refreshTokenId }),
-      ...(created.replacedSessionId === undefined
-        ? {}
-        : { replacedSessionId: created.replacedSessionId }),
     };
+    if (created.refreshTokenId !== undefined) result.refreshTokenId = created.refreshTokenId;
+    if (created.replacedSessionId !== undefined) {
+      result.replacedSessionId = created.replacedSessionId;
+    }
+    return result;
   },
 });
 

@@ -631,7 +631,7 @@ test("proxy signIn hydrates auth from refresh cookie for device verification", a
         };
       }
 
-      expect((this as unknown as { auth?: string }).auth).toBe("fresh-jwt-token");
+      expect(Object.getOwnPropertyDescriptor(this, "auth")?.value).toBe("fresh-jwt-token");
       expect(args).toMatchObject({
         provider: "device",
         params: { flow: "verify", userCode: "ABCD-EFGH" },
@@ -731,8 +731,8 @@ test("proxy signOut retries revocation via refresh token", async () => {
   expect(signOutCalls).toBe(2);
 });
 
-function unsignedToken(payload: Record<string, unknown>) {
-  const encode = (value: object) => {
+function unsignedToken(payload: Record<string, boolean | number | string>) {
+  const encode = (value: Record<string, boolean | number | string>) => {
     return Buffer.from(JSON.stringify(value)).toString("base64url");
   };
   return `${encode({ alg: "none", typ: "JWT" })}.${encode(payload)}.`;

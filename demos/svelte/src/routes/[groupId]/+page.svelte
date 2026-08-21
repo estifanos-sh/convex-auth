@@ -114,7 +114,6 @@
 						}}
 						members={workspace.members.map((member) => ({ userId: member.userId, name: member.name }))}
 						currentUserId={user.userId}
-						groupId={workspace.groupId}
 						{client}
 					/>
 				{/key}

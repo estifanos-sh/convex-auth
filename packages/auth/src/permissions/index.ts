@@ -86,17 +86,25 @@ type NormalizedRoles<TRoles extends Record<string, { label?: string; grants: rea
     };
   };
 
+type NormalizedRole = {
+  id: string;
+  label?: string;
+  grants: string[];
+};
+
 function normalizeRoles<
   const TRoles extends Record<string, { label?: string; grants: readonly string[] }>,
 >(roles: TRoles): NormalizedRoles<TRoles> {
   return Object.fromEntries(
-    Object.entries(roles).map(([id, role]) => [
-      id,
-      {
-        id,
-        ...(role.label ? { label: role.label } : {}),
-        grants: [...role.grants],
-      },
-    ]),
+    Object.entries(roles).map(([id, role]) => [id, normalizeRole(id, role)]),
   ) as NormalizedRoles<TRoles>;
+}
+
+function normalizeRole(
+  id: string,
+  role: { label?: string; grants: readonly string[] },
+): NormalizedRole {
+  const normalized: NormalizedRole = { id, grants: [...role.grants] };
+  if (role.label !== undefined) normalized.label = role.label;
+  return normalized;
 }

@@ -1,5 +1,5 @@
 import type { Auth } from "convex/server";
-import { ConvexError } from "convex/values";
+import { ConvexError, type Value } from "convex/values";
 
 import { ErrorCode } from "../../shared/codes";
 import type { ComponentCtx, ComponentReadCtx } from "../component/context";
@@ -58,7 +58,7 @@ export function createInviteDomain(deps: InviteDeps) {
           email?: string;
           roleIds?: string[];
           expiresTime?: number;
-          extend?: Record<string, unknown>;
+          extend?: { [key: string]: Value | undefined };
         };
       },
     ) => {
@@ -245,10 +245,11 @@ export function createInviteDomain(deps: InviteDeps) {
      * ```
      */
     accept: async (ctx: ComponentCtx, opts: { id: string; acceptedByUserId?: string }) => {
-      await ctx.runMutation(config.component.group.invite.accept, {
-        id: opts.id,
-        ...(opts.acceptedByUserId ? { acceptedByUserId: opts.acceptedByUserId } : {}),
-      });
+      const args = { id: opts.id };
+      if (opts.acceptedByUserId !== undefined) {
+        Object.assign(args, { acceptedByUserId: opts.acceptedByUserId });
+      }
+      await ctx.runMutation(config.component.group.invite.accept, args);
       return {
         id: opts.id,
         acceptedByUserId: opts.acceptedByUserId ?? null,

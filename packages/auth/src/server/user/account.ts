@@ -28,15 +28,23 @@ type UserProvisioningPolicy = GroupConnectionPolicy["provisioning"]["user"];
 
 type UserProvisioningSource = "login" | "scim";
 
-function mergeExtend(existing: unknown, incoming: Record<string, unknown> | undefined) {
+type UserData = AuthProfile & {
+  emailVerificationTime?: number;
+  phoneVerificationTime?: number;
+};
+
+function mergeExtend(
+  existing: AuthAccountExtend | undefined,
+  incoming: AuthAccountExtend | undefined,
+) {
   if (!incoming) {
     return undefined;
   }
-  const existingRecord =
-    typeof existing === "object" && existing !== null && !Array.isArray(existing)
-      ? (existing as Record<string, unknown>)
-      : undefined;
-  return existingRecord ? { ...existingRecord, ...incoming } : incoming;
+  return existing ? { ...existing, ...incoming } : incoming;
+}
+
+function isConnectionProtocol(value: unknown): value is "oidc" | "saml" {
+  return value === "oidc" || value === "saml";
 }
 
 function effectiveUserUpdateMode(
@@ -72,7 +80,7 @@ function isUserFieldMissing(value: unknown) {
 
 function buildUserPatchData(args: {
   currentUser: Record<string, unknown>;
-  nextUser: Record<string, unknown>;
+  nextUser: UserData;
   mode: "never" | "missing" | "always";
 }) {
   if (args.mode === "never") {
@@ -146,7 +154,7 @@ export async function upsertUserAndAccount(
 async function resolveUserIdByLinking(
   ctx: MutationCtx,
   args: CreateOrUpdateUserArgs,
-  profile: Record<string, unknown>,
+  profile: AuthProfile,
   shouldLinkViaEmail: boolean,
   shouldLinkViaPhone: boolean,
   existingUserIdOverride: GenericId<"User"> | null,
@@ -201,8 +209,9 @@ async function checkAllowLink(
   const allowed = await config.connection.hooks.allowLink({
     protocol: isCredentialsLink
       ? "credentials"
-      : args.provider.type === "oauth" && typeof args.accountExtend?.identity?.protocol === "string"
-        ? (args.accountExtend.identity.protocol as "oidc" | "saml")
+      : args.provider.type === "oauth" &&
+          isConnectionProtocol(args.accountExtend?.identity?.protocol)
+        ? args.accountExtend.identity.protocol
         : "oidc",
     connectionId:
       typeof args.accountExtend?.identity?.connectionId === "string"
@@ -233,7 +242,7 @@ async function recordOwnedEmails(
   db: ReturnType<typeof authDb>,
   userId: GenericId<"User">,
   args: CreateOrUpdateUserArgs,
-  profile: Record<string, unknown>,
+  profile: AuthProfile,
   emailVerified: boolean,
 ): Promise<void> {
   const identity = args.accountExtend?.identity;
@@ -280,12 +289,12 @@ async function recordOwnedEmails(
 async function updateExistingUser(
   db: ReturnType<typeof authDb>,
   userId: GenericId<"User">,
-  userData: Record<string, unknown>,
+  userData: UserData,
   source: UserProvisioningSource,
   provisioningUser: UserProvisioningPolicy | undefined,
   providerUpdateProfileOnLogin?: boolean,
 ) {
-  const currentUser = (await db.users.get({ id: userId })) as Record<string, unknown> | null;
+  const currentUser = await db.users.get({ id: userId });
   const mode = effectiveUserUpdateMode(source, provisioningUser, providerUpdateProfileOnLogin);
   const patchData = buildUserPatchData({
     currentUser: currentUser ?? {},
@@ -378,7 +387,7 @@ async function defaultCreateOrUpdateUser(
     }
   }
 
-  const userData = {
+  const userData: UserData = {
     ...(emailVerified ? { emailVerificationTime: Date.now() } : null),
     ...(phoneVerified ? { phoneVerificationTime: Date.now() } : null),
     ...profile,
@@ -466,7 +475,7 @@ async function uniqueUserWithVerifiedEmail(
   config: ConvexAuthConfig,
 ) {
   const db = authDb(ctx, config);
-  return (await db.users.get({ verifiedEmail: email })) as Doc<"User"> | null;
+  return await db.users.get({ verifiedEmail: email });
 }
 
 async function uniqueUserWithVerifiedPhone(
@@ -475,7 +484,7 @@ async function uniqueUserWithVerifiedPhone(
   config: ConvexAuthConfig,
 ) {
   const db = authDb(ctx, config);
-  return (await db.users.get({ verifiedPhone: phone })) as Doc<"User"> | null;
+  return await db.users.get({ verifiedPhone: phone });
 }
 
 async function createOrUpdateAccount(

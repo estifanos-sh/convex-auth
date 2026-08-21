@@ -130,12 +130,8 @@ const browserWebAuthnCeremony: WebAuthnCeremony = {
           }),
         ),
       } as PublicKeyCredentialRequestOptions & { hints?: string[] },
-      ...(opts?.autofill
-        ? ({
-            mediation: "conditional" as CredentialMediationRequirement,
-          } as const)
-        : {}),
     };
+    if (opts?.autofill) getOptions.mediation = "conditional";
 
     const getAbort = new AbortController();
     getOptions.signal = getAbort.signal;

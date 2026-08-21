@@ -154,17 +154,21 @@ async function verifyWithFidoMds(
 ): Promise<Omit<WebAuthnAttestationEvidence, "status" | "verifiedAt" | "verifier">> {
   assertFullAttestation(input.attestationObject);
   const metadata = await getFidoMetadata();
-  const response = {
+  const responseData: RegistrationResponseJSON["response"] = {
+    clientDataJSON: input.clientDataJSON,
+    attestationObject: input.attestationObject,
+  };
+  if (input.transports !== undefined) {
+    responseData.transports =
+      input.transports as RegistrationResponseJSON["response"]["transports"];
+  }
+  const response: RegistrationResponseJSON = {
     id: input.credentialId,
     rawId: input.credentialId,
     type: "public-key",
-    response: {
-      clientDataJSON: input.clientDataJSON,
-      attestationObject: input.attestationObject,
-      ...(input.transports ? { transports: input.transports } : {}),
-    },
+    response: responseData,
     clientExtensionResults: {},
-  } as RegistrationResponseJSON;
+  };
   const result = await verifyRegistrationResponse({
     response,
     expectedChallenge: input.expectedChallenge,

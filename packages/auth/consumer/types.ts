@@ -7,7 +7,13 @@ import type {
 import { webauthn } from "@estifanos-sh/convex-auth/providers/webauthn";
 // @ts-expect-error createAuth was hard-cut from the vNext public server API.
 import { createAuth } from "@estifanos-sh/convex-auth/server";
-import { authEnv, authEvents, defineAuth, type AuthEnv } from "@estifanos-sh/convex-auth/server";
+import {
+  authEnv,
+  authEvents,
+  defineAuth,
+  type AuthEnv,
+  type InferClientApi,
+} from "@estifanos-sh/convex-auth/server";
 import { defineApp, type HttpRouter } from "convex/server";
 import { v, type GenericId } from "convex/values";
 
@@ -49,6 +55,11 @@ type IsNever<T> = [T] extends [never] ? true : false;
 type _DirectWebAuthnSignInIsDisabled = Assert<IsNever<ParamsForProvider<"webauthn">>>;
 type _PasskeyClientWasRemoved = Assert<
   "passkey" extends keyof typeof webauthnClient ? false : true
+>;
+const inferredWebAuthnAuth = defineAuth(authComponent, { providers: [webauthn()] });
+type InferredWebAuthnApi = InferClientApi<typeof inferredWebAuthnAuth>;
+type _WebAuthnProviderInference = Assert<
+  InferredWebAuthnApi extends AuthApiRefs<true, false, false> ? true : false
 >;
 type UnknownFactorClient = Pick<
   PlatformAuthClient<AuthApiRefs<boolean, boolean, boolean>>,

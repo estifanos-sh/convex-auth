@@ -19,6 +19,31 @@ if (convexUrl !== null) {
 
 const siteUrl = process.env.SITE_URL ?? null;
 const passkeyDomain = siteUrl ? new URL(siteUrl).hostname : null;
+const ios = { supportsTablet: true };
+const android = {
+  adaptiveIcon: {
+    backgroundColor: "#E6F4FE",
+    foregroundImage: "./assets/images/android-icon-foreground.png",
+    backgroundImage: "./assets/images/android-icon-background.png",
+    monochromeImage: "./assets/images/android-icon-monochrome.png",
+  },
+  edgeToEdgeEnabled: true,
+  predictiveBackGestureEnabled: false,
+};
+
+if (passkeyDomain) {
+  Object.assign(ios, { associatedDomains: [`webcredentials:${passkeyDomain}`] });
+  Object.assign(android, {
+    intentFilters: [
+      {
+        action: "VIEW",
+        autoVerify: true,
+        data: [{ scheme: "https", host: passkeyDomain }],
+        category: ["BROWSABLE", "DEFAULT"],
+      },
+    ],
+  });
+}
 
 module.exports = {
   expo: {
@@ -29,32 +54,8 @@ module.exports = {
     icon: "./assets/images/icon.png",
     scheme: "demoexpo",
     userInterfaceStyle: "automatic",
-    ios: {
-      supportsTablet: true,
-      ...(passkeyDomain ? { associatedDomains: [`webcredentials:${passkeyDomain}`] } : {}),
-    },
-    android: {
-      adaptiveIcon: {
-        backgroundColor: "#E6F4FE",
-        foregroundImage: "./assets/images/android-icon-foreground.png",
-        backgroundImage: "./assets/images/android-icon-background.png",
-        monochromeImage: "./assets/images/android-icon-monochrome.png",
-      },
-      edgeToEdgeEnabled: true,
-      predictiveBackGestureEnabled: false,
-      ...(passkeyDomain
-        ? {
-            intentFilters: [
-              {
-                action: "VIEW",
-                autoVerify: true,
-                data: [{ scheme: "https", host: passkeyDomain }],
-                category: ["BROWSABLE", "DEFAULT"],
-              },
-            ],
-          }
-        : {}),
-    },
+    ios,
+    android,
     web: {
       output: "static",
       favicon: "./assets/images/favicon.png",

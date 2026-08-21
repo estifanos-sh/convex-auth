@@ -9,7 +9,7 @@
  */
 
 import { paginationOptsValidator } from "convex/server";
-import { ConvexError, v } from "convex/values";
+import { ConvexError, type Infer, v } from "convex/values";
 import { paginator } from "convex-helpers/server/pagination";
 
 import { ErrorCode } from "../../../shared/codes";
@@ -18,6 +18,14 @@ import { vGroupConnectionScimIdentityDoc, vPaginated, vScimResourceType } from "
 import schema from "../../schema";
 
 const vScimUserData = v.object(schema.tables.User.validator.fields);
+
+type ScimUserIdentity = Pick<
+  Infer<typeof vGroupConnectionScimIdentityDoc>,
+  "connectionId" | "groupId" | "externalId" | "lastProvisionedAt" | "active" | "raw"
+> & {
+  resourceType: "user";
+  userId: NonNullable<Infer<typeof vGroupConnectionScimIdentityDoc>["userId"]>;
+};
 
 /**
  * Read SCIM identities, overloaded by the args supplied. With
@@ -214,18 +222,18 @@ export const provision = mutation({
       });
     }
 
-    const identityData = {
+    const identityData: ScimUserIdentity = {
       connectionId: args.connectionId,
       groupId: args.groupId,
       resourceType: "user" as const,
       externalId: args.externalId,
       userId,
-      ...(args.lastProvisionedAt !== undefined
-        ? { lastProvisionedAt: args.lastProvisionedAt }
-        : {}),
-      ...(args.active !== undefined ? { active: args.active } : {}),
-      ...(args.raw !== undefined ? { raw: args.raw } : {}),
     };
+    if (args.lastProvisionedAt !== undefined) {
+      identityData.lastProvisionedAt = args.lastProvisionedAt;
+    }
+    if (args.active !== undefined) identityData.active = args.active;
+    if (args.raw !== undefined) identityData.raw = args.raw;
     if (identity === null) {
       await ctx.db.insert("GroupConnectionScimIdentity", identityData);
     } else {

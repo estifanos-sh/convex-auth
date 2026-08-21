@@ -77,21 +77,28 @@ function normalizePermissionsConfig(
   const roles = Object.fromEntries(
     Object.entries(permissions?.roles ?? {}).map(([roleId, role]) => [
       roleId,
-      {
-        ...(role.label ? { label: role.label } : {}),
-        grants: Array.from(new Set(role.grants)).sort(),
-      },
+      normalizePermissionRole(role),
     ]),
   );
   return { grants, roles };
+}
+
+function normalizePermissionRole(
+  role: PermissionsConfig["roles"][string],
+): PermissionsConfig["roles"][string] {
+  const normalized: PermissionsConfig["roles"][string] = {
+    grants: Array.from(new Set(role.grants)).sort(),
+  };
+  if (role.label !== undefined) normalized.label = role.label;
+  return normalized;
 }
 
 function normalizeTelemetryConfig(telemetry: ConvexAuthConfig["telemetry"]): AuthTelemetryConfig {
   const normalized: AuthTelemetryConfig = {
     includeIdentity: telemetry?.includeIdentity ?? "none",
     identityFields: telemetry?.identityFields ?? {},
-    ...(telemetry?.hashIdentity ? { hashIdentity: telemetry.hashIdentity } : {}),
   };
+  if (telemetry?.hashIdentity !== undefined) normalized.hashIdentity = telemetry.hashIdentity;
 
   if (normalized.includeIdentity === "hashed" && normalized.hashIdentity === undefined) {
     throw new Error(

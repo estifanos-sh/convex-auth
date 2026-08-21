@@ -27,19 +27,26 @@ export const HandshakeErrorCode = {
 /** Union of every client-only handshake code. */
 export type HandshakeErrorCode = (typeof HandshakeErrorCode)[keyof typeof HandshakeErrorCode];
 
-const HANDSHAKE_ERROR_MESSAGES: Record<HandshakeErrorCode, string> = {
+type HandshakeErrorContext = Record<string, Value | undefined>;
+
+const HANDSHAKE_ERROR_MESSAGES = {
   AUTH_HANDSHAKE_TIMEOUT: "Sign-in succeeded but authentication confirmation timed out.",
   AUTH_HANDSHAKE_REJECTED: "Authentication was rejected while confirming the session.",
-};
+} as const satisfies Record<HandshakeErrorCode, string>;
+
+type HandshakeErrorData = {
+  code: HandshakeErrorCode;
+  message: string;
+} & Record<string, Value>;
 
 /** @internal */
-export const createHandshakeError = (
-  code: HandshakeErrorCode,
-  context: Record<string, unknown>,
-) => {
-  return new ConvexError({
+export const createHandshakeError = (code: HandshakeErrorCode, context: HandshakeErrorContext) => {
+  const data: HandshakeErrorData = {
     code,
     message: HANDSHAKE_ERROR_MESSAGES[code],
-    ...context,
-  } as Value);
+  };
+  for (const [key, value] of Object.entries(context)) {
+    if (value !== undefined) data[key] = value;
+  }
+  return new ConvexError(data);
 };

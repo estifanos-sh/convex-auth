@@ -53,6 +53,13 @@ type WebhookDeps = {
   emitGroupAuthEvent: (ctx: ComponentCtx, data: EmitGroupAuthEventInput) => Promise<string>;
 };
 
+type WebhookEndpointPatch = {
+  url?: string;
+  status?: "active" | "disabled";
+  subscriptions?: AuthEventKind[];
+  secretCiphertext?: EncryptedSecret;
+};
+
 /**
  * Webhook endpoint doc with all stored credential material stripped for the
  * public/admin read facade (`endpoint.get`/`endpoint.list`). The raw ciphertext
@@ -155,16 +162,14 @@ export function createGroupWebhookDomain(deps: WebhookDeps) {
         }
         const secretCiphertext =
           args.patch.secret === undefined ? undefined : await encryptSecret(args.patch.secret);
+        const patch: WebhookEndpointPatch = {};
+        if (args.patch.url !== undefined) patch.url = args.patch.url;
+        if (args.patch.status !== undefined) patch.status = args.patch.status;
+        if (args.patch.subscriptions !== undefined) patch.subscriptions = args.patch.subscriptions;
+        if (secretCiphertext !== undefined) patch.secretCiphertext = secretCiphertext;
         await updateWebhookEndpoint(ctx, config.component.connection, {
           endpointId: args.id,
-          patch: {
-            ...(args.patch.url === undefined ? {} : { url: args.patch.url }),
-            ...(args.patch.status === undefined ? {} : { status: args.patch.status }),
-            ...(args.patch.subscriptions === undefined
-              ? {}
-              : { subscriptions: args.patch.subscriptions }),
-            ...(secretCiphertext === undefined ? {} : { secretCiphertext }),
-          },
+          patch,
         });
         return { endpointId: args.id };
       },

@@ -1,12 +1,12 @@
-import { ConvexError } from "convex/values";
+import { ConvexError, type Value } from "convex/values";
 
 import { ErrorCode } from "../../shared/codes";
 
 const NETWORK_ERROR_PATTERN = /(network|fetch|load failed|failed to fetch)/i;
 
-type ProxyErrorBody = {
+export type ProxyErrorBody = {
   error?: string;
-  authError?: unknown;
+  authError?: Value;
 };
 
 /**
@@ -85,9 +85,14 @@ export function parseProxyErrorBody(value: unknown): ProxyErrorBody {
   if (typeof value !== "object" || value === null) {
     return {};
   }
-  const obj = value as Record<string, unknown>;
+  const obj = value as { error?: unknown; authError?: unknown };
   return {
     error: typeof obj.error === "string" ? obj.error : undefined,
-    authError: obj.authError,
+    authError: obj.authError as Value | undefined,
   };
+}
+
+/** @internal */
+export function parseProxyResponseBody(value: unknown): Value {
+  return value as Value;
 }

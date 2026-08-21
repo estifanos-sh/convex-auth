@@ -28,7 +28,11 @@ function derToPem(der: Uint8Array, label: string): string {
   return `-----BEGIN ${label}-----\n${lines}\n-----END ${label}-----`;
 }
 
-function readDerLength(buf: Uint8Array, pos: number): { length: number; consumed: number } {
+type DerLength = { length: number; consumed: number };
+
+type DerElement = { value: Uint8Array; end: number };
+
+function readDerLength(buf: Uint8Array, pos: number): DerLength {
   const first = buf[pos];
   if (first < 0x80) return { length: first, consumed: 1 };
   const n = first & 0x7f;
@@ -37,7 +41,7 @@ function readDerLength(buf: Uint8Array, pos: number): { length: number; consumed
   return { length, consumed: 1 + n };
 }
 
-function readDerElement(buf: Uint8Array, pos: number): { value: Uint8Array; end: number } {
+function readDerElement(buf: Uint8Array, pos: number): DerElement {
   const { length, consumed } = readDerLength(buf, pos + 1);
   const valueStart = pos + 1 + consumed;
   return { value: buf.subarray(valueStart, valueStart + length), end: valueStart + length };

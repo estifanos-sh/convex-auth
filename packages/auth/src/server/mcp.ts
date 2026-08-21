@@ -41,11 +41,10 @@ export type McpToolDef<V extends GenericValidator = GenericValidator, S extends 
 type McpServer = {
   name?: string;
   version?: string;
-  tools: Record<string, McpToolDef>;
+  tools: Record<string, McpToolDef<any>>;
 };
 
 const PROTOCOL_VERSION = "2025-06-18";
-
 /**
  * JSON Schema for each Convex validator `kind`, keyed by `kind` rather than a
  * `switch`: the mapped type forces every `kind` to be handled and narrows each
@@ -121,6 +120,36 @@ function headerIdPart(id: unknown): string {
   return typeof id === "string" || typeof id === "number" ? String(id) : "0";
 }
 
+function isJsonObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+type McpRequest = {
+  id?: unknown;
+  method?: string;
+  params?: unknown;
+};
+
+function parseMcpRequest(value: unknown): McpRequest | null {
+  if (!isJsonObject(value)) return null;
+  if (value.method !== undefined && typeof value.method !== "string") return null;
+  return { id: value.id, method: value.method, params: value.params };
+}
+
+type ToolCallParams = {
+  name?: string;
+  arguments: Record<string, unknown>;
+};
+
+function parseToolCallParams(value: unknown): ToolCallParams | null {
+  if (value === undefined) return { arguments: {} };
+  if (!isJsonObject(value) || (value.name !== undefined && typeof value.name !== "string")) {
+    return null;
+  }
+  if (value.arguments !== undefined && !isJsonObject(value.arguments)) return null;
+  return { name: value.name, arguments: value.arguments ?? {} };
+}
+
 /** Resolves the OAuth scopes for a request, or `null` if it isn't an OAuth bearer. */
 export type ResolveOAuthScopes = (
   ctx: GenericActionCtx<GenericDataModel>,
@@ -163,10 +192,11 @@ async function callTool(
   ctx: GenericActionCtx<GenericDataModel>,
   id: unknown,
   scopes: readonly string[],
-  tools: Record<string, McpToolDef>,
+  tools: Record<string, McpToolDef<any>>,
   rawParams: unknown,
 ): Promise<Response> {
-  const params = (rawParams ?? {}) as { name?: string; arguments?: Record<string, unknown> };
+  const params = parseToolCallParams(rawParams);
+  if (params === null) return rpcError(id, -32602, "Invalid tool parameters.");
   const tool = params.name ? tools[params.name] : undefined;
   if (!tool) {
     return rpcError(id, -32602, `Unknown tool: ${params.name ?? "(none)"}`);
@@ -174,7 +204,7 @@ async function callTool(
   if (!scopes.includes(tool.scope)) {
     return rpcError(id, -32003, `Missing required OAuth scope: ${tool.scope}`, { status: 403 });
   }
-  const args = params.arguments ?? {};
+  const args = params.arguments;
   try {
     validate(tool.args, args, { throw: true });
   } catch (err) {
@@ -207,9 +237,11 @@ async function handleMcp(
   const scopes = await resolveScopes(ctx, request);
   if (scopes === null) return unauthorized(request);
 
-  let body: { id?: unknown; method?: string; params?: unknown };
+  let body: McpRequest;
   try {
-    body = (await request.json()) as typeof body;
+    const parsed = parseMcpRequest(await request.json());
+    if (parsed === null) return rpcError(null, -32600, "Invalid Request.", { status: 400 });
+    body = parsed;
   } catch {
     return rpcError(null, -32700, "Parse error.", { status: 400 });
   }
@@ -263,7 +295,7 @@ async function handleMcp(
 export function addMcpRoutes(
   http: HttpRouter,
   deps: {
-    tools: Record<string, McpToolDef>;
+    tools: Record<string, McpToolDef<any>>;
     name?: string;
     version?: string;
     scopes: string[];

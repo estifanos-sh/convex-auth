@@ -33,13 +33,13 @@ import { type GroupProject, useGroupData } from "@/src/groups";
 
 const STATUS_ORDER = ["in_progress", "todo", "backlog", "done", "cancelled"] as const;
 
-const STATUS_LABELS: Record<string, string> = {
+const STATUS_LABELS = {
   in_progress: "In Progress",
   todo: "Todo",
   backlog: "Backlog",
   done: "Done",
   cancelled: "Cancelled",
-};
+} as const satisfies Record<(typeof STATUS_ORDER)[number], string>;
 
 export default function IssuesScreen() {
   const client = useAppClient();

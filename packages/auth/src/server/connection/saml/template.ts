@@ -49,16 +49,16 @@ export function createXPath(local: XPathLocal, isExtractAll?: boolean): string {
 }
 
 /** Map a SAML message type to the redirect-binding query param (`SAMLRequest`/`SAMLResponse`). */
-const QUERY_PARAM_BY_KIND: Record<SamlMessageKind, "SAMLRequest" | "SAMLResponse"> = {
-  SAMLRequest: "SAMLRequest",
-  LogoutRequest: "SAMLRequest",
-  SAMLResponse: "SAMLResponse",
-  LogoutResponse: "SAMLResponse",
-};
+const QUERY_PARAM_BY_KIND = new Map<SamlMessageKind, "SAMLRequest" | "SAMLResponse">([
+  ["SAMLRequest", "SAMLRequest"],
+  ["LogoutRequest", "SAMLRequest"],
+  ["SAMLResponse", "SAMLResponse"],
+  ["LogoutResponse", "SAMLResponse"],
+]);
 
 /** The redirect/POST query-param name carrying a message of the given kind. */
 export function getQueryParamByType(type: string): "SAMLRequest" | "SAMLResponse" {
-  const param = QUERY_PARAM_BY_KIND[type as SamlMessageKind];
+  const param = QUERY_PARAM_BY_KIND.get(type as SamlMessageKind);
   if (param === undefined) {
     throw new Error("ERR_UNDEFINED_QUERY_PARAMS");
   }

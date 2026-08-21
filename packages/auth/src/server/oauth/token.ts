@@ -97,6 +97,20 @@ function jsonOk(body: Record<string, unknown>): Response {
   });
 }
 
+function tokenResponse(args: {
+  accessToken: string;
+  scopes: string[];
+  refreshToken?: string;
+}): Response {
+  return jsonOk({
+    access_token: args.accessToken,
+    token_type: "Bearer",
+    expires_in: OAUTH_ACCESS_TOKEN_DURATION_S,
+    scope: args.scopes.join(" "),
+    ...(args.refreshToken === undefined ? {} : { refresh_token: args.refreshToken }),
+  });
+}
+
 /**
  * Token/grant state is already committed when these audit hooks run. Never
  * turn an event sink outage into a response failure that hides a newly issued
@@ -321,13 +335,7 @@ async function handleAuthorizationCode(
     },
   });
 
-  return jsonOk({
-    access_token: accessToken,
-    token_type: "Bearer",
-    expires_in: OAUTH_ACCESS_TOKEN_DURATION_S,
-    scope: doc.scopes.join(" "),
-    ...(refreshToken !== undefined ? { refresh_token: refreshToken } : {}),
-  });
+  return tokenResponse({ accessToken, scopes: doc.scopes, refreshToken });
 }
 
 async function handleRefreshToken(
@@ -387,13 +395,7 @@ async function handleRefreshToken(
     data: { clientId, scopes, grantType: "refresh_token" },
   });
 
-  return jsonOk({
-    access_token: accessToken,
-    token_type: "Bearer",
-    expires_in: OAUTH_ACCESS_TOKEN_DURATION_S,
-    scope: scopes.join(" "),
-    refresh_token: rotated.refreshToken,
-  });
+  return tokenResponse({ accessToken, scopes, refreshToken: rotated.refreshToken });
 }
 
 /** Client-credentials grant denial → its RFC 6749 token-error response. */
@@ -446,12 +448,7 @@ async function handleClientCredentials(
     },
   });
 
-  return jsonOk({
-    access_token: accessToken,
-    token_type: "Bearer",
-    expires_in: OAUTH_ACCESS_TOKEN_DURATION_S,
-    scope: effectiveScopes.join(" "),
-  });
+  return tokenResponse({ accessToken, scopes: effectiveScopes });
 }
 
 /**

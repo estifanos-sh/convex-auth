@@ -41,7 +41,7 @@ export interface OAuthProviderConfig {
 }
 
 function normalizeTokens(tokens: OAuth2Tokens): OAuthTokens {
-  return normalizeOAuthTokenResponse(tokens.data as Record<string, unknown>);
+  return normalizeOAuthTokenResponse(tokens.data);
 }
 
 /**

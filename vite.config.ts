@@ -18,15 +18,7 @@ export default defineConfig({
     "*": "vp check --fix",
   },
   lint: {
-    ignorePatterns: [
-      "**/dist/**",
-      "**/_generated/**",
-      "**/node_modules/**",
-      ".github/**",
-      "packages/auth/src/server/auth.ts",
-      "packages/auth/src/server/index.ts",
-      "packages/auth/src/server/implementation.ts",
-    ],
+    ignorePatterns: ["**/dist/**", "**/_generated/**", "**/node_modules/**", ".github/**"],
     options: {
       typeAware: true,
       typeCheck: true,
@@ -177,7 +169,6 @@ export default defineConfig({
     },
   },
   test: {
-    passWithNoTests: true,
     projects: [
       {
         root: "./tests",
@@ -187,7 +178,7 @@ export default defineConfig({
         test: {
           name: "convex",
           include: ["**/*.test.ts"],
-          exclude: ["**/node.test.ts"],
+          exclude: ["**/node.test.ts", "**/*.node.test.ts"],
           environment: "edge-runtime",
           setupFiles: ["./vitest/setup.ts"],
           server: { deps: { inline: ["convex-test"] } },
@@ -202,7 +193,7 @@ export default defineConfig({
         },
         test: {
           name: "node",
-          include: ["**/node.test.ts"],
+          include: ["**/node.test.ts", "**/*.node.test.ts"],
           exclude: ["connection/**/node.test.ts", "benchmarks/**/node.test.ts"],
           environment: "node",
           setupFiles: ["./vitest/setup.ts"],

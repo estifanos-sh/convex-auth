@@ -81,8 +81,8 @@ type AuthRuntime = {
     update(
       ctx: GenericActionCtx<GenericDataModel>,
       args: { id: string; patch: Record<string, unknown> },
-    ): Promise<unknown>;
-    remove(ctx: GenericActionCtx<GenericDataModel>, args: { id: string }): Promise<unknown>;
+    ): Promise<null>;
+    remove(ctx: GenericActionCtx<GenericDataModel>, args: { id: string }): Promise<null>;
   };
   member: {
     list(
@@ -106,12 +106,12 @@ type AuthRuntime = {
           status: string;
         };
       },
-    ): Promise<unknown>;
+    ): Promise<string>;
     update(
       ctx: GenericActionCtx<GenericDataModel>,
       args: { id: string; patch: Record<string, unknown> },
-    ): Promise<unknown>;
-    remove(ctx: GenericActionCtx<GenericDataModel>, args: { id: string }): Promise<unknown>;
+    ): Promise<null>;
+    remove(ctx: GenericActionCtx<GenericDataModel>, args: { id: string }): Promise<null>;
     get(
       ctx: GenericActionCtx<GenericDataModel>,
       args: { groupId: string; userId: string },
@@ -263,16 +263,13 @@ const SAML_LOGIN_REQUEST_TTL_MS = 10 * 60 * 1000;
  */
 const SAML_SEEN_ASSERTION_FALLBACK_TTL_MS = 10 * 60 * 1000;
 
-const SCIM_FILTER_OPERATORS: Record<
-  ScimFilterOperator,
-  (values: string[], filterValue: string) => boolean
-> = {
+const SCIM_FILTER_OPERATORS = {
   pr: (values) => values.length > 0,
   eq: (values, filterValue) => values.includes(filterValue),
   co: (values, filterValue) => values.some((value) => value.includes(filterValue)),
   sw: (values, filterValue) => values.some((value) => value.startsWith(filterValue)),
   ew: (values, filterValue) => values.some((value) => value.endsWith(filterValue)),
-};
+} satisfies Record<ScimFilterOperator, (values: string[], filterValue: string) => boolean>;
 
 export function addGroupHttpRuntime(deps: GroupHttpRuntimeDeps) {
   if (!deps.hasConnection) {
@@ -529,7 +526,9 @@ export function addGroupHttpRuntime(deps: GroupHttpRuntimeDeps) {
     "emails.primary": (body) => pickPrimaryEmail(body),
     "emails.value": (body) =>
       Array.isArray(body.emails)
-        ? body.emails.map((entry) => entry.value).filter(Boolean)
+        ? body.emails
+            .map((entry) => entry.value)
+            .filter((value): value is string => typeof value === "string")
         : undefined,
     "phoneNumbers.primary": (body) => pickPhone(body),
     "phoneNumbers.value": (body) => pickPhone(body),
@@ -680,7 +679,11 @@ export function addGroupHttpRuntime(deps: GroupHttpRuntimeDeps) {
       throw new Error("Unsupported SCIM content type.");
     }
     try {
-      return (await request.json()) as Record<string, unknown>;
+      const body: unknown = await request.json();
+      if (typeof body !== "object" || body === null || Array.isArray(body)) {
+        throw new Error("Invalid SCIM JSON.");
+      }
+      return body as Record<string, unknown>;
     } catch {
       throw new Error("Invalid SCIM JSON.");
     }
@@ -881,7 +884,6 @@ export function addGroupHttpRuntime(deps: GroupHttpRuntimeDeps) {
     request: Request,
     runtimeRoute: ConnectionRuntimeRoute,
   ) => {
-    type LogoutResponseContext = { context: string; entityEndpoint: string };
     if (
       runtimeRoute.protocol !== "saml" ||
       runtimeRoute.rest.length !== 1 ||
@@ -903,17 +905,20 @@ export function addGroupHttpRuntime(deps: GroupHttpRuntimeDeps) {
       if (!parsedMessage.parsedRequest) {
         throw convexError(ErrorCode.INVALID_PARAMETERS, "Missing SAML logout payload.");
       }
-      const responseContext = parsedMessage.runtime.sp.createLogoutResponse(
+      const responseContext = await parsedMessage.runtime.sp.createLogoutResponse(
         parsedMessage.runtime.idp,
         parsedMessage.parsedRequest.extract,
         parsedMessage.binding,
         parsedMessage.relayState ?? "",
-      ) as unknown as LogoutResponseContext;
+      );
       if (parsedMessage.binding === "redirect") {
         return new Response(null, {
           status: 302,
           headers: { Location: responseContext.context },
         });
+      }
+      if (!("entityEndpoint" in responseContext)) {
+        throw convexError(ErrorCode.INVALID_PARAMETERS, "Invalid SAML logout response binding.");
       }
       return createSamlPostBindingResponse({
         endpoint: responseContext.entityEndpoint,

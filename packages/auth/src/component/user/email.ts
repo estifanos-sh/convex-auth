@@ -17,6 +17,11 @@ import { vUserEmailDoc, vUserEmailSource } from "../model";
 
 const USER_EMAIL_BATCH = 64;
 
+type PrimaryEmailPatch = {
+  email: string;
+  emailVerificationTime?: number;
+};
+
 async function listOwnedEmails(ctx: Pick<QueryCtx | MutationCtx, "db">, userId: Id<"User">) {
   const owned = await ctx.db
     .query("UserEmail")
@@ -107,10 +112,9 @@ export const upsert = mutation({
     }
 
     if (makePrimary) {
-      await ctx.db.patch("User", args.userId, {
-        email: args.email,
-        ...(verificationTime !== undefined ? { emailVerificationTime: verificationTime } : {}),
-      });
+      const patch: PrimaryEmailPatch = { email: args.email };
+      if (verificationTime !== undefined) patch.emailVerificationTime = verificationTime;
+      await ctx.db.patch("User", args.userId, patch);
     }
     return id;
   },

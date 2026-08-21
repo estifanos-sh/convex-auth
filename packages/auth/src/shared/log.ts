@@ -15,7 +15,7 @@ export const LOG_LEVELS = {
 /** One of the {@link LOG_LEVELS} severity names. */
 export type LogLevel = keyof typeof LOG_LEVELS;
 
-function serialize(value: unknown) {
+function serialize(value: unknown): string {
   if (typeof value === "string") {
     return value;
   }
@@ -23,18 +23,18 @@ function serialize(value: unknown) {
     return `${value.message}${value.stack ? `\n${value.stack}` : ""}`;
   }
   try {
-    return JSON.stringify(value);
+    return JSON.stringify(value) ?? String(value);
   } catch {
     return String(value);
   }
 }
 
-const LEVEL_SEVERITY: Record<LogLevel, number> = {
+const LEVEL_SEVERITY = {
   ERROR: 0,
   WARN: 1,
   INFO: 2,
   DEBUG: 3,
-};
+} as const satisfies Record<LogLevel, number>;
 
 /**
  * Format and emit a log line, suppressing anything below `configuredLogLevel`.

@@ -59,11 +59,11 @@ interface KeyComponent {
 }
 
 /** Map XML-dsig signature algorithm URIs to node-rsa signing-scheme aliases. */
-const nrsaAliasMapping: Record<string, string> = {
+const nrsaAliasMapping = {
   "http://www.w3.org/2000/09/xmldsig#rsa-sha1": "pkcs1-sha1",
   "http://www.w3.org/2001/04/xmldsig-more#rsa-sha256": "pkcs1-sha256",
   "http://www.w3.org/2001/04/xmldsig-more#rsa-sha512": "pkcs1-sha512",
-};
+} satisfies Record<string, string>;
 
 const signatureAlgorithms = SignatureAlgorithm;
 const digestAlgorithms = DIGEST_BY_SIGNATURE;

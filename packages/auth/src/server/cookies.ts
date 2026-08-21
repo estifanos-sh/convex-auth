@@ -12,11 +12,11 @@ import { isLocalHost } from "./url";
  */
 export const SHARED_COOKIE_OPTIONS = {
   httpOnly: true,
-  sameSite: "none" as const,
+  sameSite: "none",
   secure: true,
   path: "/",
   partitioned: true,
-};
+} as const;
 
 /**
  * Encode a redirectTo URL into the OAuth state parameter.
@@ -39,9 +39,17 @@ export function encodeOAuthState(state: string, redirectTo: string | null): stri
 export function decodeOAuthState(encoded: string): { state: string; redirectTo: string | null } {
   try {
     const padded = encoded.replace(/-/g, "+").replace(/_/g, "/");
-    const json = JSON.parse(atob(padded));
-    if (typeof json === "object" && json !== null && typeof json.s === "string") {
-      return { state: json.s, redirectTo: typeof json.r === "string" ? json.r : null };
+    const value: unknown = JSON.parse(atob(padded));
+    if (
+      typeof value === "object" &&
+      value !== null &&
+      "s" in value &&
+      typeof value.s === "string"
+    ) {
+      return {
+        state: value.s,
+        redirectTo: "r" in value && typeof value.r === "string" ? value.r : null,
+      };
     }
   } catch {}
   return { state: encoded, redirectTo: null };

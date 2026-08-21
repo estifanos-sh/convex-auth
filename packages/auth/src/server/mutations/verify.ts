@@ -2,12 +2,13 @@ import type { GenericDataModel } from "convex/server";
 import { GenericId, Infer, v } from "convex/values";
 
 import type { Hashed } from "../../shared/brand";
+import type { AuthTokens } from "../../shared/results";
 import * as Provider from "../crypto";
 import { requireAuthKey, requireEnv } from "../env";
 import { queueAuthEvent } from "../events";
 import { maxSignInAttempts } from "../limits";
 import { LOG_LEVELS, log } from "../log";
-import type { SignInParams } from "../payloads";
+import type { AuthProfile, SignInParams } from "../payloads";
 import { vPayloadRecord } from "../payloads";
 import { sha256 } from "../random";
 import {
@@ -139,6 +140,15 @@ async function verifyCodeAndSignInImplInner(
       : getProviderOrThrow(account.provider);
 
     const replaceSessionId = await getAuthSessionId(ctx);
+    const profile: AuthProfile = {};
+    if (code.emailVerified !== undefined) {
+      profile.email = code.emailVerified;
+      profile.emailVerified = true;
+    }
+    if (code.phoneVerified !== undefined) {
+      profile.phone = code.phoneVerified;
+      profile.phoneVerified = true;
+    }
     const userId =
       methodProvider.type === "oauth"
         ? account.userId
@@ -150,14 +160,7 @@ async function verifyCodeAndSignInImplInner(
               {
                 type: "verification",
                 provider: methodProvider,
-                profile: {
-                  ...(code.emailVerified !== undefined
-                    ? { email: code.emailVerified, emailVerified: true }
-                    : {}),
-                  ...(code.phoneVerified !== undefined
-                    ? { phone: code.phoneVerified, phoneVerified: true }
-                    : {}),
-                },
+                profile,
               },
               config,
             )
@@ -281,6 +284,10 @@ export function callVerifyCodeAndSignIn<DataModel extends GenericDataModel>(
 ): Promise<VerifiedIdentity | null>;
 export function callVerifyCodeAndSignIn<DataModel extends GenericDataModel>(
   ctx: GenericActionCtxWithAuthConfig<DataModel>,
+  args: Infer<typeof vVerifyCodeAndSignInArgs> & { createSession: true; generateTokens: true },
+): Promise<SessionInfo<AuthTokens> | null>;
+export function callVerifyCodeAndSignIn<DataModel extends GenericDataModel>(
+  ctx: GenericActionCtxWithAuthConfig<DataModel>,
   args: Infer<typeof vVerifyCodeAndSignInArgs> & { createSession: true },
 ): Promise<SessionInfo | null>;
 export async function callVerifyCodeAndSignIn<DataModel extends GenericDataModel>(
@@ -295,5 +302,9 @@ export async function callVerifyCodeAndSignIn<DataModel extends GenericDataModel
   })) as MutationReturnType;
   if (issuance === null) return null;
   if (!("sessionId" in issuance)) return issuance;
-  return await finalizeSessionIssuance(ctx.auth.config, issuance);
+  const session = await finalizeSessionIssuance(ctx.auth.config, issuance);
+  if (args.generateTokens && session.tokens === null) {
+    throw new Error("Session issuance omitted tokens despite generateTokens being enabled.");
+  }
+  return session;
 }

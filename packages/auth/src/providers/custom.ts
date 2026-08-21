@@ -186,8 +186,7 @@ function createRuntimeClient(config: CustomOAuthConfig): OAuthRuntimeClient {
         throw new Error(`OAuth token exchange failed: ${response.status}`);
       }
 
-      const raw = (await response.json()) as Record<string, unknown>;
-      return normalizeOAuthTokenResponse(raw);
+      return normalizeOAuthTokenResponse(await response.json());
     },
   };
 }

@@ -4,19 +4,20 @@ import { Text, Pressable, ScrollView } from "react-native";
 import { colors, priorityColors, spacing, fontSize, radius } from "@/src/theme";
 
 const PRIORITIES = ["urgent", "high", "medium", "low"] as const;
-const LABELS: Record<string, string> = {
+type Priority = (typeof PRIORITIES)[number];
+const LABELS = {
   urgent: "Urgent",
   high: "High",
   medium: "Medium",
   low: "Low",
-};
+} as const satisfies Record<(typeof PRIORITIES)[number], string>;
 
 export const PriorityPicker = React.memo(function PriorityPicker({
   value,
   onSelect,
 }: {
-  value: string;
-  onSelect: (priority: string) => void;
+  value: Priority | "none";
+  onSelect: (priority: Priority) => void;
 }) {
   return (
     <ScrollView

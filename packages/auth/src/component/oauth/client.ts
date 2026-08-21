@@ -101,8 +101,8 @@ export const update = mutation({
     if (doc === null) {
       throw new ConvexError({ code: ErrorCode.OAUTH_CLIENT_NOT_FOUND, clientId });
     }
-    const next: Record<string, unknown> = { ...patch };
-    if (patch.tokenEndpointAuthMethod === "none") next.clientSecretHash = undefined;
+    const next =
+      patch.tokenEndpointAuthMethod === "none" ? { ...patch, clientSecretHash: undefined } : patch;
     await ctx.db.patch("OAuthClient", doc._id, next);
     return null;
   },

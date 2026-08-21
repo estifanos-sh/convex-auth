@@ -1,8 +1,9 @@
-import type { GenericActionCtx, GenericDataModel } from "convex/server";
+import type { FunctionReturnType, GenericActionCtx, GenericDataModel } from "convex/server";
 import { ConvexError } from "convex/values";
+import { validate } from "convex-helpers/validators";
 
 import { ErrorCode } from "../../shared/codes";
-import { GenericId, Infer, v } from "convex/values";
+import { Infer, v } from "convex/values";
 
 import { getGroup, getGroupConnection } from "../contract";
 import * as Provider from "../crypto";
@@ -20,8 +21,7 @@ import {
   GROUP_SAML_PROVIDER_PREFIX,
   isGroupProviderId,
 } from "../connection/shared";
-import { MutationCtx } from "../types";
-import type { AuthProviderMaterializedConfig } from "../types";
+import type { ConnectionHookProtocol, Doc, MutationCtx } from "../types";
 import { upsertUserAndAccount } from "../user/account";
 import { AUTH_STORE_REF } from "./store/refs";
 
@@ -54,27 +54,25 @@ function normalizeAccountExtend(
   provider: string,
   providerAccountId: string,
   accountExtend: AuthAccountExtend | undefined,
-) {
-  const baseIdentity: Record<string, unknown> = {
+): AuthAccountExtend {
+  const identity: NonNullable<AuthAccountExtend["identity"]> = {
     type: "oauth",
     provider,
     providerAccountId,
   };
   if (provider.startsWith(GROUP_OIDC_PROVIDER_PREFIX)) {
-    baseIdentity.type = "group-connection-oidc";
-    baseIdentity.connectionId = provider.slice(GROUP_OIDC_PROVIDER_PREFIX.length);
+    identity.type = "group-connection-oidc";
+    identity.connectionId = provider.slice(GROUP_OIDC_PROVIDER_PREFIX.length);
   }
   if (provider.startsWith(GROUP_SAML_PROVIDER_PREFIX)) {
-    baseIdentity.type = "group-connection-saml";
-    baseIdentity.connectionId = provider.slice(GROUP_SAML_PROVIDER_PREFIX.length);
+    identity.type = "group-connection-saml";
+    identity.connectionId = provider.slice(GROUP_SAML_PROVIDER_PREFIX.length);
   }
-  const provided = accountExtend;
-  const providedIdentity = provided?.identity;
   return {
-    ...provided,
+    ...accountExtend,
     identity: {
-      ...baseIdentity,
-      ...providedIdentity,
+      ...identity,
+      ...accountExtend?.identity,
     },
   };
 }
@@ -86,7 +84,18 @@ function normalizeAccountExtend(
  */
 function readStringArrayClaim(profile: AuthProfile, key: string): string[] | undefined {
   const value = profile[key];
-  return Array.isArray(value) ? (value as string[]) : undefined;
+  if (!Array.isArray(value) || !value.every((item): item is string => typeof item === "string")) {
+    return undefined;
+  }
+  return value;
+}
+
+function toAuthProfile(profile: unknown): AuthProfile {
+  if (validate(vPayloadRecord, profile)) return profile;
+  throw new ConvexError({
+    code: ErrorCode.OAUTH_INVALID_PROFILE,
+    message: "OAuth profile must contain only supported payload values.",
+  });
 }
 
 /** Lowercased registrable domain of an email address, or `null` when unparseable. */
@@ -112,9 +121,12 @@ async function isSamlEmailDomainVerified(
 ): Promise<boolean> {
   const domain = emailDomain(email);
   if (domain === null) return false;
+  type ConnectionDomain = FunctionReturnType<
+    Provider.Config["component"]["connection"]["domain"]["list"]
+  >[number];
   const domains = (await ctx.runQuery(config.component.connection.domain.list, {
     connectionId,
-  })) as Array<{ domain: string; verifiedAt?: number }>;
+  })) as ConnectionDomain[];
   return domains.some((row) => row.verifiedAt !== undefined && row.domain.toLowerCase() === domain);
 }
 
@@ -143,9 +155,7 @@ async function jitProvisionMembership(
   const groupId = connection?.groupId;
   if (!groupId) return;
 
-  const definedRoleIds = new Set(
-    Object.keys((config.permissions?.roles ?? {}) as Record<string, unknown>),
-  );
+  const definedRoleIds = new Set(Object.keys(config.permissions?.roles ?? {}));
   const provisionedRoleIds = resolveProvisionedRoleIds({
     policy: connectionPolicy,
     groups: readStringArrayClaim(profile, "groups"),
@@ -208,14 +218,17 @@ export async function userOAuthImpl(
 ): Promise<OAuthReturnType> {
   log("DEBUG", "userOAuthImpl args:", redactUserOAuthArgsForLog(args));
   const { profile, provider, providerAccountId, signature, accountExtend } = args;
-  const typedProfile = profile as AuthProfile;
+  const typedProfile = toAuthProfile(profile);
   const db = authDb(ctx, config);
   const connectionId = provider.startsWith(GROUP_OIDC_PROVIDER_PREFIX)
     ? provider.slice(GROUP_OIDC_PROVIDER_PREFIX.length)
     : provider.startsWith(GROUP_SAML_PROVIDER_PREFIX)
       ? provider.slice(GROUP_SAML_PROVIDER_PREFIX.length)
       : null;
-  const connectionProtocol = provider.startsWith(GROUP_OIDC_PROVIDER_PREFIX)
+  type OAuthConnectionProtocol = Extract<ConnectionHookProtocol, "oidc" | "saml">;
+  const connectionProtocol: OAuthConnectionProtocol | null = provider.startsWith(
+    GROUP_OIDC_PROVIDER_PREFIX,
+  )
     ? "oidc"
     : provider.startsWith(GROUP_SAML_PROVIDER_PREFIX)
       ? "saml"
@@ -243,11 +256,7 @@ export async function userOAuthImpl(
         )
       : null;
 
-  /**
-   * SCIM identity `userId` crosses the component boundary as `string`; re-brand
-   * to the server's `Id<"User">` here — the one legitimate cast at the boundary.
-   */
-  const existingScimUserId = existingScimIdentity?.userId as GenericId<"User"> | undefined;
+  const existingScimUserId = existingScimIdentity?.userId as Doc<"User">["_id"] | undefined;
 
   let verifier;
   try {
@@ -266,32 +275,34 @@ export async function userOAuthImpl(
     });
   }
 
-  const profileResolved =
+  const profileResolved = toAuthProfile(
     (config.connection?.hooks?.profileResolved
       ? await config.connection.hooks.profileResolved({
           protocol: connectionProtocol ?? "oidc",
           connectionId: connectionId ?? undefined,
           profile: typedProfile,
         })
-      : undefined) ?? typedProfile;
-  const profileForProvisioning =
+      : undefined) ?? typedProfile,
+  );
+  const profileForProvisioning = toAuthProfile(
     (config.connection?.hooks?.beforeProvision
       ? await config.connection.hooks.beforeProvision({
           protocol: connectionProtocol ?? "oidc",
           connectionId: connectionId ?? undefined,
-          profile: profileResolved as Record<string, unknown>,
+          profile: profileResolved,
         })
-      : undefined) ?? profileResolved;
+      : undefined) ?? profileResolved,
+  );
 
   const provisioningProfile =
     connectionProtocol === "saml" && connectionId !== null
       ? {
-          ...(profileForProvisioning as Record<string, unknown>),
+          ...profileForProvisioning,
           emailVerified: await isSamlEmailDomainVerified(
             ctx,
             config,
             connectionId,
-            (profileForProvisioning as Record<string, unknown>).email,
+            profileForProvisioning.email,
           ),
         }
       : profileForProvisioning;
@@ -302,7 +313,7 @@ export async function userOAuthImpl(
     existingAccount !== null ? { existingAccount } : { providerAccountId },
     {
       type: "oauth",
-      provider: (isGroupProviderId(provider)
+      provider: isGroupProviderId(provider)
         ? createSyntheticOAuthMaterializedConfig(provider, {
             accountLinking:
               connectionProtocol === "oidc"
@@ -311,8 +322,8 @@ export async function userOAuthImpl(
                   ? connectionPolicy?.identity.accountLinking.saml
                   : undefined,
           })
-        : getProviderOrThrow(provider)) as AuthProviderMaterializedConfig,
-      profile: provisioningProfile as AuthProfile,
+        : getProviderOrThrow(provider),
+      profile: provisioningProfile,
       emails: args.emails,
       accountExtend: normalizeAccountExtend(provider, providerAccountId, accountExtend),
     },
@@ -337,7 +348,7 @@ export async function userOAuthImpl(
         await config.connection.hooks.afterProvision({
           protocol: connectionProtocol ?? "oidc",
           connectionId,
-          profile: profileForProvisioning as Record<string, unknown>,
+          profile: profileForProvisioning,
           userId,
         });
       }
@@ -365,10 +376,12 @@ export const callUserOAuth = async <DataModel extends GenericDataModel>(
   ctx: GenericActionCtx<DataModel>,
   args: Infer<typeof vUserOAuthArgs>,
 ): Promise<OAuthReturnType> => {
-  return ctx.runMutation(AUTH_STORE_REF, {
+  const code = await ctx.runMutation(AUTH_STORE_REF, {
     args: {
       type: "userOAuth",
       ...args,
     },
-  }) as Promise<OAuthReturnType>;
+  });
+  if (typeof code !== "string") throw new TypeError("OAuth sign-in returned an invalid code.");
+  return code;
 };

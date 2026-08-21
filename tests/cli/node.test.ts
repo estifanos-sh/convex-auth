@@ -9,7 +9,7 @@ import {
 import { bundleLegacyKeys, generateKeys } from "@estifanos-sh/convex-auth/cli/keys";
 import { expect, test, vi } from "vite-plus/test";
 
-function expectProcessExitSilently(fn: () => unknown) {
+function expectProcessExitSilently(fn: () => void) {
   const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
   const stdout = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
   try {
@@ -20,7 +20,7 @@ function expectProcessExitSilently(fn: () => unknown) {
   }
 }
 
-function expectProcessExit(fn: () => unknown) {
+function expectProcessExit(fn: () => void) {
   const exit = vi.spyOn(process, "exit").mockImplementation(((code?: string | number | null) => {
     throw new Error(`process.exit:${code ?? ""}`);
   }) as never);
@@ -119,13 +119,14 @@ test("isPreviewDeployKey returns false for keys without pipe separator", () => {
 
 test("generateKeys produces signing and secret-encryption keys", async () => {
   const generated = await generateKeys();
-  const keys = JSON.parse(generated.AUTH_KEYS) as {
+  type GeneratedKeyring = {
     version: number;
     jwtPrivateKey: string;
-    jwks: { keys: Array<Record<string, unknown>> };
+    jwks: { keys: JsonWebKey[] };
     secretEncryptionKey: string;
     webauthnMaskingKey: string;
   };
+  const keys = JSON.parse(generated.AUTH_KEYS) as GeneratedKeyring;
 
   expect(keys.version).toBe(1);
   expect(keys.jwtPrivateKey).toContain("-----BEGIN PRIVATE KEY-----");

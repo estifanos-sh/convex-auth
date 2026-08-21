@@ -83,7 +83,7 @@ const PUBLIC_DATA_KEYS = {
   security: ["reason", "errorCode"],
 } as const;
 
-const EVENT_KIND_DATA_CATEGORY: Record<AuthEvent["kind"], keyof typeof PUBLIC_DATA_KEYS> = {
+const EVENT_KIND_DATA_CATEGORY = {
   "user.created": "user",
   "user.updated": "user",
   "session.signed_in": "session",
@@ -136,7 +136,7 @@ const EVENT_KIND_DATA_CATEGORY: Record<AuthEvent["kind"], keyof typeof PUBLIC_DA
   "webhook.delivery.attempted": "webhook",
   "webhook.delivery.succeeded": "webhook",
   "webhook.delivery.failed": "webhook",
-};
+} as const satisfies Record<AuthEvent["kind"], keyof typeof PUBLIC_DATA_KEYS>;
 
 function publicData(
   kind: AuthEvent["kind"],

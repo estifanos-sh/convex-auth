@@ -78,7 +78,7 @@ export function normalizeGroupConnectionPolicy(policy: unknown): GroupConnection
   const groupsMapping = parseStringArrayMapping(groups.mapping);
   const rolesMapping = parseStringArrayMapping(roles.mapping);
 
-  return {
+  const normalized: GroupConnectionPolicy = {
     version: 1,
     identity: {
       accountLinking: {
@@ -139,16 +139,17 @@ export function normalizeGroupConnectionPolicy(policy: unknown): GroupConnection
       groups: {
         mode: oneOf(groups.mode, ["sync"], d.provisioning.groups.mode),
         source: "protocol",
-        ...(groupsMapping ? { mapping: groupsMapping } : {}),
       },
       roles: {
         mode: oneOf(roles.mode, ["map"], d.provisioning.roles.mode),
         source: "protocol",
-        ...(rolesMapping ? { mapping: rolesMapping } : {}),
       },
     },
-    ...(extend ? { extend } : {}),
   };
+  if (groupsMapping) normalized.provisioning.groups.mapping = groupsMapping;
+  if (rolesMapping) normalized.provisioning.roles.mapping = rolesMapping;
+  if (extend) normalized.extend = extend;
+  return normalized;
 }
 
 export function patchGroupConnectionPolicy(

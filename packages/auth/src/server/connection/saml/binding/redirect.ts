@@ -19,20 +19,18 @@ import {
   type LogoutResponseSetting,
 } from "./shared";
 
-/** Parsed request fields read from the genuinely-open {@link FlowResult.extract}. */
-interface ParsedRequestExtract {
-  request: { id: string };
-}
-
-/**
- * View the extractor's genuinely-open {@link ExtractedProperties} through the
- * concrete request shape these response/logout builders read. The extract is
- * dynamically assembled from inbound XML, so this is the single dynamic-shape
- * boundary where the open record is narrowed to {@link ParsedRequestExtract}.
- */
-function asParsedRequest(extract: ExtractedProperties): ParsedRequestExtract {
-  const value: unknown = extract;
-  return value as ParsedRequestExtract;
+/** Read a request ID from the dynamically assembled SAML extraction record. */
+function requestIdFromExtract(extract: ExtractedProperties): string | null {
+  const request = extract.request;
+  if (
+    typeof request !== "object" ||
+    request === null ||
+    !("id" in request) ||
+    typeof request.id !== "string"
+  ) {
+    return null;
+  }
+  return request.id;
 }
 
 interface BuildRedirectConfig {
@@ -43,6 +41,16 @@ interface BuildRedirectConfig {
   entitySetting: SamlEntitySettings;
   relayState?: string;
 }
+
+type LogoutResponseTags = {
+  ID: string;
+  Destination: string;
+  Issuer: string;
+  EntityID: string;
+  IssueInstant: string;
+  StatusCode: string;
+  InResponseTo?: string;
+};
 
 function pvPair(param: string, value: string, first?: boolean): string {
   return (first === true ? "?" : "&") + param + "=" + value;
@@ -67,24 +75,21 @@ async function buildRedirectURL(opts: BuildRedirectConfig): Promise<string> {
     relayState = pvPair(SamlQueryParam.relayState, encodeURIComponent(relayState));
   }
   if (isSigned) {
-    /**
-     * The signed redirect path always runs with a configured algorithm and key
-     * (the entity defaults supply `requestSignatureAlgorithm`, and a signed
-     * request requires `privateKey`); the signer also declares `privateKey` as
-     * `string`. These two boundary casts narrow the optional/`BinaryLike`
-     * settings to what the signer consumes without runtime change.
-     */
-    const sigAlg = pvPair(
-      SamlQueryParam.sigAlg,
-      encodeURIComponent(entitySetting.requestSignatureAlgorithm as string),
-    );
+    const signingAlgorithm = entitySetting.requestSignatureAlgorithm;
+    const signingKey = entitySetting.privateKey;
+    if (signingAlgorithm === undefined || signingKey === undefined) {
+      throw new Error("ERR_SIGNED_REDIRECT_MISSING_SIGNING_CONFIG");
+    }
+    const privateKey =
+      typeof signingKey === "string" ? signingKey : new TextDecoder().decode(signingKey);
+    const sigAlg = pvPair(SamlQueryParam.sigAlg, encodeURIComponent(signingAlgorithm));
     const octetString = samlRequest + relayState + sigAlg;
     const signature = await constructMessageSignature(
       queryParam + "=" + octetString,
-      entitySetting.privateKey as string,
+      privateKey,
       entitySetting.privateKeyPass,
       undefined,
-      entitySetting.requestSignatureAlgorithm,
+      signingAlgorithm,
     );
     return (
       baseUrl +
@@ -163,7 +168,7 @@ export async function logoutResponseRedirectURL(
       id = getBindingField(template, "id");
       rawSamlResponse = getBindingField(template, "context");
     } else {
-      const tvalue: Record<string, unknown> = {
+      const tvalue: LogoutResponseTags = {
         ID: id,
         Destination: base,
         Issuer: metadata.init.getEntityID(),
@@ -171,8 +176,9 @@ export async function logoutResponseRedirectURL(
         IssueInstant: new Date().toISOString(),
         StatusCode: SAML_STATUS_SUCCESS,
       };
-      if (requestInfo && requestInfo.extract && asParsedRequest(requestInfo.extract).request) {
-        tvalue.InResponseTo = asParsedRequest(requestInfo.extract).request.id;
+      const requestId = requestInfo?.extract ? requestIdFromExtract(requestInfo.extract) : null;
+      if (requestId !== null) {
+        tvalue.InResponseTo = requestId;
       }
       rawSamlResponse = replaceTagsByValue(defaultLogoutResponseTemplate.context, tvalue);
     }

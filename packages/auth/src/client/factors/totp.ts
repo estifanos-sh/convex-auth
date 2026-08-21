@@ -1,5 +1,6 @@
 import type { FactorDeps, SignInActionResult, SignInResult, TotpClient } from "../core/types";
 import { ErrorCode } from "../../shared/codes";
+import type { AuthParameters } from "../../shared/results";
 
 function isSignedInResult(
   result: SignInActionResult,
@@ -52,7 +53,7 @@ export function createTotpClient(deps: FactorDeps): TotpClient {
       verifier: string;
       totpId: string;
     }> => {
-      const params: Record<string, unknown> = { flow: "setup" };
+      const params: AuthParameters = { flow: "setup" };
       if (opts?.name) params.name = opts.name;
       if (opts?.accountName) params.accountName = opts.accountName;
 
@@ -92,7 +93,7 @@ export function createTotpClient(deps: FactorDeps): TotpClient {
       verifier: string;
       totpId: string;
     }): Promise<SignInResult> => {
-      const params: Record<string, unknown> = {
+      const params: AuthParameters = {
         flow: "verify",
         code: opts.code,
         totpId: opts.totpId,
@@ -114,7 +115,7 @@ export function createTotpClient(deps: FactorDeps): TotpClient {
     },
 
     verify: async (opts: { code: string; verifier: string }): Promise<SignInResult> => {
-      const params: Record<string, unknown> = {
+      const params: AuthParameters = {
         flow: "verify",
         code: opts.code,
       };

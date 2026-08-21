@@ -973,15 +973,15 @@ type AuthServerHelpers = {
       ctx: GenericActionCtx<GenericDataModel>,
       args: AuthCreateAccountArgs,
     ) => Promise<{
-      account: GenericDoc<GenericDataModel, "Account">;
-      user: GenericDoc<GenericDataModel, "User">;
+      account: Doc<"Account">;
+      user: Doc<"User">;
     }>;
     get: (
       ctx: GenericActionCtx<GenericDataModel>,
       args: AuthRetrieveAccountArgs,
     ) => Promise<{
-      account: GenericDoc<GenericDataModel, "Account">;
-      user: GenericDoc<GenericDataModel, "User">;
+      account: Doc<"Account">;
+      user: Doc<"User">;
     }>;
     update: (
       ctx: GenericActionCtx<GenericDataModel>,

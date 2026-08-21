@@ -96,6 +96,12 @@ type PasswordFlowDispatch = { tag: PasswordFlow } | { tag: "invalid"; flow: unkn
 
 type PasswordEmailProviderFactory = () => EmailConfig;
 
+type PasswordAuthorizeResult<DataModel extends GenericDataModel> = Awaited<
+  ReturnType<CredentialsConfig<DataModel>["authorize"]>
+>;
+
+type PasswordParams = Parameters<CredentialsConfig["authorize"]>[0];
+
 function decodePasswordFlow(flow: unknown): PasswordFlowDispatch {
   if (typeof flow === "string" && (PASSWORD_FLOWS as readonly string[]).includes(flow)) {
     return { tag: flow as PasswordFlow };
@@ -127,7 +133,8 @@ export function password<DataModel extends GenericDataModel = GenericDataModel>(
   const provider = config.id ?? "password";
   const resetProvider = typeof config.reset === "function" ? config.reset() : config.reset;
   const verifyProvider = typeof config.verify === "function" ? config.verify() : config.verify;
-  const extraProviders = [resetProvider, verifyProvider, config.afterReset?.provider]
+  const afterReset = config.afterReset;
+  const extraProviders = [resetProvider, verifyProvider, afterReset?.provider]
     .filter(
       (extraProvider): extraProvider is NonNullable<typeof extraProvider> =>
         extraProvider !== undefined,
@@ -179,10 +186,7 @@ export function password<DataModel extends GenericDataModel = GenericDataModel>(
         return { userId: user._id, hasTotp: false };
       };
 
-      const flowHandlers: Record<
-        PasswordFlow,
-        () => Promise<Awaited<ReturnType<CredentialsConfig<DataModel>["authorize"]>>>
-      > = {
+      const flowHandlers = {
         signUp: async () => {
           const secret = requireStringParam(params.password, "password", "signUp");
           validatePasswordRequirements(secret);
@@ -225,10 +229,16 @@ export function password<DataModel extends GenericDataModel = GenericDataModel>(
             });
           }
           const hasTotp = result.kind === "signedIn" ? result.user.hasTotp : true;
+          if (result.kind === "signedIn") {
+            return {
+              userId: result.user._id as GenericDoc<DataModel, "User">["_id"],
+              hasTotp,
+              issuance: result.issuance,
+            };
+          }
           return {
             userId: result.user._id as GenericDoc<DataModel, "User">["_id"],
             hasTotp,
-            ...(result.kind === "signedIn" ? { issuance: result.issuance } : {}),
           };
         },
 
@@ -256,9 +266,16 @@ export function password<DataModel extends GenericDataModel = GenericDataModel>(
             throw new Error(`Password reset is not enabled for ${provider}`);
           }
           validatePasswordRequirements(newPassword);
-          if (config.afterReset !== undefined) {
+          if (afterReset !== undefined) {
+            const verificationParams: SignInParams = {};
+            if (typeof params.email === "string") {
+              verificationParams.email = params.email;
+            }
+            if (typeof params.code === "string") {
+              verificationParams.code = params.code;
+            }
             const verified = await callVerifyCodeAndSignIn(ctx, {
-              params: params as SignInParams,
+              params: verificationParams,
               provider: resetProvider.id,
               createSession: false,
               generateTokens: false,
@@ -282,7 +299,7 @@ export function password<DataModel extends GenericDataModel = GenericDataModel>(
             }
             return await ctx.auth.provider.continuePasswordReset(ctx, {
               userId: verified.userId,
-              operation: config.afterReset,
+              operation: afterReset,
               accountId: account.account._id,
               secret: await crypto.hashSecret(newPassword),
             });
@@ -405,7 +422,7 @@ export function password<DataModel extends GenericDataModel = GenericDataModel>(
             issuance: result.issuance,
           };
         },
-      };
+      } satisfies Record<PasswordFlow, () => Promise<PasswordAuthorizeResult<DataModel>>>;
 
       if (flowDispatch.tag === "invalid") {
         throw new Error(
@@ -426,7 +443,7 @@ function validateDefaultPasswordRequirements(password: string) {
   }
 }
 
-function defaultProfile(params: Record<string, unknown>) {
+function defaultProfile(params: PasswordParams) {
   const email = params.email;
   if (typeof email !== "string" || email.trim().length === 0) {
     throw new Error("Missing `email` param");

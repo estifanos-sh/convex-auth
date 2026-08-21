@@ -123,7 +123,12 @@ function collectDbQueryVars(code: string): Set<string> {
  * of the receiver chain. Returns `{ root, chain }` where `root` is the leading
  * identifier/`)` and `chain` is the raw receiver text.
  */
-function receiverChain(code: string, dotIndex: number): { root: string; chain: string } {
+interface ReceiverChain {
+  root: string;
+  chain: string;
+}
+
+function receiverChain(code: string, dotIndex: number): ReceiverChain {
   let depth = 0;
   let i = dotIndex - 1;
   let rootStart = dotIndex;

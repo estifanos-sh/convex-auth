@@ -49,9 +49,13 @@ type TotpResult =
   | SignInSessionResult<SessionInfo<AuthTokens | null> | null>
   | SignInTotpSetupResult;
 
-const TOTP_FLOWS = ["setup", "verify"] as const;
+const TOTP_FLOWS = { setup: true, verify: true } as const;
 
-type TotpFlow = (typeof TOTP_FLOWS)[number];
+type TotpFlow = keyof typeof TOTP_FLOWS;
+
+function isTotpFlow(value: unknown): value is TotpFlow {
+  return typeof value === "string" && Object.hasOwn(TOTP_FLOWS, value);
+}
 
 type TotpDispatch =
   | { flow: "setup"; params: Record<string, unknown> }
@@ -102,12 +106,12 @@ async function decryptTotpSecret(stored: ArrayBuffer): Promise<Uint8Array> {
 
 function resolveTotpFlow(params: Record<string, unknown>): TotpFlow {
   const flow = params.flow;
-  if (typeof flow === "string" && (TOTP_FLOWS as readonly string[]).includes(flow)) {
-    return flow as TotpFlow;
+  if (isTotpFlow(flow)) {
+    return flow;
   }
   throw convexError(
     ErrorCode.TOTP_MISSING_FLOW,
-    "Missing `flow` parameter. Expected one of: " + TOTP_FLOWS.join(", "),
+    "Missing `flow` parameter. Expected one of: " + Object.keys(TOTP_FLOWS).join(", "),
   );
 }
 
@@ -131,13 +135,13 @@ function resolveTotpDispatch(
 ): TotpDispatch {
   const flow = resolveTotpFlow(params);
   if (flow === "setup") {
-    return { flow: "setup" as const, params };
+    return { flow, params };
   }
   const resolvedVerifier = requireTotpVerifier(verifier);
   const code = requireTotpCode(params);
   if (typeof params.totpId === "string" && params.totpId.length > 0) {
     return {
-      flow: "verify" as const,
+      flow,
       code,
       totpId: params.totpId,
       verifier: resolvedVerifier,
@@ -145,7 +149,7 @@ function resolveTotpDispatch(
     };
   }
   return {
-    flow: "verify" as const,
+    flow,
     code,
     verifier: resolvedVerifier,
     intent: "challenge",
@@ -184,65 +188,45 @@ export const handleTotp = async (
   provider: TotpProviderConfig,
   args: { params?: Record<string, unknown>; verifier?: string },
 ): Promise<TotpResult> => {
-  const params = (args.params ?? {}) as Record<string, unknown>;
+  const params = args.params ?? {};
   const dispatch = resolveTotpDispatch(params, args.verifier);
 
-  const flowHandlers: Record<string, () => Promise<TotpResult>> = {
-    setup: async () => {
-      const { params: setupParams } = dispatch as { params: Record<string, unknown> };
-      const userId = await requireAuthenticatedUserId(ctx);
-      const secret = new Uint8Array(20);
-      crypto.getRandomValues(secret);
-      const base32Secret = encodeBase32LowerCaseNoPadding(secret);
-      let enrollment: { user: CrossComponentUserDoc; totpId: string; verifierId: string };
-      try {
-        enrollment = (await ctx.runMutation(
-          ctx.auth.config.component.factor.totp.createEnrollment,
-          {
-            userId,
-            secret: await encryptTotpSecret(secret),
-            digits: provider.options.digits,
-            period: provider.options.period,
-            name: typeof setupParams.name === "string" ? setupParams.name : undefined,
-            createdAt: Date.now(),
-          },
-        )) as typeof enrollment;
-      } catch (error) {
-        throw asConvexError(error, ErrorCode.INTERNAL_ERROR, `TOTP setup failed: ${String(error)}`);
-      }
-      const accountName =
-        typeof setupParams.accountName === "string" && setupParams.accountName.length > 0
-          ? setupParams.accountName
-          : (enrollment.user.email ?? "user");
-      const uri = createTOTPKeyURI(
-        provider.options.issuer,
-        accountName,
-        secret,
-        provider.options.period,
-        provider.options.digits,
-      );
+  async function setup(setupParams: Record<string, unknown>): Promise<TotpResult> {
+    const userId = await requireAuthenticatedUserId(ctx);
+    const secret = new Uint8Array(20);
+    crypto.getRandomValues(secret);
+    const base32Secret = encodeBase32LowerCaseNoPadding(secret);
+    let enrollment: { user: CrossComponentUserDoc; totpId: string; verifierId: string };
+    try {
+      enrollment = (await ctx.runMutation(ctx.auth.config.component.factor.totp.createEnrollment, {
+        userId,
+        secret: await encryptTotpSecret(secret),
+        digits: provider.options.digits,
+        period: provider.options.period,
+        name: typeof setupParams.name === "string" ? setupParams.name : undefined,
+        createdAt: Date.now(),
+      })) as typeof enrollment;
+    } catch (error) {
+      throw asConvexError(error, ErrorCode.INTERNAL_ERROR, `TOTP setup failed: ${String(error)}`);
+    }
+    const accountName =
+      typeof setupParams.accountName === "string" && setupParams.accountName.length > 0
+        ? setupParams.accountName
+        : (enrollment.user.email ?? "user");
+    const uri = createTOTPKeyURI(
+      provider.options.issuer,
+      accountName,
+      secret,
+      provider.options.period,
+      provider.options.digits,
+    );
 
-      return {
-        kind: "totpSetup" as const,
-        totpSetup: {
-          uri,
-          secret: base32Secret,
-          totpId: enrollment.totpId,
-        },
-        verifier: enrollment.verifierId,
-      };
-    },
-
-    verify: async () => {
-      if (dispatch.flow !== "verify") {
-        throw convexError(ErrorCode.TOTP_MISSING_FLOW, `Unexpected dispatch: ${dispatch.flow}`);
-      }
-      if (dispatch.intent === "enrollment") {
-        return await confirmEnrollment(dispatch.code, dispatch.totpId, dispatch.verifier);
-      }
-      return await verifyChallenge(dispatch.code, dispatch.verifier);
-    },
-  };
+    return {
+      kind: "totpSetup" as const,
+      totpSetup: { uri, secret: base32Secret, totpId: enrollment.totpId },
+      verifier: enrollment.verifierId,
+    };
+  }
 
   /**
    * `verify` with `totpId`: completes a first-time enrollment after `setup`.
@@ -408,9 +392,11 @@ export const handleTotp = async (
     return { kind: "signedIn" as const, session };
   }
 
-  const handler = flowHandlers[dispatch.flow];
-  if (!handler) {
-    throw convexError(ErrorCode.TOTP_MISSING_FLOW, `Unknown TOTP flow: ${dispatch.flow}`);
+  if (dispatch.flow === "setup") {
+    return await setup(dispatch.params);
   }
-  return handler();
+  if (dispatch.intent === "enrollment") {
+    return await confirmEnrollment(dispatch.code, dispatch.totpId, dispatch.verifier);
+  }
+  return await verifyChallenge(dispatch.code, dispatch.verifier);
 };

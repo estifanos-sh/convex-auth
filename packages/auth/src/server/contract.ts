@@ -1,41 +1,15 @@
-import type { ComponentCtx as ComponentWriteCtx, ComponentReadCtx } from "./component/context";
+import type { FunctionArgs, FunctionReference, FunctionReturnType } from "convex/server";
+
 import { cached, invalidateCtxCache } from "./cache/context";
+import { single } from "./component/api";
+import type { ComponentCtx as ComponentWriteCtx, ComponentReadCtx } from "./component/context";
 import type { AuthEventKind } from "./events";
 import type { ConvexAuthMaterializedConfig } from "./types";
 
 type ComponentConnection = ConvexAuthMaterializedConfig["component"]["connection"];
 type ComponentUser = ConvexAuthMaterializedConfig["component"]["user"];
 
-/**
- * The loose `runQuery`/`runMutation` casts are centralized in
- * {@link componentQuery} and {@link componentMutation} as a local convenience at
- * this boundary, letting domain code work with typed records inward.
- */
-type ComponentBoundaryRunQuery = <TArgs extends Record<string, unknown>, TResult>(
-  ref: unknown,
-  args: TArgs,
-) => Promise<TResult>;
-type ComponentBoundaryRunMutation = <TArgs extends Record<string, unknown>, TResult>(
-  ref: unknown,
-  args: TArgs,
-) => Promise<TResult>;
-
-type GroupConnectionRecord = {
-  _id: string;
-  _creationTime: number;
-  groupId: string;
-  slug?: string;
-  name?: string;
-  protocol: "oidc" | "saml";
-  status: "draft" | "active" | "disabled";
-  config?: unknown;
-  extend?: unknown;
-};
-
-type GroupConnectionDomainLookupRecord = {
-  connection: GroupConnectionRecord | null;
-  domain: ConnectionDomainRecord | null;
-};
+type GroupConnectionRecord = FunctionReturnType<ComponentConnection["list"]>["page"][number];
 
 type PaginatedResult<T> = {
   page: T[];
@@ -48,138 +22,69 @@ type PaginationOpts = {
   cursor: string | null;
 };
 
-type GroupRecord = {
-  _id: string;
-  _creationTime: number;
-  name: string;
-  slug?: string;
-  type?: string;
-  parentGroupId?: string;
-  rootGroupId?: string;
-  isRoot?: boolean;
-  policy?: unknown;
-  extend?: unknown;
-};
+type ConnectionDomainRecord = FunctionReturnType<ComponentConnection["domain"]["list"]>[number];
+type ConnectionDomainVerificationRecord = NonNullable<
+  FunctionReturnType<ComponentConnection["domain"]["verification"]["get"]>
+>;
+type ScimConfigRecord = NonNullable<
+  FunctionReturnType<ComponentConnection["scim"]["config"]["get"]>
+>;
+type GroupConnectionSecretRecord = NonNullable<
+  FunctionReturnType<ComponentConnection["secret"]["get"]>
+>;
+type WebhookEndpointRecord = FunctionReturnType<
+  ComponentConnection["webhook"]["endpoint"]["list"]
+>[number];
+type WebhookDeliveryRecord = FunctionReturnType<
+  ComponentConnection["webhook"]["delivery"]["list"]
+>["page"][number];
+type InternalWebhookDeliveryRecord = FunctionReturnType<
+  ComponentConnection["webhook"]["delivery"]["dueForDispatch"]
+>[number];
 
-type ConnectionDomainRecord = {
-  _id: string;
-  _creationTime: number;
-  connectionId: string;
-  groupId: string;
-  domain: string;
-  isPrimary: boolean;
-  verifiedAt?: number;
-};
+export type ScimIdentityRecord = FunctionReturnType<
+  ComponentConnection["scim"]["identity"]["list"]
+>["page"][number];
 
-type ConnectionDomainVerificationRecord = {
-  domainId: string;
-  recordName: string;
-  token: string;
-  expiresAt: number;
-};
-
-type ScimConfigRecord = {
-  _id: string;
-  _creationTime: number;
-  connectionId: string;
-  groupId: string;
-  status: "draft" | "active" | "disabled";
-  basePath: string;
-  tokenHash: string;
-  lastRotatedAt?: number;
-  extend?: unknown;
-};
-
-type GroupConnectionSecretRecord = {
-  ciphertext: string;
-};
-
-type WebhookEndpointRecord = {
-  _id: string;
-  _creationTime: number;
-  connectionId: string;
-  groupId: string;
-  url: string;
-  status: "active" | "disabled";
-  secretCiphertext: string;
-  subscriptions: AuthEventKind[];
-  createdByUserId?: string;
-  lastSuccessAt?: number;
-  lastFailureAt?: number;
-  failureCount: number;
-  extend?: unknown;
-};
-
-type WebhookDeliveryRecord = {
-  _id: string;
-  _creationTime: number;
-  connectionId: string;
-  endpointId: string;
-  eventId: string;
-  kind: AuthEventKind;
-  status: "pending" | "processing" | "delivered" | "failed";
-  attemptCount: number;
-  nextAttemptAt: number;
-  lastAttemptAt?: number;
-  lastResponseStatus?: number;
-  lastError?: string;
-  signedAt: number;
-};
-
-type InternalWebhookDeliveryRecord = WebhookDeliveryRecord & {
-  payload: unknown;
-  signature: string;
-};
-
-export type ScimIdentityRecord = {
-  _id: string;
-  _creationTime: number;
-  connectionId: string;
-  groupId: string;
-  resourceType: string;
-  externalId: string;
-  userId?: string;
-  mappedGroupId?: string;
-  active?: boolean;
-  raw?: Record<string, unknown>;
-  lastProvisionedAt?: number;
-};
-
-const componentQuery = <TArgs extends Record<string, unknown>, TResult>(
+const componentQuery = <TArgs extends object, TResult>(
   ctx: ComponentReadCtx,
-  ref: unknown,
+  ref: FunctionReference<"query", any, any, TResult>,
   args: TArgs,
-) => (ctx.runQuery as ComponentBoundaryRunQuery)(ref, args) as Promise<TResult>;
+): Promise<TResult> => ctx.runQuery(ref, args);
 
-const componentMutation = <TArgs extends Record<string, unknown>, TResult>(
+const componentMutation = <TArgs extends object, TResult>(
   ctx: ComponentWriteCtx,
-  ref: unknown,
+  ref: FunctionReference<"mutation", any, any, TResult>,
   args: TArgs,
-) => (ctx.runMutation as ComponentBoundaryRunMutation)(ref, args) as Promise<TResult>;
+): Promise<TResult> => ctx.runMutation(ref, args);
 
 export const getGroupConnection = (
   ctx: ComponentReadCtx,
   componentConnection: ComponentConnection,
   connectionId: string,
 ) =>
-  cached(ctx, `group-connection:${connectionId}`, () =>
-    componentQuery<{ id: string }, GroupConnectionRecord | null>(ctx, componentConnection.get, {
+  cached(ctx, `group-connection:${connectionId}`, async () => {
+    const result = await ctx.runQuery(componentConnection.get, {
       id: connectionId,
-    }),
-  );
+    });
+    if (result !== null && "connection" in result) {
+      throw new TypeError("Component connection lookup returned a domain result for an id lookup.");
+    }
+    return result;
+  });
 
 export const getGroupConnectionByDomain = (
   ctx: ComponentReadCtx,
   componentConnection: ComponentConnection,
   domain: string,
 ) =>
-  cached(ctx, `group-connection-domain:${domain}`, () =>
-    componentQuery<{ domain: string }, GroupConnectionDomainLookupRecord | null>(
-      ctx,
-      componentConnection.get,
-      { domain },
-    ),
-  );
+  cached(ctx, `group-connection-domain:${domain}`, async () => {
+    const result = await ctx.runQuery(componentConnection.get, { domain });
+    if (result !== null && !("connection" in result)) {
+      throw new TypeError("Component connection lookup returned an id result for a domain lookup.");
+    }
+    return result;
+  });
 
 export const listGroupConnections = (
   ctx: ComponentReadCtx,
@@ -204,23 +109,18 @@ export const listGroupConnections = (
 export const createGroupConnection = (
   ctx: ComponentWriteCtx,
   componentConnection: ComponentConnection,
-  args: {
-    groupId: string;
-    protocol: "oidc" | "saml";
-    slug?: string;
-    name?: string;
-    status?: "draft" | "active" | "disabled";
-    config?: Record<string, unknown>;
-    extend?: Record<string, unknown>;
-  },
+  args: FunctionArgs<ComponentConnection["create"]>,
 ) => componentMutation<typeof args, string>(ctx, componentConnection.create, args);
 
 export const updateGroupConnection = async (
   ctx: ComponentWriteCtx,
   componentConnection: ComponentConnection,
-  args: { connectionId: string; patch: Record<string, unknown> },
+  args: {
+    connectionId: string;
+    patch: FunctionArgs<ComponentConnection["update"]>["patch"];
+  },
 ) => {
-  const result = await componentMutation<{ id: string; patch: Record<string, unknown> }, null>(
+  const result = await componentMutation<FunctionArgs<ComponentConnection["update"]>, null>(
     ctx,
     componentConnection.update,
     { id: args.connectionId, patch: args.patch },
@@ -250,8 +150,8 @@ export const getGroup = (
   componentGroup: ConvexAuthMaterializedConfig["component"]["group"],
   groupId: string,
 ) =>
-  cached(ctx, `group-record:${groupId}`, () =>
-    componentQuery<{ id: string }, GroupRecord | null>(ctx, componentGroup.get, { id: groupId }),
+  cached(ctx, `group-record:${groupId}`, async () =>
+    single(await ctx.runQuery(componentGroup.get, { id: groupId })),
   );
 
 export const listConnectionDomains = (
@@ -337,8 +237,6 @@ export const upsertScimConfig = async (
     status: string;
     basePath: string;
     tokenHash: string;
-    // Optional to match the component `scim.config.upsert` validator
-    // (`lastRotatedAt: v.optional(v.number())`).
     lastRotatedAt?: number;
     extend?: unknown;
   },
@@ -378,8 +276,6 @@ export const upsertConnectionDomainVerification = (
     expiresAt: number;
   },
 ) =>
-  // The component `domain.verification.upsert` returns the verification-record
-  // id (`v.id("GroupConnectionDomainVerification")`), not `null`.
   componentMutation<typeof args, string>(ctx, componentConnection.domain.verification.upsert, args);
 
 export const removeConnectionDomainVerification = (
@@ -400,8 +296,6 @@ export const verifyConnectionDomain = (
   componentConnection: ComponentConnection,
   args: { domainId: string; verifiedAt: number },
 ) =>
-  // The component `domain.verify` returns the updated domain doc
-  // (`vGroupConnectionDomainDoc`), not `null`.
   componentMutation<{ id: string; verifiedAt: number }, ConnectionDomainRecord>(
     ctx,
     componentConnection.domain.verify,
@@ -435,8 +329,6 @@ export const upsertGroupConnectionSecret = async (
     updatedAt: number;
   },
 ) => {
-  // The component `secret.upsert` returns the secret-record id
-  // (`v.id("GroupConnectionSecret")`), not `null`.
   const result = await componentMutation<typeof args, string>(
     ctx,
     componentConnection.secret.upsert,
@@ -500,61 +392,28 @@ export const getScimIdentityByConnectionAndUser = (
   ctx: ComponentReadCtx,
   componentConnection: ComponentConnection,
   args: { connectionId: string; userId: string },
-) =>
-  componentQuery<typeof args, ScimIdentityRecord | null>(
-    ctx,
-    componentConnection.scim.identity.get,
-    args,
-  );
+) => ctx.runQuery(componentConnection.scim.identity.get, args).then(single);
 
 export const getScimIdentityByMappedGroup = (
   ctx: ComponentReadCtx,
   componentConnection: ComponentConnection,
   mappedGroupId: string,
-) =>
-  componentQuery<{ mappedGroupId: string }, ScimIdentityRecord | null>(
-    ctx,
-    componentConnection.scim.identity.get,
-    { mappedGroupId },
-  );
+) => ctx.runQuery(componentConnection.scim.identity.get, { mappedGroupId }).then(single);
 
 export const upsertScimIdentity = (
   ctx: ComponentWriteCtx,
   componentConnection: ComponentConnection,
-  args: {
-    connectionId: string;
-    groupId: string;
-    resourceType: string;
-    externalId: string;
-    userId?: string;
-    mappedGroupId?: string;
-    active?: boolean;
-    raw?: Record<string, unknown>;
-    lastProvisionedAt?: number;
-  },
+  args: FunctionArgs<ComponentConnection["scim"]["identity"]["upsert"]>,
 ) => componentMutation<typeof args, string>(ctx, componentConnection.scim.identity.upsert, args);
 
 export const provisionScimUser = (
   ctx: ComponentWriteCtx,
   componentConnection: ComponentConnection,
-  args: {
-    connectionId: string;
-    groupId: string;
-    externalId: string;
-    provider: string;
-    userData: Record<string, unknown>;
-    active?: boolean;
-    raw?: Record<string, unknown>;
-    lastProvisionedAt?: number;
-  },
+  args: FunctionArgs<ComponentConnection["scim"]["identity"]["provision"]>,
 ) =>
   componentMutation<typeof args, { userId: string; created: boolean }>(
     ctx,
-    (
-      componentConnection.scim.identity as typeof componentConnection.scim.identity & {
-        provision: unknown;
-      }
-    ).provision,
+    componentConnection.scim.identity.provision,
     args,
   );
 
@@ -570,23 +429,21 @@ export const removeScimIdentity = (
 export const insertUser = (
   ctx: ComponentWriteCtx,
   componentUser: ComponentUser,
-  data: Record<string, unknown>,
+  data: FunctionArgs<ComponentUser["create"]>["data"],
 ) =>
-  componentMutation<{ data: Record<string, unknown> }, string>(ctx, componentUser.create, { data });
+  componentMutation<FunctionArgs<ComponentUser["create"]>, string>(ctx, componentUser.create, {
+    data,
+  });
 
 export const updateUser = (
   ctx: ComponentWriteCtx,
   componentUser: ComponentUser,
-  args: { userId: string; patch: Record<string, unknown> },
+  args: { userId: string; patch: FunctionArgs<ComponentUser["update"]>["patch"] },
 ) =>
-  componentMutation<{ id: string; patch: Record<string, unknown> }, null>(
-    ctx,
-    componentUser.update,
-    {
-      id: args.userId,
-      patch: args.patch,
-    },
-  );
+  componentMutation<FunctionArgs<ComponentUser["update"]>, null>(ctx, componentUser.update, {
+    id: args.userId,
+    patch: args.patch,
+  });
 
 export const getScimIdentity = (
   ctx: ComponentReadCtx,
@@ -596,12 +453,7 @@ export const getScimIdentity = (
     resourceType: "user" | "group";
     externalId: string;
   },
-) =>
-  componentQuery<typeof args, ScimIdentityRecord | null>(
-    ctx,
-    componentConnection.scim.identity.get,
-    args,
-  );
+) => ctx.runQuery(componentConnection.scim.identity.get, args).then(single);
 
 export const getWebhookEndpoint = (
   ctx: ComponentReadCtx,
@@ -632,9 +484,12 @@ export const createWebhookEndpoint = (
 export const updateWebhookEndpoint = (
   ctx: ComponentWriteCtx,
   componentConnection: ComponentConnection,
-  args: { endpointId: string; patch: Record<string, unknown> },
+  args: {
+    endpointId: string;
+    patch: FunctionArgs<ComponentConnection["webhook"]["endpoint"]["update"]>["patch"];
+  },
 ) =>
-  componentMutation<{ id: string; patch: Record<string, unknown> }, null>(
+  componentMutation<FunctionArgs<ComponentConnection["webhook"]["endpoint"]["update"]>, null>(
     ctx,
     componentConnection.webhook.endpoint.update,
     { id: args.endpointId, patch: args.patch },
@@ -654,9 +509,12 @@ export const listReadyWebhookDeliveries = (
 export const updateWebhookDelivery = (
   ctx: ComponentWriteCtx,
   componentConnection: ComponentConnection,
-  args: { deliveryId: string; patch: Record<string, unknown> },
+  args: {
+    deliveryId: string;
+    patch: FunctionArgs<ComponentConnection["webhook"]["delivery"]["update"]>["patch"];
+  },
 ) =>
-  componentMutation<{ id: string; patch: Record<string, unknown> }, null>(
+  componentMutation<FunctionArgs<ComponentConnection["webhook"]["delivery"]["update"]>, null>(
     ctx,
     componentConnection.webhook.delivery.update,
     { id: args.deliveryId, patch: args.patch },

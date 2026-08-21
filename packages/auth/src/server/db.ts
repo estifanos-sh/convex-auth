@@ -5,6 +5,7 @@ import type {
   GenericActionCtx,
   GenericDataModel,
 } from "convex/server";
+import type { GenericId } from "convex/values";
 
 import type { AuthComponentApi } from "./component/api";
 import type { Doc } from "./types";
@@ -95,10 +96,10 @@ export function authDb(ctx: ComponentRunContext, config: AuthComponentBoundaryCo
         refreshTokenExpirationTime?: number;
       }) =>
         runMutation(ctx, component.session.create, args) as Promise<{
-          userId: string;
-          sessionId: string;
-          refreshTokenId?: string;
-          replacedSessionId?: string;
+          userId: GenericId<"User">;
+          sessionId: GenericId<"Session">;
+          refreshTokenId?: GenericId<"RefreshToken">;
+          replacedSessionId?: GenericId<"Session">;
           user: Doc<"User">;
         }>,
       get: (sessionId: string) =>
@@ -106,6 +107,16 @@ export function authDb(ctx: ComponentRunContext, config: AuthComponentBoundaryCo
       delete: (sessionId: string) => runMutation(ctx, component.session.remove, { id: sessionId }),
       listByUser: (userId: string) =>
         runQuery(ctx, component.session.list, { userId }) as Promise<Doc<"Session">[]>,
+    },
+    factors: {
+      getPasskey: (passkeyId: string) =>
+        runQuery(ctx, component.factor.passkey.get, {
+          id: passkeyId,
+        }) as Promise<Doc<"Passkey"> | null>,
+      getTotp: (totpId: string) =>
+        runQuery(ctx, component.factor.totp.get, {
+          id: totpId,
+        }) as Promise<Doc<"TotpFactor"> | null>,
     },
     verifiers: {
       create: (sessionId?: string, signature?: string, expirationTime?: number) =>

@@ -72,11 +72,14 @@ function resolveProcessors(
  * ```
  */
 export function nodeTelemetry(config: TelemetryConfig): NodeTracerProvider {
-  const resource = resourceFromAttributes({
+  const attributes: Attributes = {
     [ATTR_SERVICE_NAME]: config.serviceName,
-    ...(config.serviceVersion ? { [ATTR_SERVICE_VERSION]: config.serviceVersion } : {}),
     ...config.attributes,
-  });
+  };
+  if (config.serviceVersion !== undefined) {
+    attributes[ATTR_SERVICE_VERSION] = config.serviceVersion;
+  }
+  const resource = resourceFromAttributes(attributes);
   const provider = new NodeTracerProvider({
     resource,
     spanProcessors: resolveProcessors(config.spanProcessor),
@@ -106,11 +109,14 @@ export function nodeTelemetry(config: TelemetryConfig): NodeTracerProvider {
  * ```
  */
 export function browserTelemetry(config: TelemetryConfig): WebTracerProvider {
-  const resource = resourceFromAttributes({
+  const attributes: Attributes = {
     [ATTR_SERVICE_NAME]: config.serviceName,
-    ...(config.serviceVersion ? { [ATTR_SERVICE_VERSION]: config.serviceVersion } : {}),
     ...config.attributes,
-  });
+  };
+  if (config.serviceVersion !== undefined) {
+    attributes[ATTR_SERVICE_VERSION] = config.serviceVersion;
+  }
+  const resource = resourceFromAttributes(attributes);
   const provider = new WebTracerProvider({
     resource,
     spanProcessors: resolveProcessors(config.spanProcessor),

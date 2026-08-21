@@ -32,6 +32,12 @@ export interface FlowResult {
   sigAlg?: string | null;
 }
 
+type ParsedFlow = {
+  samlContent: string;
+  extract: ExtractedProperties;
+  sigAlg: string | null;
+};
+
 const extractorFieldsByMessageKind = new Map<
   SamlMessageKind,
   (assertion?: string | null) => ExtractorFields
@@ -123,11 +129,7 @@ async function redirectFlow(options: FlowOptions): Promise<FlowResult> {
     assertion.length > 0 ? assertion : null,
   );
 
-  const parseResult: {
-    samlContent: string;
-    extract: ExtractedProperties;
-    sigAlg: string | null;
-  } = {
+  const parseResult: ParsedFlow = {
     samlContent: xmlString,
     sigAlg: null,
     extract: extract(xmlString, extractorFields),
@@ -350,10 +352,10 @@ function checkStatus(content: string, parserType: string): Promise<string> {
   throw new Error(`ERR_FAILED_STATUS with top tier code: ${top}, second tier code: ${second}`);
 }
 
-const flowByBinding: Record<BindingKind, (options: FlowOptions) => Promise<FlowResult>> = {
+const flowByBinding = {
   post: postFlow,
   redirect: redirectFlow,
-};
+} satisfies Record<BindingKind, (options: FlowOptions) => Promise<FlowResult>>;
 
 /** Dispatch an inbound SAML message to the redirect or POST parsing flow by binding. */
 export function flow(options: FlowOptions): Promise<FlowResult> {

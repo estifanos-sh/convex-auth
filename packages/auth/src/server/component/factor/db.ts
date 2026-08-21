@@ -87,10 +87,12 @@ export async function consumeVerifierById(
   verifierId: string,
   expectedSignature?: string,
 ): Promise<VerifierDoc | null> {
-  return (await ctx.runMutation(ctx.auth.config.component.token.pkce.consume, {
-    id: verifierId,
-    ...(expectedSignature === undefined ? {} : { expectedSignature }),
-  })) as VerifierDoc | null;
+  const args = { id: verifierId };
+  if (expectedSignature !== undefined) Object.assign(args, { expectedSignature });
+  return (await ctx.runMutation(
+    ctx.auth.config.component.token.pkce.consume,
+    args,
+  )) as VerifierDoc | null;
 }
 
 /** Create a provider continuation. */

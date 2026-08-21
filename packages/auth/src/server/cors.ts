@@ -23,8 +23,14 @@ const ALLOW_HEADERS = "Authorization, Content-Type, Mcp-Session-Id, MCP-Protocol
 const DEFAULT_MATCHED_METHODS = "GET,POST,PUT,PATCH,DELETE,OPTIONS";
 const DEFAULT_MATCHED_HEADERS = "Content-Type,Authorization";
 
+type MatchedCorsHeaders = {
+  "Access-Control-Allow-Methods": string;
+  "Access-Control-Allow-Headers": string;
+  "Access-Control-Allow-Origin"?: string;
+};
+
 /** CORS response headers for the public bearer OAuth/MCP surface (`*` origin). */
-export function corsHeaders(): Record<string, string> {
+export function corsHeaders() {
   return {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": ALLOW_METHODS,
@@ -76,7 +82,7 @@ export function buildCorsHeaders(
   request: Request,
   corsConfig: CorsConfig | undefined,
   defaultOrigins: string[] | (() => string[]),
-): Record<string, string> {
+) {
   const origins =
     corsConfig?.origins ??
     (typeof defaultOrigins === "function" ? defaultOrigins() : defaultOrigins);
@@ -87,11 +93,14 @@ export function buildCorsHeaders(
       ? requestOrigin
       : null;
 
-  return {
-    ...(matchedOrigin ? { "Access-Control-Allow-Origin": matchedOrigin } : {}),
+  const headers: MatchedCorsHeaders = {
     "Access-Control-Allow-Methods": corsConfig?.methods ?? DEFAULT_MATCHED_METHODS,
     "Access-Control-Allow-Headers": corsConfig?.headers ?? DEFAULT_MATCHED_HEADERS,
   };
+  if (matchedOrigin !== null) {
+    headers["Access-Control-Allow-Origin"] = matchedOrigin;
+  }
+  return headers;
 }
 
 /** Build the `204` origin-matched preflight response for the API-key surface. */

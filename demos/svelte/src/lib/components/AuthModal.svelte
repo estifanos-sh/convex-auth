@@ -9,13 +9,14 @@
 		kind: 'signedIn' | 'redirect' | 'started' | 'totpRequired' | 'deviceCode';
 		redirect?: URL | string;
 	};
+	type AuthParameters = Record<string, string | number | boolean | undefined>;
 
 	type AuthContext = {
 		invite?: { email?: string } | null;
-		signIn: (provider: string, args?: Record<string, unknown>) => Promise<SignInResult>;
+		signIn: (provider: string, args?: AuthParameters) => Promise<SignInResult>;
 		webauthn?: {
 			isSupported: () => boolean;
-			signIn: (opts?: Record<string, unknown>) => Promise<SignInResult>;
+			signIn: (opts?: AuthParameters) => Promise<SignInResult>;
 		};
 	};
 

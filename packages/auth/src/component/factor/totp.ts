@@ -22,6 +22,11 @@ const TOTP_LIST_BATCH = 32;
 const TOTP_VERIFIER_TTL_MS = 15 * 60 * 1000;
 
 type TotpIntent = "enrollment" | "challenge";
+type TotpVerifier = {
+  userId: string;
+  purpose?: "totp.setup";
+  totpId?: string;
+};
 
 /** Create a TOTP factor and its enrollment verifier atomically. */
 export const createEnrollment = mutation({
@@ -64,13 +69,24 @@ export const createEnrollment = mutation({
   },
 });
 
-function parseVerifier(signature: string | undefined): Record<string, unknown> | null {
+function parseVerifier(signature: string | undefined): TotpVerifier | null {
   if (signature === undefined) return null;
   try {
     const parsed: unknown = JSON.parse(signature);
-    return typeof parsed === "object" && parsed !== null
-      ? (parsed as Record<string, unknown>)
-      : null;
+    if (typeof parsed !== "object" || parsed === null) return null;
+    const candidate = parsed as {
+      userId?: unknown;
+      purpose?: unknown;
+      totpId?: unknown;
+    };
+    if (typeof candidate.userId !== "string" || candidate.userId.length === 0) return null;
+    if (candidate.purpose !== undefined && candidate.purpose !== "totp.setup") return null;
+    if (candidate.totpId !== undefined && typeof candidate.totpId !== "string") return null;
+
+    const verifier: TotpVerifier = { userId: candidate.userId };
+    if (candidate.purpose !== undefined) verifier.purpose = candidate.purpose;
+    if (candidate.totpId !== undefined) verifier.totpId = candidate.totpId;
+    return verifier;
   } catch {
     return null;
   }
@@ -112,9 +128,6 @@ async function resolveVerification(
     return { status: "ready" as const, userId: factor.userId, factor };
   }
 
-  if (typeof data.userId !== "string" || data.userId.length === 0) {
-    return { status: "invalid_verifier" as const };
-  }
   const userId = data.userId as Id<"User">;
   const factor = await ctx.db
     .query("TotpFactor")

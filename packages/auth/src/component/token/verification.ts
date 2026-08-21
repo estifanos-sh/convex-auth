@@ -12,7 +12,9 @@ import { v } from "convex/values";
 import { mutation, query } from "../functions";
 import { recordSignInLimit, resetSignInLimit } from "../limits";
 import { vAccountDoc, vUserDoc, vVerificationCodeDoc } from "../model";
-import { createSessionRows } from "../session";
+import { createSessionRows, type SessionRows } from "../session";
+
+type VerifiedSession = SessionRows & { status: "signedIn" };
 
 /** Reserve verification attempts and resolve a valid code plus account atomically. */
 export const beginVerification = mutation({
@@ -118,15 +120,16 @@ export const completeVerification = mutation({
       refreshTokenExpirationTime: args.generateTokens ? args.refreshTokenExpirationTime : undefined,
     });
     if (created === null) return { status: "rejected" as const };
-    return {
+    const result: VerifiedSession = {
       status: "signedIn" as const,
       user: created.user,
       sessionId: created.sessionId,
-      ...(created.refreshTokenId === undefined ? {} : { refreshTokenId: created.refreshTokenId }),
-      ...(created.replacedSessionId === undefined
-        ? {}
-        : { replacedSessionId: created.replacedSessionId }),
     };
+    if (created.refreshTokenId !== undefined) result.refreshTokenId = created.refreshTokenId;
+    if (created.replacedSessionId !== undefined) {
+      result.replacedSessionId = created.replacedSessionId;
+    }
+    return result;
   },
 });
 

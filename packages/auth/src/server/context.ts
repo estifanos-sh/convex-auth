@@ -20,6 +20,8 @@ type AuthIdentityCtx = {
   };
 };
 
+type AuthContextReadCtx = AuthIdentityCtx & AuthQueryCtx;
+
 /**
  * Current request auth context injected into `ctx.auth` by `auth.ctx()`. This
  * is the authenticated auth shape returned by {@link defineAuth().context}.
@@ -120,24 +122,17 @@ export type OptionalAuthContext = {
  */
 export type AuthLike = {
   user: {
-    get: (...args: never[]) => Promise<UserDoc | null>;
-    [key: string]: unknown;
+    get: (ctx: AuthContextReadCtx, args: { id: string }) => Promise<UserDoc | null>;
   };
   active: {
-    get: (...args: never[]) => Promise<{
+    get: (
+      ctx: AuthContextReadCtx,
+      args: { userId: string },
+    ) => Promise<{
       groupId: string;
       roleIds: string[];
       grants: string[];
     } | null>;
-    [key: string]: unknown;
-  };
-  member: {
-    get: (...args: never[]) => Promise<{
-      membership: unknown;
-      roleIds: string[];
-      grants: string[];
-    }>;
-    [key: string]: unknown;
   };
 };
 
@@ -160,7 +155,7 @@ export type AuthLike = {
  * ```
  */
 export type AuthContextConfig<
-  TResolve extends Record<string, unknown> = Record<string, never>,
+  TResolve extends object = Record<string, never>,
   TCtx extends AuthIdentityCtx = AuthIdentityCtx,
 > = {
   /**
@@ -182,36 +177,6 @@ export type AuthContextConfig<
    */
   resolve?: (ctx: TCtx, user: UserDoc, auth: AuthContext) => Promise<TResolve> | TResolve;
 };
-
-type AuthContextResolverLike = {
-  user: {
-    get: (ctx: AuthQueryCtx, args: { id: string }) => Promise<UserDoc | null>;
-  };
-  active: {
-    get: (
-      ctx: AuthQueryCtx,
-      opts: { userId: string },
-    ) => Promise<{
-      groupId: string;
-      roleIds: string[];
-      grants: string[];
-    } | null>;
-  };
-};
-
-/**
- * Narrow the loose {@link AuthLike} compat surface to the precise
- * {@link AuthContextResolverLike} the resolver body needs.
- *
- * `AuthLike`'s methods use `(...args: never[])` parameters so any concrete
- * domain object is assignable to it; those bottom-typed parameters do not
- * statically unify with the resolver's precise `(ctx, args)` signatures, so
- * this is the single sanctioned assertion at that irreducible boundary. The
- * concrete domains object (the only real value ever passed) satisfies both.
- */
-function asResolver(auth: AuthLike): AuthContextResolverLike {
-  return auth as unknown as AuthContextResolverLike;
-}
 
 /** @internal */
 export async function getSessionUserId(ctx: AuthIdentityCtx): Promise<string | null> {
@@ -257,8 +222,8 @@ function makeAssert(groupId: string | null, grants: readonly string[]): AuthCont
  * @internal
  */
 async function resolveActiveMembership(
-  auth: AuthContextResolverLike,
-  ctx: AuthQueryCtx,
+  auth: AuthLike,
+  ctx: AuthContextReadCtx,
   userId: string,
 ): Promise<{ groupId: string | null; roleIds: string[]; grants: string[] }> {
   const active = await auth.active.get(ctx, { userId });
@@ -276,8 +241,8 @@ async function resolveActiveMembership(
  * A session caller passes no scopes and keeps their full role grants.
  */
 export async function getAuthContextForUser(
-  auth: AuthContextResolverLike,
-  ctx: AuthQueryCtx,
+  auth: AuthLike,
+  ctx: AuthContextReadCtx,
   userId: string,
   oauthScopes?: readonly string[],
 ): Promise<AuthContext> {
@@ -285,6 +250,12 @@ export async function getAuthContextForUser(
     auth.user.get(ctx, { id: userId }),
     resolveActiveMembership(auth, ctx, userId),
   ]);
+  if (user === null) {
+    throw new ConvexError({
+      code: ErrorCode.NOT_SIGNED_IN,
+      message: "The authenticated user no longer exists.",
+    });
+  }
   const groupId = resolved.groupId;
   const role = groupId === null ? null : (resolved.roleIds[0] ?? null);
   const grants = groupId === null ? [] : resolved.grants;
@@ -292,7 +263,7 @@ export async function getAuthContextForUser(
     oauthScopes === undefined ? grants : grants.filter((grant) => oauthScopes.includes(grant));
   return {
     userId: userId as AuthContext["userId"],
-    user: user as UserDoc,
+    user,
     groupId,
     role,
     grants: effectiveGrants,
@@ -311,12 +282,7 @@ export async function getAuthContext(
   }
   const userId = userIdFromIdentity(identity);
   const oauthScopes = oauthScopesFromIdentity(identity);
-  return await getAuthContextForUser(
-    asResolver(auth),
-    ctx as AuthQueryCtx,
-    userId,
-    oauthScopes ?? undefined,
-  );
+  return await getAuthContextForUser(auth, ctx, userId, oauthScopes ?? undefined);
 }
 
 /** @internal */

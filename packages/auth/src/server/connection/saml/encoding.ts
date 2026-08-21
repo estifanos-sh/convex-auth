@@ -58,20 +58,20 @@ export function flattenDeep(input: unknown): unknown[] {
 }
 
 /**
- * Read a dotted `path` out of a genuinely-open object, returning `defaultValue`
- * when a segment is missing or the resolved value is `undefined` (lodash.get over
- * `unknown` extract dictionaries). Falsy leaf values (`""`, `0`, `false`) are
- * returned as-is rather than collapsed to the default.
+ * Read a string at a dotted `path`, returning `defaultValue` when a segment is
+ * missing or the resolved value is not a string.
  */
-export function get(obj: unknown, path: string, defaultValue: unknown): unknown {
+export function getString(obj: unknown, path: string, defaultValue: string): string;
+export function getString(obj: unknown, path: string, defaultValue: null): string | null;
+export function getString(obj: unknown, path: string, defaultValue: string | null): string | null {
   let current: unknown = obj;
   for (const segment of path.split(".")) {
-    if (current === null || current === undefined) {
+    if (typeof current !== "object" || current === null || Array.isArray(current)) {
       return defaultValue;
     }
-    current = (current as Record<string, unknown>)[segment];
+    current = Object.getOwnPropertyDescriptor(current, segment)?.value;
   }
-  return current === undefined ? defaultValue : current;
+  return typeof current === "string" ? current : defaultValue;
 }
 
 /** Base64-encode a string, byte array, or `Uint8Array`. */

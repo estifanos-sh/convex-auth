@@ -103,6 +103,16 @@ type WebAuthnResult =
   | SignInSessionResult<SessionInfo<AuthTokens | null> | null>
   | SignInWebAuthnOptionsResult;
 
+type PasskeyRegistrationData = Omit<
+  Parameters<typeof mutatePasskeyCompleteRegistration>[1],
+  "replaceSessionId"
+>;
+
+type PasskeySessionCompletion = Pick<
+  Awaited<ReturnType<typeof mutatePasskeyCompleteRegistration>>,
+  "user" | "sessionId" | "refreshTokenId" | "replacedSessionId"
+>;
+
 /**
  * The WebAuthn provider has three single-word flows:
  *
@@ -117,7 +127,12 @@ const WEBAUTHN_FLOWS = ["register", "signIn", "verify"] as const;
 type WebAuthnFlow = (typeof WEBAUTHN_FLOWS)[number];
 type WebAuthnDispatch = { flow: WebAuthnFlow };
 
+function isWebAuthnFlow(value: string): value is WebAuthnFlow {
+  return WEBAUTHN_FLOWS.some((flow) => flow === value);
+}
+
 type PasskeyParams = {
+  flow?: string;
   userName?: string;
   userDisplayName?: string;
   email?: string;
@@ -129,6 +144,47 @@ type PasskeyParams = {
   authenticatorData?: string;
   signature?: string;
 };
+
+type PasskeyParamCandidate = {
+  flow?: unknown;
+  userName?: unknown;
+  userDisplayName?: unknown;
+  email?: unknown;
+  clientDataJSON?: unknown;
+  attestationObject?: unknown;
+  transports?: unknown;
+  passkeyName?: unknown;
+  credentialId?: unknown;
+  authenticatorData?: unknown;
+  signature?: unknown;
+};
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((entry) => typeof entry === "string");
+}
+
+function parsePasskeyParams(value: unknown): PasskeyParams {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return {};
+  const input = value as PasskeyParamCandidate;
+  const string = (key: keyof PasskeyParams) => {
+    const candidate = input[key];
+    return typeof candidate === "string" ? candidate : undefined;
+  };
+  const transports = isStringArray(input.transports) ? input.transports : undefined;
+  return {
+    flow: string("flow"),
+    userName: string("userName"),
+    userDisplayName: string("userDisplayName"),
+    email: string("email"),
+    clientDataJSON: string("clientDataJSON"),
+    attestationObject: string("attestationObject"),
+    transports,
+    passkeyName: string("passkeyName"),
+    credentialId: string("credentialId"),
+    authenticatorData: string("authenticatorData"),
+    signature: string("signature"),
+  };
+}
 
 const requireStringParam = (value: unknown, name: string) => {
   if (typeof value !== "string") {
@@ -210,36 +266,36 @@ function resolveRpOptions(provider: WebAuthnProviderConfig): RpOptions {
     }
 
     const appHostname = appUrl ? new URL(appUrl).hostname : undefined;
+    const registration: RpOptions["registration"] = {
+      userVerification: provider.options.registration.userVerification ?? "required",
+      residentKey: provider.options.registration.residentKey ?? "preferred",
+      algorithms: provider.options.registration.algorithms ?? [
+        coseAlgorithmES256,
+        coseAlgorithmRS256,
+      ],
+    };
+    const authentication: RpOptions["authentication"] = {
+      userVerification: provider.options.authentication.userVerification ?? "required",
+    };
+    if (provider.options.registration.authenticatorAttachment !== undefined) {
+      registration.authenticatorAttachment = provider.options.registration.authenticatorAttachment;
+    }
+    if (provider.options.registration.hints !== undefined) {
+      registration.hints = provider.options.registration.hints;
+    }
+    if (provider.options.registration.attestation !== undefined) {
+      registration.attestation = provider.options.registration.attestation;
+    }
+    if (provider.options.authentication.hints !== undefined) {
+      authentication.hints = provider.options.authentication.hints;
+    }
     return {
       rpName: provider.options.rpName ?? appHostname ?? provider.options.rpId ?? "localhost",
       rpId: provider.options.rpId ?? appHostname ?? "localhost",
       origin: provider.options.origin ?? appUrl ?? "http://localhost",
       challengeExpirationMs: provider.options.challengeExpirationMs ?? 300_000,
-      registration: {
-        userVerification: provider.options.registration.userVerification ?? "required",
-        residentKey: provider.options.registration.residentKey ?? "preferred",
-        algorithms: provider.options.registration.algorithms ?? [
-          coseAlgorithmES256,
-          coseAlgorithmRS256,
-        ],
-        ...(provider.options.registration.authenticatorAttachment
-          ? {
-              authenticatorAttachment: provider.options.registration.authenticatorAttachment,
-            }
-          : {}),
-        ...(provider.options.registration.hints
-          ? { hints: provider.options.registration.hints }
-          : {}),
-        ...(provider.options.registration.attestation
-          ? { attestation: provider.options.registration.attestation }
-          : {}),
-      },
-      authentication: {
-        userVerification: provider.options.authentication.userVerification ?? "required",
-        ...(provider.options.authentication.hints
-          ? { hints: provider.options.authentication.hints }
-          : {}),
-      },
+      registration,
+      authentication,
     };
   } catch (error) {
     throw asConvexError(
@@ -394,10 +450,10 @@ export function validateCredentialAlgorithm(
   }
 }
 
-function resolveWebAuthnDispatch(params: Record<string, unknown>): WebAuthnDispatch {
+function resolveWebAuthnDispatch(params: PasskeyParams): WebAuthnDispatch {
   const flow = params.flow;
-  if (typeof flow === "string" && (WEBAUTHN_FLOWS as readonly string[]).includes(flow)) {
-    return { flow: flow as WebAuthnFlow };
+  if (typeof flow === "string" && isWebAuthnFlow(flow)) {
+    return { flow };
   }
   throw convexError(
     ErrorCode.PASSKEY_MISSING_FLOW,
@@ -509,6 +565,85 @@ type AssertionCredential = { algorithm: number; publicKey: ArrayBuffer };
 
 function copyArrayBuffer(bytes: Uint8Array): ArrayBuffer {
   return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+}
+
+function registrationData(
+  userId: string,
+  credentialId: string,
+  publicKey: Uint8Array,
+  algorithm: number,
+  counter: number,
+  backupState: BackupState,
+  params: PasskeyParams,
+  attestation: WebAuthnAttestationEvidence | undefined,
+  ctx: EnrichedActionCtx,
+): PasskeyRegistrationData {
+  return {
+    userId,
+    credentialId,
+    publicKey: copyArrayBuffer(publicKey),
+    algorithm,
+    counter,
+    ...(params.transports === undefined ? {} : { transports: params.transports }),
+    deviceType: backupState.deviceType,
+    backedUp: backupState.backedUp,
+    ...(params.passkeyName === undefined ? {} : { name: params.passkeyName }),
+    ...(attestation === undefined ? {} : { attestation }),
+    createdAt: Date.now(),
+    sessionExpirationTime: sessionExpirationTime(ctx.auth.config),
+    refreshTokenExpirationTime: refreshTokenExpirationTime(ctx.auth.config),
+  };
+}
+
+async function finalizePasskeySession(
+  ctx: EnrichedActionCtx,
+  completed: PasskeySessionCompletion,
+): Promise<SignInSessionResult<SessionInfo<AuthTokens | null> | null>> {
+  const userId = completed.user._id as GenericId<"User">;
+  const sessionId = completed.sessionId as GenericId<"Session">;
+  setActiveSpanAttributes({
+    "auth.signin.result": "success",
+    ...buildKnownSignInIdentityAttributes(
+      ctx.auth.config,
+      { userId, sessionId },
+      completed.user.email,
+    ),
+  });
+  if (completed.replacedSessionId !== undefined) {
+    const replacedSessionId = completed.replacedSessionId as GenericId<"Session">;
+    await queueAuthEvent(ctx, ctx.auth.config, {
+      kind: "session.invalidated",
+      actor: { type: "system" },
+      subject: { type: "session", id: replacedSessionId },
+      targets: [
+        { kind: "user", id: userId },
+        { kind: "session", id: replacedSessionId },
+      ],
+      outcome: "success",
+      data: { userId, reason: "replaced" },
+    });
+  }
+  await queueAuthEvent(ctx, ctx.auth.config, {
+    kind: "session.signed_in",
+    actor: { type: "user", id: userId },
+    subject: { type: "session", id: sessionId },
+    targets: [
+      { kind: "user", id: userId },
+      { kind: "session", id: sessionId },
+    ],
+    outcome: "success",
+    data: { provider: "session" },
+  });
+  const session = await finalizeSessionIssuance(ctx.auth.config, {
+    userId,
+    sessionId,
+    identity: buildSessionIdentity(userId, sessionId, completed.user),
+    refreshToken: encodeRefreshToken(
+      completed.refreshTokenId as GenericId<"RefreshToken">,
+      sessionId,
+    ),
+  });
+  return { kind: "signedIn", session };
 }
 
 function signatureIsValid(
@@ -824,12 +959,12 @@ export async function handleWebAuthn(
   ctx: EnrichedActionCtx,
   provider: WebAuthnProviderConfig,
   args: {
-    params?: Record<string, unknown>;
+    params?: unknown;
     verifier?: string;
     continuation?: string;
   },
 ): Promise<WebAuthnResult> {
-  const params = (args.params ?? {}) as PasskeyParams;
+  const params = parsePasskeyParams(args.params);
   const dispatch = resolveWebAuthnDispatch(params);
 
   const handleRegisterVerify = async (): Promise<WebAuthnResult> => {
@@ -937,34 +1072,29 @@ export async function handleWebAuthn(
       }
     }
 
-    let completed;
+    let completed:
+      | Awaited<ReturnType<typeof mutatePasskeyCompleteRegistration>>
+      | Exclude<Awaited<ReturnType<typeof mutatePasskeyCompleteRotation>>, { status: "rejected" }>;
     try {
-      const registrationData = {
+      const data = registrationData(
         userId,
         credentialId,
-        publicKey: publicKeyBytes.buffer.slice(
-          publicKeyBytes.byteOffset,
-          publicKeyBytes.byteOffset + publicKeyBytes.byteLength,
-        ) as ArrayBuffer,
+        publicKeyBytes,
         algorithm,
-        counter: authData.signatureCounter,
-        transports: params.transports,
-        deviceType: backupState.deviceType,
-        backedUp: backupState.backedUp,
-        name: params.passkeyName,
-        ...(attestationEvidence ? { attestation: attestationEvidence } : {}),
-        createdAt: Date.now(),
-        sessionExpirationTime: sessionExpirationTime(ctx.auth.config),
-        refreshTokenExpirationTime: refreshTokenExpirationTime(ctx.auth.config),
-      };
+        authData.signatureCounter,
+        backupState,
+        params,
+        attestationEvidence,
+        ctx,
+      );
       if (continuationId === undefined) {
         completed = await mutatePasskeyCompleteRegistration(ctx, {
-          ...registrationData,
+          ...data,
           replaceSessionId: (await getAuthSessionId(ctx)) ?? undefined,
         });
       } else {
         const rotation = await mutatePasskeyCompleteRotation(ctx, {
-          ...registrationData,
+          ...data,
           continuationId,
           provider: provider.id,
         });
@@ -1015,51 +1145,7 @@ export async function handleWebAuthn(
       throw convexError(ErrorCode.INTERNAL_ERROR, "An unexpected error occurred.");
     }
 
-    const signedInUserId = userId as GenericId<"User">;
-    const sessionId = completed.sessionId as GenericId<"Session">;
-    setActiveSpanAttributes({
-      "auth.signin.result": "success",
-      ...buildKnownSignInIdentityAttributes(
-        ctx.auth.config,
-        { userId: signedInUserId, sessionId },
-        completed.user.email,
-      ),
-    });
-    if ("replacedSessionId" in completed && completed.replacedSessionId !== undefined) {
-      const replacedSessionId = completed.replacedSessionId as GenericId<"Session">;
-      await queueAuthEvent(ctx, ctx.auth.config, {
-        kind: "session.invalidated",
-        actor: { type: "system" },
-        subject: { type: "session", id: replacedSessionId },
-        targets: [
-          { kind: "user", id: signedInUserId },
-          { kind: "session", id: replacedSessionId },
-        ],
-        outcome: "success",
-        data: { userId: signedInUserId, reason: "replaced" },
-      });
-    }
-    await queueAuthEvent(ctx, ctx.auth.config, {
-      kind: "session.signed_in",
-      actor: { type: "user", id: signedInUserId },
-      subject: { type: "session", id: sessionId },
-      targets: [
-        { kind: "user", id: signedInUserId },
-        { kind: "session", id: sessionId },
-      ],
-      outcome: "success",
-      data: { provider: "session" },
-    });
-    const signInResult = await finalizeSessionIssuance(ctx.auth.config, {
-      userId: signedInUserId,
-      sessionId,
-      identity: buildSessionIdentity(signedInUserId, sessionId, completed.user),
-      refreshToken: encodeRefreshToken(
-        completed.refreshTokenId as GenericId<"RefreshToken">,
-        sessionId,
-      ),
-    });
-    return { kind: "signedIn" as const, session: signInResult };
+    return await finalizePasskeySession(ctx, completed);
   };
 
   const handleAuthVerify = async (): Promise<WebAuthnResult> => {
@@ -1162,55 +1248,10 @@ export async function handleWebAuthn(
       );
     }
 
-    const userId = completed.user._id as GenericId<"User">;
-    const sessionId = completed.sessionId as GenericId<"Session">;
-    setActiveSpanAttributes({
-      "auth.signin.result": "success",
-      ...buildKnownSignInIdentityAttributes(
-        ctx.auth.config,
-        { userId, sessionId },
-        completed.user.email,
-      ),
-    });
-    if (completed.replacedSessionId !== undefined) {
-      const replacedSessionId = completed.replacedSessionId as GenericId<"Session">;
-      await queueAuthEvent(ctx, ctx.auth.config, {
-        kind: "session.invalidated",
-        actor: { type: "system" },
-        subject: { type: "session", id: replacedSessionId },
-        targets: [
-          { kind: "user", id: userId },
-          { kind: "session", id: replacedSessionId },
-        ],
-        outcome: "success",
-        data: { userId, reason: "replaced" },
-      });
-    }
-    await queueAuthEvent(ctx, ctx.auth.config, {
-      kind: "session.signed_in",
-      actor: { type: "user", id: userId },
-      subject: { type: "session", id: sessionId },
-      targets: [
-        { kind: "user", id: userId },
-        { kind: "session", id: sessionId },
-      ],
-      outcome: "success",
-      data: { provider: "session" },
-    });
-    const signInResult = await finalizeSessionIssuance(ctx.auth.config, {
-      userId,
-      sessionId,
-      identity: buildSessionIdentity(userId, sessionId, completed.user),
-      refreshToken: encodeRefreshToken(
-        completed.refreshTokenId as GenericId<"RefreshToken">,
-        sessionId,
-      ),
-    });
-
-    return { kind: "signedIn" as const, session: signInResult };
+    return await finalizePasskeySession(ctx, completed);
   };
 
-  const flowHandlers: Record<WebAuthnFlow, () => Promise<WebAuthnResult>> = {
+  const flowHandlers = {
     register: async () => {
       const rp = resolveRpOptions(provider);
 
@@ -1267,38 +1308,29 @@ export async function handleWebAuthn(
         kind: "webauthnOptions" as const,
         options: {
           rp: { name: rp.rpName, id: rp.rpId },
-          user: {
-            id: userHandle,
-            name: userName,
-            displayName: userDisplayName,
-          },
+          user: { id: userHandle, name: userName, displayName: userDisplayName },
           challenge: encodeBase64urlNoPadding(challenge),
           pubKeyCredParams: rp.registration.algorithms.map((alg) => ({
             type: "public-key" as const,
             alg,
           })),
           timeout: rp.challengeExpirationMs,
-          ...(rp.registration.hints ? { hints: rp.registration.hints } : {}),
+          ...(rp.registration.hints === undefined ? {} : { hints: rp.registration.hints }),
           attestation: rp.registration.attestation?.conveyance ?? "none",
           authenticatorSelection: {
             residentKey: rp.registration.residentKey,
             requireResidentKey: rp.registration.residentKey === "required",
             userVerification: rp.registration.userVerification,
-            ...(rp.registration.authenticatorAttachment
-              ? {
-                  authenticatorAttachment: rp.registration.authenticatorAttachment,
-                }
-              : {}),
+            ...(rp.registration.authenticatorAttachment === undefined
+              ? {}
+              : { authenticatorAttachment: rp.registration.authenticatorAttachment }),
           },
           excludeCredentials,
         },
         verifier: registration.verifierId,
         ...(args.continuation === undefined
           ? {}
-          : {
-              continuation: args.continuation,
-              operation: "rotate" as const,
-            }),
+          : { continuation: args.continuation, operation: "rotate" as const }),
       };
     },
 
@@ -1342,34 +1374,17 @@ export async function handleWebAuthn(
           : credentialAuthenticationHints(eligibleCredentials);
       }
 
-      const options: {
-        challenge: string;
-        timeout: number;
-        rpId: string;
-        userVerification: string;
-        hints?: string[];
-        allowCredentials?: Array<{
-          type: "public-key";
-          id: string;
-          transports?: string[];
-        }>;
-      } = {
-        challenge: encodeBase64urlNoPadding(challenge),
-        timeout: rp.challengeExpirationMs,
-        rpId: rp.rpId,
-        userVerification: rp.authentication.userVerification,
-        ...((rp.authentication.hints ?? credentialHints)
-          ? { hints: rp.authentication.hints ?? credentialHints }
-          : {}),
-      };
-
-      if (allowCredentials) {
-        options.allowCredentials = allowCredentials;
-      }
-
+      const hints = rp.authentication.hints ?? credentialHints;
       return {
         kind: "webauthnOptions" as const,
-        options,
+        options: {
+          challenge: encodeBase64urlNoPadding(challenge),
+          timeout: rp.challengeExpirationMs,
+          rpId: rp.rpId,
+          userVerification: rp.authentication.userVerification,
+          ...(hints === undefined ? {} : { hints }),
+          ...(allowCredentials === undefined ? {} : { allowCredentials }),
+        },
         verifier: signIn.verifierId,
       };
     },
@@ -1391,7 +1406,7 @@ export async function handleWebAuthn(
           "or `signature` + `credentialId` (to complete a `signIn`).",
       );
     },
-  };
+  } satisfies Record<WebAuthnFlow, () => Promise<WebAuthnResult>>;
 
   const handler = flowHandlers[dispatch.flow];
   if (!handler) {

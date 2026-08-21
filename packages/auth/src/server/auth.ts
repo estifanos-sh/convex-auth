@@ -4,9 +4,9 @@
  * @module
  */
 
-import type { GenericActionCtx, GenericDataModel, HttpRouter } from "convex/server";
+import type { HttpRouter } from "convex/server";
 import { ConvexError } from "convex/values";
-import type { GenericValidator } from "convex/values";
+import type { GenericValidator, Value } from "convex/values";
 
 import { ErrorCode } from "../shared/codes";
 import type { AuthApiRefs } from "../client/index";
@@ -16,10 +16,8 @@ import type {
   AuthConfig,
   AuthContext,
   AuthContextConfig,
-  AuthContextFacade,
   AuthContextFactory,
   AuthContextResolver,
-  AuthLike,
   InferAuth,
   OptionalAuthContext,
   OptionalAuthContextFactory,
@@ -30,10 +28,8 @@ import { Auth as AuthFactory } from "./runtime";
 import { createAuthValidators } from "./validators";
 import type { AuthExtendValidators, AuthValidators } from "./validators";
 import type {
-  AuthMemberInspectResult,
   AuthProviderConfig,
   ConvexAuthConfig,
-  Doc,
   Grant,
   HasDeviceProvider,
   HasWebAuthnProvider,
@@ -50,21 +46,20 @@ export type { AuthExtendValidators, AuthValidators };
  * from `string[]` to the permission-typed literal unions.
  */
 type MemberAccessResult<TPermissions extends PermissionsConfig | undefined> = Omit<
-  AuthMemberInspectResult,
+  Awaited<ReturnType<RuntimeAuthApi["member"]["assert"]>>,
   "roleIds" | "grants"
 > & {
   roleIds: RoleId<TPermissions>[];
   grants: Grant<TPermissions>[];
 };
 
-type MemberResolutionResult<TPermissions extends PermissionsConfig | undefined> =
-  MemberAccessResult<TPermissions> & {
-    matchedGroupId: string | null;
-    depth: number | null;
-    isDirect: boolean;
-    isInherited: boolean;
-    traversedGroupIds: string[];
-  };
+type MemberResolutionResult<TPermissions extends PermissionsConfig | undefined> = Omit<
+  Awaited<ReturnType<RuntimeAuthApi["member"]["resolve"]>>,
+  "roleIds" | "grants"
+> & {
+  roleIds: RoleId<TPermissions>[];
+  grants: Grant<TPermissions>[];
+};
 
 type MemberApiWithPermissions<TPermissions extends PermissionsConfig | undefined> = Omit<
   ReturnType<typeof AuthFactory>["auth"]["member"],
@@ -78,30 +73,16 @@ type MemberApiWithPermissions<TPermissions extends PermissionsConfig | undefined
         userId: string;
         roleIds?: RoleId<TPermissions>[];
         status?: string;
-        extend?: Record<string, unknown>;
+        extend?: Record<string, Value>;
       };
     },
   ) => Promise<string>;
-  list: (
-    ctx: Parameters<ReturnType<typeof AuthFactory>["auth"]["member"]["list"]>[0],
-    opts?: {
-      where?: { groupId?: string; userId?: string; status?: string };
-      paginationOpts?: { numItems: number; cursor: string | null };
-      orderBy?: "_creationTime" | "status";
-      order?: "asc" | "desc";
-    },
-  ) => Promise<{
-    page: Doc<"GroupMember">[];
-    isDone: boolean;
-    continueCursor: string;
-    splitCursor?: string | null;
-    pageStatus?: "SplitRecommended" | "SplitRequired" | null;
-  }>;
+  list: ReturnType<typeof AuthFactory>["auth"]["member"]["list"];
   update: (
     ctx: Parameters<ReturnType<typeof AuthFactory>["auth"]["member"]["update"]>[0],
     args: {
       id: string;
-      patch: Record<string, unknown> & { roleIds?: RoleId<TPermissions>[] };
+      patch: Record<string, Value> & { roleIds?: RoleId<TPermissions>[] };
     },
   ) => Promise<null>;
   get: {
@@ -431,6 +412,8 @@ export type AuthApi<
   TExtend extends AuthExtendValidators = {},
 > = AuthApiBase<TPermissions, TExtend>;
 
+declare const providerConfigs: unique symbol;
+
 /**
  * The return type of {@link defineAuth}.
  *
@@ -445,7 +428,10 @@ export type ConvexAuthResult<
   P extends AuthProviderConfig[],
   TPermissions extends PermissionsConfig | undefined = undefined,
   TExtend extends AuthExtendValidators = {},
-> = AuthApi<TPermissions, TExtend>;
+> = AuthApi<TPermissions, TExtend> & {
+  /** Provider tuple retained solely for {@link InferClientApi}. */
+  readonly [providerConfigs]?: P;
+};
 
 /**
  * Infer the typed `AuthApiRefs` for the client SDK from a `defineAuth` call.
@@ -523,7 +509,7 @@ export function defineAuth<
     ...config,
     component,
     providers: [...config.providers],
-  } as ConvexAuthConfig);
+  });
   const {
     domain: domainApi,
     scim: scimApi,
@@ -533,7 +519,7 @@ export function defineAuth<
     oidc: oidcApi,
     saml: samlApi,
     ...restConnection
-  } = authResult.auth.connection as InternalConnectionApi;
+  } = authResult.auth.connection;
 
   type SetGroupConnectionDomains = PublicGroupConnectionApi["domain"]["upsert"];
   type GroupConnectionDomainInput = Array<{
@@ -616,11 +602,7 @@ export function defineAuth<
         isPrimary: Boolean(nextDomain.isPrimary),
       });
       if (current?.verifiedAt !== undefined) {
-        await (
-          ctx as {
-            runMutation: GenericActionCtx<GenericDataModel>["runMutation"];
-          }
-        ).runMutation(component.connection.domain.verify, {
+        await ctx.runMutation(component.connection.domain.verify, {
           id: domainId,
           verifiedAt: current.verifiedAt,
         });
@@ -690,21 +672,23 @@ export function defineAuth<
 
   const accountApi: PublicAccountApi = authResult.auth.accountManagement;
 
+  const memberApi = authResult.auth.member as MemberApiWithPermissions<TPermissions>;
+
   const oauthApi: PublicOAuthApi = {
     authorize: authResult.auth.oauth.authorize,
     client: {
-      create: authResult.auth.oauth.client.create,
-      get: authResult.auth.oauth.client.get,
-      list: authResult.auth.oauth.client.list,
-      update: authResult.auth.oauth.client.update,
-      revoke: authResult.auth.oauth.client.revoke,
+      create: (ctx, args) => authResult.auth.oauth.client.create(ctx, args),
+      get: (ctx, args) => authResult.auth.oauth.client.get(ctx, args),
+      list: (ctx, args) => authResult.auth.oauth.client.list(ctx, args),
+      update: (ctx, args) => authResult.auth.oauth.client.update(ctx, args),
+      revoke: (ctx, args) => authResult.auth.oauth.client.revoke(ctx, args),
     },
   };
 
   const eventApi: PublicEventApi = authResult.auth.event;
 
-  const api = {
-    v: createAuthValidators(config.extend ?? ({} as TExtend)),
+  const api: ConvexAuthResult<P, TPermissions, TExtend> = {
+    v: createAuthValidators<TExtend>(config.extend),
     signIn: authResult.signIn,
     signOut: authResult.signOut,
     store: authResult.store,
@@ -714,7 +698,7 @@ export function defineAuth<
     account: accountApi,
     factor: authResult.auth.factor,
     group: groupApi,
-    member: authResult.auth.member,
+    member: memberApi,
     invite: authResult.auth.invite,
     key: authResult.auth.key,
     provider: authResult.auth.provider,
@@ -723,7 +707,7 @@ export function defineAuth<
     request: authResult.auth.request,
     connection: publicGroupConnection,
 
-    ...(createAuthContextFacade(authResult.auth as AuthLike) as AuthContextFacade),
-  } as unknown as ConvexAuthResult<P, TPermissions, TExtend>;
+    ...createAuthContextFacade(authResult.auth),
+  };
   return api;
 }

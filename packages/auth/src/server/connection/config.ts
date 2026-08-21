@@ -67,19 +67,18 @@ export function getPublicSamlConfig(config: unknown): SamlConfigShape {
  * otherwise hand back the raw stored config.
  * @internal
  */
-export function getPublicConnectionConfig(config: unknown): Record<string, unknown> {
+export function getPublicConnectionConfig(config: unknown) {
   const base = asRecord(config);
   if (base === null || Array.isArray(base)) return {};
-  const next: Record<string, unknown> = { ...base };
+  const next = { ...base };
   const protocols = asRecord(base.protocols);
   if (protocols === null || Array.isArray(protocols)) {
     delete next.protocols;
   } else {
-    next.protocols = {
-      ...protocols,
-      ...(protocols.oidc !== undefined ? { oidc: getPublicOidcConfig(config) } : {}),
-      ...(protocols.saml !== undefined ? { saml: getPublicSamlConfig(config) } : {}),
-    };
+    const publicProtocols = { ...protocols };
+    if (protocols.oidc !== undefined) publicProtocols.oidc = getPublicOidcConfig(config);
+    if (protocols.saml !== undefined) publicProtocols.saml = getPublicSamlConfig(config);
+    next.protocols = publicProtocols;
   }
   if (base.oidc !== undefined) next.oidc = getPublicOidcConfig(config);
   if (base.saml !== undefined) next.saml = getPublicSamlConfig(config);

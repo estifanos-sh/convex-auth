@@ -48,15 +48,13 @@ export async function readStoredSession(): Promise<SessionShape | null> {
   if (typeof data.token !== "string" || data.token.length === 0) {
     return null;
   }
-  return {
-    token: data.token,
-    ...(data.refreshToken ? { refreshToken: data.refreshToken } : {}),
-  };
+  const session: SessionShape = { token: data.token };
+  if (data.refreshToken) session.refreshToken = data.refreshToken;
+  return session;
 }
 
 export async function writeStoredSession(session: SessionShape) {
-  await writeStorage({
-    token: session.token,
-    ...(session.refreshToken ? { refreshToken: session.refreshToken } : {}),
-  });
+  const data: StorageShape = { token: session.token };
+  if (session.refreshToken) data.refreshToken = session.refreshToken;
+  await writeStorage(data);
 }
