@@ -493,7 +493,6 @@ function eventId(event: { kind: AuthEventKind; subject: AuthEventSubject }): str
 
 export type EmitAuthEventInput<K extends AuthEventKind = AuthEventKind> = {
   eventId?: string;
-  category?: AuthEventCategory;
   occurredAt?: number;
   kind: K;
   actor: AuthEventActor;
@@ -534,16 +533,16 @@ function computeAuthEvent<K extends AuthEventKind>(input: EmitAuthEventInput<K>)
   return finalizeAuthEvent<K>({
     ...input,
     eventId: input.eventId ?? eventId(input),
-    category: input.category ?? categoryForKind(input.kind),
+    category: categoryForKind(input.kind),
     occurredAt: input.occurredAt ?? Date.now(),
   });
 }
 
 function appendArgs(event: AuthEvent) {
+  const { category: _, ...input } = event;
   return {
-    event,
+    event: input,
     targets: event.targets,
-    idempotencyKey: event.eventId,
   };
 }
 
@@ -669,8 +668,8 @@ export async function emitAuthEvent<K extends AuthEventKind>(
  *
  * Scheduled writes are recorded by the caller's mutation commit but execute in
  * a separate function, keeping projection fan-out off the
- * authentication critical path. Configured handlers preserve their existing
- * synchronous, exactly-once behavior by falling back to {@link emitAuthEvent}.
+ * authentication critical path. Configured handlers preserve synchronous,
+ * exactly-once delivery through {@link emitAuthEvent}.
  *
  * @internal
  */

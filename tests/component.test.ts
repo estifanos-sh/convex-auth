@@ -13,7 +13,7 @@ import {
   EVENT_CATEGORIES,
   EVENT_KIND_CATEGORY,
 } from "../packages/auth/src/shared/event/kinds";
-import { convexTest, pruneExpiredForTest } from "./convex/setup";
+import { convexTest, privateAuthForTest, pruneExpiredForTest } from "./convex/setup";
 
 /** Literal values carried by a `v.union(v.literal(...), ...)` validator. */
 function unionLiteralValues(validator: unknown): string[] {
@@ -767,7 +767,6 @@ test("event.append persists target projections and dedupes by eventId", async ()
   const event = {
     eventId: "session.signed_in:user:" + userId + ":deadbeef",
     kind: "session.signed_in" as const,
-    category: "session" as const,
     occurredAt: Date.now(),
     actor: { type: "user" as const, id: userId },
     subject: { type: "user" as const, id: userId },
@@ -783,7 +782,6 @@ test("event.append persists target projections and dedupes by eventId", async ()
     return await ctx.runMutation(components.auth.event.append, {
       event,
       targets: event.targets,
-      idempotencyKey: event.eventId,
     });
   });
   expect(first.created).toBe(true);
@@ -801,11 +799,46 @@ test("event.append persists target projections and dedupes by eventId", async ()
     return await ctx.runMutation(components.auth.event.append, {
       event,
       targets: event.targets,
-      idempotencyKey: event.eventId,
     });
   });
   expect(second.created).toBe(false);
   expect(second.createdTargets).toHaveLength(0);
+});
+
+test("event.append orders different kinds in one private auth-events stream", async () => {
+  const t = convexTest(schema);
+  const userId = await t.run(
+    async (ctx) =>
+      await ctx.runMutation(components.auth.user.create, {
+        data: { email: "event-order@example.com" },
+      }),
+  );
+
+  for (const [eventId, kind] of [
+    ["event-order:user", "user.created"],
+    ["event-order:session", "session.signed_in"],
+  ] as const) {
+    await t.run(
+      async (ctx) =>
+        await ctx.runMutation(components.auth.event.append, {
+          event: {
+            eventId,
+            kind,
+            occurredAt: Date.now(),
+            actor: { type: "system" },
+            subject: { type: "user", id: userId },
+            targets: [{ kind: "user", id: userId }],
+            outcome: "success",
+          },
+        }),
+    );
+  }
+
+  const events = await t.run(
+    async (ctx) => await ctx.runQuery(privateAuthForTest(components.auth).event.orderedEvents, {}),
+  );
+  expect(events.map(({ kind }) => kind)).toEqual(["user.created", "session.signed_in"]);
+  expect(events[0]!.commitTs <= events[1]!.commitTs).toBe(true);
 });
 
 test("event taxonomy: component validators are derived from the shared kind table with no drift", () => {
@@ -846,7 +879,6 @@ test("event taxonomy: append+list round-trips every kind and preserves its categ
         event: {
           eventId,
           kind,
-          category: EVENT_KIND_CATEGORY[kind],
           occurredAt: Date.now(),
           actor: { type: "system" as const },
           subject: { type: "user" as const, id: userId },
@@ -854,7 +886,6 @@ test("event taxonomy: append+list round-trips every kind and preserves its categ
           outcome: "success" as const,
         },
         targets: [{ kind: "user" as const, id: userId }],
-        idempotencyKey: eventId,
       });
     });
     expect(appended.created).toBe(true);

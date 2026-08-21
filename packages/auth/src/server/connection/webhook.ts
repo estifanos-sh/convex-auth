@@ -5,11 +5,9 @@ import type { ComponentCtx, ComponentReadCtx } from "../component/context";
 import {
   createWebhookEndpoint,
   getWebhookEndpoint,
-  listReadyWebhookDeliveries,
   listWebhookDeliveries,
   listWebhookEndpoints,
   updateWebhookEndpoint,
-  updateWebhookDelivery,
 } from "../contract";
 import { convexError } from "../errors";
 import type { AuthEventKind } from "../events";
@@ -201,47 +199,6 @@ export function createGroupWebhookDomain(deps: WebhookDeps) {
         },
       ) => {
         return await listWebhookDeliveries(ctx, config.component.connection, data);
-      },
-      listReady: async (ctx: ComponentReadCtx, args: { limit?: number } = {}) => {
-        return await listReadyWebhookDeliveries(ctx, config.component.connection, {
-          now: Date.now(),
-          limit: args.limit,
-        });
-      },
-      markDelivered: async (ctx: ComponentCtx, args: { id: string; responseStatus?: number }) => {
-        await updateWebhookDelivery(ctx, config.component.connection, {
-          deliveryId: args.id,
-          patch: {
-            status: "delivered",
-            attemptCount: 1,
-            lastAttemptAt: Date.now(),
-            lastResponseStatus: args.responseStatus,
-          },
-        });
-      },
-      markFailed: async (
-        ctx: ComponentCtx,
-        args: {
-          id: string;
-          data: {
-            attemptCount: number;
-            responseStatus?: number;
-            error?: string;
-            retryAt?: number;
-          };
-        },
-      ) => {
-        await updateWebhookDelivery(ctx, config.component.connection, {
-          deliveryId: args.id,
-          patch: {
-            status: args.data.retryAt ? "pending" : "failed",
-            attemptCount: args.data.attemptCount,
-            lastAttemptAt: Date.now(),
-            lastResponseStatus: args.data.responseStatus,
-            lastError: args.data.error,
-            nextAttemptAt: args.data.retryAt ?? Date.now(),
-          },
-        });
       },
     },
   };

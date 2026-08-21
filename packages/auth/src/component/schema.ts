@@ -24,6 +24,7 @@ import {
   vWebhookDeliveryStatus,
   vWebhookEndpointStatus,
 } from "./model";
+import { authEventStream } from "./eventstream";
 
 /**
  * Schema for the auth component.
@@ -33,6 +34,10 @@ import {
  * management (groups, members, invites).
  */
 export default defineSchema({
+  ...authEventStream.tables({
+    events: (table) => table.index("event_id", ["eventId"]),
+  }),
+
   /**
    * Authenticated users. A user may have multiple linked accounts
    * and multiple concurrent sessions.

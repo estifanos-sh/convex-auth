@@ -9,11 +9,16 @@ import { paginationOptsValidator } from "convex/server";
 import { ConvexError, v, type Infer } from "convex/values";
 
 import { ErrorCode } from "../shared/codes";
+import { EVENT_KIND_CATEGORY } from "../shared/event/kinds";
 import type { Doc } from "./_generated/dataModel";
-import { mutation, query } from "./functions";
+import type { MutationCtx } from "./_generated/server";
+import { appendAuthEvent, readOrderedAuthEvents } from "./eventstream";
+import { internalQuery, mutation, query } from "./functions";
 import {
   vAuthEvent,
   vAuthEventData,
+  vAuthEventInput,
+  vAuthEventKind,
   vAuthEventProjectionDoc,
   vAuthEventTarget,
   vAuthEventWhere,
@@ -22,10 +27,18 @@ import {
 import schema from "./schema";
 
 type AuthEvent = Infer<typeof vAuthEvent>;
+type AuthEventInput = Infer<typeof vAuthEventInput>;
 type AuthEventTarget = Infer<typeof vAuthEventTarget>;
 type AuthEventWhere = Infer<typeof vAuthEventWhere>;
 
 const MAX_EVENT_TARGETS = 64;
+
+/** Read the private auth event stream in commit order for component tests. */
+export const orderedEvents = internalQuery({
+  args: {},
+  returns: v.array(v.object({ kind: vAuthEventKind, commitTs: v.int64() })),
+  handler: readOrderedAuthEvents,
+});
 
 function targetKey(target: AuthEventTarget): string {
   return `${target.kind}:${target.id}`;
@@ -83,67 +96,12 @@ const PUBLIC_DATA_KEYS = {
   security: ["reason", "errorCode"],
 } as const;
 
-const EVENT_KIND_DATA_CATEGORY = {
-  "user.created": "user",
-  "user.updated": "user",
-  "session.signed_in": "session",
-  "session.signed_out": "session",
-  "session.invalidated": "session",
-  "session.refresh_exchanged": "session",
-  "session.refresh_reuse_detected": "session",
-  "account.linked": "account",
-  "account.unlinked": "account",
-  "password.changed": "password",
-  "passkey.added": "passkey",
-  "passkey.removed": "passkey",
-  "totp.enrolled": "totp",
-  "totp.removed": "totp",
-  "email.verified": "email",
-  "phone.verified": "phone",
-  "api_key.created": "api_key",
-  "api_key.revoked": "api_key",
-  "oauth.client.created": "oauth",
-  "oauth.client.revoked": "oauth",
-  "oauth.code.created": "oauth",
-  "oauth.token.created": "oauth",
-  "oauth.token.exchanged": "oauth",
-  "oauth.refresh.reuse_detected": "oauth",
-  "oauth.refresh.revoked": "oauth",
-  "connection.created": "connection",
-  "connection.updated": "connection",
-  "connection.removed": "connection",
-  "connection.login.succeeded": "connection",
-  "connection.login.failed": "connection",
-  "connection.domain.verification_requested": "connection",
-  "connection.domain.verified": "connection",
-  "connection.policy.updated": "connection",
-  "connection.saml.set": "connection",
-  "connection.saml.refreshed": "connection",
-  "connection.oidc.set": "connection",
-  "connection.scim.set": "scim",
-  "connection.scim.read": "scim",
-  "connection.scim.user.provisioned": "scim",
-  "connection.scim.user.updated": "scim",
-  "connection.scim.user.deactivated": "scim",
-  "connection.scim.user.reactivated": "scim",
-  "connection.scim.group.provisioned": "scim",
-  "connection.scim.group.updated": "scim",
-  "connection.scim.group.deactivated": "scim",
-  "connection.scim.group.reactivated": "scim",
-  "webhook.endpoint.created": "webhook",
-  "webhook.endpoint.disabled": "webhook",
-  "webhook.delivery.created": "webhook",
-  "webhook.delivery.attempted": "webhook",
-  "webhook.delivery.succeeded": "webhook",
-  "webhook.delivery.failed": "webhook",
-} as const satisfies Record<AuthEvent["kind"], keyof typeof PUBLIC_DATA_KEYS>;
-
 function publicData(
   kind: AuthEvent["kind"],
   value: unknown,
 ): Infer<typeof vAuthEventData> | undefined {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return undefined;
-  const category = EVENT_KIND_DATA_CATEGORY[kind];
+  const category = EVENT_KIND_CATEGORY[kind];
   const keys = PUBLIC_DATA_KEYS[category] ?? [];
   const source = value as Record<string, unknown>;
   const redacted: Record<string, unknown> = {};
@@ -342,78 +300,97 @@ export const list = query({
 /**
  * Append an auth event, fanning out idempotent projections per target.
  *
- * The projection row is the durable source of truth and the query surface. One
- * copy per target provides indexed reads without duplicating every event into a
- * second stream that no API consumes.
+ * The projection row is the query surface. The canonical event itself is also
+ * appended once to the component-private shared stream, whose V6 commitTs
+ * ordering is used for durable event ordering. `eventId` makes both writes
+ * idempotent.
  */
+const vAppendResult = v.object({
+  eventId: v.string(),
+  created: v.boolean(),
+  createdTargets: v.array(vAuthEventTarget),
+  projections: v.array(vAuthEventProjectionDoc),
+});
+
+/**
+ * Append a canonical event and its query projections in the caller's
+ * transaction. This is intentionally shared by webhook delivery state
+ * transitions so a committed transition can never lack its audit record.
+ *
+ * @internal
+ */
+export async function appendAuthEventProjection(
+  ctx: MutationCtx,
+  args: {
+    event: AuthEventInput;
+    targets?: AuthEventTarget[];
+  },
+): Promise<Infer<typeof vAppendResult>> {
+  const event: AuthEvent = {
+    ...args.event,
+    category: EVENT_KIND_CATEGORY[args.event.kind],
+  };
+  const scopes = args.targets ?? args.event.targets;
+  if (scopes.length > MAX_EVENT_TARGETS) {
+    throw new ConvexError({
+      code: ErrorCode.INVALID_PARAMETERS,
+      message: `Auth events support at most ${MAX_EVENT_TARGETS} targets`,
+    });
+  }
+  const seenScopes = new Set<string>();
+  const createdTargets: AuthEventTarget[] = [];
+  const projections: Array<Infer<typeof vAuthEventProjectionDoc>> = [];
+  for (const target of scopes) {
+    const key = targetKey(target);
+    if (seenScopes.has(key)) continue;
+    seenScopes.add(key);
+    const existing = await ctx.db
+      .query("AuthEventProjection")
+      .withIndex("event_id_target", (q) =>
+        q.eq("eventId", event.eventId).eq("targetKind", target.kind).eq("targetId", target.id),
+      )
+      .unique();
+    if (existing !== null) {
+      projections.push(publicProjection(existing));
+      continue;
+    }
+
+    const projectionId = await ctx.db.insert("AuthEventProjection", {
+      eventId: event.eventId,
+      targetKind: target.kind,
+      targetId: target.id,
+      kind: event.kind,
+      category: event.category,
+      occurredAt: event.occurredAt,
+      actorType: event.actor.type,
+      actorId: event.actor.id,
+      subjectType: event.subject.type,
+      subjectId: event.subject.id,
+      outcome: event.outcome,
+      errorCode: event.errorCode,
+      requestId: event.request?.requestId,
+      ip: event.request?.ip,
+      userAgent: event.request?.userAgent,
+      data: event.data,
+    });
+    const projection = await ctx.db.get("AuthEventProjection", projectionId);
+    if (projection !== null) projections.push(publicProjection(projection));
+    createdTargets.push(target);
+  }
+  await appendAuthEvent(ctx, event);
+  return {
+    eventId: event.eventId,
+    created: createdTargets.length > 0,
+    createdTargets,
+    projections,
+  };
+}
+
 export const append = mutation({
   args: {
-    event: vAuthEvent,
+    event: vAuthEventInput,
     targets: v.optional(v.array(vAuthEventTarget)),
-    idempotencyKey: v.optional(v.string()),
   },
-  returns: v.object({
-    eventId: v.string(),
-    created: v.boolean(),
-    createdTargets: v.array(vAuthEventTarget),
-    projections: v.array(vAuthEventProjectionDoc),
-  }),
-  handler: async (ctx, args) => {
-    const scopes = args.targets ?? args.event.targets;
-    if (scopes.length > MAX_EVENT_TARGETS) {
-      throw new ConvexError({
-        code: ErrorCode.INVALID_PARAMETERS,
-        message: `Auth events support at most ${MAX_EVENT_TARGETS} targets`,
-      });
-    }
-    const seenScopes = new Set<string>();
-    const createdTargets: AuthEventTarget[] = [];
-    const projections: Array<Infer<typeof vAuthEventProjectionDoc>> = [];
-    for (const target of scopes) {
-      const key = targetKey(target);
-      if (seenScopes.has(key)) continue;
-      seenScopes.add(key);
-      const existing = await ctx.db
-        .query("AuthEventProjection")
-        .withIndex("event_id_target", (q) =>
-          q
-            .eq("eventId", args.event.eventId)
-            .eq("targetKind", target.kind)
-            .eq("targetId", target.id),
-        )
-        .unique();
-      if (existing !== null) {
-        projections.push(publicProjection(existing));
-        continue;
-      }
-
-      const projectionId = await ctx.db.insert("AuthEventProjection", {
-        eventId: args.event.eventId,
-        targetKind: target.kind,
-        targetId: target.id,
-        kind: args.event.kind,
-        category: args.event.category,
-        occurredAt: args.event.occurredAt,
-        actorType: args.event.actor.type,
-        actorId: args.event.actor.id,
-        subjectType: args.event.subject.type,
-        subjectId: args.event.subject.id,
-        outcome: args.event.outcome,
-        errorCode: args.event.errorCode,
-        requestId: args.event.request?.requestId,
-        ip: args.event.request?.ip,
-        userAgent: args.event.request?.userAgent,
-        data: args.event.data,
-      });
-      const projection = await ctx.db.get("AuthEventProjection", projectionId);
-      if (projection !== null) projections.push(publicProjection(projection));
-      createdTargets.push(target);
-    }
-    return {
-      eventId: args.event.eventId,
-      created: createdTargets.length > 0,
-      createdTargets,
-      projections,
-    };
-  },
+  returns: vAppendResult,
+  handler: async (ctx, args) => await appendAuthEventProjection(ctx, args),
 });

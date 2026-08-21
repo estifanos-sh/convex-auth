@@ -38,10 +38,6 @@ type WebhookEndpointRecord = FunctionReturnType<
 type WebhookDeliveryRecord = FunctionReturnType<
   ComponentConnection["webhook"]["delivery"]["list"]
 >["page"][number];
-type InternalWebhookDeliveryRecord = FunctionReturnType<
-  ComponentConnection["webhook"]["delivery"]["dueForDispatch"]
->[number];
-
 export type ScimIdentityRecord = FunctionReturnType<
   ComponentConnection["scim"]["identity"]["list"]
 >["page"][number];
@@ -517,29 +513,4 @@ export const updateWebhookEndpoint = (
     ctx,
     componentConnection.webhook.endpoint.update,
     { id: args.endpointId, patch: args.patch },
-  );
-
-export const listReadyWebhookDeliveries = (
-  ctx: ComponentReadCtx,
-  componentConnection: ComponentConnection,
-  args: { now: number; limit?: number },
-) =>
-  componentQuery<typeof args, InternalWebhookDeliveryRecord[]>(
-    ctx,
-    componentConnection.webhook.delivery.dueForDispatch,
-    args,
-  );
-
-export const updateWebhookDelivery = (
-  ctx: ComponentWriteCtx,
-  componentConnection: ComponentConnection,
-  args: {
-    deliveryId: string;
-    patch: FunctionArgs<ComponentConnection["webhook"]["delivery"]["update"]>["patch"];
-  },
-) =>
-  componentMutation<FunctionArgs<ComponentConnection["webhook"]["delivery"]["update"]>, null>(
-    ctx,
-    componentConnection.webhook.delivery.update,
-    { id: args.deliveryId, patch: args.patch },
   );

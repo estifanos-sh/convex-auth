@@ -5,7 +5,7 @@ import { getPublicWebhookEndpoint } from "@estifanos-sh/convex-auth/server/conne
 import { decryptSecret } from "@estifanos-sh/convex-auth/server/secret";
 import { expect, test } from "vite-plus/test";
 
-import { convexTest } from "../convex/setup";
+import { convexTest, privateAuthForTest } from "../convex/setup";
 
 test("public webhook projection strips encrypted credential material", () => {
   const endpoint = getPublicWebhookEndpoint({
@@ -89,4 +89,95 @@ test("webhook endpoint update rotates the secret without exposing it", async () 
   expect(await decryptSecret(raw!.secretCiphertext)).toBe("new-secret");
   expect(publicEndpoint).not.toHaveProperty("secretCiphertext");
   expect(publicEndpoint?.subscriptions).toEqual(["user.updated"]);
+});
+
+test("webhook delivery state transitions commit matching audit events", async () => {
+  const t = convexTest(schema);
+  const groupId = await t.run(
+    async (ctx) =>
+      await ctx.runMutation(components.auth.group.create, {
+        name: "Webhook audit",
+        slug: "webhook-audit",
+        type: "organization",
+      }),
+  );
+  const connectionId = await t.run(
+    async (ctx) =>
+      await ctx.runMutation(components.auth.connection.create, {
+        groupId,
+        slug: "webhook-audit",
+        name: "Webhook audit",
+        status: "active",
+        protocol: "oidc",
+      }),
+  );
+  const endpointId = await t.run(
+    async (ctx) =>
+      await ctx.runMutation(components.auth.connection.webhook.endpoint.create, {
+        connectionId,
+        groupId,
+        url: "https://example.com/webhooks/audit",
+        secretCiphertext: "encrypted",
+        subscriptions: ["user.created"],
+      }),
+  );
+  const now = Date.now();
+  const deliveryId = await t.run(
+    async (ctx) =>
+      await ctx.runMutation(components.auth.connection.webhook.delivery.create, {
+        connectionId,
+        endpointId,
+        eventId: "source-event",
+        kind: "user.created",
+        payload: { userId: "user" },
+        nextAttemptAt: now,
+        signature: "signature",
+        signedAt: now,
+      }),
+  );
+  const begun = await t.run(
+    async (ctx) =>
+      await ctx.runMutation(privateAuthForTest(components.auth).connection.webhook.delivery.begin, {
+        id: deliveryId,
+        occurredAt: now + 1,
+      }),
+  );
+  expect(begun?.status).toBe("processing");
+  expect(begun?.attemptCount).toBe(1);
+  await t.run(
+    async (ctx) =>
+      await ctx.runMutation(
+        privateAuthForTest(components.auth).connection.webhook.delivery.settle,
+        {
+          id: deliveryId,
+          occurredAt: now + 2,
+          outcome: "success",
+          retry: false,
+          responseStatus: 204,
+        },
+      ),
+  );
+
+  const delivery = await t.run(
+    async (ctx) =>
+      await ctx.runQuery(components.auth.connection.webhook.delivery.list, {
+        connectionId,
+        paginationOpts: { numItems: 10, cursor: null },
+      }),
+  );
+  const audit = await t.run(
+    async (ctx) =>
+      await ctx.runQuery(components.auth.connection.audit.list, {
+        connectionId,
+        paginationOpts: { numItems: 10, cursor: null },
+      }),
+  );
+  expect(delivery.page.find(({ _id }) => _id === deliveryId)?.status).toBe("delivered");
+  expect(audit.page.map((event) => event.kind)).toEqual(
+    expect.arrayContaining([
+      "webhook.delivery.created",
+      "webhook.delivery.attempted",
+      "webhook.delivery.succeeded",
+    ]),
+  );
 });

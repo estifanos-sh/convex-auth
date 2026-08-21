@@ -10,9 +10,15 @@ description: Stream-backed SSO audit event projection queries.
 
 # auth.event.list for SSO audit
 
-SSO audit views read stream-backed event projections through `auth.event.list`.
-Use typed scopes and function-builder filters so reads stay aligned with Convex
-indexes.
+SSO audit views read canonical event projections through `auth.event.list`.
+Each event kind belongs to one library-owned category; callers name the kind and
+convex-auth derives that category, so filters cannot drift from the taxonomy.
+The component appends every event to one private, append-only `auth-events`
+stream ordered by Convex commit time, then exposes redacted projections for
+application reads. Stream cursors are deliberately not part of this API.
+
+An `eventId` makes a retried emission idempotent. Reusing it does not append a
+second stream record or duplicate an existing target projection.
 
 App-owned admin RPC may wrap `auth.connection.audit.list` for convenience, but
 the canonical server facade is `auth.event.list(ctx, { where, paginationOpts })`.
