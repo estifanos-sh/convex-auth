@@ -175,7 +175,6 @@ export function createKeyDomain(deps: KeyDeps) {
       // not turn into a per-request write.
       const result = (await ctx.runMutation(config.component.user.key.recordUse, {
         id: doc._id,
-        now: Date.now(),
         coarsenMs: LAST_USED_COARSEN_MS,
       })) as
         | { status: "invalid" | "revoked" | "expired" | "limited" }

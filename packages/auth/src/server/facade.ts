@@ -23,7 +23,7 @@ import {
   type UserDoc,
 } from "./context";
 
-export type { AuthContext, AuthContextConfig, AuthLike, OptionalAuthContext, UserDoc };
+export type { AuthContext, AuthContextConfig, OptionalAuthContext, UserDoc };
 
 /**
  * Config for auth setup. Extends the standard auth config

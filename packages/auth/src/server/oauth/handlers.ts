@@ -133,9 +133,15 @@ export function createOAuthHttpHandlers(deps: OAuthHttpHandlerDeps) {
         const oauthCookies = result.cookies;
         const { id: profileId, emails: profileEmails, ...profileData } = result.profile;
         const { signature } = result;
-        const { redirectTo: stateRedirectTo } = decodeOAuthState(params.get("state") ?? "");
+        const decodedState = decodeOAuthState(params.get("state") ?? "");
+        if (decodedState === null) {
+          throw convexError({
+            code: ErrorCode.INVALID_VERIFIER,
+            message: "Invalid OAuth state. Please try signing in again.",
+          });
+        }
         const destinationUrl = await redirectAbsoluteUrl(ctx, config, {
-          redirectTo: stateRedirectTo ?? undefined,
+          redirectTo: decodedState.redirectTo ?? undefined,
         });
 
         const verificationCode = await callUserOAuth(ctx, {

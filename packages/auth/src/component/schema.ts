@@ -208,7 +208,7 @@ export default defineSchema({
     backedUp: v.boolean(),
     /** User-assigned friendly name (e.g. "MacBook Touch ID"). */
     name: v.optional(v.string()),
-    /** Trusted authenticator-attestation evidence, absent on legacy/unattested credentials. */
+    /** Trusted authenticator-attestation evidence, absent on unattested credentials. */
     attestation: v.optional(
       v.object({
         verifier: v.string(),
@@ -731,7 +731,7 @@ export default defineSchema({
 
   OAuthRefreshToken: defineTable({
     tokenHash: v.string(),
-    grantId: v.optional(v.id("OAuthRefreshGrant")),
+    grantId: v.id("OAuthRefreshGrant"),
     expiresAt: v.number(),
     firstUsedTime: v.optional(v.number()),
     parentTokenId: v.optional(v.id("OAuthRefreshToken")),

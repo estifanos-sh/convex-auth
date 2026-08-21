@@ -204,7 +204,6 @@ async function createInvite(
   return await t.run(async (ctx) => {
     return await ctx.runMutation(components.auth.group.invite.create, {
       tokenHash,
-      status: "pending",
       email: args.email,
       roleIds: ["member"],
     });

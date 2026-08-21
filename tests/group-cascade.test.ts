@@ -44,7 +44,6 @@ test("group.remove cascade-deletes the whole subtree (groups, members, invites)"
     await ctx.runMutation(components.auth.group.invite.create, {
       groupId: b,
       tokenHash: "th-cascade-1",
-      status: "pending",
     });
     return { root, a, b, a1 };
   });

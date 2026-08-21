@@ -165,7 +165,7 @@ export type AccountSummary = {
   phoneVerified: boolean;
 };
 
-const FACTOR_ACCOUNT_PROVIDERS = new Set(["passkey", "webauthn"]);
+const FACTOR_ACCOUNT_PROVIDERS = new Set(["passkey"]);
 
 function isFactorAccount(account: Pick<Doc<"Account">, "provider">): boolean {
   return FACTOR_ACCOUNT_PROVIDERS.has(account.provider);

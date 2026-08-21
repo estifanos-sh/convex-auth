@@ -95,7 +95,7 @@ test("assertion credential IDs are bounded before lookup", () => {
   );
 });
 
-test("strict sign-in rejects legacy credentials without attestation evidence", async () => {
+test("strict sign-in rejects credentials without attestation evidence", async () => {
   const policy: WebAuthnAttestationPolicy = {
     conveyance: "direct",
     verifier: {

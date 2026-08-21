@@ -28,14 +28,6 @@ import { vOAuthRefreshTokenDoc } from "../model";
 /** Token rows deleted per `purgeRevokedGrant` transaction before it reschedules. */
 const PURGE_MAX = 1000;
 
-/**
- * Upper bound on the still-unused successor rows dropped when re-pointing a
- * token's single child on an in-window retry. Post-fix a token has exactly one
- * unused successor; the cap only ever matters when draining a legacy fork left by
- * an older build, keeping the mutation within Convex read/write limits.
- */
-const REPLACE_MAX = 64;
-
 async function purgeGrantTokens(
   ctx: MutationCtx,
   grantId: Id<"OAuthRefreshGrant">,
@@ -169,7 +161,7 @@ const vExchangeResult = v.union(
  * advanced past it (its child was already consumed) or, having never advanced,
  * with a distinct successor *outside* the grace window. Both revoke the grant
  * (`revokedAt`, O(1)) and schedule bounded token cleanup; the user/client are
- * returned for audit. `"invalid"` (unknown hash, missing/legacy grant, revoked
+ * returned for audit. `"invalid"` (unknown hash, missing grant, revoked
  * grant, `clientId` mismatch, or expired — the expired grant is revoked first)
  * carries nothing; a `clientId` mismatch does not revoke. `"scope_exceeded"`
  * rejects a broadening request without burning the token.
@@ -190,7 +182,7 @@ export const exchange = mutation({
       .query("OAuthRefreshToken")
       .withIndex("token_hash", (q) => q.eq("tokenHash", args.tokenHash))
       .first();
-    if (doc === null || doc.grantId === undefined) return { status: "invalid" as const };
+    if (doc === null) return { status: "invalid" as const };
     const grantId = doc.grantId;
     const grant = await ctx.db.get("OAuthRefreshGrant", grantId);
     if (grant === null || grant.clientId !== args.clientId) return { status: "invalid" as const };
@@ -259,14 +251,17 @@ export const exchange = mutation({
       return rotated;
     }
 
-    // The presented token's still-unused successor(s). Post-fix there is at most
-    // one; the bounded take also drains any legacy fork left by an older build.
+    // The presented token has at most one still-unused successor.
     const unusedChildren = await ctx.db
       .query("OAuthRefreshToken")
       .withIndex("grant_id_parent_token_id_first_used", (q) =>
         q.eq("grantId", grantId).eq("parentTokenId", doc._id).eq("firstUsedTime", undefined),
       )
-      .take(REPLACE_MAX);
+      .take(2);
+
+    if (unusedChildren.length > 1) {
+      throw new Error("Refresh-token rotation invariant violated: multiple unused successors.");
+    }
 
     if (unusedChildren.length === 0) {
       // The successor was already consumed — the chain provably advanced past the

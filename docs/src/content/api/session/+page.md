@@ -33,20 +33,12 @@ backed builders such as `authQuery`, `authMutation`, or `authAction`.
 const sessionId = await auth.session.id(ctx); // Id<"Session"> | null
 ```
 
-The legacy way still works:
-
-```ts
-const identity = await ctx.auth.getUserIdentity();
-const sessionId = identity?.sid;
-```
-
 ### Revoke all other sessions
 
 This is useful for a "sign out everywhere else" feature:
 
 ```ts
-const identity = await ctx.auth.getUserIdentity();
-const sessionId = identity?.sid;
+const sessionId = await auth.session.id(ctx);
 if (!sessionId) {
   throw new Error("Current session missing");
 }

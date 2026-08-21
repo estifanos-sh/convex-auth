@@ -3458,7 +3458,6 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           groupId?: string;
           invitedByUserId?: string;
           roleIds?: Array<string>;
-          status: "pending" | "accepted" | "revoked" | "expired";
           tokenHash: string;
         },
         string,
@@ -4010,7 +4009,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           _id: string;
           expiresAt: number;
           firstUsedTime?: number;
-          grantId?: string;
+          grantId: string;
           parentTokenId?: string;
           tokenHash: string;
         } | null,
@@ -4622,7 +4621,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       recordUse: FunctionReference<
         "mutation",
         "internal",
-        { coarsenMs?: number; id: string; now: number },
+        { coarsenMs?: number; id: string },
         | { status: "invalid" }
         | { status: "revoked" }
         | { status: "expired" }
@@ -4658,13 +4657,8 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         {
           id: string;
           patch: {
-            lastUsedAt?: number;
             name?: string;
             rateLimit?: { maxRequests: number; windowMs: number };
-            rateLimitState?: {
-              attemptsLeft: number;
-              lastAttemptTime: number;
-            };
             revoked?: boolean;
             scopes?: Array<{ actions: Array<string>; resource: string }>;
           };

@@ -714,7 +714,7 @@ export const vOAuthRefreshGrantDoc = v.object({
 export const vOAuthRefreshTokenDoc = v.object({
   ...vDocMeta(TABLES.OAuthRefreshToken),
   tokenHash: v.string(),
-  grantId: v.optional(v.id(TABLES.OAuthRefreshGrant)),
+  grantId: v.id(TABLES.OAuthRefreshGrant),
   expiresAt: v.number(),
   firstUsedTime: v.optional(v.number()),
   parentTokenId: v.optional(v.id(TABLES.OAuthRefreshToken)),

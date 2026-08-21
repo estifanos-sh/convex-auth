@@ -160,15 +160,7 @@ export const pruneExpired = internalMutation({
       signInLimits += 1;
     }
 
-    // (A) Reclaim every invite that has passed its `expiresTime`. This deletes
-    // pending invites that expired AND any terminal (expired/revoked) invite that
-    // still carries a past `expiresTime` — legacy rows written before terminal
-    // transitions cleared it (see group/invite.ts). The previous version deleted
-    // only NON-terminal rows, so terminal rows kept their past `expiresTime` and
-    // pinned the front of the `expires_time` index forever; with the reschedule
-    // keyed on the DELETED count it then stopped advancing (starvation). Now every
-    // scanned row is deleted so the front always advances, and we reschedule on the
-    // SCANNED count.
+    // Reclaim pending invites that have passed their `expiresTime`.
     const inviteDocs = await ctx.db
       .query("GroupInvite")
       .withIndex("expires_time", (q) => q.gte("expiresTime", 0).lt("expiresTime", now))

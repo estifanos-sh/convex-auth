@@ -58,7 +58,6 @@ export type {
   AuthApiRefs,
   AuthClient,
   AuthState,
-  BrowserAuthClient,
   ClientOptions,
   ClientRuntime,
   CodeCompletionParams,

@@ -14,13 +14,7 @@ import { ErrorCode } from "../../shared/codes";
 
 import { mutation, query } from "../functions";
 import schema from "../schema";
-import {
-  vApiKeyDoc,
-  vApiKeyRateLimit,
-  vApiKeyRateLimitState,
-  vApiKeyScope,
-  vPaginated,
-} from "../model";
+import { vApiKeyDoc, vApiKeyRateLimit, vApiKeyScope, vPaginated } from "../model";
 
 type ApiKeyRateLimit = { maxRequests: number; windowMs: number };
 type ApiKeyUsePatch = {
@@ -153,9 +147,7 @@ export const update = mutation({
       name: v.optional(v.string()),
       scopes: v.optional(v.array(vApiKeyScope)),
       rateLimit: v.optional(vApiKeyRateLimit),
-      rateLimitState: v.optional(vApiKeyRateLimitState),
       revoked: v.optional(v.boolean()),
-      lastUsedAt: v.optional(v.number()),
     }),
   },
   returns: v.null(),
@@ -208,7 +200,7 @@ export const update = mutation({
  * `coarsenMs` (or passing `0`) disables coarsening and refreshes every call.
  */
 export const recordUse = mutation({
-  args: { id: v.id("ApiKey"), now: v.number(), coarsenMs: v.optional(v.number()) },
+  args: { id: v.id("ApiKey"), coarsenMs: v.optional(v.number()) },
   returns: v.union(
     v.object({ status: v.literal("invalid") }),
     v.object({ status: v.literal("revoked") }),
@@ -222,10 +214,7 @@ export const recordUse = mutation({
     }),
   ),
   handler: async (ctx, { id: keyId, coarsenMs }) => {
-    // Use the mutation's trusted transaction clock for validity and bucket
-    // math. `now` remains in the argument shape for compatibility with the
-    // existing component reference, but callers cannot use it to bypass
-    // expiration or refill a bucket from an arbitrary timestamp.
+    // Use the mutation's trusted transaction clock for validity and bucket math.
     const now = Date.now();
     const key = await ctx.db.get("ApiKey", keyId);
     if (key === null) {
@@ -239,12 +228,6 @@ export const recordUse = mutation({
     }
     const patch: ApiKeyUsePatch = {};
     if (key.rateLimit) {
-      // Legacy rows may predate write-time validation. Treat malformed
-      // configuration or bucket state as exhausted instead of letting NaN,
-      // infinity, or a non-positive limit authenticate a request.
-      if (!isValidRateLimit(key.rateLimit)) {
-        return { status: "limited" as const };
-      }
       const state = key.rateLimitState;
       if (!state) {
         patch.rateLimitState = {
@@ -252,26 +235,12 @@ export const recordUse = mutation({
           lastAttemptTime: now,
         };
       } else {
-        if (
-          !Number.isFinite(state.attemptsLeft) ||
-          state.attemptsLeft < 0 ||
-          !Number.isFinite(state.lastAttemptTime) ||
-          state.lastAttemptTime < 0
-        ) {
-          return { status: "limited" as const };
-        }
         const elapsed = Math.max(0, now - state.lastAttemptTime);
         const refillRate = key.rateLimit.maxRequests / key.rateLimit.windowMs;
-        if (!Number.isFinite(refillRate)) {
-          return { status: "limited" as const };
-        }
         const refilled = Math.min(
           key.rateLimit.maxRequests,
           state.attemptsLeft + elapsed * refillRate,
         );
-        if (!Number.isFinite(refilled)) {
-          return { status: "limited" as const };
-        }
         if (refilled < 1) {
           // Bucket empty: reject WITHOUT writing (matches the prior facade,
           // which threw before its single `update`, leaving state untouched).

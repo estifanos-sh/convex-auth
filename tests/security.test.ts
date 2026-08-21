@@ -67,9 +67,9 @@ test("parseAuthCookies ignores unnamespaced cookies for namespaced auth", () => 
   const host = "localhost";
   const namespace = "tenant";
   const namespaced = authCookieNames(host, namespace);
-  const legacy = authCookieNames(host);
+  const unnamespaced = authCookieNames(host);
   const parsed = parseAuthCookies(
-    `${legacy.token}=legacy-token; ${legacy.refreshToken}=legacy-refresh; ${legacy.verifier}=legacy-verifier; ` +
+    `${unnamespaced.token}=unnamespaced-token; ${unnamespaced.refreshToken}=unnamespaced-refresh; ${unnamespaced.verifier}=unnamespaced-verifier; ` +
       `${namespaced.token}=namespaced-token; ${namespaced.refreshToken}=namespaced-refresh; ${namespaced.verifier}=namespaced-verifier`,
     host,
     namespace,
@@ -80,12 +80,12 @@ test("parseAuthCookies ignores unnamespaced cookies for namespaced auth", () => 
   expect(parsed.verifier).toBe("namespaced-verifier");
 });
 
-test("parseAuthCookies does not fall back to old cookie names", () => {
+test("parseAuthCookies does not fall back to unnamespaced cookie names", () => {
   const host = "localhost";
   const namespace = "tenant";
-  const legacy = authCookieNames(host);
+  const unnamespaced = authCookieNames(host);
   const parsed = parseAuthCookies(
-    `${legacy.token}=legacy-token; ${legacy.refreshToken}=legacy-refresh; ${legacy.verifier}=legacy-verifier`,
+    `${unnamespaced.token}=unnamespaced-token; ${unnamespaced.refreshToken}=unnamespaced-refresh; ${unnamespaced.verifier}=unnamespaced-verifier`,
     host,
     namespace,
   );

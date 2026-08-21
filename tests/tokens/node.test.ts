@@ -29,7 +29,7 @@ async function keyringWithPrivateKey(jwtPrivateKey: string) {
   return JSON.stringify(keyring);
 }
 
-test("AUTH_KEYS signs and verifies OAuth tokens without legacy key variables", async () => {
+test("AUTH_KEYS signs and verifies OAuth tokens", async () => {
   process.env.CONVEX_SITE_URL = "https://example.convex.site";
   process.env.AUTH_KEYS = (await generateKeys()).AUTH_KEYS;
 

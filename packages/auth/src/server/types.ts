@@ -786,8 +786,8 @@ export interface OAuthProfile {
   email?: string;
   /**
    * All emails the provider reported (e.g. GitHub `/user/emails`). When
-   * present, every entry is recorded; `email` remains the primary for
-   * back-compat. Single-email providers omit this.
+   * present, every entry is recorded; `email` is the primary address.
+   * Single-email providers omit this.
    */
   emails?: ProfileEmail[];
   image?: string;

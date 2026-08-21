@@ -59,7 +59,7 @@ test("strict security-key policy removes mixed password-manager credentials from
   const credentials = [
     { id: "yubikey", transports: ["usb", "nfc"] },
     { id: "proton", transports: ["internal", "hybrid"] },
-    { id: "legacy-unknown" },
+    { id: "unknown-provider" },
   ];
 
   expect(selectAuthenticationCredentials(credentials, true)).toEqual([credentials[0]]);

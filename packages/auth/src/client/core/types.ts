@@ -678,10 +678,6 @@ export type AuthClient<Api extends AuthApiRefs<boolean, boolean, boolean> = Auth
 export type PlatformAuthClient<Api extends AuthApiRefs<boolean, boolean, boolean> = AuthApiRefs> =
   AuthClient<Api> & CapabilityClient<InferCaps<Api>["webauthn"], "webauthn", WebAuthnClient>;
 
-/** @deprecated Use `PlatformAuthClient`. */
-export type BrowserAuthClient<Api extends AuthApiRefs<boolean, boolean, boolean> = AuthApiRefs> =
-  PlatformAuthClient<Api>;
-
 /**
  * Options for {@link client}.
  *

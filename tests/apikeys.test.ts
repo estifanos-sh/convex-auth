@@ -312,7 +312,7 @@ test("key.verify after expiry throws ConvexError", async () => {
   vi.useRealTimers();
 });
 
-test("key usage transaction does not trust a caller-supplied timestamp", async () => {
+test("key usage transaction uses the trusted transaction timestamp", async () => {
   vi.useFakeTimers();
   try {
     vi.setSystemTime(10_000);
@@ -330,9 +330,8 @@ test("key usage transaction does not trust a caller-supplied timestamp", async (
     });
 
     const result = await t.run(async (ctx) => {
-      return await ctx.runMutation((components.auth.user.key as any).recordUse, {
+      return await ctx.runMutation(components.auth.user.key.recordUse, {
         id: keyId,
-        now: 0,
         coarsenMs: 60_000,
       });
     });
@@ -440,36 +439,6 @@ test("key.verify rate limiting triggers after threshold", async () => {
   ).rejects.toThrow(ConvexError);
 
   vi.useRealTimers();
-});
-
-test("key.verify fails closed on malformed legacy bucket state", async () => {
-  const t = convexTest(schema);
-  const userId = await createUser(t);
-  const { id: keyId, secret } = await t.run(async (ctx) => {
-    return await auth.key.create(ctx, {
-      data: {
-        userId,
-        name: "Malformed Bucket",
-        scopes: [],
-        rateLimit: { maxRequests: 10, windowMs: 60_000 },
-      },
-    });
-  });
-  await t.run(async (ctx) => {
-    await ctx.runMutation(components.auth.user.key.update, {
-      id: keyId,
-      patch: {
-        rateLimitState: {
-          attemptsLeft: Number.NaN,
-          lastAttemptTime: Date.now(),
-        },
-      },
-    });
-  });
-
-  await expect(t.run(async (ctx) => auth.key.verify(ctx, { secret }))).rejects.toThrow(
-    "rate limit exceeded",
-  );
 });
 
 test("key.list returns only keys for the given userId", async () => {
