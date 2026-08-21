@@ -187,21 +187,21 @@ export function Chrome(props: { children: JSX.Element; landing?: boolean; withSi
           </div>
         </Show>
         {props.children}
-      </div>
-      <footer class="site-foot">
-        <div class="site-foot-inner">
-          <div class="site-foot-primary">
-            <p class="site-foot-built">
-              Built with <span aria-label="love">♥</span> by
-              <a href="https://estifanos.com">estifanos.com</a>
-            </p>
+        <footer class="site-foot">
+          <div class="site-foot-inner">
+            <div class="site-foot-primary">
+              <p class="site-foot-built">
+                Built with <span aria-label="love">♥</span> by
+                <a href="https://estifanos.com">estifanos.com</a>
+              </p>
+            </div>
+            <nav aria-label="Footer" class="site-foot-links">
+              <a href="/convex-auth/getting-started/installation/">Installation</a>
+              <a href="https://github.com/estifanos-sh/convex-auth">GitHub</a>
+            </nav>
           </div>
-          <nav aria-label="Footer" class="site-foot-links">
-            <a href="/convex-auth/getting-started/installation/">Installation</a>
-            <a href="https://github.com/estifanos-sh/convex-auth">GitHub</a>
-          </nav>
-        </div>
-      </footer>
+        </footer>
+      </div>
       <Show when={searchOpen()}>
         <div class="overlay search-overlay">
           <button aria-label="Close search" class="scrim" onClick={closeSearch} />
@@ -223,6 +223,14 @@ export function Chrome(props: { children: JSX.Element; landing?: boolean; withSi
                 value={query()}
               />
               <kbd>ESC</kbd>
+              <button
+                aria-label="Close search"
+                class="search-close"
+                onClick={closeSearch}
+                type="button"
+              >
+                <CloseIcon />
+              </button>
             </div>
             <Show
               when={results().length}
@@ -240,6 +248,7 @@ export function Chrome(props: { children: JSX.Element; landing?: boolean; withSi
                         aria-current={activeIndex() === index() ? "true" : undefined}
                         href={result.url}
                         onMouseEnter={() => setActiveIndex(index())}
+                        onClick={closeSearch}
                       >
                         <Show when={result.section}>
                           <small>{result.section}</small>
