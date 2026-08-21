@@ -24,14 +24,14 @@ root namespace for group connection domain management through
 
 ## Methods
 
-| Method   | Signature                                                  | Returns                            | Description                                                   |
-| -------- | ---------------------------------------------------------- | ---------------------------------- | ------------------------------------------------------------- |
-| `create` | `(ctx, { groupId, slug?, name?, status?, domains?, ... })` | `{ connectionId, groupId }`        | Creates a new SSO connection for a group.                     |
-| `get`    | `(ctx, { id })` or `(ctx, { domain })`                     | `Doc \| null`                      | Reads a connection by ID or verified domain selector.         |
-| `list`   | `(ctx, { where?, paginationOpts, orderBy?, order? })`      | `{ page, isDone, continueCursor }` | Lists SSO connections with optional filtering and sorting.    |
-| `update` | `(ctx, { id, patch })`                                     | `{ connectionId }`                 | Updates connection fields (status, metadata, domains, etc.).  |
-| `remove` | `(ctx, { id })`                                            | `{ connectionId }`                 | Deletes an SSO connection.                                    |
-| `status` | `(ctx, { id })`                                            | Status object                      | Returns readiness and per-protocol status for the connection. |
+| Method   | Signature                                                  | Returns                            | Description                                                         |
+| -------- | ---------------------------------------------------------- | ---------------------------------- | ------------------------------------------------------------------- |
+| `create` | `(ctx, { groupId, slug?, name?, status?, domains?, ... })` | `{ connectionId, groupId }`        | Creates a new SSO connection for a group.                           |
+| `get`    | `(ctx, { id })` or `(ctx, { domain })`                     | `Doc \| null`                      | Reads a connection by ID or verified domain selector.               |
+| `list`   | `(ctx, { where?, paginationOpts, orderBy?, order? })`      | `{ page, isDone, continueCursor }` | Lists SSO connections with optional filtering and sorting.          |
+| `update` | `(ctx, { id, patch })`                                     | `{ connectionId }`                 | Updates connection fields such as its name, status, or extend data. |
+| `remove` | `(ctx, { id })`                                            | `{ connectionId }`                 | Deletes an SSO connection.                                          |
+| `status` | `(ctx, { id })`                                            | Status object                      | Returns readiness and per-protocol status for the connection.       |
 
 ## Domain methods
 
@@ -89,10 +89,10 @@ const status = await auth.connection.status(ctx, { id: connectionId });
 
 Verified domains establish trusted ownership for a connection.
 
-- domain-based SSO discovery should rely on verified domains
-- primary-domain verification is the clearest signal that a connection is ready
-- automatic account linking is only safe when your linking policy allows it and
-  the connection has verified domain ownership
+Domain-based SSO discovery should rely only on verified domains. Verification
+of the primary domain is the clearest readiness signal, and automatic account
+linking is safe only when both the connection policy permits it and domain
+ownership has been proved.
 
 Use `domain.status(...)` when building onboarding UIs. It returns the current
 primary domain, verified domains, pending DNS challenges, warnings, and the next

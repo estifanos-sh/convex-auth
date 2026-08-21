@@ -10,6 +10,17 @@ description: Auth methods available in convex-auth.
 
 # Providers
 
+A provider is an authentication method inside Convex Auth. It proves an
+identity, then hands control back to the shared account and session system. It
+should not create application-owned users or sessions, and application code
+should not need to know which provider authenticated the current user.
+
+Start with a built-in provider whenever one matches the protocol you need. The
+built-in providers own credential storage, verification, rate limiting, account
+linking, session issuance, and multi-step ceremonies as one system. Configure
+them in `defineAuth`; do not reproduce those responsibilities in app tables or
+callbacks.
+
 ## OAuth
 
 convex-auth currently ships first-party OAuth wrappers for Google, GitHub,
@@ -85,11 +96,11 @@ The flag is available on `google`, `github`, `apple`, `microsoft`, and
 
 ### Google
 
-- Import: `@estifanos-sh/convex-auth/providers`
-- Factory:
-  `google({ clientId, clientSecret, redirectUri?, scopes?, accountLinking?, updateProfileOnLogin? })`
-- Default scopes: `openid profile email`
-- Example app env: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`
+Import `google` from `@estifanos-sh/convex-auth/providers` and pass the client
+ID and secret chosen by your application. The provider requests
+`openid profile email` by default. Override the redirect URI, scopes, account
+linking, or profile synchronization only when the provider registration or your
+identity policy requires different behavior.
 
 ```ts
 import { google } from "@estifanos-sh/convex-auth/providers";
@@ -108,11 +119,10 @@ Use `redirectUri` only when you need to override the default callback route.
 
 ### GitHub
 
-- Import: `@estifanos-sh/convex-auth/providers`
-- Factory:
-  `github({ clientId, clientSecret, redirectUri?, scopes?, accountLinking?, updateProfileOnLogin? })`
-- Default scopes: `user:email`
-- Example app env: `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`
+Import `github` from `@estifanos-sh/convex-auth/providers` and provide the
+application's client ID and secret. It requests `user:email` and performs the
+profile and email fetch required to normalize GitHub identity into a Convex Auth
+user.
 
 ```ts
 import { github } from "@estifanos-sh/convex-auth/providers";
@@ -131,12 +141,11 @@ The GitHub wrapper performs the profile and email fetch for you.
 
 ### Apple
 
-- Import: `@estifanos-sh/convex-auth/providers`
-- Factory:
-  `apple({ clientId, teamId, keyId, privateKey, redirectUri?, scopes?, accountLinking?, updateProfileOnLogin? })`
-- Default scopes: `name email`
-- Example app env: `APPLE_CLIENT_ID`, `APPLE_TEAM_ID`, `APPLE_KEY_ID`,
-  `APPLE_PRIVATE_KEY`
+Apple requires the service client ID, team ID, key ID, and private key owned by
+your application. The provider requests `name email` by default. Apple may
+return a person's name only during initial consent, which is why Convex Auth
+persists the normalized profile instead of requiring application code to
+reconstruct it on later sign-ins.
 
 ```ts
 import { apple } from "@estifanos-sh/convex-auth/providers";
@@ -158,12 +167,11 @@ persist any extra profile fields you care about on first sign-in.
 
 ### Microsoft
 
-- Import: `@estifanos-sh/convex-auth/providers`
-- Factory:
-  `microsoft({ tenant, clientId, clientSecret?, redirectUri?, scopes?, accountLinking?, updateProfileOnLogin? })`
-- Default scopes: `openid profile email`
-- Example app env: `MICROSOFT_TENANT_ID`, `MICROSOFT_CLIENT_ID`, and optionally
-  `MICROSOFT_CLIENT_SECRET`
+Microsoft configuration starts with the tenant and client ID; confidential
+clients also pass their secret. The default `openid profile email` scopes allow
+the provider to validate the ID token and normalize its claims. Keep the tenant
+choice explicit because it determines which Microsoft directory may establish
+an identity.
 
 ```ts
 import { microsoft } from "@estifanos-sh/convex-auth/providers";
@@ -183,7 +191,7 @@ The Microsoft wrapper validates the ID token and nonce internally.
 
 ### OAuth imports
 
-- `@estifanos-sh/convex-auth/providers`
+`@estifanos-sh/convex-auth/providers`.
 
 ## Custom OAuth
 
@@ -230,9 +238,20 @@ OAuth-based. Provide an `authorize` callback that validates the submitted
 credentials and returns the authenticated user; return `null` to reject the
 attempt. The built-in `password()` provider is layered on top of this.
 
-- Import: `@estifanos-sh/convex-auth/providers`
-- Factory: `credentials({ id?, authorize, crypto?, extraProviders? })`
-- Default `id`: `"credentials"`
+This escape hatch is not a reason to build a password, PIN, passkey, recovery,
+or restricted-session system in the application schema. If the credential is a
+password-like secret, configure `password()` with its validation and crypto
+hooks. If authentication must continue into another provider ceremony, use the
+provider's typed continuation operation. Calling component internals from
+`authorize`, issuing an intermediate session, or coordinating the flow with
+application tables splits one security protocol across two owners.
+
+Import `credentials` from `@estifanos-sh/convex-auth/providers`. Its default ID
+is `"credentials"`; choose another ID only when the application deliberately
+has more than one custom credential protocol. `authorize` is the required
+boundary. The optional crypto hooks define secret handling, and
+`extraProviders` lets one custom entry point participate in other configured
+provider ceremonies.
 
 ```ts
 import { credentials } from "@estifanos-sh/convex-auth/providers";

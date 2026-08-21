@@ -1,6 +1,6 @@
 ---
 title: auth.user
-description: User management — read, update, delete users and manage active groups.
+description: Resolve and manage Convex Auth user identities.
 ---
 
 <svelte:head>
@@ -10,8 +10,10 @@ description: User management — read, update, delete users and manage active gr
 
 # auth.user
 
-The `auth.user` namespace provides methods for managing users. All methods
-require a Convex context (`ctx`) as the first argument.
+The `auth.user` namespace is the server facade for Convex Auth's canonical user
+record. Use it for administrative lookup and mutation. Product code should
+usually take the current identity from `ctx.auth` instead of loading the same
+user again.
 
 For native identity claims already available on the JWT, prefer
 `ctx.auth.getUserIdentity()`. In normal app code, prefer `auth.ctx()` /
@@ -48,13 +50,13 @@ Provider-agnostic management of every email a user owns (across OAuth, SSO,
 and SCIM). The collection is exposed via `.list`; `User.email` remains the
 single denormalized primary pointer.
 
-| Method    | Signature                   | Returns                    | Description                                                                                                       |
-| --------- | --------------------------- | -------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `list`    | `(ctx, { userId? })`        | `Doc<"UserEmail">[]`       | Every email the user owns, with provenance (`source`, `connectionId`, `verificationTime`, `isPrimary`).           |
-| `add`     | `(ctx, email, { userId? })` | `{ email }`                | Records an **unverified** address. Does not verify (verification stays proof-driven) and does not become primary. |
-| `remove`  | `(ctx, email, { userId? })` | `{ email }`                | Deletes an address. Throws if it is the primary, the only verified email, or a connection-managed row.            |
-| `primary` | `(ctx, { userId? })`        | `Doc<"UserEmail"> \| null` | Reads the current primary email.                                                                                  |
-| `primary` | `(ctx, email, { userId? })` | `{ email }`                | Promotes a **verified** address to primary (syncs `User.email`).                                                  |
+| Method        | Signature                   | Returns                    | Description                                                                                                       |
+| ------------- | --------------------------- | -------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `list`        | `(ctx, { userId? })`        | `Doc<"UserEmail">[]`       | Every email the user owns, with provenance (`source`, `connectionId`, `verificationTime`, `isPrimary`).           |
+| `create`      | `(ctx, { email, userId? })` | `{ email }`                | Records an **unverified** address. Does not verify (verification stays proof-driven) and does not become primary. |
+| `remove`      | `(ctx, { email, userId? })` | `{ email }`                | Removes an address. Throws if it is the primary, the only verified email, or a connection-managed row.            |
+| `promote`     | `(ctx, { email, userId? })` | `{ email }`                | Promotes a **verified** address to primary and synchronizes `User.email`.                                         |
+| `primary.get` | `(ctx, { userId? }?)`       | `Doc<"UserEmail"> \| null` | Reads the current primary email.                                                                                  |
 
 `userId` defaults to the current session user everywhere.
 
@@ -83,7 +85,7 @@ const user = ctx.auth.user;
 const user = await auth.user.get(ctx, { id: userId });
 ```
 
-### Delete a user
+### Remove a user
 
 ```ts
 await auth.user.remove(ctx, { id: userId });

@@ -144,24 +144,25 @@ Configure with `SECURITY_CONTACT` (e.g., `mailto:security@example.com` or
 
 ## Common pitfalls
 
-- **AASA must not redirect.** The Apple CDN fetches it once on app
-  install/update and rejects redirects. Serve it directly at the path.
-- **AASA has no extension.** The path is exactly `/.well-known/apple-app-site-association`
-  with no `.json` suffix.
-- **`Content-Type` matters.** AASA must be `application/json`,
-  `assetlinks.json` must be `application/json`, and `security.txt` must be
-  `text/plain`. The helper sets these headers — preserve them when
-  adapting.
-- **Apple caches AASA aggressively** (~24h). For development, append
-  `?mode=developer` to the Associated Domain entitlement (iOS 17.4+) to
-  bypass caching and AASA verification.
-- **RP ID must match the AASA host.** If your WebAuthn RP ID is
-  `app.example.com`, AASA must be served at `https://app.example.com/.well-known/apple-app-site-association`.
-- **`assetlinks.json` is a top-level array.** Common mistake to wrap in an
-  object — the helper handles this.
+Apple's association file must be served directly, without a redirect and
+without a `.json` extension. The exact path is
+`/.well-known/apple-app-site-association`. Apple caches it aggressively; during
+development on iOS 17.4 or newer, the Associated Domain entitlement can append
+`?mode=developer` to bypass the normal cache and verification behavior.
+
+The WebAuthn relying-party ID and association host must agree. An RP ID of
+`app.example.com` requires the file at
+`https://app.example.com/.well-known/apple-app-site-association`. A mismatch
+prevents the operating system from associating the passkey with the native app.
+
+Preserve the response formats produced by the helper. AASA and
+`assetlinks.json` use `application/json`, while `security.txt` uses
+`text/plain`. Android's `assetlinks.json` document is a top-level array, not an
+object containing an array.
 
 ## Related
 
-- [Native apps guide](/guides/native-apps) — full setup for iOS + Android passkeys
-- [Production checklist](/guides/production) — ensure these endpoints are live
-- [Environment variables](/getting-started/environment) — all env vars
+Continue with the [native apps guide](/guides/native-apps) for iOS and Android
+passkeys, then use the [production guide](/guides/production) to verify the
+public endpoints. The [environment guide](/getting-started/environment)
+explains the values used to generate each response.

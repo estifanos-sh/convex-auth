@@ -67,47 +67,36 @@ export const list = query({
 
 ## Identity vs enrichment
 
-Use `ctx.auth.getUserIdentity()` when you want the native Convex identity
-surface directly from the JWT:
+Use `ctx.auth.getUserIdentity()` when a function needs only the native claims
+Convex verified from the JWT, such as its subject, token identifier, email,
+name, or picture URL. Those claims are a signed snapshot and require no lookup
+of the auth user.
 
-- `subject`
-- `tokenIdentifier`
-- `email`
-- `name`
-- `pictureUrl`
+Use `auth.ctx()` for application functions. It resolves the stable `userId` and
+current user document, then adds the active group, role, and grants when that
+context exists. This is the appropriate layer for ownership checks and product
+authorization because it provides the current component state rather than only
+the token snapshot.
 
-Use `auth.ctx()` when you want auth state enriched from Convex Auth tables:
-
-- `ctx.auth.userId`
-- `ctx.auth.user`
-- `ctx.auth.groupId`
-- `ctx.auth.role`
-- `ctx.auth.grants`
-
-The canonical `convex-auth` integration uses:
-
-- `convex/convex.config.ts` — component registration
-- `convex/auth.ts` — provider config, exports `signIn`/`signOut` plus the internal `store` and `http` runtime aliases
-- `convex/auth/core.ts` — lightweight context for queries/mutations
-- `convex/auth.config.ts` — native Convex JWT trust config
-- `convex/http.ts` — mounts auth protocol routes with `auth.http()`
+The integration keeps those responsibilities in separate files.
+`convex/convex.config.ts` registers the component, `convex/auth.ts` configures
+providers and exports the auth runtime, and `convex/auth/core.ts` creates the
+lightweight context used by application functions. `convex/auth.config.ts`
+configures native JWT trust, while `convex/http.ts` mounts protocol routes with
+`auth.http()`.
 
 ## When to use `core` vs `auth`
 
-Use `convex/auth/core.ts` anywhere you only need auth context or helper
-lookups inside Convex functions.
+Use `convex/auth/core.ts` anywhere a query or mutation needs `auth.ctx()`, a
+permission assertion, an entity lookup, or current-user management of accounts,
+factors, and keys. It deliberately excludes provider implementations and crypto
+from those function bundles.
 
-- Queries and mutations wrapped with `auth.ctx()`
-- Permission checks like `auth.member.assert(ctx, ...)`
-- Helper lookups like `auth.user.get`, `auth.member.list`, `auth.group.get`
-- Account, factor, and key management like `auth.account.list`,
-  `auth.factor.list`, and `auth.key.list`
-
-Use `convex/auth.ts` only for the full runtime surface.
-
-- Exporting `signIn`, `signOut`, `store`, and `http`
-- Calling `auth.request.context(ctx, request)`
-- Passing the full auth runtime into higher-level server helpers such as group SSO setup
+Import the full runtime from `convex/auth.ts` only at boundaries that actually
+drive authentication: exporting `signIn`, `signOut`, and `store`; mounting HTTP
+routes; resolving credentials on a raw HTTP request; or configuring a server
+integration that needs providers. This split is a bundling boundary, not two
+different auth systems.
 
 [In this repo](https://github.com/estifanos-sh/convex-auth/tree/main/convex), `convex/comments.ts`, `convex/projects.ts`, `convex/issues.ts`,
 `convex/groups.ts`, and `convex/account.ts` all use `core` because they only

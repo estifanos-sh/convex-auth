@@ -25,23 +25,19 @@ and how deprovisioning behaves.
 Connector mechanics stay in [`auth.connection.oidc`](/connection/oidc/),
 [`auth.connection.saml`](/connection/saml/), and [`auth.connection.scim`](/connection/scim/).
 
-`auth.connection.policy` is where you define how normalized external identity is
-applied to your app:
-
-- account linking
-- user creation and profile-update authority
-- SCIM reuse
-- JIT membership creation
-- group and role sync policy
-- deprovision behavior
+`auth.connection.policy` defines what a normalized external identity is allowed
+to change. It centralizes account linking, user creation, profile authority,
+SCIM reuse, just-in-time membership, external group and role mapping, and
+deprovisioning. Keeping these decisions in one policy prevents an OIDC or SAML
+adapter from quietly inventing its own account lifecycle.
 
 ## Methods
 
-| Method     | Signature                  | Returns                 | Description                                                                   |
-| ---------- | -------------------------- | ----------------------- | ----------------------------------------------------------------------------- |
-| `get`      | `(ctx, { groupId })`       | `GroupConnectionPolicy` | Returns the canonical policy for a group.                                     |
-| `update`   | `(ctx, { groupId, data })` | `GroupConnectionPolicy` | Applies a partial update and returns the new policy.                          |
-| `validate` | `(ctx, { groupId })`       | `{ checks: [...] }`     | Validates the policy document for a group. Each check has its own `ok` field. |
+| Method     | Signature                   | Returns                 | Description                                                                   |
+| ---------- | --------------------------- | ----------------------- | ----------------------------------------------------------------------------- |
+| `get`      | `(ctx, { groupId })`        | `GroupConnectionPolicy` | Returns the canonical policy for a group.                                     |
+| `update`   | `(ctx, { groupId, patch })` | `GroupConnectionPolicy` | Applies a partial update and returns the new policy.                          |
+| `validate` | `(ctx, { groupId })`        | `{ checks: [...] }`     | Validates the policy document for a group. Each check has its own `ok` field. |
 
 ## Default policy
 
@@ -104,19 +100,17 @@ await auth.connection.policy.update(ctx, {
 
 ## What belongs here
 
-- account linking behavior
-- user profile authority and update behavior
-- SCIM user reuse behavior
-- JIT provisioning behavior
-- group sync behavior
-- role sync behavior
-- deprovision behavior
+Policy owns decisions made after a provider has proved and normalized an
+identity. It answers whether the identity may link to an existing account,
+whether a missing user or membership may be created, which source may update a
+profile, how external groups map to role IDs, and what happens when the external
+directory disables a user.
 
-Not first-class yet:
-
-- allowed auth methods
-- domain restrictions
-- session or token policy
+Allowed authentication methods, domain restrictions, and session or token
+lifetimes are not first-class connection policy fields. They belong to provider,
+domain-trust, and session configuration respectively. Keeping those boundaries
+explicit prevents one policy document from becoming an untyped collection of
+unrelated security switches.
 
 Connector settings such as OIDC issuer URLs, client secrets, SAML metadata, and
 SCIM bearer tokens remain in their respective

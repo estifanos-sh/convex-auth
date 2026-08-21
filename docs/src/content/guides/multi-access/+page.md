@@ -1,101 +1,69 @@
 ---
-title: Multi-Access
-description: One app, any auth method — session, API key, SSO, device flow.
+title: One identity, every client
+description: Use one user identity across browser, device, SSO, and API access.
 ---
 
 <svelte:head>
 
-  <title>Multi-Access - convex-auth</title>
+  <title>One identity, every client</title>
 </svelte:head>
 
-# Multi-Access
+# One identity, every client
 
-Every auth path resolves to the same `userId`. They compose naturally because
-`userId` is the single shared anchor across all access patterns.
+The way a caller proves identity should not change the shape of your product
+code. Browser sessions, OAuth, passwords, passkeys, group SSO, and device flow
+all resolve to the same Convex Auth `userId`. Your queries and mutations consume
+that identity through `ctx.auth`; they do not need a provider-specific adapter.
 
-## Default app pattern
-
-In app queries, mutations, and actions, use `auth.ctx()` once and then read the
-resolved user from `ctx.auth`.
+Create the authenticated builders once:
 
 ```ts
 // convex/functions.ts
 export const authQuery = customQuery(query, auth.ctx());
+export const authMutation = customMutation(mutation, auth.ctx());
 ```
 
+Every protected function can then operate on the current user without accepting
+an identity from the client or looking up a provider account.
+
 ```ts
-export const myGroups = authQuery({
+export const listMine = authQuery({
   args: {},
-  handler: async (ctx) => {
-    return await auth.member.list(ctx, {
-      where: { userId: ctx.auth.userId },
-    });
-  },
+  handler: (ctx) =>
+    ctx.db
+      .query("projects")
+      .withIndex("by_owner", (q) => q.eq("ownerId", ctx.auth.userId))
+      .collect(),
 });
 ```
 
-## Raw HTTP fallback
+Group SSO and device authorization eventually issue the same kind of session as
+an interactive browser sign-in. Do not create separate user tables or duplicate
+handlers for them. The provider and transport differ; the product identity does
+not.
 
-Most apps do not need `auth.request.context(...)`. Keep it for raw `httpAction`
-handlers that intentionally accept either a browser session or an API key in the
-same endpoint.
+## Machine and raw HTTP access
+
+API keys are deliberately different because a raw HTTP request may not carry a
+browser session. Use `auth.request.action` for an API-key-only endpoint. Use
+`auth.request.context` only when one HTTP route intentionally accepts either an
+API key or a browser session.
 
 ```ts
-http.route({
-  path: "/api/data",
-  method: "GET",
-  handler: httpAction(async (ctx, request) => {
-    const authContext = await auth.request.context.optional(ctx, request);
-    if (authContext.userId === null) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-      });
-    }
-    const data = await ctx.runQuery(internal.data.forUser, {
-      userId: authContext.userId,
-    });
-    return Response.json(data);
-  }),
+const handler = httpAction(async (ctx, request) => {
+  const identity = await auth.request.context(ctx, request);
+  return Response.json(
+    await ctx.runQuery(internal.projects.forOwner, {
+      ownerId: identity.userId,
+    }),
+  );
 });
 ```
 
-## How each access pattern resolves
+Keep the shared business operation keyed by `userId`. The HTTP boundary resolves
+the credential once and passes the trusted identity inward. It should not copy
+session validation, API-key parsing, or account lookup into domain functions.
 
-| How the user authenticated                | How `userId` is available                                       |
-| ----------------------------------------- | --------------------------------------------------------------- |
-| Browser (password, email, passkey, OAuth) | `ctx.auth.userId` via `auth.ctx()`                              |
-| Group SSO (OIDC/SAML)                     | Same as browser - SSO completes as a session                    |
-| Device flow (RFC 8628, CLI/TV)            | Same as browser - device poll returns session tokens            |
-| API key (machine/automation)              | `ctx.key.userId` or `auth.request.context(ctx, request).userId` |
-
-## Composing primitives
-
-```ts
-// Works for any authenticated caller
-async function getMyGroups(ctx: any, userId: string) {
-  const { page } = await auth.member.list(ctx, {
-    where: { userId },
-    paginationOpts: { numItems: 25, cursor: null },
-  });
-  return page;
-}
-
-// Browser session
-const handler = authQuery({
-  args: {},
-  handler: async (ctx) => {
-    return getMyGroups(ctx, ctx.auth.userId);
-  },
-});
-
-// API key HTTP endpoint
-const apiHandler = auth.request.action(async (ctx) => {
-  return getMyGroups(ctx, ctx.key.userId);
-});
-
-// Any HTTP action (session or API key)
-const flexHandler = httpAction(async (ctx, request) => {
-  const authContext = await auth.request.context(ctx, request);
-  return Response.json(await getMyGroups(ctx, authContext.userId));
-});
-```
+If an endpoint only serves the browser, prefer an `authQuery` or `authMutation`.
+The raw request helpers are escape hatches for HTTP integrations, not the
+default architecture.

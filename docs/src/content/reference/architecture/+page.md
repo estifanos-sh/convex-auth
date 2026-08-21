@@ -1,270 +1,138 @@
 ---
-title: Architecture
-description: How convex-auth works as a Convex component.
+title: How Convex Auth works
+description: The ownership model behind Convex Auth and your application.
 ---
-
-<script>
-  import Card from '$lib/components/docs/Card.svelte';
-  import CardGrid from '$lib/components/docs/CardGrid.svelte';
-</script>
 
 <svelte:head>
 
-  <title>Architecture - convex-auth</title>
+  <title>How Convex Auth works</title>
 </svelte:head>
 
-# Architecture
+# How Convex Auth works
 
-## Component model
+Convex Auth is the authentication system for your application, not a collection
+of helpers for building a second authentication system beside it. Once the
+component is installed, it owns identities, sign-in accounts, credentials,
+verification state, sessions, refresh tokens, passkeys, recovery state, and the
+security rules that connect those records.
 
-Your app registers the auth component and wires four files:
+Your application owns product data. A document such as a project, message, or
+invoice records the Convex Auth `userId` of the person who owns it. The app does
+not copy the user, inspect password hashes, manufacture sessions, or keep a
+parallel account record in sync.
 
-<CardGrid>
-  <Card title="convex.config.ts">
-    `defineApp({ env: authEnv })` and `app.use(auth)` registers typed env, the auth component, and
-    isolated storage/functions.
-  </Card>
-  <Card title="auth.ts">
-    `defineAuth(components.auth, { providers, permissions })` is the vNext preview setup for providers,
-    permissions, helper namespaces, and HTTP routes.
-  </Card>
-  <Card title="auth/core.ts">
-    Lightweight context import for queries and mutations. No providers or crypto
-    loaded.
-  </Card>
-  <Card title="HTTP alias">
-    `auth.http()` mounts OAuth callbacks,
-    JWKS, and SSO protocol routes from the app-side alias.
-  </Card>
-</CardGrid>
+| Convex Auth owns                             | Your application owns                       |
+| -------------------------------------------- | ------------------------------------------- |
+| Users and linked sign-in accounts            | Product profiles and preferences            |
+| Passwords, PINs, passkeys, and TOTP          | Projects, documents, and other domain data  |
+| Verification, enrollment, and recovery state | References to an auth `userId` or `groupId` |
+| Sessions, refresh tokens, and API keys       | The authorization rules around product data |
 
-The component owns its own isolated tables:
+This boundary is the most important part of the architecture. It keeps account
+recovery consistent with sign-in, makes revocation apply everywhere, and lets
+new authentication methods resolve to the same identity without migrations in
+your application schema.
 
-| Table              | Purpose                                      |
-| ------------------ | -------------------------------------------- |
-| `User`             | User records                                 |
-| `Account`          | Linked auth accounts (OAuth, password, etc.) |
-| `Session`          | Active sessions                              |
-| `Group`            | Organizations / teams                        |
-| `Member`           | Group memberships with role ids              |
-| `Invite`           | Pending invitations                          |
-| `ApiKey`           | API keys with scopes                         |
-| `Passkey`          | WebAuthn credentials                         |
-| `Totp`             | TOTP enrollments                             |
-| `Group Connection` | SSO connections (OIDC/SAML/SCIM config)      |
+## One identity through every sign-in method
 
-The auth component also installs two Convex subcomponents internally:
+A provider proves something about a person: an OAuth account belongs to them, a
+password is correct, or a passkey ceremony succeeded. Convex Auth links that
+proof to an account and resolves the account to one stable `userId`. It then
+issues a session. Convex trusts the session JWT, and `auth.ctx()` resolves it
+into `ctx.auth` before your handler runs.
 
-| Subcomponent               | Role                                                              |
-| -------------------------- | ----------------------------------------------------------------- |
-| `@convex-dev/action-cache` | Cached OIDC discovery and SAML metadata fetches                   |
-| `@convex-dev/workpool`     | Webhook delivery worker — drives retries with exponential backoff |
-
-These are mounted by `component.use(...)` inside `convex.config.ts`; the
-parent app doesn't install or configure them.
-
-## Function visibility
-
-Component functions are private to the component boundary from the browser's
-point of view. The parent app reaches the component through typed component
-references and server-side wrappers, usually the `auth.*` helpers documented
-under API Reference. Client-callable Convex functions still live in the parent
-app, where you choose what to export.
-
-## Scheduled cleanup
-
-The component owns its own `crons.ts` and runs a daily `pruneExpired`
-job (03:00 UTC) that prunes expired rows from `Session`, `RefreshToken`,
-`VerificationCode`, `AuthVerifier`, `GroupInvite`, and `DeviceCode`.
-Batched at 200 docs per run by default; rerun the cron tomorrow to drain
-any backlog.
-
-## Auth flow
-
-1. **Client** calls `signIn(provider, params)`
-2. **App** stores a verification code in the component and returns a redirect
-   URL
-3. **Client** redirects to the OAuth / SSO provider
-4. **Provider** authenticates the user and redirects back with a code
-5. **App** calls the component to verify the code and upsert the user
-6. **Component** returns session tokens (JWT + refresh token)
-7. **Client** stores tokens — subsequent requests include the JWT
-
-For subsequent requests:
-
-- Queries/mutations call `ctx.auth.getUserIdentity()` which returns
-  `{ subject: "userId", sid: "sessionId", email?, name?, picture? }`
-- `auth.ctx()` / `auth.context(ctx)` resolves
-  `{ userId, user, groupId, role, grants }`
-
-## Key design constraints
-
-- Component functions are not browser-callable through the parent app unless
-  your app exports wrappers. Your app chooses the public auth actions and SSO
-  admin RPC it wants to expose.
-- Components cannot access `ctx.auth` or `process.env`. Auth checks and env var
-  reads happen at the app layer. In Convex 1.41+, prefer typed env with
-  `defineApp({ env: authEnv })` and generated `env` imports.
-- Component tables are isolated — they don't share the app's data model.
-
-## What `defineAuth` returns
-
-`defineAuth(components.auth, config)` is the vNext preview replacement for the
-old `defineAuth(...)` mental model. It returns one auth handle with:
-
-- **Actions**: `signIn`, `signOut` — the client-facing auth flow
-- **Internal runtime**: `store` — session token exchange used internally by the auth runtime
-- **Helpers**: `auth.user.*`, `auth.session.*`, `auth.group.*`, etc. —
-  server-side primitives
-- **Request helpers**: `auth.request.context`, `auth.request.action`, and `auth.request.route` for your own app routes
-- **Connection (SSO)** (conditional): `auth.connection.*` — only present when
-  `connection()` is in providers. Expose admin RPC by writing your own
-  `authMutation`/`authQuery` functions that call this facade.
-
-## Entry point split: `server` vs `core`
-
-The full auth definition from `@estifanos-sh/convex-auth/server` loads provider
-implementations, OAuth, crypto, and HTTP route handling. Queries and mutations
-should not load that code unless they need it. To keep function bundles fast,
-use the split pattern:
+That means application code is independent of how the person signed in. A
+password user, a GitHub user, and an enterprise SSO user all reach the same
+handler with the same `ctx.auth.userId`. Email and provider account IDs are
+attributes of an identity; neither is a safe replacement for `userId`.
 
 ```ts
-// convex/permissions.ts — pure shared permission definition
-import { definePermissions } from "@estifanos-sh/convex-auth/permissions";
-
-export const permissions = definePermissions({
-  grants: ["members.read"],
-  roles: {
-    member: {
-      label: "Member",
-      grants: ["members.read"],
-    },
+export const create = authMutation({
+  args: { title: v.string() },
+  handler: async (ctx, args) => {
+    return ctx.db.insert("projects", {
+      title: args.title,
+      ownerId: ctx.auth.userId,
+    });
   },
 });
 ```
 
-```ts
-// convex/auth.ts — heavyweight, only evaluated for signIn/signOut
-import { defineAuth } from "@estifanos-sh/convex-auth/server";
-import { google, password } from "@estifanos-sh/convex-auth/providers";
-import { permissions } from "./permissions";
+Do not accept `ownerId` or `userId` from the browser when the value means “the
+current user.” Derive it from `ctx.auth`. A client-provided identity turns an
+authentication decision into untrusted input.
 
-export const auth = defineAuth(components.auth, {
-  providers: [google({ clientId, clientSecret }), password()],
-  permissions,
-});
+## The application boundary
 
-export const { signIn, signOut, store } = auth;
-```
+Convex components have isolated storage. The browser cannot call component
+functions directly, and the component cannot read your application tables.
+`defineAuth` creates the typed server facade that crosses this boundary. The
+exported `signIn` and `signOut` actions drive the client flow; the remaining
+`auth.*` namespaces are server APIs for your Convex functions.
 
-```ts
-// convex/auth.config.ts — native Convex JWT trust
-import { env } from "./_generated/server";
-
-export default {
-  providers: [
-    {
-      domain: `${env.CONVEX_SITE_URL}/auth`,
-      applicationID: "convex",
-    },
-  ],
-};
-```
-
-```ts
-// convex/auth/core.ts — lightweight, imported by all queries
-import { createAuthContext } from "@estifanos-sh/convex-auth/core";
-import { components } from "../_generated/api";
-import { permissions } from "../permissions";
-
-export const auth = createAuthContext(components.auth, {
-  permissions,
-});
-```
+Queries and mutations should import the lightweight context created by
+`createAuthContext`. Wire `auth.ctx()` into custom builders once, then use those
+builders throughout the app. This rejects unauthenticated callers before your
+business handler runs and avoids loading provider and cryptography code into
+every function bundle.
 
 ```ts
 // convex/functions.ts
-import { customQuery, customMutation } from "convex-helpers/server/customFunctions";
-import { query, mutation } from "./_generated/server";
+import { customMutation, customQuery } from "convex-helpers/server/customFunctions";
+import { mutation, query } from "./_generated/server";
 import { auth } from "./auth/core";
 
 export const authQuery = customQuery(query, auth.ctx());
 export const authMutation = customMutation(mutation, auth.ctx());
 ```
 
-`createAuthContext` is the current lightweight context entry point. In vNext
-docs, keep its vocabulary aligned with `defineAuth`: pass `permissions`, use
-object args, and keep provider, OAuth, and crypto code out of query/mutation
-bundles.
+Use `auth.ctx.optional()` only for a genuinely public handler whose response
+changes when a viewer is signed in. Authentication-required code should use the
+required builder so a missing identity cannot become an overlooked branch.
 
-| Entry point                             | What it loads                               | Use for                                         |
-| --------------------------------------- | ------------------------------------------- | ----------------------------------------------- |
-| `@estifanos-sh/convex-auth/server`      | Everything (providers, OAuth, crypto, HTTP) | `convex/auth.ts` — signIn/signOut exports       |
-| `@estifanos-sh/convex-auth/core`        | Context resolution only (~2KB)              | `convex/functions.ts` — query/mutation wrappers |
-| `@estifanos-sh/convex-auth/browser`     | Browser client defaults                     | Web apps and SSR client hydration               |
-| `@estifanos-sh/convex-auth/react`       | React gates + app-owned auth client context | React apps wrapping the browser client          |
-| `@estifanos-sh/convex-auth/svelte`      | Svelte runes bridge + gate components       | Svelte 5 apps wrapping the browser client       |
-| `@estifanos-sh/convex-auth/expo`        | Expo SecureStore, AuthSession, passkeys     | Expo / React Native apps                        |
-| `@estifanos-sh/convex-auth/providers/*` | Individual provider                         | Only in `convex/auth.ts`                        |
+## Extend the system instead of duplicating it
 
-Your app also needs `convex/auth.config.ts` so Convex trusts the JWT issuer
-used by Convex Auth.
+An application-owned `Users` table that mirrors auth users is usually the first
+sign that the boundary has been crossed. Tables for password or PIN hashes,
+passkeys, verification codes, login challenges, recovery codes, account locks,
+restricted sessions, or session handoffs go further: together they recreate an
+authentication protocol that Convex Auth can no longer revoke or reason about
+as one system.
 
-## Where `ctx.auth` comes from
+Use a provider when the application needs another way to prove identity. Use a
+typed provider operation or continuation when one proof must lead into another
+ceremony, such as password recovery followed by passkey rotation. A continuation
+keeps its authorization ticket inside Convex Auth and delays the normal session
+until the complete flow succeeds. Do not issue an ordinary session and recreate
+“restricted session” semantics in an application table.
 
-Neither `defineAuth` nor `createAuthContext` mutate every Convex handler
-automatically. App code wires `auth.ctx()` into custom builders once, then uses
-those builders everywhere auth is required.
+Use `defineAuth({ extend })` for small application fields that must travel with
+the auth user. Keep richer public profiles and product settings in an app table
+keyed by `userId`; they are product data, not another identity record. Use the
+`auth.user`, `auth.account`, `auth.session`, and related facades for administrative
+operations instead of calling generated component functions directly.
 
-```ts
-// convex/functions.ts
-import { customAction, customMutation, customQuery } from "convex-helpers/server/customFunctions";
-import { action, mutation, query } from "./_generated/server";
-import { auth } from "./auth/core";
+## Authorization is a separate decision
 
-export const authQuery = customQuery(query, auth.ctx());
-export const authMutation = customMutation(mutation, auth.ctx());
-export const authAction = customAction(action, auth.ctx());
-```
+Authentication answers who is calling. Authorization answers what that user may
+do with your product data. For user-owned data, compare the stored owner ID with
+`ctx.auth.userId`. For group access, define typed grants with
+`definePermissions`, assign roles through Convex Auth memberships, and check
+grants rather than role names.
 
-Inside those handlers, `ctx.auth` includes
-`{ userId, user, groupId, role, grants }` and unauthenticated callers are
-rejected before your handler runs.
+This separation does not require another session or identity table. The session
+establishes the user; your handler applies the business rule. If access changes,
+update ownership, membership, or grants at the layer where that rule belongs.
 
-## API layers
+## The complete runtime
 
-| Layer                | What it is                                                        | Typical usage                                                               |
-| -------------------- | ----------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| Auth-flow actions    | Required client-callable functions exported from `convex/auth.ts` | `api.auth.signIn`, `api.auth.signOut`                                       |
-| Internal auth action | Internal runtime mutation exported from `convex/auth.ts`          | `internal.auth.store`                                                       |
-| Helper namespaces    | Server-side helper APIs returned by `defineAuth(...)`             | `auth.member.assert(ctx, { ... })`, `auth.connection.create(ctx, { data })` |
-| App-owned admin RPC  | Optional public RPC for group connection admin UI                 | `authMutation`/`authQuery` functions calling `auth.connection.*`            |
+`defineAuth` is the composition root for providers, permissions, and protocol
+routes. `createAuthContext` is its lightweight companion for ordinary Convex
+handlers. `auth.config.ts` tells Convex to trust JWTs issued from
+`${CONVEX_SITE_URL}/auth`, while `auth.http()` mounts OAuth callbacks, JWKS, and
+other protocol routes. The component performs expiration cleanup itself.
 
-Only the first layer is required for the frontend auth client. The third layer
-exists only if your app explicitly exposes app-owned group connection admin
-RPC by writing `authMutation`/`authQuery` functions over the `auth.connection.*`
-facade.
-
-`auth.oauth.*` is the app-as-authorization-server surface: it backs OAuth
-client registration and the authorization-code, token, and refresh flows for
-your app's own OAuth clients (for example MCP servers and Dynamic Client
-Registration). It is wired into the `/oauth2/*` HTTP routes mounted by
-`auth.http()`. Full OIDC provider-mode federation — third-party
-`/userinfo` and standard-claim ID tokens for external relying parties — is still
-future work.
-
-## Multi-access model
-
-Every auth path resolves to the same `userId`:
-
-| Access pattern                     | How `userId` is available                                       |
-| ---------------------------------- | --------------------------------------------------------------- |
-| Browser (password, OAuth, passkey) | `ctx.auth.userId` via `auth.ctx()`                              |
-| Group SSO (OIDC / SAML)            | Same as browser - SSO completes as a session                    |
-| Device flow (CLI / IoT)            | Same as browser - device poll returns session tokens            |
-| API key (machine / automation)     | `ctx.key.userId` or `auth.request.context(ctx, request).userId` |
-
-The `userId` is the single shared anchor — server logic works regardless of how
-the caller authenticated. In app code, prefer `auth.ctx()` and
-`ctx.auth.userId`. Use `auth.request.context(ctx, request)` for advanced raw HTTP
-handlers that accept either a session or an API key.
+Most applications should interact with this system in only three places: one
+auth definition, one shared pair of authenticated function builders, and a
+client created with `api.auth`. Everything else should be application code that
+reads `ctx.auth.userId` and works with product data.

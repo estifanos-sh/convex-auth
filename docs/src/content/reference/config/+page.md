@@ -100,35 +100,29 @@ authorization model.
 
 ## Return value
 
-`defineAuth` returns an object with:
+`defineAuth` returns one composition root with three kinds of capabilities. The
+client actions, `signIn` and `signOut`, are exported from the application's auth
+module. `store` is runtime plumbing for exchanging session tokens and is not a
+frontend API.
 
-- `signIn` — Action for client sign-in
-- `signOut` — Action for client sign-out
-- `store` — Internal runtime mutation for session token exchange
-- `auth.user.*` — User helpers
-- `auth.session.*` — Session helpers
-- `auth.account.*` — Account helpers
-- `auth.factor.*` — Safe current-user passkey and TOTP management
-- `auth.group.*` — Group helpers
-- `auth.member.*` — Membership helpers
-- `auth.invite.*` — Invite helpers
-- `auth.key.*` — API key helpers
-- `auth.provider.signIn(ctx, { provider, ... })` — Server-side provider sign-in
-- `auth.provider.continue(ctx, { userId, operation })` — Continue a proven
-  identity into a typed provider operation without issuing an intermediate
-  session
-- `auth.event.*` — Audit reads and app-owned event emission
-- `auth.request.*` — HTTP route helpers
-- `auth.http()` — app-owned HTTP router for OAuth callbacks, JWKS, and protocol
-  routes
-- `auth.v.*` — Convex `returns:` validators for the read surface
-  (`user`, `group`, `member`, `invite`, `viewer`, `list`). See
-  [Typed Returns](/reference/typed-returns).
-- `auth.connection.*` — group connection (SSO) admin facade when `connection()` is in providers
-- `InferClientApi<typeof auth>` — Type-level utility; use as the generic for
-  `client()` on the frontend to get conditional WebAuthn/TOTP/device helpers
-- `Doc`, `Viewer`, `Group`, `Membership` — exported document types
-  (extend-aware), importable from `@estifanos-sh/convex-auth/server`
+The entity namespaces—`auth.user`, `auth.session`, `auth.account`,
+`auth.factor`, `auth.group`, `auth.member`, `auth.invite`, and `auth.key`—are
+server facades over component-owned state. They exist so application functions
+can perform an intentional administrative or current-user operation without
+calling generated component internals.
+
+`auth.provider` coordinates providers, including verifier-bound continuations
+that deliberately postpone session issuance. `auth.request` resolves identity
+at raw HTTP boundaries, and `auth.http()` mounts the authentication protocol
+routes. When the `connection()` provider is configured, `auth.connection`
+provides the private group SSO administration facade.
+
+The returned `auth.v` validators describe public read results for Convex
+`returns:` validation. The exported `Doc`, `Viewer`, `Group`, and `Membership`
+types carry configured extension fields, while `InferClientApi<typeof auth>`
+gives the browser client only the provider capabilities enabled by this auth
+definition. See [Typed Returns](/reference/typed-returns) for the validator and
+type relationship.
 
 ## Per-provider OAuth options
 

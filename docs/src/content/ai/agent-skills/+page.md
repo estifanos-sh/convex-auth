@@ -67,10 +67,11 @@ unreleased API to an older application.
 
 ## Machine-readable documentation
 
-- [`/llms.txt`](/llms.txt) is the compact index with one Markdown URL per page.
-- [`/llms-full.txt`](/llms-full.txt) contains the full documentation corpus.
-- Append `.md` to a documentation route for its canonical Markdown, for example
-  [`/getting-started/installation.md`](/getting-started/installation.md).
+[`/llms.txt`](/llms.txt) is the compact index with one Markdown URL per page.
+[`/llms-full.txt`](/llms-full.txt) contains the complete documentation corpus
+for tools that need offline context. A single page is available as canonical
+Markdown by appending `.md` to its route, as in
+[`/getting-started/installation.md`](/getting-started/installation.md).
 
 Skills contain procedures and guardrails. Detailed API reference remains in
 the documentation so agents load it only when the task requires it.

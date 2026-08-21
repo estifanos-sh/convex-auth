@@ -1,6 +1,6 @@
 ---
 title: auth.group
-description: Group management — create, list, update, and delete hierarchical groups.
+description: Model organizations, workspaces, and teams in Convex Auth.
 ---
 
 <svelte:head>
@@ -73,7 +73,7 @@ const { ancestors } = await auth.group.ancestors(ctx, {
 // ancestors => [{ _id: orgId, name: "Acme Corp", ... }]
 ```
 
-### Update group metadata
+### Update group extension data
 
 ```ts
 await auth.group.update(ctx, {

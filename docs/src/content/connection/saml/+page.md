@@ -91,15 +91,12 @@ await auth.connection.saml.upsert(ctx, {
 
 Supported security options:
 
-- `requireSignedAssertions`: reject assertions that do not include an assertion
-  signature
-- `requireTimestamps`: require SAML time conditions (`NotBefore`/`NotOnOrAfter`)
-- `clockSkewSeconds`: tolerated clock drift when validating assertion time
-  windows
-- `weakAlgorithmHandling`: `"warn"` or `"reject"` weak algorithms like SHA-1
-- `maxMetadataSize`: reject oversized IdP metadata payloads during
-  configure/refresh
-- `maxResponseSize`: reject oversized SAML responses before parsing
+`requireSignedAssertions` rejects assertions without their own signature, while
+`requireTimestamps` requires `NotBefore` and `NotOnOrAfter` conditions.
+`clockSkewSeconds` defines the small amount of clock drift tolerated while
+checking those conditions. `weakAlgorithmHandling` either warns about or
+rejects algorithms such as SHA-1. `maxMetadataSize` and `maxResponseSize` bound
+untrusted XML before expensive parsing or cryptographic work.
 
 Use `profile.mapping` to normalize the core SAML attributes used for the
 built-in profile. `groups` and `roles` can feed into

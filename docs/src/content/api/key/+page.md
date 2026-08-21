@@ -16,16 +16,16 @@ permissions and optional per-key rate limiting.
 
 ## Methods
 
-| Method   | Signature                                                                      | Returns                                                                | Description                                                                                                                                                 |
-| -------- | ------------------------------------------------------------------------------ | ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `create` | `(ctx, { data: { userId, name, scopes, metadata?, rateLimit?, expiresAt? } })` | `{ id, secret }`                                                       | Creates a new API key. The secret key (with `sk_` prefix) is returned once.                                                                                 |
-| `verify` | `(ctx, { secret })`                                                            | `{ userId, keyId, scopes }`                                            | Verifies a secret key string. Throws `ConvexError` with code `INVALID_API_KEY`, `API_KEY_REVOKED`, `API_KEY_EXPIRED`, or `API_KEY_RATE_LIMITED` on failure. |
-| `list`   | `(ctx, { where?, paginationOpts, orderBy?, order? })`                          | `PaginationResult<Doc<"ApiKey">>` — `{ page, isDone, continueCursor }` | Lists keys for a user. Convex-native shape.                                                                                                                 |
-| `get`    | `(ctx, { id })`                                                                | `KeyDoc \| null`                                                       | Reads a key document by ID (does not include the secret).                                                                                                   |
-| `update` | `(ctx, { id, patch })`                                                         | `null`                                                                 | Updates key metadata, scopes, or rate limit.                                                                                                                |
-| `revoke` | `(ctx, { id })`                                                                | `null`                                                                 | Revokes a key (soft delete — the key still exists but can no longer be verified).                                                                           |
-| `remove` | `(ctx, { id })`                                                                | `null`                                                                 | Permanently deletes a key.                                                                                                                                  |
-| `rotate` | `(ctx, { id })`                                                                | `{ id, secret }`                                                       | Generates a new secret for an existing key. Throws `ConvexError` with code `INVALID_PARAMETERS` or `API_KEY_REVOKED` on failure.                            |
+| Method   | Signature                                                                    | Returns                                                                | Description                                                                                                                                                 |
+| -------- | ---------------------------------------------------------------------------- | ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `create` | `(ctx, { data: { userId, name, scopes, extend?, rateLimit?, expiresAt? } })` | `{ id, secret }`                                                       | Creates a new API key. The secret key (with `sk_` prefix) is returned once.                                                                                 |
+| `verify` | `(ctx, { secret })`                                                          | `{ userId, keyId, scopes }`                                            | Verifies a secret key string. Throws `ConvexError` with code `INVALID_API_KEY`, `API_KEY_REVOKED`, `API_KEY_EXPIRED`, or `API_KEY_RATE_LIMITED` on failure. |
+| `list`   | `(ctx, { where?, paginationOpts, orderBy?, order? })`                        | `PaginationResult<Doc<"ApiKey">>` — `{ page, isDone, continueCursor }` | Lists keys for a user. Convex-native shape.                                                                                                                 |
+| `get`    | `(ctx, { id })`                                                              | `KeyDoc \| null`                                                       | Reads a key document by ID (does not include the secret).                                                                                                   |
+| `update` | `(ctx, { id, patch })`                                                       | `null`                                                                 | Updates key extension data, scopes, or rate limit.                                                                                                          |
+| `revoke` | `(ctx, { id })`                                                              | `null`                                                                 | Invalidates a key while preserving its record for audit.                                                                                                    |
+| `remove` | `(ctx, { id })`                                                              | `null`                                                                 | Permanently deletes a key.                                                                                                                                  |
+| `rotate` | `(ctx, { id })`                                                              | `{ id, secret }`                                                       | Generates a new secret for an existing key. Throws `ConvexError` with code `INVALID_PARAMETERS` or `API_KEY_REVOKED` on failure.                            |
 
 ## Scopes
 
@@ -121,10 +121,11 @@ try {
 }
 ```
 
-### Metadata
+### Application extension data
 
-Each key can carry an arbitrary `metadata` object for storing additional context
-like environment, project, or team:
+Each key can carry an `extend` object for application-specific context such as
+an environment or project. Convex Auth validates and returns this data but does
+not interpret it as authentication or authorization policy.
 
 ```ts
 await auth.key.update(ctx, {
