@@ -116,7 +116,7 @@ test("password sign up requires email", async () => {
         flow: "signUp",
       },
     } as never);
-  }).rejects.toThrow(/Validator error/);
+  }).rejects.toThrow(/Invalid parameters for credentials provider password/);
 });
 
 test("change password requires authentication", async () => {
@@ -352,5 +352,5 @@ test("invalid flow name surfaces a clear error", async () => {
       provider: "password",
       params: { email: TEST_EMAIL, password: TEST_PASSWORD, flow: "bogus" },
     } as never);
-  }).rejects.toThrow(/Validator error/);
+  }).rejects.toThrow(/Invalid parameters for credentials provider password/);
 });
