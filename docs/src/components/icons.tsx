@@ -20,33 +20,6 @@ export function GitHubIcon() {
   );
 }
 
-export function SunIcon() {
-  return (
-    <svg aria-hidden="true" fill="none" height="16" viewBox="0 0 16 16" width="16">
-      <circle cx="8" cy="8" r="3.1" stroke="currentColor" stroke-width="1.5" />
-      <path
-        d="M8 1.4v1.4M8 13.2v1.4M1.4 8h1.4M13.2 8h1.4M3.2 3.2l1 1M11.8 11.8l1 1M3.2 12.8l1-1M11.8 4.2l1-1"
-        stroke="currentColor"
-        stroke-linecap="round"
-        stroke-width="1.5"
-      />
-    </svg>
-  );
-}
-
-export function MoonIcon() {
-  return (
-    <svg aria-hidden="true" fill="none" height="16" viewBox="0 0 16 16" width="16">
-      <path
-        d="M13.3 10.2A5.4 5.4 0 1 1 5.8 2.7 4.3 4.3 0 0 0 13.3 10.2Z"
-        stroke="currentColor"
-        stroke-linejoin="round"
-        stroke-width="1.5"
-      />
-    </svg>
-  );
-}
-
 export function MenuIcon() {
   return (
     <svg aria-hidden="true" fill="none" height="16" viewBox="0 0 16 16" width="16">

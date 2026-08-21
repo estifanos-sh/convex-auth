@@ -4,8 +4,6 @@ description: Set up convex-auth in your project.
 ---
 
 <script>
-  import Tabs from '$lib/components/docs/Tabs.svelte';
-  import TabItem from '$lib/components/docs/TabItem.svelte';
   import Card from '$lib/components/docs/Card.svelte';
   import CardGrid from '$lib/components/docs/CardGrid.svelte';
 </script>
@@ -19,24 +17,6 @@ description: Set up convex-auth in your project.
 
 ## Install
 
-<Tabs syncKey="pkg">
-  <TabItem label="pnpm">
-
-```bash
-pnpm add @estifanos-sh/convex-auth
-pnpm exec convex dev
-pnpm exec convex-auth
-```
-
-To skip the interactive prompt:
-
-```bash
-pnpm exec convex-auth --app-url "http://localhost:5173"
-```
-
-  </TabItem>
-  <TabItem label="npm">
-
 ```bash
 npm install @estifanos-sh/convex-auth
 npx convex dev
@@ -48,24 +28,6 @@ To skip the interactive prompt:
 ```bash
 npx convex-auth --app-url "http://localhost:5173"
 ```
-
-  </TabItem>
-  <TabItem label="yarn">
-
-```bash
-yarn add @estifanos-sh/convex-auth
-yarn convex dev
-yarn convex-auth
-```
-
-To skip the interactive prompt:
-
-```bash
-yarn convex-auth --app-url "http://localhost:5173"
-```
-
-  </TabItem>
-</Tabs>
 
 ## Quick Setup (CLI)
 
