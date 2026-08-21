@@ -18,11 +18,7 @@ import {
 } from "./cors";
 import type { AuthContext, OptionalAuthContext, UserDoc } from "./auth";
 import type { ComponentCtx, ComponentReadCtx as HttpQueryCtx } from "./component/context";
-import {
-  createUnauthenticatedAuthContext,
-  getAuthContextForUser,
-  getSessionUserId,
-} from "./context";
+import { createUnauthenticatedAuthContext, getAuthContext, getAuthContextForUser } from "./context";
 import { logError } from "./log";
 import { verifyOAuthToken } from "./tokens";
 import type { CorsConfig, HttpKeyContext } from "./types";
@@ -49,6 +45,12 @@ type HttpContextAuthLike = {
       roleIds: string[];
       grants: string[];
     } | null>;
+  };
+  session: {
+    get: (
+      ctx: HttpQueryCtx,
+      args: { id: string },
+    ) => Promise<import("./types").Doc<"Session"> | null>;
   };
   key: {
     verify: (
@@ -296,11 +298,10 @@ async function resolveHttpAuthContext(
   const oauthContext = await getHttpOAuthContext(auth, ctx, request, resource, issuer);
   if (oauthContext !== null) return oauthContext;
 
-  const sessionUserId = await getSessionUserId(ctx);
-  if (sessionUserId !== null) {
-    const authContext = await getAuthContextForUser(auth, ctx, sessionUserId);
+  const sessionContext = await getAuthContext(auth, ctx);
+  if (sessionContext !== null) {
     return {
-      ...authContext,
+      ...sessionContext,
       source: "session",
       key: null,
       oauth: null,

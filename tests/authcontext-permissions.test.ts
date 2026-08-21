@@ -1,6 +1,6 @@
 import { expect, test } from "vite-plus/test";
 
-import { getAuthContextForUser } from "../packages/auth/src/server/context";
+import { getAuthContext, getAuthContextForUser } from "../packages/auth/src/server/context";
 
 /**
  * Regression tests for active-group resolution in `getAuthContextForUser`.
@@ -99,4 +99,56 @@ test("getAuthContextForUser rejects an identity whose user was deleted", async (
   await expect(getAuthContextForUser(resolver, {} as any, "u1")).rejects.toMatchObject({
     data: { code: "NOT_SIGNED_IN" },
   });
+});
+
+test("getAuthContext rejects a session whose epoch was revoked", async () => {
+  const resolver: any = {
+    user: {
+      get: async () => ({ _id: "u1", sessionEpoch: 1 }),
+    },
+    active: {
+      get: async () => null,
+    },
+    session: {
+      get: async () => ({
+        _id: "s1",
+        userId: "u1",
+        expirationTime: Date.now() + 60_000,
+        epoch: 0,
+      }),
+    },
+  };
+  const context = {
+    auth: {
+      getUserIdentity: async () => ({ subject: "u1", sid: "s1", session_epoch: 0 }),
+    },
+  } as any;
+
+  await expect(getAuthContext(resolver, context)).resolves.toBeNull();
+});
+
+test("getAuthContext accepts the current session epoch", async () => {
+  const resolver: any = {
+    user: {
+      get: async () => ({ _id: "u1", sessionEpoch: 2 }),
+    },
+    active: {
+      get: async () => null,
+    },
+    session: {
+      get: async () => ({
+        _id: "s1",
+        userId: "u1",
+        expirationTime: Date.now() + 60_000,
+        epoch: 2,
+      }),
+    },
+  };
+  const context = {
+    auth: {
+      getUserIdentity: async () => ({ subject: "u1", sid: "s1", session_epoch: 2 }),
+    },
+  } as any;
+
+  await expect(getAuthContext(resolver, context)).resolves.toMatchObject({ userId: "u1" });
 });

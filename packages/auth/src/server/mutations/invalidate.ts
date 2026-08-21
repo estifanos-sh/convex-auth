@@ -6,8 +6,7 @@ import { authDb } from "../db";
 import { emitAuthEvent } from "../events";
 import { LOG_LEVELS } from "../log";
 import { log } from "../log";
-import { deleteSession } from "../session/lifecycle";
-import { Doc, MutationCtx } from "../types";
+import { MutationCtx } from "../types";
 import { AUTH_STORE_REF } from "./store/refs";
 
 export const vInvalidateSessionsArgs = v.object({
@@ -34,18 +33,12 @@ export async function invalidateSessionsImpl(
 ): Promise<void> {
   log(LOG_LEVELS.DEBUG, "invalidateSessionsImpl args:", args);
   const { userId, except } = args;
-  const exceptSet = new Set(except ?? []);
   const typedUserId = userId as GenericId<"User">;
-  const sessions = (await authDb(ctx, config).sessions.listByUser(typedUserId)) as Doc<"Session">[];
-  const deleted: GenericId<"Session">[] = [];
-  await Promise.all(
-    sessions.map(async (session) => {
-      if (exceptSet.has(session._id)) return;
-      await deleteSession(ctx, session, config);
-      deleted.push(session._id);
-    }),
-  );
-  for (const sessionId of deleted) {
+  const revoked = await authDb(ctx, config).sessions.revokeForUser({
+    userId: typedUserId,
+    except,
+  });
+  for (const sessionId of revoked.cleanedSessionIds) {
     await emitAuthEvent(ctx, config, {
       kind: "session.invalidated",
       actor: { type: "system" },

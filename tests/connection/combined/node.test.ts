@@ -114,12 +114,16 @@ function parseUserIdFromToken(token: string) {
   return subject;
 }
 
-async function startGroupConnectionContext(prefix: string, protocol: "oidc" | "saml") {
-  const { convexApiUrl, convexSiteUrl } = getInteropRuntime();
-  const convexClient = new ConvexHttpClient(convexApiUrl, {
+function createInteropClient(convexApiUrl: string) {
+  return new ConvexHttpClient(convexApiUrl, {
     skipConvexDeploymentUrlCheck: true,
     logger: false,
   });
+}
+
+async function startGroupConnectionContext(prefix: string, protocol: "oidc" | "saml") {
+  const { convexApiUrl, convexSiteUrl } = getInteropRuntime();
+  const convexClient = createInteropClient(convexApiUrl);
 
   const signInResult = (await convexClient.action(api.auth.signIn, {
     provider: "anonymous",
@@ -216,8 +220,16 @@ test("SCIM + OIDC reuses provisioned userId", async () => {
   const { zitadelBaseUrl, zitadelRuntimeBaseUrl, managementToken, loginToken } =
     getInteropRuntime();
 
-  const { convexSiteUrl, convexClient, convexUserToken, connectionId, groupId, runId } =
-    await startGroupConnectionContext("combined-oidc", "oidc");
+  const {
+    convexApiUrl,
+    convexSiteUrl,
+    convexClient,
+    convexUserToken,
+    connectionId,
+    groupId,
+    runId,
+  } = await startGroupConnectionContext("combined-oidc", "oidc");
+  const signInClient = createInteropClient(convexApiUrl);
 
   const email = `${runId}@example.com`;
 
@@ -357,7 +369,7 @@ test("SCIM + OIDC reuses provisioned userId", async () => {
   });
 
   const { redirect: signInUrl, verifier } = await startConnectionSignIn(
-    convexClient,
+    signInClient,
     connectionId,
     "oidc",
   );
@@ -427,7 +439,7 @@ test("SCIM + OIDC reuses provisioned userId", async () => {
   const verificationCode = new URL(completionLocation).searchParams.get("code");
   expect(verificationCode).toBeTruthy();
 
-  const exchanged = (await convexClient.action(api.auth.signIn, {
+  const exchanged = (await signInClient.action(api.auth.signIn, {
     params: { code: verificationCode! },
     verifier,
   })) as ConvexSignInResult;
@@ -455,8 +467,16 @@ test("SCIM + SAML reuses provisioned userId", async () => {
   const { zitadelBaseUrl, zitadelRuntimeBaseUrl, managementToken, loginToken } =
     getInteropRuntime();
 
-  const { convexSiteUrl, convexClient, convexUserToken, connectionId, groupId, runId } =
-    await startGroupConnectionContext("combined-saml", "saml");
+  const {
+    convexApiUrl,
+    convexSiteUrl,
+    convexClient,
+    convexUserToken,
+    connectionId,
+    groupId,
+    runId,
+  } = await startGroupConnectionContext("combined-saml", "saml");
+  const signInClient = createInteropClient(convexApiUrl);
 
   const email = `${runId}@example.com`;
 
@@ -588,7 +608,7 @@ test("SCIM + SAML reuses provisioned userId", async () => {
   );
 
   const { redirect: signInUrl, verifier } = await startConnectionSignIn(
-    convexClient,
+    signInClient,
     connectionId,
     "saml",
   );
@@ -705,7 +725,7 @@ test("SCIM + SAML reuses provisioned userId", async () => {
   const verificationCode = new URL(completionLocation).searchParams.get("code");
   expect(verificationCode).toBeTruthy();
 
-  const exchanged = (await convexClient.action(api.auth.signIn, {
+  const exchanged = (await signInClient.action(api.auth.signIn, {
     params: { code: verificationCode! },
     verifier,
   })) as ConvexSignInResult;

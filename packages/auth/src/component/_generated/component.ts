@@ -77,7 +77,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         issueSession: boolean;
         limitIdentifier: string;
         refreshTokenExpirationTime: number;
-        replaceSessionId?: string;
+        replaceSession?: { authenticatedUserId: string; sessionId: string };
         sessionExpirationTime: number;
       },
       | { status: "rejected" }
@@ -869,7 +869,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           "mutation",
           "internal",
           { connectionId: string; mode: "soft" | "hard"; userId: string },
-          { revoked: number },
+          { cleanupPending: boolean; cleanedSessions: number; epoch: number },
           Name
         >;
         revokeGroup: FunctionReference<
@@ -2832,7 +2832,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           id: string;
           lastUsedAt: number;
           refreshTokenExpirationTime: number;
-          replaceSessionId?: string;
+          replaceSession?: { authenticatedUserId: string; sessionId: string };
           sessionExpirationTime: number;
         },
         | { status: "rejected" }
@@ -2880,7 +2880,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           name?: string;
           publicKey: ArrayBuffer;
           refreshTokenExpirationTime: number;
-          replaceSessionId?: string;
+          replaceSession?: { authenticatedUserId: string; sessionId: string };
           sessionExpirationTime: number;
           transports?: Array<string>;
           userId: string;
@@ -3112,7 +3112,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           intent: "enrollment" | "challenge";
           now: number;
           refreshTokenExpirationTime: number;
-          replaceSessionId?: string;
+          replaceSession?: { authenticatedUserId: string; sessionId: string };
           sessionExpirationTime: number;
           totpId?: string;
           verifierId: string;
@@ -4079,12 +4079,13 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       "internal",
       {
         refreshTokenExpirationTime?: number;
-        replaceSessionId?: string;
+        replaceSession?: { authenticatedUserId: string; sessionId: string };
         sessionExpirationTime: number;
         sessionId?: string;
         userId: string;
       },
       {
+        epoch: number;
         refreshTokenId?: string;
         replacedSessionId?: string;
         sessionId: string;
@@ -4102,6 +4103,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           name?: string;
           phone?: string;
           phoneVerificationTime?: number;
+          sessionEpoch?: number;
         };
         userId: string;
       },
@@ -4114,6 +4116,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       {
         _creationTime: number;
         _id: string;
+        epoch?: number;
         expirationTime: number;
         userId: string;
       } | null,
@@ -4126,6 +4129,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       Array<{
         _creationTime: number;
         _id: string;
+        epoch?: number;
         expirationTime: number;
         userId: string;
       }>,
@@ -4135,8 +4139,15 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
     revokeForUser: FunctionReference<
       "mutation",
       "internal",
-      { userId: string },
-      { revoked: number },
+      { except?: Array<string>; userId: string },
+      {
+        cleanedRefreshTokens: number;
+        cleanedSessionIds: Array<string>;
+        cleanedSessions: number;
+        cleanupPending: boolean;
+        epoch: number;
+        retainedSessionIds: Array<string>;
+      },
       Name
     >;
   };
@@ -4264,6 +4275,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           sessionId: string;
         },
         | {
+            epoch: number;
             refreshTokenId: string;
             sessionId: string;
             status: "rotated";
@@ -4281,6 +4293,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
               name?: string;
               phone?: string;
               phoneVerificationTime?: number;
+              sessionEpoch?: number;
             };
             userId: string;
           }
@@ -4378,7 +4391,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           generateTokens: boolean;
           identifier?: string;
           refreshTokenExpirationTime: number;
-          replaceSessionId?: string;
+          replaceSession?: { authenticatedUserId: string; sessionId: string };
           sessionExpirationTime: number;
           userId: string;
         },

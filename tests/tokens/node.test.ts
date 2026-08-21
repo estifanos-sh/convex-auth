@@ -54,7 +54,9 @@ test("generateToken retries private-key import after an invalid warmup", async (
   const tokens = await import("@estifanos-sh/convex-auth/server/tokens");
   await expect(
     tokens.generateToken(
-      { identity: { subject: "user1" as any, sessionId: "session1" as any } },
+      {
+        identity: { subject: "user1" as any, sessionId: "session1" as any, sessionEpoch: 0 },
+      },
       {} as any,
     ),
   ).rejects.toThrow();
@@ -70,6 +72,7 @@ test("generateToken retries private-key import after an invalid warmup", async (
       identity: {
         subject: "user1" as any,
         sessionId: "session1" as any,
+        sessionEpoch: 0,
         email: "user@example.com",
         emailVerified: true,
         name: "Test User",
@@ -84,6 +87,7 @@ test("generateToken retries private-key import after an invalid warmup", async (
   const claims = decodeJwt(token);
   expect(claims.sub).toBe("user1");
   expect(claims.sid).toBe("session1");
+  expect(claims.session_epoch).toBe(0);
   expect(claims.email).toBe("user@example.com");
   expect(claims.email_verified).toBe(true);
   expect(claims.name).toBe("Test User");
@@ -102,7 +106,7 @@ test("generateToken accepts flattened PKCS#8 private keys", async () => {
 
   const tokens = await import("@estifanos-sh/convex-auth/server/tokens");
   const token = await tokens.generateToken(
-    { identity: { subject: "user2" as any, sessionId: "session2" as any } },
+    { identity: { subject: "user2" as any, sessionId: "session2" as any, sessionEpoch: 0 } },
     {} as any,
   );
 
@@ -122,7 +126,7 @@ test("generateToken uses the mounted auth route as issuer", async () => {
 
   const tokens = await import("@estifanos-sh/convex-auth/server/tokens");
   const token = await tokens.generateToken(
-    { identity: { subject: "user3" as any, sessionId: "session3" as any } },
+    { identity: { subject: "user3" as any, sessionId: "session3" as any, sessionEpoch: 0 } },
     { path: "/custom-auth" } as any,
   );
 
@@ -142,7 +146,7 @@ test("generateToken defaults to the /auth issuer", async () => {
 
   const tokens = await import("@estifanos-sh/convex-auth/server/tokens");
   const token = await tokens.generateToken(
-    { identity: { subject: "user4" as any, sessionId: "session4" as any } },
+    { identity: { subject: "user4" as any, sessionId: "session4" as any, sessionEpoch: 0 } },
     {} as any,
   );
 

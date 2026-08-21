@@ -16,7 +16,7 @@ import type { Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
 import { mutation, query } from "../functions";
 import { vPasskeyDoc, vUserDoc } from "../model";
-import { createSessionRows, revokeSessionRows } from "../session";
+import { createSessionRows, revokeSessionRows, vSessionReplacement } from "../session";
 
 const PASSKEY_LIST_BATCH = 128;
 const DEFAULT_VERIFIER_TTL_MS = 15 * 60 * 1000;
@@ -403,7 +403,7 @@ export const create = mutation({
 export const completeRegistration = mutation({
   args: {
     ...vPasskeyCreateArgs.fields,
-    replaceSessionId: v.optional(v.id("Session")),
+    replaceSession: v.optional(vSessionReplacement),
     sessionExpirationTime: v.number(),
     refreshTokenExpirationTime: v.number(),
   },
@@ -415,12 +415,11 @@ export const completeRegistration = mutation({
     replacedSessionId: v.optional(v.id("Session")),
   }),
   handler: async (ctx, args) => {
-    const { replaceSessionId, sessionExpirationTime, refreshTokenExpirationTime, ...passkey } =
-      args;
+    const { replaceSession, sessionExpirationTime, refreshTokenExpirationTime, ...passkey } = args;
     const passkeyId = await createPasskey(ctx, passkey);
     const created = await createSessionRows(ctx, {
       userId: passkey.userId,
-      replaceSessionId,
+      replaceSession,
       sessionExpirationTime,
       refreshTokenExpirationTime,
     });
@@ -588,7 +587,7 @@ export const completeAssertion = mutation({
     counter: v.number(),
     lastUsedAt: v.number(),
     backedUp: v.boolean(),
-    replaceSessionId: v.optional(v.id("Session")),
+    replaceSession: v.optional(vSessionReplacement),
     sessionExpirationTime: v.number(),
     refreshTokenExpirationTime: v.number(),
   },
@@ -608,7 +607,7 @@ export const completeAssertion = mutation({
 
     const created = await createSessionRows(ctx, {
       userId: passkey.userId,
-      replaceSessionId: args.replaceSessionId,
+      replaceSession: args.replaceSession,
       sessionExpirationTime: args.sessionExpirationTime,
       refreshTokenExpirationTime: args.refreshTokenExpirationTime,
     });

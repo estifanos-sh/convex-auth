@@ -313,7 +313,7 @@ export async function mutatePasskeyCompleteRegistration(
     name?: string;
     attestation?: WebAuthnAttestationEvidence;
     createdAt: number;
-    replaceSessionId?: string;
+    replaceSession?: { sessionId: string; authenticatedUserId: string };
     sessionExpirationTime: number;
     refreshTokenExpirationTime: number;
   },
@@ -413,7 +413,7 @@ export async function mutatePasskeyCompleteAssertion(
     counter: number;
     lastUsedAt: number;
     backedUp: boolean;
-    replaceSessionId?: string;
+    replaceSession?: { sessionId: string; authenticatedUserId: string };
     sessionExpirationTime: number;
     refreshTokenExpirationTime: number;
   },

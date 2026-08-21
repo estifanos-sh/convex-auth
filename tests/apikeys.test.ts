@@ -21,6 +21,16 @@ async function createUser(t: any, email = "test@example.com") {
   });
 }
 
+/** Create a current session row for strict session-context tests. */
+async function createSession(t: any, userId: string) {
+  return await t.run(async (ctx: any) => {
+    return await ctx.runMutation(components.auth.session.create, {
+      userId,
+      sessionExpirationTime: Date.now() + 60_000,
+    });
+  });
+}
+
 /** Inject a component mutation after key.verify's hash lookup but before recordUse. */
 async function verifyAfterInterveningMutation(
   t: any,
@@ -700,6 +710,7 @@ test("scopes.can full wildcard grants everything", async () => {
 test("auth.context returns auth state from a session identity", async () => {
   const t = convexTest(schema);
   const userId = await createUser(t);
+  const session = await createSession(t, userId);
 
   const resolved = await t.run(async (ctx) => {
     const sessionCtx = {
@@ -708,7 +719,8 @@ test("auth.context returns auth state from a session identity", async () => {
         ...ctx.auth,
         getUserIdentity: async () => ({
           subject: userId,
-          sid: "session_123",
+          sid: session.sessionId,
+          session_epoch: session.epoch,
           issuer: "https://example.com",
         }),
       },
@@ -893,6 +905,7 @@ test("auth.request.context optional returns null-shaped auth with revoked key", 
 test("auth.request.context prefers session auth over API key when both are present", async () => {
   const t = convexTest(schema);
   const userId = await createUser(t);
+  const session = await createSession(t, userId);
 
   const { secret } = await t.run(async (ctx) => {
     return await auth.key.create(ctx, {
@@ -907,7 +920,8 @@ test("auth.request.context prefers session auth over API key when both are prese
         ...ctx.auth,
         getUserIdentity: async () => ({
           subject: userId,
-          sid: "session_456",
+          sid: session.sessionId,
+          session_epoch: session.epoch,
           issuer: "https://example.com",
         }),
       },

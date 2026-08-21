@@ -12,6 +12,7 @@ import { v } from "convex/values";
 
 import { mutation, query } from "../functions";
 import { vDeviceCodeDoc, vDeviceStatus } from "../model";
+import { createSessionRows } from "../session";
 
 /**
  * Read a device-code record by `id`, by `deviceCodeHash`, or by `userCode`
@@ -82,10 +83,12 @@ export const authorize = mutation({
     if (doc === null || doc.status !== "pending" || doc.expiresAt <= now) {
       return { transitioned: false };
     }
-    const sessionId = await ctx.db.insert("Session", {
+    const created = await createSessionRows(ctx, {
       userId,
-      expirationTime: sessionExpirationTime,
+      sessionExpirationTime,
     });
+    if (created === null) return { transitioned: false };
+    const sessionId = created.sessionId;
     await ctx.db.patch("DeviceCode", deviceId, {
       status: "authorized",
       userId,

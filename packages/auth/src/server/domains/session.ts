@@ -24,8 +24,9 @@ export function createSessionDomain(deps: SessionDeps) {
     /**
      * Revoke (sign out) all sessions for a given user.
      *
-     * Marks every session belonging to `userId` as invalid so that
-     * subsequent requests using those session JWTs will fail authentication.
+     * Advances the user's session epoch, so every non-excluded session stops
+     * authenticating and refreshing atomically. Physical cleanup is bounded
+     * and never defines the revocation boundary.
      * Optionally, one or more sessions can be excluded — this is useful
      * when you want to sign out all *other* devices while keeping the
      * current session alive.
@@ -98,11 +99,10 @@ export function createSessionDomain(deps: SessionDeps) {
       return (await getAuthSessionId(ctx)) as GenericId<"Session"> | null;
     },
     /**
-     * List all sessions belonging to a user.
+     * List a bounded set of sessions belonging to a user.
      *
-     * Returns every session document associated with the given `userId`,
-     * including both active and expired sessions. This is useful for
-     * building "active sessions" UIs or auditing sign-in history.
+     * Returns at most 16 non-expired sessions in the user's current epoch.
+     * It is suitable for a current-devices UI, not an unbounded audit history.
      *
      * @param ctx - Convex query or mutation context.
      * @param opts.userId - The user whose sessions to list.

@@ -13,11 +13,11 @@ import { ErrorCode } from "../shared/codes";
 import { recordSignInLimit, resetSignInLimit } from "./limits";
 import { mutation, query } from "./functions";
 import { vAccountDoc, vUserDoc } from "./model";
-import { createSessionRows, type SessionRows } from "./session";
+import { createSessionRows, type SessionRows, vSessionReplacement } from "./session";
 
 const ACCOUNT_LIST_BATCH = 128;
 
-type AcceptedCredentialsSignIn = SessionRows & { status: "accepted" };
+type AcceptedCredentialsSignIn = Omit<SessionRows, "epoch"> & { status: "accepted" };
 
 /** Reserve a password attempt and load all sign-in state in one transaction. */
 export const beginCredentialsSignIn = mutation({
@@ -84,7 +84,7 @@ export const completeCredentialsSignIn = mutation({
     limitIdentifier: v.string(),
     issueSession: v.boolean(),
     generateTokens: v.boolean(),
-    replaceSessionId: v.optional(v.id("Session")),
+    replaceSession: v.optional(vSessionReplacement),
     sessionExpirationTime: v.number(),
     refreshTokenExpirationTime: v.number(),
   },
@@ -107,7 +107,7 @@ export const completeCredentialsSignIn = mutation({
 
     const created = await createSessionRows(ctx, {
       userId: account.userId,
-      replaceSessionId: args.replaceSessionId,
+      replaceSession: args.replaceSession,
       sessionExpirationTime: args.sessionExpirationTime,
       refreshTokenExpirationTime: args.generateTokens ? args.refreshTokenExpirationTime : undefined,
     });

@@ -73,6 +73,7 @@ import {
   buildSessionIdentity,
   finalizeSessionIssuance,
   getAuthSessionId,
+  getAuthSessionReplacement,
   sessionExpirationTime,
 } from "./session/lifecycle";
 import { encodeRefreshToken, refreshTokenExpirationTime } from "./token/refresh";
@@ -105,7 +106,7 @@ type WebAuthnResult =
 
 type PasskeyRegistrationData = Omit<
   Parameters<typeof mutatePasskeyCompleteRegistration>[1],
-  "replaceSessionId"
+  "replaceSession"
 >;
 
 type PasskeySessionCompletion = Pick<
@@ -1090,7 +1091,7 @@ export async function handleWebAuthn(
       if (continuationId === undefined) {
         completed = await mutatePasskeyCompleteRegistration(ctx, {
           ...data,
-          replaceSessionId: (await getAuthSessionId(ctx)) ?? undefined,
+          replaceSession: await getAuthSessionReplacement(ctx),
         });
       } else {
         const rotation = await mutatePasskeyCompleteRotation(ctx, {
@@ -1226,7 +1227,7 @@ export async function handleWebAuthn(
       );
     }
 
-    const replaceSessionId = (await getAuthSessionId(ctx)) ?? undefined;
+    const replaceSession = await getAuthSessionReplacement(ctx);
     let completed;
     try {
       completed = await mutatePasskeyCompleteAssertion(ctx, {
@@ -1234,7 +1235,7 @@ export async function handleWebAuthn(
         counter: authenticatorData.signatureCounter,
         lastUsedAt: Date.now(),
         backedUp: backupState.backedUp,
-        replaceSessionId,
+        replaceSession,
         sessionExpirationTime: sessionExpirationTime(ctx.auth.config),
         refreshTokenExpirationTime: refreshTokenExpirationTime(ctx.auth.config),
       });

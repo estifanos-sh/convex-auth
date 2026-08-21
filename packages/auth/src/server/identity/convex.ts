@@ -9,5 +9,7 @@ declare module "convex/server" {
      * native identity access can read `identity.sid` directly.
      */
     readonly sid?: GenericId<"Session">;
+    /** Session epoch captured in the convex-auth access token. */
+    readonly session_epoch?: number;
   }
 }

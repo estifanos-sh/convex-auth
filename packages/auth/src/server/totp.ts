@@ -29,7 +29,7 @@ import { decryptSecret, encryptSecret } from "./secret";
 import {
   buildSessionIdentity,
   finalizeSessionIssuance,
-  getAuthSessionId,
+  getAuthSessionReplacement,
   sessionExpirationTime,
 } from "./session/lifecycle";
 import { encodeRefreshToken, refreshTokenExpirationTime } from "./token/refresh";
@@ -318,7 +318,7 @@ export const handleTotp = async (
       throw convexError(ErrorCode.TOTP_INVALID_CODE, "Invalid TOTP code.");
     }
 
-    const replaceSessionId = (await getAuthSessionId(ctx)) ?? undefined;
+    const replaceSession = await getAuthSessionReplacement(ctx);
     const completed = (await ctx.runMutation(
       ctx.auth.config.component.factor.totp.completeVerification,
       {
@@ -326,7 +326,7 @@ export const handleTotp = async (
         intent: input.intent,
         authenticatedUserId: input.authenticatedUserId,
         totpId: input.totpId,
-        replaceSessionId,
+        replaceSession,
         sessionExpirationTime: sessionExpirationTime(ctx.auth.config),
         refreshTokenExpirationTime: refreshTokenExpirationTime(ctx.auth.config),
         now: Date.now(),

@@ -14,7 +14,7 @@ import { sha256 } from "../random";
 import {
   buildSessionIdentity,
   finalizeSessionIssuance,
-  getAuthSessionId,
+  getAuthSessionReplacement,
   sessionExpirationTime,
 } from "../session/lifecycle";
 import type { SessionIssuance } from "../session/lifecycle";
@@ -139,7 +139,8 @@ async function verifyCodeAndSignInImplInner(
       ? createSyntheticOAuthMaterializedConfig(account.provider)
       : getProviderOrThrow(account.provider);
 
-    const replaceSessionId = await getAuthSessionId(ctx);
+    const replaceSession = await getAuthSessionReplacement(ctx);
+    const replaceSessionId = replaceSession?.sessionId ?? null;
     const profile: AuthProfile = {};
     if (code.emailVerified !== undefined) {
       profile.email = code.emailVerified;
@@ -172,7 +173,7 @@ async function verifyCodeAndSignInImplInner(
         codeId: code._id,
         userId,
         identifier,
-        replaceSessionId: replaceSessionId ?? undefined,
+        replaceSession,
         createSession: args.createSession,
         generateTokens,
         sessionExpirationTime: sessionExpirationTime(config),

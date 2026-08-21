@@ -16,7 +16,7 @@ import type { MutationCtx } from "../_generated/server";
 import { mutation, query } from "../functions";
 import { recordSignInLimit, resetSignInLimit } from "../limits";
 import { vTotpFactorDoc, vUserDoc } from "../model";
-import { createSessionRows } from "../session";
+import { createSessionRows, vSessionReplacement } from "../session";
 
 const TOTP_LIST_BATCH = 32;
 const TOTP_VERIFIER_TTL_MS = 15 * 60 * 1000;
@@ -175,7 +175,7 @@ export const completeVerification = mutation({
     intent: v.union(v.literal("enrollment"), v.literal("challenge")),
     authenticatedUserId: v.optional(v.id("User")),
     totpId: v.optional(v.id("TotpFactor")),
-    replaceSessionId: v.optional(v.id("Session")),
+    replaceSession: v.optional(vSessionReplacement),
     sessionExpirationTime: v.number(),
     refreshTokenExpirationTime: v.number(),
     now: v.number(),
@@ -203,7 +203,7 @@ export const completeVerification = mutation({
     });
     const created = await createSessionRows(ctx, {
       userId: resolved.userId,
-      replaceSessionId: args.replaceSessionId,
+      replaceSession: args.replaceSession,
       sessionExpirationTime: args.sessionExpirationTime,
       refreshTokenExpirationTime: args.refreshTokenExpirationTime,
     });

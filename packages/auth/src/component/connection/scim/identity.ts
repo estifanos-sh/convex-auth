@@ -18,7 +18,7 @@ import type { MutationCtx } from "../../_generated/server";
 import { mutation, query } from "../../functions";
 import { vGroupConnectionScimIdentityDoc, vPaginated, vScimResourceType } from "../../model";
 import schema from "../../schema";
-import { revokeSessionRows } from "../../session";
+import { revokeSessionState } from "../../session";
 
 const vScimUserData = v.object(schema.tables.User.validator.fields);
 const vProfileUpdate = v.union(v.literal("never"), v.literal("missing"), v.literal("always"));
@@ -419,7 +419,11 @@ export const revoke = mutation({
     userId: v.id("User"),
     mode: v.union(v.literal("soft"), v.literal("hard")),
   },
-  returns: v.object({ revoked: v.number() }),
+  returns: v.object({
+    epoch: v.number(),
+    cleanedSessions: v.number(),
+    cleanupPending: v.boolean(),
+  }),
   handler: async (ctx, args) => {
     const connection = await activeScimConnection(ctx, args.connectionId);
     const identity = await ctx.db
@@ -470,14 +474,14 @@ export const revoke = mutation({
       .unique();
     if (membership !== null) await ctx.db.delete("GroupMember", membership._id);
     if (account !== null) await ctx.db.delete("Account", account._id);
-    const revoked = await revokeSessionRows(ctx, args.userId);
+    const { epoch, cleanedSessions, cleanupPending } = await revokeSessionState(ctx, args.userId);
     if (args.mode === "hard") await ctx.db.delete("GroupConnectionScimIdentity", identity._id);
     else
       await ctx.db.patch("GroupConnectionScimIdentity", identity._id, {
         active: false,
         lastProvisionedAt: Date.now(),
       });
-    return { revoked };
+    return { epoch, cleanedSessions, cleanupPending };
   },
 });
 
