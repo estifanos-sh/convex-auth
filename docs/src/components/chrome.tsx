@@ -1,7 +1,7 @@
 import { For, Show, createSignal, onCleanup, onMount, type JSX } from "solid-js";
 import { useRouterState } from "@tanstack/solid-router";
 import { sidebar } from "../config/sidebar";
-import { CloseIcon, GitHubIcon, MenuIcon, SearchIcon } from "./icons";
+import { CloseIcon, CopyIcon, GitHubIcon, MenuIcon, SearchIcon } from "./icons";
 
 interface SearchResult {
   excerpt: string;
@@ -21,6 +21,7 @@ export function Chrome(props: { children: JSX.Element; landing?: boolean; withSi
   const [query, setQuery] = createSignal("");
   const [results, setResults] = createSignal<SearchResult[]>([]);
   const [activeIndex, setActiveIndex] = createSignal(0);
+  const [installCopied, setInstallCopied] = createSignal(false);
   let pagefind:
     | {
         init: () => Promise<void>;
@@ -42,6 +43,11 @@ export function Chrome(props: { children: JSX.Element; landing?: boolean; withSi
     setQuery("");
     setResults([]);
     setActiveIndex(0);
+  };
+  const copyInstall = async () => {
+    await navigator.clipboard.writeText("npm install @estifanos-sh/convex-auth");
+    setInstallCopied(true);
+    window.setTimeout(() => setInstallCopied(false), 1600);
   };
   const search = async (value: string) => {
     setQuery(value);
@@ -138,10 +144,19 @@ export function Chrome(props: { children: JSX.Element; landing?: boolean; withSi
       <Show when={props.withSidebar}>
         <section class="brand-strip" aria-label="Convex Auth by Estifanos">
           <div class="brand-strip-inner">
-            <p class="brand-strip-title">
-              Convex Auth <span>By Estifanos</span>
-            </p>
-            <p class="brand-strip-deck">The unofficial Convex authentication solution.</p>
+            <div class="brand-strip-copy">
+              <p class="brand-strip-title">
+                Convex Auth <span>By Estifanos</span>
+              </p>
+              <p class="brand-strip-deck">The unofficial Convex authentication solution.</p>
+            </div>
+            <div class="install-panel">
+              <p>Install Convex Auth</p>
+              <button aria-label="Copy install command" onClick={copyInstall} type="button">
+                <code>npm install @estifanos-sh/convex-auth</code>
+                <span>{installCopied() ? "Copied" : <CopyIcon />}</span>
+              </button>
+            </div>
           </div>
         </section>
       </Show>
