@@ -91,10 +91,12 @@ const user = await auth.user.get(ctx, { id: userId });
 await auth.user.remove(ctx, { id: userId });
 ```
 
-### Active group
+### Change active group
 
-Active-group selection lives on the `auth.group.active` namespace, not
-`auth.user`:
+`ctx.auth.groupId`, `ctx.auth.role`, and `ctx.auth.grants` are the active
+authorization snapshot for the current handler. Change the preference through
+`auth.group.active` only in the explicit user action that selects a different
+group; do not call it again merely to rediscover the current group:
 
 ```ts
 await auth.group.active.update(ctx, { groupId: orgId, userId });

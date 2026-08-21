@@ -2,10 +2,10 @@
 
 Authentication and authorization for Convex applications.
 
-This is a preview release. Install it from the `preview` channel:
+Install the published package:
 
 ```sh
-pnpm add @estifanos-sh/convex-auth@preview
+npm install @estifanos-sh/convex-auth
 ```
 
 Configure the component in `convex/convex.config.ts`:
@@ -45,8 +45,8 @@ and provider configuration.
 
 ## Links
 
-- [Documentation](https://estifanos.sh/convex-auth/)
-- [Source](https://github.com/estifanos-sh/convex-auth)
-- [Issues](https://github.com/estifanos-sh/convex-auth/issues)
+Read the [documentation](https://estifanos.sh/convex-auth/), browse the
+[source](https://github.com/estifanos-sh/convex-auth), or report an
+[issue](https://github.com/estifanos-sh/convex-auth/issues).
 
 Apache-2.0

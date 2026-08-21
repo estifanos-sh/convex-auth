@@ -17,13 +17,9 @@ description: defineAuth options reference.
 
 ## `defineAuth(component, config)`
 
-`defineAuth` is the vNext preview setup surface. It is the preferred way to
-describe the app's auth primitive: providers, permissions, table extensions,
-and HTTP intent live on one typed definition.
-
-Current stable releases may still expose `defineAuth`. Treat `defineAuth` and
-`definePermissions` as the vNext target vocabulary while the implementation
-lands.
+`defineAuth` is the one application auth definition. Providers, permissions,
+table extensions, and protocol routes live on this typed composition root so a
+user has one identity and one session lifecycle regardless of how they sign in.
 
 ```ts
 import { authEvents, defineAuth } from "@estifanos-sh/convex-auth/server";
@@ -124,6 +120,11 @@ actions become the generated `api.auth` client contract; passing that object to
 the browser, Expo, or framework client carries provider IDs, validated sign-in
 parameters, and enabled factor helpers automatically. See [Typed
 Returns](/reference/typed-returns) for the validator and type relationship.
+
+Do not call generated component functions from application code and do not
+build a parallel account, password, session, passkey, or recovery table. The
+facade owns those security records so every provider, revocation, and recovery
+operation reaches the same user lifecycle.
 
 ## Per-provider OAuth options
 

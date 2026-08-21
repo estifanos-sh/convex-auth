@@ -8,7 +8,7 @@
     "generate:content": "node ./scripts/content/compile.ts && vp fmt src/generated",
     "build": "pnpm run generate:content && vp build && vp fmt src/routeTree.gen.ts && node ./scripts/static/assemble.ts && pnpx pagefind --site dist/client/convex-auth",
     "preview": "vp preview",
-    "check": "pnpm run generate:content && vp exec tsc --noEmit --project ./tsconfig.json"
+    "check": "pnpm run generate:content && node ./scripts/content/truth.ts && vp exec tsc --noEmit --project ./tsconfig.json"
   },
   "dependencies": {
     "@tanstack/solid-router": "^1.170.22",

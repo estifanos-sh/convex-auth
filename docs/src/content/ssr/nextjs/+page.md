@@ -24,7 +24,10 @@ import { server } from "@estifanos-sh/convex-auth/server";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-const auth = server({ url: process.env.CONVEX_URL! });
+const convexUrl = process.env.CONVEX_URL;
+if (convexUrl === undefined) throw new Error("CONVEX_URL is required.");
+
+const auth = server({ url: convexUrl });
 
 export async function middleware(request: NextRequest) {
   const result = await auth.refresh(request);
@@ -69,7 +72,10 @@ Create `app/api/auth/route.ts` to handle client-side sign-in and sign-out:
 // app/api/auth/route.ts
 import { server } from "@estifanos-sh/convex-auth/server";
 
-const auth = server({ url: process.env.CONVEX_URL! });
+const convexUrl = process.env.CONVEX_URL;
+if (convexUrl === undefined) throw new Error("CONVEX_URL is required.");
+
+const auth = server({ url: convexUrl });
 
 export async function POST(request: Request) {
   return auth.proxy(request);
@@ -122,7 +128,10 @@ export function AuthProvider({
   children: React.ReactNode;
 }) {
   const { convex, authClient } = useMemo(() => {
-    const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL!;
+    const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL;
+    if (convexUrl === undefined) {
+      throw new Error("NEXT_PUBLIC_CONVEX_URL is required.");
+    }
     const convexClient = new ConvexReactClient(convexUrl);
     const authClient = createAuthClient({
       convex: convexClient,

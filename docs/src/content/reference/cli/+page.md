@@ -13,7 +13,7 @@ description: Command-line commands and options for the setup wizard.
 ## Commands
 
 ```bash
-pnpm exec convex-auth [command] [options]
+npx convex-auth [command] [options]
 ```
 
 The CLI defaults to `setup` when no command is given.
@@ -28,7 +28,7 @@ The CLI defaults to `setup` when no command is given.
 ## Setup wizard
 
 ```bash
-pnpm exec convex-auth [options]
+npx convex-auth [options]
 ```
 
 The wizard runs 8 steps: configure `APP_URL`, generate signing and encryption
@@ -100,7 +100,7 @@ export const setScim = authMutation({
 Example:
 
 ```bash
-pnpm exec convex-auth --app-url "https://app.example.com"
+npx convex-auth --app-url "https://app.example.com"
 ```
 
 Then call the exported functions with normal Convex hooks:

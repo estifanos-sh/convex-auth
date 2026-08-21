@@ -4,22 +4,21 @@ Use these templates only after verifying the named exports exist in the
 installed `@estifanos-sh/convex-auth` version. Merge them into existing files rather
 than replacing unrelated component or HTTP registrations.
 
-## Register the component and typed environment
+## Register the component
 
 ```ts
 // convex/convex.config.ts
 import { defineApp } from "convex/server";
 import auth from "@estifanos-sh/convex-auth/convex.config";
-import { authEnv } from "@estifanos-sh/convex-auth/server";
 
-const app = defineApp({ env: authEnv });
+const app = defineApp();
 app.use(auth);
 
 export default app;
 ```
 
-Preserve other `app.use(...)` calls and combine their environment validators
-using the mechanism supported by the installed Convex version.
+Preserve other `app.use(...)` calls. When the application reads environment
+values directly, declare only those application-owned values in `defineApp`.
 
 ## Define authentication once
 

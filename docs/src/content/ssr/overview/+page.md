@@ -21,7 +21,10 @@ the incoming `Request` object.
 ```ts
 import { server } from "@estifanos-sh/convex-auth/server";
 
-const auth = server({ url: process.env.CONVEX_URL! });
+const convexUrl = process.env.CONVEX_URL;
+if (convexUrl === undefined) throw new Error("CONVEX_URL is required.");
+
+const auth = server({ url: convexUrl });
 
 // In your server handler / middleware:
 const result = await auth.refresh(request);
@@ -90,8 +93,11 @@ you need to accept tokens from additional issuers (e.g. a custom OIDC provider),
 pass them in the `acceptedIssuers` array:
 
 ```ts
+const convexUrl = process.env.CONVEX_URL;
+if (convexUrl === undefined) throw new Error("CONVEX_URL is required.");
+
 const auth = server({
-  url: process.env.CONVEX_URL!,
+  url: convexUrl,
   acceptedIssuers: ["https://auth.example.com"],
 });
 ```

@@ -1,35 +1,7 @@
-import type { EnvFromDefinition } from "convex/server";
-import { ConvexError, v } from "convex/values";
+import { ConvexError } from "convex/values";
 
 import { ErrorCode } from "../shared/codes";
 import { AuthKeyringError, parseAuthKeyring, type AuthKeyring } from "../shared/keyring";
-
-const vOptionalBooleanString = v.optional(v.union(v.literal("true"), v.literal("false")));
-
-/**
- * Convex app environment variables used by Convex Auth.
- *
- * Pass this to `defineApp({ env: authEnv })` to get Convex deployment-time
- * validation and generated `env` typing in the parent app.
- */
-export const authEnv = {
-  ANDROID_APP_LINKS: v.optional(v.string()),
-  APP_URL: v.optional(v.string()),
-  AUTH_KEYS: v.optional(v.string()),
-  AUTH_LOG_LEVEL: v.optional(
-    v.union(v.literal("DEBUG"), v.literal("INFO"), v.literal("WARN"), v.literal("ERROR")),
-  ),
-  AUTH_LOG_SECRETS: vOptionalBooleanString,
-  CHANGE_PASSWORD_URL: v.optional(v.string()),
-  CONVEX_SITE_URL: v.optional(v.string()),
-  IOS_APP_IDS: v.optional(v.string()),
-  IOS_APPLINK_PATHS: v.optional(v.string()),
-  SECURITY_CONTACT: v.optional(v.string()),
-  SECURITY_TXT_EXPIRES_DAYS: v.optional(v.string()),
-} as const;
-
-/** Inferred type of the validated auth environment from {@link authEnv}. */
-export type AuthEnv = EnvFromDefinition<typeof authEnv>;
 
 function readRawEnv(name: string): string | undefined {
   const value = typeof process === "undefined" ? undefined : process.env?.[name];

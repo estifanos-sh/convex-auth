@@ -3,12 +3,16 @@ import { client } from "@estifanos-sh/convex-auth/browser";
 import { useAuth as useReactAuth } from "@estifanos-sh/convex-auth/react";
 import { useConvexAuth as useSvelteAuth } from "@estifanos-sh/convex-auth/svelte";
 import { ErrorCode as ClientErrorCode, type ClientOptions } from "@estifanos-sh/convex-auth/client";
-import { credentials } from "@estifanos-sh/convex-auth/providers";
+import { credentials, email, password } from "@estifanos-sh/convex-auth/providers";
 import { webauthn } from "@estifanos-sh/convex-auth/providers/webauthn";
 // @ts-expect-error createAuth was hard-cut from the vNext public server API.
 import { createAuth } from "@estifanos-sh/convex-auth/server";
-import { authEnv, authEvents, defineAuth, type AuthEnv } from "@estifanos-sh/convex-auth/server";
-import { type ApiFromModules, defineApp, type FunctionArgs, type HttpRouter } from "convex/server";
+// @ts-expect-error Applications own their environment schema; authEnv was removed.
+import { authEnv } from "@estifanos-sh/convex-auth/server";
+// @ts-expect-error Applications own their environment type; AuthEnv was removed.
+import type { AuthEnv } from "@estifanos-sh/convex-auth/server";
+import { authEvents, defineAuth } from "@estifanos-sh/convex-auth/server";
+import { type ApiFromModules, type FunctionArgs, type HttpRouter } from "convex/server";
 import { v, type GenericId, type Infer } from "convex/values";
 
 import { api } from "../../../convex/_generated/api";
@@ -26,17 +30,6 @@ declare const groupId: GenericId<"Group">;
 declare const memberId: GenericId<"GroupMember">;
 declare const keyId: GenericId<"ApiKey">;
 declare const secret: string;
-declare const authEnvironment: AuthEnv;
-
-const optionalKeyring: string | undefined = authEnvironment.AUTH_KEYS;
-// @ts-expect-error Legacy signing material is no longer part of the public environment contract.
-void authEnvironment.JWT_PRIVATE_KEY;
-// @ts-expect-error Legacy JWKS material is no longer part of the public environment contract.
-void authEnvironment.JWKS;
-// @ts-expect-error Legacy secret encryption material is no longer public configuration.
-void authEnvironment.AUTH_SECRET_ENCRYPTION_KEY;
-// @ts-expect-error Provider credentials belong to the application environment.
-void authEnvironment.AUTH_GITHUB_ID;
 declare const authComponent: Parameters<typeof defineAuth>[0];
 declare const authUserId: GenericId<"User">;
 declare const authGroupId: GenericId<"Group">;
@@ -82,6 +75,26 @@ void generatedClient.signIn("password", {
 void generatedClient.signIn("invented-provider");
 // @ts-expect-error password sign-in requires the password flow parameters.
 void generatedClient.signIn("password", { email: "person@example.com" });
+
+// The installation and provider guides intentionally pass the generated API
+// directly to the client and model recovery as a typed provider operation.
+// Keep these examples in the consumer typecheck so documentation cannot drift
+// back to InferClientApi or caller-authored continuation strings.
+const documentationEmail = email({
+  from: "My App <noreply@example.com>",
+  send: async () => {},
+});
+const documentationPasskeys = webauthn();
+const documentationRecovery = defineAuth(authComponent, {
+  providers: [
+    password({
+      reset: documentationEmail,
+      afterReset: documentationPasskeys.rotate(),
+    }),
+    documentationPasskeys,
+  ],
+});
+void documentationRecovery;
 
 type Assert<T extends true> = T;
 type Equal<Left, Right> =
@@ -275,9 +288,8 @@ const permissions = definePermissions({
   },
 });
 
-void defineApp({ env: authEnv });
-void optionalKeyring;
-void authEnvironment;
+void authEnv;
+type _AuthEnvWasRemoved = AuthEnv;
 void permissions.roles.admin.id;
 void createAuth;
 void defineAuth(authComponent, {

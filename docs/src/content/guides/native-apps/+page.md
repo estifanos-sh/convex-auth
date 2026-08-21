@@ -51,6 +51,9 @@ manual client type is necessary.
 
 Do not use `@estifanos-sh/convex-auth/browser` in native Expo code. The Expo
 entrypoint falls back to the browser client automatically when running on web.
+On native, one app process owns its SecureStore state. Browser-only cross-tab
+storage synchronization and browser lock coordination do not exist there, so a
+second native process should not be expected to observe sign-out immediately.
 
 ## iOS
 
@@ -108,8 +111,8 @@ export const GET = () => {
 ### 4. Rebuild and verify
 
 ```bash
-pnpm expo prebuild --clean
-pnpm expo run:ios --device
+npx expo prebuild --clean
+npx expo run:ios --device
 ```
 
 Verify Apple's CDN sees the file:

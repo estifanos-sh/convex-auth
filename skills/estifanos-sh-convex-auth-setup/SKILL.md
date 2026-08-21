@@ -45,18 +45,17 @@ about dev processes; do not start a duplicate watcher. Run the package CLI with
 the detected package runner and a concrete frontend origin:
 
 ```bash
-pnpx @estifanos-sh/convex-auth setup --app-url "http://localhost:5173"
+npx convex-auth --app-url "http://localhost:5173"
 ```
 
-Use the equivalent `npx`, `yarn dlx`, or `bunx` command when appropriate. The
-wizard creates keys and shared files. If the environment is non-interactive,
+The wizard creates keys and shared files. If the environment is non-interactive,
 make the same changes deliberately using
 [references/server.md](references/server.md); do not invent deployment secrets.
 
 Review existing files rather than overwriting them. The resulting setup must
 include:
 
-- the component registered with `defineApp({ env: authEnv })`;
+- the component registered with `defineApp()` and `app.use(auth)`;
 - one canonical `defineAuth(components.auth, config)` definition;
 - app HTTP routes from `auth.http()`;
 - a Convex JWT trust entry in `auth.config.*`;

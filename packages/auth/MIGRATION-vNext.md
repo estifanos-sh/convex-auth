@@ -1,8 +1,9 @@
 # vNext Migration Guide
 
-This preview release makes the public API match Convex function conventions:
+This release makes the public API match Convex function conventions:
 definition-first setup, object args, explicit primary IDs, native pagination,
-typed app env, and permissions-first group authorization.
+application-owned provider configuration, and permissions-first group
+authorization.
 
 This is a hard breaking cut: removed names are not kept as compatibility aliases.
 
@@ -71,12 +72,10 @@ export const auth = defineAuth(components.auth, {
 });
 ```
 
-Use these nouns consistently:
-
-- `permissions` is the configured permission system.
-- `grants` are atomic strings checked by app code.
-- `roles` are named bundles of grants assigned to memberships and invites.
-- `authorization: { roles }` was removed with the old setup vocabulary.
+`permissions` names the configured permission system. Its `grants` are the
+atomic strings checked by app code, while `roles` are named bundles assigned to
+memberships and invites. `authorization: { roles }` was removed with the old
+setup vocabulary.
 
 ## Object args everywhere
 
@@ -133,21 +132,20 @@ const pending = await auth.invite.list(ctx, {
 });
 ```
 
-## Typed Convex env
+## Application-owned provider environment
 
-Import `authEnv` into your app definition and extend it with application-owned
-provider or delivery settings. Convex Auth does not prescribe those names.
+Declare provider and delivery-service values in the application definition and
+pass them to the provider that uses them. Convex Auth does not prescribe or
+read provider credential names.
 
 ```ts
 // convex/convex.config.ts
 import { defineApp } from "convex/server";
 import { v } from "convex/values";
-import { authEnv } from "@estifanos-sh/convex-auth/server";
 import auth from "@estifanos-sh/convex-auth/convex.config";
 
 const app = defineApp({
   env: {
-    ...authEnv,
     GITHUB_CLIENT_ID: v.string(),
     GITHUB_CLIENT_SECRET: v.string(),
   },
@@ -160,7 +158,6 @@ export default app;
 ```ts
 import { env } from "./_generated/server";
 
-const appUrl = env.APP_URL;
 const github = {
   clientId: env.GITHUB_CLIENT_ID,
   clientSecret: env.GITHUB_CLIENT_SECRET,
@@ -238,14 +235,14 @@ lists.
 
 ## HTTP and routing
 
-Keep app-owned HTTP routes explicit. Use typed env in `defineApp({ env:
-authEnv })`, mount the auth component with Convex component options, and expose
-auth HTTP routes from the app's `convex/http.ts`.
+Keep app-owned HTTP routes explicit. Register the auth component once and
+mount the protocol routes from the app's `convex/http.ts`. Configure a nondefault
+auth path on `defineAuth({ path })`; it is not a component `httpPrefix` option.
 
 ```ts
 // convex/convex.config.ts
-const app = defineApp({ env: authEnv });
-app.use(authComponent, { name: "auth", httpPrefix: "/auth" });
+const app = defineApp();
+app.use(authComponent);
 ```
 
 ```ts
@@ -257,15 +254,9 @@ export default http;
 Route helpers such as `auth.request.context(...)` and
 `auth.request.route(...)` remain the way to protect app-owned HTTP handlers.
 
-## Naming checklist
+## Naming summary
 
-- Prefer `defineAuth` for the vNext auth definition.
-- Prefer `definePermissions` and `permissions` over
-  `authorization: { roles }`.
-- Use `id` for the primary row ID.
-- Use `ids` for batch primary ID reads.
-- Use `<entity>Id` only for foreign keys.
-- Use `where` for list filters.
-- Use `paginationOpts` for unbounded lists.
-- Use `data` for create payloads.
-- Use `patch` for update payloads.
+Use `defineAuth` and `definePermissions`, not the removed
+`authorization: { roles }` setup. Primary rows use `id`, batch reads use
+`ids`, and foreign keys keep their entity prefix such as `userId`. Lists use
+`where` and `paginationOpts`; creates take `data`, while updates take `patch`.

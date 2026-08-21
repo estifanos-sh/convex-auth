@@ -102,10 +102,12 @@ path with the request parameters. The page shows the requested scopes and, on
 approval, records the user's authorization by calling `auth.oauth.authorize` —
 which mints a single-use code and returns the redirect back to the client.
 
-`userId` **must** be the authenticated caller, never request input:
+`userId` **must** be the authenticated caller, never request input. Make this
+an auth-aware mutation so the consent page reuses the one context snapshot
+instead of separately resolving a viewer:
 
 ```ts
-export const authorize = mutation({
+export const authorize = authMutation({
   args: {
     clientId: v.string(),
     redirectUri: v.string(),
@@ -115,11 +117,8 @@ export const authorize = mutation({
     resource: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const user = await auth.user.viewer(ctx);
-    if (user === null) throw new ConvexError({ code: "NOT_SIGNED_IN" });
-
     const result = await auth.oauth.authorize(ctx, {
-      userId: user._id,
+      userId: ctx.auth.userId,
       clientId: args.clientId,
       scopes: args.scope?.split(" ").filter(Boolean) ?? [],
       redirectUri: args.redirectUri,
