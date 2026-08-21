@@ -168,6 +168,16 @@ export function Chrome(props: { children: JSX.Element; landing?: boolean; withSi
           </div>
         </div>
       </header>
+      <Show when={props.withSidebar}>
+        <section class="brand-strip" aria-label="Convex Auth by Estifanos">
+          <div class="brand-strip-inner">
+            <p class="brand-strip-title">
+              Convex Auth <span>By Estifanos</span>
+            </p>
+            <p class="brand-strip-deck">The unofficial Convex authentication solution.</p>
+          </div>
+        </section>
+      </Show>
       <div classList={{ "docs-frame": true, "docs-frame-home": !props.withSidebar }}>
         <Show when={props.withSidebar}>
           <aside class="rail">
