@@ -117,8 +117,7 @@ export type OptionalAuthContext = {
 /**
  * Minimal auth helper surface required by the context resolvers.
  *
- * This stays exported because `auth.ts` re-exports it for compatibility with
- * existing consumers that reference the low-level context helpers.
+ * @internal
  */
 export type AuthLike = {
   user: {

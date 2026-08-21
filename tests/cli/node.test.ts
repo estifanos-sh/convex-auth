@@ -6,7 +6,7 @@ import {
   stripDeploymentTypePrefix,
   templateToSource,
 } from "@estifanos-sh/convex-auth/cli/index";
-import { bundleLegacyKeys, generateKeys } from "@estifanos-sh/convex-auth/cli/keys";
+import { generateKeys } from "@estifanos-sh/convex-auth/cli/keys";
 import { expect, test, vi } from "vite-plus/test";
 
 function expectProcessExitSilently(fn: () => void) {
@@ -84,7 +84,7 @@ test("deploymentTypeFromAdminKey extracts dev type", () => {
 });
 
 test("deploymentTypeFromAdminKey rejects untyped keys", () => {
-  expectProcessExitSilently(() => deploymentTypeFromAdminKey("legacyKeyWithoutColons"));
+  expectProcessExitSilently(() => deploymentTypeFromAdminKey("invalidKeyWithoutColons"));
 });
 
 test("readConvexDeployment allows self-hosted admin keys with explicit url", () => {
@@ -114,7 +114,7 @@ test("isPreviewDeployKey returns false for non-preview keys", () => {
 
 test("isPreviewDeployKey returns false for keys without pipe separator", () => {
   expect(isPreviewDeployKey("preview:team:project")).toBe(false);
-  expect(isPreviewDeployKey("legacyKey")).toBe(false);
+  expect(isPreviewDeployKey("invalidKey")).toBe(false);
 });
 
 test("generateKeys produces signing and secret-encryption keys", async () => {
@@ -147,23 +147,4 @@ test("generateKeys produces signing and secret-encryption keys", async () => {
   expect(typeof keys.webauthnMaskingKey).toBe("string");
   expect(keys.webauthnMaskingKey.length).toBeGreaterThan(20);
   expect(keys.webauthnMaskingKey).not.toBe(keys.secretEncryptionKey);
-});
-
-test("bundleLegacyKeys preserves existing cryptographic material", () => {
-  const bundled = JSON.parse(
-    bundleLegacyKeys({
-      JWT_PRIVATE_KEY: "existing-private-key",
-      JWKS: JSON.stringify({ keys: [{ kty: "OKP", x: "existing-public-key" }] }),
-      AUTH_SECRET_ENCRYPTION_KEY: "existing-secret-encryption-key",
-    }),
-  );
-
-  expect(bundled).toMatchObject({
-    version: 1,
-    jwtPrivateKey: "existing-private-key",
-    jwks: { keys: [{ kty: "OKP", x: "existing-public-key" }] },
-    secretEncryptionKey: "existing-secret-encryption-key",
-  });
-  expect(typeof bundled.webauthnMaskingKey).toBe("string");
-  expect(bundled.webauthnMaskingKey.length).toBeGreaterThan(20);
 });

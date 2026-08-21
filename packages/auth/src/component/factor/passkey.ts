@@ -328,16 +328,13 @@ export const list = query({
  * credential.
  */
 async function createPasskey(ctx: MutationCtx, args: Infer<typeof vPasskeyCreateArgs>) {
-  const linkedAccounts = await Promise.all(
-    ["passkey", "webauthn"].map((provider) =>
-      ctx.db
-        .query("Account")
-        .withIndex("provider_account_id", (q) =>
-          q.eq("provider", provider).eq("providerAccountId", args.credentialId),
-        )
-        .first(),
-    ),
-  );
+  const linkedAccount = await ctx.db
+    .query("Account")
+    .withIndex("provider_account_id", (q) =>
+      q.eq("provider", "passkey").eq("providerAccountId", args.credentialId),
+    )
+    .first();
+  const linkedAccounts = [linkedAccount];
   for (const account of linkedAccounts) {
     if (account !== null && account.userId !== args.userId) {
       throw new ConvexError({
@@ -478,15 +475,13 @@ export const completeRotation = mutation({
 
     const oldPasskeys = await listPasskeys(ctx, continuation.userId);
     for (const passkey of oldPasskeys) await ctx.db.delete("Passkey", passkey._id);
-    for (const accountProvider of ["passkey", "webauthn"]) {
-      const accounts = await ctx.db
-        .query("Account")
-        .withIndex("user_id_provider", (q) =>
-          q.eq("userId", continuation.userId).eq("provider", accountProvider),
-        )
-        .take(PASSKEY_LIST_BATCH);
-      for (const account of accounts) await ctx.db.delete("Account", account._id);
-    }
+    const accounts = await ctx.db
+      .query("Account")
+      .withIndex("user_id_provider", (q) =>
+        q.eq("userId", continuation.userId).eq("provider", "passkey"),
+      )
+      .take(PASSKEY_LIST_BATCH);
+    for (const account of accounts) await ctx.db.delete("Account", account._id);
 
     const {
       continuationId,
@@ -658,15 +653,13 @@ const remove = mutation({
       });
     }
     const linkedAccounts = [];
-    for (const provider of ["passkey", "webauthn"]) {
-      const accounts = await ctx.db
-        .query("Account")
-        .withIndex("provider_account_id", (q) =>
-          q.eq("provider", provider).eq("providerAccountId", passkey.credentialId),
-        )
-        .take(PASSKEY_LIST_BATCH);
-      linkedAccounts.push(...accounts);
-    }
+    const accounts = await ctx.db
+      .query("Account")
+      .withIndex("provider_account_id", (q) =>
+        q.eq("provider", "passkey").eq("providerAccountId", passkey.credentialId),
+      )
+      .take(PASSKEY_LIST_BATCH);
+    linkedAccounts.push(...accounts);
     if (requireOtherAccount === true) {
       const linkedIds = new Set(linkedAccounts.map((account) => account._id));
       const otherAccount = await ctx.db

@@ -16,10 +16,10 @@ import type {
   AuthContext,
   AuthContextConfig,
   AuthContextFacade,
-  AuthLike,
   OptionalAuthContext,
   UserDoc,
 } from "../server/facade";
+import type { AuthLike } from "../server/context";
 import { configDefaults } from "../server/config";
 import { createCoreDomains } from "../server/core";
 import {

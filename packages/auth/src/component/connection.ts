@@ -52,12 +52,11 @@ export const get = query({
   ),
   handler: async (ctx, args) => {
     if (args.domain !== undefined) {
-      const domainRows = await ctx.db
+      const domainRow = await ctx.db
         .query("GroupConnectionDomain")
         .withIndex("domain", (idx) => idx.eq("domain", args.domain!))
-        .take(DOMAIN_RESOLVE_MAX);
-      const domainRow = domainRows.find((row) => row.verifiedAt !== undefined);
-      if (!domainRow) {
+        .unique();
+      if (domainRow?.verifiedAt === undefined) {
         return null;
       }
       const connection = await ctx.db.get("GroupConnection", domainRow.connectionId);
@@ -195,13 +194,6 @@ export const update = mutation({
     return null;
   },
 });
-
-/**
- * Bound on rows scanned when resolving a connection by domain. A domain is
- * unique per row (`domain.create` rejects cross-connection reuse), so this only
- * guards against legacy duplicates while the verified-row filter is applied.
- */
-const DOMAIN_RESOLVE_MAX = 16;
 
 const CASCADE_MAX = 1000;
 const SCIM_CONFIG_DELETE_BATCH = 16;

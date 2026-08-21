@@ -4,17 +4,7 @@ import {
   assertSafeIdpFetchUrl,
   unsafeFetchUrlReason,
 } from "../../packages/auth/src/shared/fetch/guard";
-import { afterEach, expect, test } from "vite-plus/test";
-
-const savedFlag = process.env.CONVEX_AUTH_ALLOW_PRIVATE_FETCH_HOSTS;
-
-afterEach(() => {
-  if (savedFlag === undefined) {
-    delete process.env.CONVEX_AUTH_ALLOW_PRIVATE_FETCH_HOSTS;
-  } else {
-    process.env.CONVEX_AUTH_ALLOW_PRIVATE_FETCH_HOSTS = savedFlag;
-  }
-});
+import { expect, test } from "vite-plus/test";
 
 test("unsafeFetchUrlReason allows public https and rejects internal fetch targets", () => {
   expect(
@@ -52,20 +42,13 @@ test("unsafeFetchUrlReason allows public https and rejects internal fetch target
 });
 
 test("strict public fetch guard requires https and rejects internal targets", () => {
-  delete process.env.CONVEX_AUTH_ALLOW_PRIVATE_FETCH_HOSTS;
   expect(() => assertSafeFetchUrl("https://169.254.169.254/")).toThrow();
   expect(() => assertSafeFetchUrl("https://idp.internal/")).toThrow();
   expect(() => assertSafeFetchUrl("https://idp.example.com/")).not.toThrow();
   expect(() => assertSafeFetchUrl("http://idp.example.com/")).toThrow(/https:/);
-
-  process.env.CONVEX_AUTH_ALLOW_PRIVATE_FETCH_HOSTS = "1";
-  expect(() => assertSafeFetchUrl("https://169.254.169.254/")).toThrow();
-  expect(() => assertSafeFetchUrl("https://idp.internal/")).toThrow();
-  expect(() => assertSafeFetchUrl("https://metadata/")).toThrow();
 });
 
 test("idp fetch guard allows http without disabling the host block", () => {
-  delete process.env.CONVEX_AUTH_ALLOW_PRIVATE_FETCH_HOSTS;
   expect(() => assertSafeIdpFetchUrl("https://idp.example.com/")).not.toThrow();
   expect(() =>
     assertSafeIdpFetchUrl("http://idp.example.com/.well-known/openid-configuration"),
@@ -87,28 +70,6 @@ test("idp fetch guard allows http without disabling the host block", () => {
     /not allowed/,
   );
   expect(() => assertSafeIdpFetchUrl("http://idp.internal/")).toThrow(/not allowed/);
-});
-
-test("idp fetch guard ignores the legacy private-host opt-out", () => {
-  process.env.CONVEX_AUTH_ALLOW_PRIVATE_FETCH_HOSTS = "1";
-  // The legacy flag is ignored, not honored: a public IdP over http still works,
-  // while single-label and private hosts stay blocked regardless of the flag.
-  expect(() =>
-    assertSafeIdpFetchUrl("http://idp.example.com/.well-known/openid-configuration"),
-  ).not.toThrow();
-  expect(() =>
-    assertSafeIdpFetchUrl("http://zitadel:8080/.well-known/openid-configuration"),
-  ).toThrow(/not allowed/);
-  expect(() => assertSafeIdpFetchUrl("http://10.0.0.5/.well-known/openid-configuration")).toThrow(
-    /not allowed/,
-  );
-  expect(() =>
-    assertSafeIdpFetchUrl("http://idp.internal/.well-known/openid-configuration"),
-  ).toThrow(/not allowed/);
-  expect(() => assertSafeIdpFetchUrl("http://127.0.0.1/")).toThrow(/not allowed/);
-  expect(() => assertSafeIdpFetchUrl("http://169.254.169.254/latest/meta-data/")).toThrow(
-    /not allowed/,
-  );
 });
 
 test("idp proxy host guard accepts any well-formed host and rejects injection/malformed values", () => {

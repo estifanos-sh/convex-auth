@@ -70,7 +70,6 @@ export function createInviteDomain(deps: InviteDeps) {
         ...data,
         roleIds,
         tokenHash,
-        status: "pending",
       })) as string;
       return { id: inviteId, token };
     },

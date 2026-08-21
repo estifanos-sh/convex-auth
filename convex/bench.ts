@@ -86,17 +86,6 @@ type SignInArgs =
       params: { email: string; flow: "signIn" };
     };
 const authSignIn = makeFunctionReference<"action", SignInArgs, SignInResult>("auth:signIn");
-const authStore = makeFunctionReference<
-  "mutation",
-  {
-    args: {
-      type: "verifier";
-      signature: string;
-      expirationTime: number;
-    };
-  },
-  string
->("auth:store");
 
 /**
  * Issue a password sign-in and return the backend-observed wall time
@@ -245,40 +234,7 @@ export const webAuthnOptionsBatch = action({
   },
 });
 
-/** Reproduce the pre-optimization WebAuthn option transaction chain for comparison. */
-export const legacyWebAuthnOptionsBatch = action({
-  args: { email: v.string(), iterations: v.number() },
-  returns: v.object({
-    backendMs: v.array(v.number()),
-    totalMs: v.number(),
-  }),
-  handler: async (ctx, { email, iterations }) => {
-    const batchStart = Date.now();
-    const backendMs: number[] = [];
-    for (let i = 0; i < iterations; i += 1) {
-      const start = Date.now();
-      await ctx.runMutation(authStore, {
-        args: {
-          type: "verifier",
-          signature: `benchmark-${i}-${start}`,
-          expirationTime: start + 15 * 60 * 1000,
-        },
-      });
-      const user = (await ctx.runQuery(components.auth.user.get, {
-        verifiedEmail: email,
-      })) as { _id: string } | null;
-      if (user !== null) {
-        await ctx.runQuery(components.auth.factor.passkey.list, {
-          userId: user._id,
-        });
-      }
-      backendMs.push(Date.now() - start);
-    }
-    return { backendMs, totalMs: Date.now() - batchStart };
-  },
-});
-
-/** Measure the single component transaction replacing the legacy option chain. */
+/** Measure the single component transaction used to create WebAuthn options. */
 export const webAuthnOptionTransactionBatch = action({
   args: { email: v.string(), iterations: v.number() },
   returns: v.object({

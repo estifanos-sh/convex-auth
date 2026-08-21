@@ -125,7 +125,6 @@ export const create = mutation({
     email: v.optional(v.string()),
     tokenHash: v.string(),
     roleIds: v.optional(v.array(v.string())),
-    status: vInviteStatus,
     expiresTime: v.optional(v.number()),
     extend: v.optional(v.any()),
   },
@@ -227,7 +226,7 @@ export const create = mutation({
         }
       }
     }
-    return await ctx.db.insert("GroupInvite", args);
+    return await ctx.db.insert("GroupInvite", { ...args, status: "pending" });
   },
 });
 

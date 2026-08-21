@@ -25,7 +25,6 @@ export const SHARED_COOKIE_OPTIONS = {
  * even when cookies are blocked (e.g. mobile webviews).
  */
 export function encodeOAuthState(state: string, redirectTo: string | null): string {
-  if (redirectTo === null) return state;
   const json = JSON.stringify({ s: state, r: redirectTo });
   return btoa(json).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
@@ -33,10 +32,11 @@ export function encodeOAuthState(state: string, redirectTo: string | null): stri
 /**
  * Decode an OAuth state parameter, extracting the original state and redirectTo.
  *
- * A non-encoded value is treated as a plain state string with no redirectTo,
- * preserving backward compatibility with states issued before encoding.
+ * Returns `null` for malformed or unencoded state.
  */
-export function decodeOAuthState(encoded: string): { state: string; redirectTo: string | null } {
+export function decodeOAuthState(
+  encoded: string,
+): { state: string; redirectTo: string | null } | null {
   try {
     const padded = encoded.replace(/-/g, "+").replace(/_/g, "/");
     const value: unknown = JSON.parse(atob(padded));
@@ -52,7 +52,7 @@ export function decodeOAuthState(encoded: string): { state: string; redirectTo: 
       };
     }
   } catch {}
-  return { state: encoded, redirectTo: null };
+  return null;
 }
 
 const REDIRECT_MAX_AGE = 60 * 15;

@@ -91,7 +91,7 @@ test("duplicate passkey registration for the same user is idempotent", async () 
   ).toHaveLength(1);
 });
 
-test("trusted re-registration upgrades an existing legacy passkey row", async () => {
+test("trusted re-registration adds attestation to an existing passkey", async () => {
   const t = convexTest(schema);
   const userId = await t.run((ctx) =>
     ctx.runMutation(components.auth.user.create, {
@@ -612,7 +612,7 @@ test("phantom Account blocks registration before a Passkey is created", async ()
   expect(owner).not.toBe(registrant);
 });
 
-test("removing a Passkey also removes legacy and stray canonical Account rows", async () => {
+test("removing a Passkey also removes its Account row", async () => {
   const t = convexTest(schema);
   const { userId, passkeyId } = await t.run(async (ctx) => {
     const userId = (await ctx.runMutation(components.auth.user.create, {
@@ -622,11 +622,6 @@ test("removing a Passkey also removes legacy and stray canonical Account rows", 
       ...passkeyArgs(userId),
       credentialId: "remove-credential",
     })) as string;
-    await ctx.runMutation(components.auth.account.create, {
-      userId: userId as never,
-      provider: "webauthn",
-      providerAccountId: "remove-credential",
-    });
     return { userId, passkeyId };
   });
 

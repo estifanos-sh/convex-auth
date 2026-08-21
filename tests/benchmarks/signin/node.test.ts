@@ -55,11 +55,6 @@ const benchWebAuthnOptionsBatch = makeFunctionReference<
   { email: string; iterations: number },
   BatchResult
 >("bench:webAuthnOptionsBatch");
-const benchLegacyWebAuthnOptionsBatch = makeFunctionReference<
-  "action",
-  { email: string; iterations: number },
-  BatchResult
->("bench:legacyWebAuthnOptionsBatch");
 const benchWebAuthnOptionTransactionBatch = makeFunctionReference<
   "action",
   { email: string; iterations: number },
@@ -220,10 +215,6 @@ test("auth:signIn — WebAuthn options", async () => {
     email: WEBAUTHN_EMAIL,
     iterations: N_ITERATIONS,
   });
-  const legacy = await client.action(benchLegacyWebAuthnOptionsBatch, {
-    email: WEBAUTHN_EMAIL,
-    iterations: N_ITERATIONS,
-  });
   const optimizedTransactions = await client.action(benchWebAuthnOptionTransactionBatch, {
     email: WEBAUTHN_EMAIL,
     iterations: N_ITERATIONS,
@@ -232,16 +223,10 @@ test("auth:signIn — WebAuthn options", async () => {
   console.log(`\nauth:signIn WebAuthn options (n=${N_ITERATIONS})`);
   printRow("client wall time", stats(clientSamples));
   printRow("backend wall time (bench wrap)", stats(backend.backendMs));
-  printRow("optimized 1-transaction chain", stats(optimizedTransactions.backendMs));
-  printRow("legacy 3-transaction chain", stats(legacy.backendMs));
+  printRow("option transaction", stats(optimizedTransactions.backendMs));
   const transportOverhead = stats(clientSamples).p50 - stats(backend.backendMs).p50;
-  const transactionSavings =
-    stats(legacy.backendMs).p50 - stats(optimizedTransactions.backendMs).p50;
   console.log(
     `  transport overhead (client p50 − backend p50) = ${transportOverhead.toFixed(1)}ms`,
-  );
-  console.log(
-    `  transaction reduction (legacy p50 − optimized p50) = ${transactionSavings.toFixed(1)}ms`,
   );
 
   expect(stats(clientSamples).p95).toBeLessThan(800);
