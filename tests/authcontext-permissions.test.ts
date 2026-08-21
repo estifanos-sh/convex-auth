@@ -12,21 +12,34 @@ import { getAuthContext, getAuthContextForUser } from "../packages/auth/src/serv
 type StubOpts = {
   user: unknown;
   active?: { groupId: string; roleIds: string[]; grants: string[] } | null;
+  session?: unknown;
 };
 
 function makeResolver(opts: StubOpts) {
-  const calls = { userGet: 0, activeGet: 0 };
+  const calls = { contextGet: 0, args: [] as Array<{ userId: string; sessionId?: string }> };
   const resolver: any = {
-    user: {
-      get: async () => {
-        calls.userGet += 1;
-        return opts.user;
-      },
-    },
-    active: {
-      get: async () => {
-        calls.activeGet += 1;
-        return opts.active ?? null;
+    context: {
+      get: async (_ctx: unknown, args: { userId: string; sessionId?: string }) => {
+        calls.contextGet += 1;
+        calls.args.push(args);
+        const active = opts.active ?? null;
+        return {
+          user: opts.user,
+          session: args.sessionId === undefined ? null : (opts.session ?? null),
+          active:
+            active === null
+              ? null
+              : {
+                  ...active,
+                  group: null,
+                  membership: {
+                    _id: "m1",
+                    groupId: active.groupId,
+                    userId: args.userId,
+                    roleIds: active.roleIds,
+                  },
+                },
+        };
       },
     },
   };
@@ -41,8 +54,8 @@ test("getAuthContextForUser preserves active group and role when no grants are c
 
   const result = await getAuthContextForUser(resolver, {} as any, "u1");
 
-  expect(calls.userGet).toBe(1); // user read kept
-  expect(calls.activeGet).toBe(1);
+  expect(calls.contextGet).toBe(1);
+  expect(calls.args).toEqual([{ userId: "u1" }]);
   expect(result.groupId).toBe("g1");
   expect(result.role).toBe("member");
   expect(result.grants).toEqual([]);
@@ -58,7 +71,7 @@ test("getAuthContextForUser resolves membership when permissions are configured"
 
   const result = await getAuthContextForUser(resolver, {} as any, "u1");
 
-  expect(calls.activeGet).toBe(1);
+  expect(calls.contextGet).toBe(1);
   expect(result.groupId).toBe("g1");
   expect(result.role).toBe("admin");
   expect(result.grants).toEqual(["issues.read"]);
@@ -72,7 +85,7 @@ test("getAuthContextForUser falls back to the first membership", async () => {
 
   const result = await getAuthContextForUser(resolver, {} as any, "u1");
 
-  expect(calls.activeGet).toBe(1);
+  expect(calls.contextGet).toBe(1);
   expect(result.groupId).toBe("g2");
   expect(result.role).toBe("viewer");
 });
@@ -102,22 +115,15 @@ test("getAuthContextForUser rejects an identity whose user was deleted", async (
 });
 
 test("getAuthContext rejects a session whose epoch was revoked", async () => {
-  const resolver: any = {
-    user: {
-      get: async () => ({ _id: "u1", sessionEpoch: 1 }),
-    },
-    active: {
-      get: async () => null,
-    },
+  const { resolver, calls } = makeResolver({
+    user: { _id: "u1", sessionEpoch: 1 },
     session: {
-      get: async () => ({
-        _id: "s1",
-        userId: "u1",
-        expirationTime: Date.now() + 60_000,
-        epoch: 0,
-      }),
+      _id: "s1",
+      userId: "u1",
+      expirationTime: Date.now() + 60_000,
+      epoch: 0,
     },
-  };
+  });
   const context = {
     auth: {
       getUserIdentity: async () => ({ subject: "u1", sid: "s1", session_epoch: 0 }),
@@ -125,25 +131,19 @@ test("getAuthContext rejects a session whose epoch was revoked", async () => {
   } as any;
 
   await expect(getAuthContext(resolver, context)).resolves.toBeNull();
+  expect(calls.args).toEqual([{ userId: "u1", sessionId: "s1" }]);
 });
 
 test("getAuthContext accepts the current session epoch", async () => {
-  const resolver: any = {
-    user: {
-      get: async () => ({ _id: "u1", sessionEpoch: 2 }),
-    },
-    active: {
-      get: async () => null,
-    },
+  const { resolver, calls } = makeResolver({
+    user: { _id: "u1", sessionEpoch: 2 },
     session: {
-      get: async () => ({
-        _id: "s1",
-        userId: "u1",
-        expirationTime: Date.now() + 60_000,
-        epoch: 2,
-      }),
+      _id: "s1",
+      userId: "u1",
+      expirationTime: Date.now() + 60_000,
+      epoch: 2,
     },
-  };
+  });
   const context = {
     auth: {
       getUserIdentity: async () => ({ subject: "u1", sid: "s1", session_epoch: 2 }),
@@ -151,4 +151,5 @@ test("getAuthContext accepts the current session epoch", async () => {
   } as any;
 
   await expect(getAuthContext(resolver, context)).resolves.toMatchObject({ userId: "u1" });
+  expect(calls.contextGet).toBe(1);
 });

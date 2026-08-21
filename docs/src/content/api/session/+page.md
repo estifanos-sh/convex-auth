@@ -16,6 +16,12 @@ revoked access token therefore fails the next auth-context resolution and its
 refresh token cannot mint another token, even when an expired row has not been
 removed yet.
 
+Protected functions validate that epoch in the same component query that reads
+the current user and active-group authorization state. Applications should use
+`auth.ctx()` or `auth.context(ctx)` instead of separately loading the viewer,
+active group, and membership; those extra calls repeat the same component reads
+without making authorization fresher.
+
 The `ctx.auth` examples on this page assume the handler is using `auth.ctx()`-
 backed builders such as `authQuery`, `authMutation`, or `authAction`.
 

@@ -73,10 +73,13 @@ name, or picture URL. Those claims are a signed snapshot and require no lookup
 of the auth user.
 
 Use `auth.ctx()` for application functions. It resolves the stable `userId` and
-current user document, then adds the active group, role, and grants when that
-context exists. This is the appropriate layer for ownership checks and product
-authorization because it provides the current component state rather than only
-the token snapshot.
+current session, user document, active membership, and group through one
+component query, then derives the configured grants from that snapshot. This is
+the appropriate layer for ownership checks and product authorization because it
+provides current component state rather than only the token snapshot. The
+snapshot is deliberately read again when a Convex query is re-evaluated; roles,
+grants, group preference, and session revocation are never hidden behind a
+persistent application cache.
 
 The integration keeps those responsibilities in separate files.
 `convex/convex.config.ts` registers the component, `convex/auth.ts` configures

@@ -10,8 +10,7 @@ type ActiveSnapshot = {
   grants: string[];
 };
 
-/** @internal */
-export type AuthContextSnapshot = {
+type AuthContextSnapshot = {
   user: Doc<"User"> | null;
   session: Doc<"Session"> | null;
   active: ActiveSnapshot | null;
