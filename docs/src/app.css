@@ -62,7 +62,7 @@
 
 html {
   min-width: 20rem;
-  scroll-behavior: smooth;
+  scroll-behavior: auto;
   scroll-padding-top: calc(var(--header-h) + 1rem);
   background: var(--studio-paper);
 }
@@ -256,29 +256,38 @@ input {
 
 .brand-strip {
   position: relative;
-  min-height: 9.375rem;
+  min-height: clamp(18rem, 27vw, 23rem);
   overflow: hidden;
-  background: #211718 url("/convex-auth/brand/convex-racing-lines.png") left bottom /
-    min(77vw, 1575px) auto no-repeat;
+  background: #211718;
   color: #fffaf0;
+}
+
+.brand-strip::after {
+  position: absolute;
+  inset: 0;
+  background: url("/convex-auth/brand/convex-racing-lines.png") center bottom / 100% auto no-repeat;
+  content: "";
+  pointer-events: none;
 }
 
 .brand-strip-inner {
   position: relative;
   z-index: 1;
   display: grid;
+  grid-template-columns: minmax(0, 0.85fr) minmax(24rem, 1.15fr);
+  gap: clamp(3rem, 7vw, 8rem);
   width: min(100%, var(--page-width));
-  min-height: 9.375rem;
+  min-height: clamp(18rem, 27vw, 23rem);
   margin: 0 auto;
-  padding: 1.75rem var(--page-gutter) 2.625rem;
-  align-content: center;
+  padding: clamp(2.75rem, 5vw, 4.75rem) var(--page-gutter) clamp(7rem, 10vw, 9rem);
+  align-items: start;
 }
 
 .brand-strip-title {
   margin: 0;
   color: #fffaf0;
   font-family: "neue-haas-grotesk-display", "Inter Tight", Inter, sans-serif;
-  font-size: clamp(2rem, 3.4vw, 3.25rem);
+  font-size: clamp(2.75rem, 4.5vw, 4.75rem);
   font-weight: 900;
   letter-spacing: -0.035em;
   line-height: 0.95;
@@ -290,9 +299,75 @@ input {
 }
 
 .brand-strip-deck {
-  margin: 10px 0 0;
+  max-width: 29rem;
+  margin: 0.875rem 0 0;
   color: rgba(255, 250, 240, 0.7);
-  font-size: 16px;
+  font-size: clamp(1rem, 1.25vw, 1.25rem);
+}
+
+.install-panel {
+  width: 100%;
+  margin-top: 0.25rem;
+  padding: 0.75rem;
+  border: 1px solid rgba(255, 250, 240, 0.2);
+  border-radius: var(--radius-medium);
+  background: rgba(12, 8, 9, 0.66);
+  box-shadow: 0 1.25rem 3rem rgba(0, 0, 0, 0.2);
+}
+
+.install-panel > p {
+  margin: 0 0 0.625rem;
+  color: rgba(255, 250, 240, 0.6);
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.install-panel button {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  min-height: 3.5rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.875rem 1rem;
+  border: 1px solid rgba(255, 250, 240, 0.16);
+  border-radius: calc(var(--radius-medium) - 0.25rem);
+  background: rgba(255, 250, 240, 0.08);
+  color: #fffaf0;
+  cursor: pointer;
+  text-align: left;
+}
+
+.install-panel button:hover {
+  background: rgba(255, 250, 240, 0.13);
+}
+
+.install-panel code {
+  overflow: hidden;
+  color: #fffaf0;
+  font-family: var(--font-mono);
+  font-size: clamp(0.75rem, 1vw, 0.9375rem);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.install-panel button span {
+  display: grid;
+  flex: 0 0 auto;
+  min-width: 1.5rem;
+  color: rgba(255, 250, 240, 0.75);
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  place-items: center;
+}
+
+.install-panel svg {
+  width: 1rem;
+  height: 1rem;
 }
 
 .docs-frame {
@@ -318,9 +393,14 @@ input {
 .rail {
   position: sticky;
   top: var(--header-h);
+  z-index: 10;
+  align-self: start;
   height: calc(100svh - var(--header-h));
   padding: 1.5rem 1rem 3rem;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
   border-right: 1px solid var(--line-whisper);
   background: var(--studio-paper);
   margin: 0;
@@ -1069,6 +1149,16 @@ input {
 }
 
 @media (max-width: 62.5rem) {
+  .brand-strip-inner {
+    grid-template-columns: 1fr;
+    gap: 2rem;
+    padding-bottom: 8rem;
+  }
+
+  .install-panel {
+    max-width: 36rem;
+  }
+
   .home-hero {
     grid-template-columns: 1fr;
     align-items: start;
@@ -1095,15 +1185,17 @@ input {
 
   .brand-strip,
   .brand-strip-inner {
-    min-height: 128px;
+    min-height: 25rem;
   }
 
-  .brand-strip {
-    background-size: auto 92px;
+  .brand-strip::after {
+    background-position: 34% bottom;
+    background-size: auto 7rem;
   }
 
   .brand-strip-inner {
-    padding: 22px 20px 40px;
+    gap: 1.5rem;
+    padding: 2.5rem 1.25rem 7rem;
   }
 
   .brand-strip-title span {
