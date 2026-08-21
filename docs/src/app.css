@@ -162,6 +162,7 @@ input {
 }
 
 .search-chip,
+.github-button,
 .cta-ghost,
 .cta-solid,
 .icon-btn,
@@ -179,6 +180,21 @@ input {
   border-color: rgba(255, 250, 240, 0.24);
   background: transparent;
   color: #fffaf0;
+}
+
+.github-button {
+  min-height: 44px;
+  gap: 8px;
+  padding: 0 16px;
+  border-radius: var(--pill);
+  background: var(--signal-coral);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.github-button:hover {
+  background: var(--signal-coral-dark);
 }
 
 .search-chip {
@@ -629,19 +645,11 @@ input {
   gap: 48px;
 }
 
-.site-foot-brand {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  font-size: 12px;
-}
-
 .site-foot-primary {
   display: grid;
   gap: 8px;
 }
 
-.site-foot-credits,
 .site-foot-links {
   display: flex;
   flex-wrap: wrap;
@@ -649,8 +657,20 @@ input {
   gap: 8px 18px;
 }
 
-.site-foot-credits {
-  font-size: 11px;
+.site-foot-built {
+  display: flex;
+  margin: 0;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.site-foot-built span {
+  color: var(--signal-coral);
+  font-family: var(--font-mono);
+  font-size: 18px;
+  line-height: 1;
+  text-shadow: 2px 0 0 var(--stripe-plum);
 }
 
 .site-foot-links {

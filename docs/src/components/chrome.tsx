@@ -1,7 +1,7 @@
 import { For, Show, createSignal, onCleanup, onMount, type JSX } from "solid-js";
 import { useRouterState } from "@tanstack/solid-router";
 import { sidebar } from "../config/sidebar";
-import { CloseIcon, MenuIcon, SearchIcon } from "./icons";
+import { CloseIcon, GitHubIcon, MenuIcon, SearchIcon } from "./icons";
 
 interface SearchResult {
   excerpt: string;
@@ -117,6 +117,10 @@ export function Chrome(props: { children: JSX.Element; landing?: boolean; withSi
             <span>Search</span>
             <kbd>⌘K</kbd>
           </button>
+          <a class="github-button" href="https://github.com/estifanos-sh/convex-auth">
+            <GitHubIcon />
+            <span>GitHub</span>
+          </a>
           <Show when={props.withSidebar}>
             <button
               aria-controls="mobile-docs-nav"
@@ -172,20 +176,10 @@ export function Chrome(props: { children: JSX.Element; landing?: boolean; withSi
       <footer class="site-foot">
         <div class="site-foot-inner">
           <div class="site-foot-primary">
-            <div class="site-foot-brand">
-              <span>Built for</span>
-              <img
-                alt="Convex"
-                class="brand-wordmark"
-                height="36"
-                src="/convex-auth/brand/convex-logo-white.svg"
-                width="92"
-              />
-            </div>
-            <div class="site-foot-credits">
-              <a href="https://github.com/estifanos-sh/convex-auth">Open source on GitHub</a>
-              <a href="/convex-auth/llms.txt">llms.txt</a>
-            </div>
+            <p class="site-foot-built">
+              Built with <span aria-label="love">♥</span> by
+              <a href="https://estifanos.com">estifanos.com</a>
+            </p>
           </div>
           <nav aria-label="Footer" class="site-foot-links">
             <a href="/convex-auth/getting-started/installation/">Installation</a>
