@@ -1,133 +1,85 @@
 ---
-title: Production Deploy
-description: Deploy convex-auth to production.
+title: Production deployment
+description: Move a Convex Auth application from local development to production.
 ---
-
-<script>
-  import Tabs from '$lib/components/docs/Tabs.svelte';
-  import TabItem from '$lib/components/docs/TabItem.svelte';
-</script>
 
 <svelte:head>
 
-  <title>Production Deploy - convex-auth</title>
+  <title>Production deployment</title>
 </svelte:head>
 
-# Production Deploy
+# Production deployment
 
-## Setup production keys
+A production deployment uses the same component and application code as local
+development. What changes is the trust boundary: signing keys must be generated
+for the production deployment, provider credentials must name production
+callbacks, and the public application URL must be the origin users actually
+visit.
 
-<Tabs syncKey="pkg">
-  <TabItem label="pnpm">
-
-`pnpm exec convex-auth --prod --app-url "https://myapp.com"`
-
-  </TabItem>
-  <TabItem label="npm">
-
-`npx convex-auth --prod --app-url "https://myapp.com"`
-
-  </TabItem>
-  <TabItem label="yarn">
-
-`yarn convex-auth --prod --app-url "https://myapp.com"`
-
-  </TabItem>
-</Tabs>
-
-## Set provider secrets
-
-<Tabs syncKey="pkg">
-  <TabItem label="pnpm">
-
-`pnpm exec convex env set --prod GITHUB_CLIENT_ID "..."` then
-`pnpm exec convex env set --prod GITHUB_CLIENT_SECRET "..."`
-
-  </TabItem>
-  <TabItem label="npm">
-
-`npx convex env set --prod GITHUB_CLIENT_ID "..."` then
-`npx convex env set --prod GITHUB_CLIENT_SECRET "..."`
-
-  </TabItem>
-  <TabItem label="yarn">
-
-`yarn convex env set --prod GITHUB_CLIENT_ID "..."` then
-`yarn convex env set --prod GITHUB_CLIENT_SECRET "..."`
-
-  </TabItem>
-</Tabs>
-
-## Deploy
-
-<Tabs syncKey="pkg">
-  <TabItem label="pnpm">
+Generate the production key material with the setup CLI:
 
 ```bash
-pnpm exec convex deploy --cmd 'pnpm run build'
+npx convex-auth --prod --app-url "https://myapp.com"
 ```
 
-  </TabItem>
-  <TabItem label="npm">
+The CLI writes the signing and encryption material to the Convex deployment. Do
+not copy development keys into production or store them in source control. Set
+the provider credentials owned by your application through Convex as well:
+
+```bash
+npx convex env set --prod GITHUB_CLIENT_ID "..."
+npx convex env set --prod GITHUB_CLIENT_SECRET "..."
+```
+
+Then deploy the application and its Convex functions using the build command for
+your app:
 
 ```bash
 npx convex deploy --cmd 'npm run build'
 ```
 
-  </TabItem>
-  <TabItem label="yarn">
+## Verify the trust chain
 
-```bash
-yarn convex deploy --cmd 'yarn build'
-```
+`APP_URL` must be the production frontend origin. Convex provides
+`CONVEX_SITE_URL`; `convex/auth.config.ts` must trust its `/auth` issuer with
+`applicationID: "convex"`. Every OAuth provider registration must send its
+callback to that same production site URL. These values describe one round
+trip, so a staging origin, localhost callback, or mismatched issuer will fail
+even when each value looks valid in isolation.
 
-  </TabItem>
-</Tabs>
+`AUTH_KEYS` must exist on the production deployment, and every enabled provider
+must receive the credentials that its factory expects. Convex Auth does not use
+generic `AUTH_*` provider variables automatically; the names are the ones your
+application declared and passed to the provider.
 
-## Checklist
+## Publish platform association files
 
-- `APP_URL` is set to your production domain (not `localhost`)
-- `AUTH_KEYS` is set (the CLI generates its independent signing and encryption
-  key material)
-- Provider secrets (`AUTH_*_ID`, `AUTH_*_SECRET`) are configured
-- `CONVEX_SITE_URL` is auto-provided by Convex
-- `convex/auth.config.ts` trusts `env.CONVEX_SITE_URL` with
-  `applicationID: "convex"`
-- OAuth callback URLs are registered with your providers pointing to
-  `CONVEX_SITE_URL`
+Native passkeys and app links require the frontend host to publish platform
+association documents. iOS uses
+`/.well-known/apple-app-site-association` with no extension and no redirect;
+Android uses `/.well-known/assetlinks.json`. Both must be served from the host
+used as the WebAuthn relying-party ID. Configure `IOS_APP_IDS` and
+`ANDROID_APP_LINKS` with the applications that are allowed to claim that host.
 
-### Cross-platform `.well-known` files
+Password-manager integration can publish `/.well-known/change-password`, and a
+security contact can publish `/.well-known/security.txt`. These endpoints are
+described in the [.well-known reference](/reference/well-known), but they should
+be deployed only when the corresponding application behavior exists.
 
-Apps using passkeys, password managers, or native iOS/Android sign-in should
-serve these from the frontend host. See the
-[.well-known reference](/reference/well-known) and the
-[native apps guide](/guides/native-apps).
+## Understand refresh traffic
 
-- For native iOS passkeys: `IOS_APP_IDS` set, `apple-app-site-association`
-  reachable at the RP ID host with no redirects, no `.json` extension
-- For native Android passkeys: `ANDROID_APP_LINKS` set, `assetlinks.json`
-  reachable at the RP ID host
-- For password manager UX: `CHANGE_PASSWORD_URL` set (302 from
-  `/.well-known/change-password`)
-- For security disclosure: `SECURITY_CONTACT` set with unexpired
-  `Expires:` (refreshes every `SECURITY_TXT_EXPIRES_DAYS`, default 365)
+The browser client periodically exchanges its stored refresh token for a short
+lived access token. Convex logs may show an `auth:signIn` action followed by an
+`auth:store` mutation during page load, token refresh, or activity in another
+tab. That pair is normal and does not represent a fresh interactive sign-in.
 
-## Auth refresh and Convex logs
+A refresh can cause active Convex subscriptions to re-evaluate. If one refresh
+produces a large burst of query work, look for the same query subscribed in both
+a page and its child, auth-dependent queries mounted on routes that do not need
+them, or queries that should use `"skip"` until their inputs exist. Pass already
+loaded data down the component tree instead of opening another subscription.
 
-Convex Auth refreshes stored browser sessions when the Convex client asks for a
-fresh access token. In logs this can show up as an `auth:signIn` action followed
-by an `auth:store` mutation. That pair is expected on page load, token refresh,
-and across multiple tabs or visitors.
-
-Each refresh mutation can cause active Convex subscriptions to re-evaluate. If
-your logs show a burst of many cached query evaluations after auth refresh, first
-look for duplicate or unnecessary subscriptions in the app:
-
-- avoid subscribing to the same query in both a page and child component;
-- pass already-loaded data as props when possible;
-- use `"skip"` for queries that are disabled by config or route state;
-- only run auth-dependent queries on pages that actually need them.
-
-Treat refresh as suspicious when a single tab with one auth client refreshes in a
-tight loop. Common causes are duplicate auth clients, unavailable storage,
-corrupted refresh-token storage, or proxy retry failures.
+Repeated refreshes in a tight loop from one tab are different. They usually
+indicate more than one auth client, unavailable or corrupted token storage, or a
+proxy retrying a failed exchange. Diagnose that loop at the client and storage
+boundary rather than adding application-owned session state.

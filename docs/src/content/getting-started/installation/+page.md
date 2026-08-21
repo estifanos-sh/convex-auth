@@ -1,21 +1,18 @@
 ---
 title: Installation
-description: Set up convex-auth in your project.
+description: Add Convex Auth to a Convex application.
 ---
-
-<script>
-  import Card from '$lib/components/docs/Card.svelte';
-  import CardGrid from '$lib/components/docs/CardGrid.svelte';
-</script>
 
 <svelte:head>
 
-  <title>Installation - convex-auth</title>
+  <title>Installation</title>
 </svelte:head>
 
 # Installation
 
-## Install
+Install Convex Auth while `convex dev` is running, then launch the setup wizard.
+The wizard registers the component, creates the server definition and HTTP
+routes, and configures Convex to trust sessions issued by Convex Auth.
 
 ```bash
 npm install @estifanos-sh/convex-auth
@@ -23,77 +20,33 @@ npx convex dev
 npx convex-auth
 ```
 
-To skip the interactive prompt:
+Pass the application URL when the wizard cannot infer it:
 
 ```bash
 npx convex-auth --app-url "http://localhost:5173"
 ```
 
-## Quick Setup (CLI)
+The generated files are the normal integration surface. Keep provider secrets
+and `defineAuth` in `convex/auth.ts`. Import the lightweight auth context from
+`convex/auth/core.ts` in ordinary queries and mutations. Mount the generated
+HTTP routes, and leave `convex/auth.config.ts` in place so native Convex identity
+resolution trusts Convex Auth.
 
-Keep `convex dev` running while you launch the setup command in a second
-terminal. The setup flow is:
+## Configure one provider
 
-1. install `@estifanos-sh/convex-auth`
-2. start a Convex deployment with `convex dev`
-3. run the auth setup wizard
-
-The wizard creates:
-
-- key generation
-- `convex.config.ts`
-- `auth.ts` — provider config + sign-in actions
-- `auth/core.ts` — lightweight context for queries and mutations
-- `auth.config.ts` — native Convex JWT trust config
-- `http.ts`
-
-## API layers
-
-<CardGrid>
-  <Card title="Client auth flow">
-    Frontends use `client({ convex, api: api.auth })`. The public client contract is
-    `signIn` + `signOut`; `store` is internal runtime plumbing.
-  </Card>
-  <Card title="Server helpers">
-    `auth.user.*`, `auth.connection.*`, and `auth.connection.scim.*` are server-side helpers for
-    Convex code. They are not automatically public RPC.
-  </Card>
-  <Card title="Optional group SSO RPC">
-    If your app wants client-callable group SSO admin APIs, expose app-owned
-    wrappers such as `convex/auth/group.ts`.
-  </Card>
-</CardGrid>
-
-### 1. Register the component
-
-```ts
-// convex/convex.config.ts
-import { defineApp } from "convex/server";
-import { v } from "convex/values";
-import auth from "@estifanos-sh/convex-auth/convex.config";
-import { authEnv } from "@estifanos-sh/convex-auth/server";
-
-const app = defineApp({
-  env: {
-    ...authEnv,
-    GITHUB_CLIENT_ID: v.string(),
-    GITHUB_CLIENT_SECRET: v.string(),
-  },
-});
-app.use(auth);
-export default app;
-```
-
-### 2. Configure providers
+Provider configuration belongs in the application because credentials and
+delivery services belong to the application. Convex Auth does not reserve
+environment-variable names or bundle an email vendor. This example uses GitHub,
+but the surrounding architecture is the same for every provider.
 
 ```ts
 // convex/auth.ts
+import { github } from "@estifanos-sh/convex-auth/providers";
 import { defineAuth } from "@estifanos-sh/convex-auth/server";
 import { components } from "./_generated/api";
 import { env } from "./_generated/server";
-import { github } from "@estifanos-sh/convex-auth/providers/github";
 
-const auth = defineAuth(components.auth, {
+export const auth = defineAuth(components.auth, {
   providers: [
     github({
       clientId: env.GITHUB_CLIENT_ID,
@@ -102,15 +55,17 @@ const auth = defineAuth(components.auth, {
   ],
 });
 
-export { auth };
 export const { signIn, signOut, store } = auth;
 ```
 
-`store` and `http` stay exported so the auth runtime can cross the Convex
-component boundary without storing env-backed provider secrets in component
-tables. Frontend apps should pass only `api.auth` into the client SDK.
+`signIn` and `signOut` are the client-facing actions. `store` is exported for
+the auth runtime; frontend code should not call it. Pass `api.auth` to the
+client SDK and let the client complete provider redirects and continuations.
 
-### 3. Create the auth context
+## Protect application functions
+
+Create the lightweight context once and use it to define the builders for
+authenticated application functions.
 
 ```ts
 // convex/auth/core.ts
@@ -120,37 +75,24 @@ import { components } from "../_generated/api";
 export const auth = createAuthContext(components.auth);
 ```
 
-Queries and mutations import `auth` from `./auth/core` — this keeps provider
-and crypto code out of your query bundles entirely.
-
-### 4. Trust the Convex Auth JWT issuer
-
 ```ts
-// convex/auth.config.ts
-import { env } from "./_generated/server";
+// convex/functions.ts
+import { customMutation, customQuery } from "convex-helpers/server/customFunctions";
+import { mutation, query } from "./_generated/server";
+import { auth } from "./auth/core";
 
-export default {
-  providers: [
-    {
-      domain: `${env.CONVEX_SITE_URL}/auth`,
-      applicationID: "convex",
-    },
-  ],
-};
+export const authQuery = customQuery(query, auth.ctx());
+export const authMutation = customMutation(mutation, auth.ctx());
 ```
 
-`CONVEX_SITE_URL` is provided automatically by Convex. This file is what makes
-`ctx.auth.getUserIdentity()` work against tokens issued by Convex Auth.
+Handlers created with these builders receive `ctx.auth.userId` and
+`ctx.auth.user`. Store the `userId` on product documents that belong to a user.
+Do not add password, account, session, passkey, or recovery tables to the
+application schema; those records already belong to the component.
 
-### 5. Auth HTTP routes
+## What to change after setup
 
-Mount the app-side auth protocol alias from `convex/http.ts`. This keeps OAuth
-secrets in deployment env vars while the component still owns auth storage and
-state.
-
-```ts
-// convex/http.ts
-import { auth } from "./auth";
-
-export default auth.http();
-```
+Most applications only need to add providers, configure permissions, and wrap
+their protected functions. The generated `auth.config.ts` and HTTP mounting are
+protocol wiring, not extension points. Read [How Convex Auth works](/reference/architecture)
+before changing the generated structure or creating any app-owned auth state.

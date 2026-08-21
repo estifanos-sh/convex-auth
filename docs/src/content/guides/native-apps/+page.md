@@ -52,9 +52,7 @@ entrypoint falls back to the browser client automatically when running on web.
 
 ### 1. Get your Team ID and Bundle ID
 
-- **Team ID**: Apple Developer → Membership → Team ID (10-character string).
-- **Bundle ID**: From `app.config.ts` / `app.json` → `ios.bundleIdentifier`.
-  Combined as `TEAMID.com.example.app`.
+**Team ID**: Apple Developer → Membership → Team ID (10-character string); **Bundle ID**: From `app.config.ts` / `app.json` → `ios.bundleIdentifier`. Combined as `TEAMID.com.example.app`.
 
 ### 2. Add the Associated Domain to your Expo config
 
@@ -208,15 +206,16 @@ to work across subdomains (the AASA / `assetlinks.json` must then live at
 
 ## Troubleshooting
 
-- **Native sheet doesn't appear, error like "Passkey sign-in failed"**:
-  Most likely the Associated Domain entitlement is missing or AASA isn't
-  reachable. Run `curl https://app-site-association.cdn-apple.com/a/v1/<host>`.
-- **"webauthn: not supported"**: Check `Passkey.isSupported()` in the
-  `react-native-passkey` library — needs iOS 16+ / Android 14+ / Play Services.
-- **Counter validation failures**: Test on a fresh device — emulators have
-  spotty Credential Manager support.
+When the native sheet does not appear, first verify the Associated Domain
+entitlement and fetch Apple's cached AASA response from
+`https://app-site-association.cdn-apple.com/a/v1/<host>`. A “webauthn not
+supported” result should be checked with `Passkey.isSupported()`; native
+passkeys require iOS 16 or Android 14 with suitable Play Services. Counter
+validation failures on an emulator should be reproduced on a physical device,
+because emulator Credential Manager behavior is incomplete.
 
 ## Related
 
-- [.well-known endpoints reference](/reference/well-known)
-- [Production checklist](/guides/production)
+The [.well-known reference](/reference/well-known) explains the association
+documents. Use the [production guide](/guides/production) to verify them on the
+deployed host.

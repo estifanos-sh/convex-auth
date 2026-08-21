@@ -29,12 +29,10 @@ ID. It is not an app-managed override.
 The current SCIM surface is intentionally vendor-agnostic and focused on the
 common interoperability subset:
 
-- Users and Groups resources
-- `PATCH` and `PUT`
-- filters: `eq`, `co`, `sw`, `ew`, `pr`
-- idempotent provisioning by `externalId`
-- no `Bulk`
-- no `ETag`
+The implementation supports User and Group resources, `PATCH` and `PUT`, and
+the `eq`, `co`, `sw`, `ew`, and `pr` filters. Provisioning is idempotent by
+`externalId`, allowing a directory to retry safely. Bulk operations and ETags
+are not currently implemented.
 
 ## Methods
 

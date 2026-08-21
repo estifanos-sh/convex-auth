@@ -118,19 +118,18 @@ from the current route/context before calling the RPC.
 
 ## Unified model
 
-All three protocols now follow the same mental model:
+All three protocols participate in one provisioning model. OIDC, SAML, or SCIM
+first normalizes an external identity. The
+[`auth.connection.policy`](/connection/policy/) then decides whether that
+identity may link to an account, create a user or membership, update a profile,
+or deprovision access. Verified domains establish trust for discovery and safe
+linking. Optional `sso.hooks` can refine the normalized profile without taking
+ownership of the protocol or its stored identity state.
 
-1. Protocol config extracts external identity
-2. [`auth.connection.policy`](/connection/policy/) decides how that identity is applied
-3. Verified domains establish trust for discovery and safe linking
-4. Optional `sso.hooks` run on normalized profiles during provisioning
-
-That means:
-
-- OIDC / SAML / SCIM configure how to read external identity
-- `policy` decides how users, memberships, and deprovisioning behave
-- domains decide whether a connection is trusted for domain-based discovery
-- hooks let your app customize the normalized provisioning pipeline
+This order matters. Protocol configuration explains how to understand the
+external system; policy explains what that information is allowed to change.
+Keeping them separate prevents a metadata or claim-mapping change from silently
+changing account-linking authority.
 
 ## Per-tenant runtime configuration
 
@@ -146,26 +145,28 @@ call `createConnection({ groupId, ... })` with your app's authorization check.
 
 This means you can:
 
-- Onboard new group customers without redeploying.
-- Support multiple IdPs across different tenants simultaneously.
-- Let tenant admins configure their own SSO via your UI.
+Because a connection is tenant-owned runtime state, a new customer can be
+onboarded without redeploying the application. Different groups can use
+different identity providers at the same time, and a product can let each
+tenant administrator configure only their own connection through an authorized
+app RPC.
 
 ## Current policy scope
 
 Today `auth.connection.policy` covers:
 
-- OIDC and SAML account linking
-- user creation and profile authority
-- SCIM user reuse
-- JIT user and membership creation
-- groups and roles mapping into membership `roleIds`
-- SCIM deprovision behavior
+The policy covers OIDC and SAML account linking, user creation, profile
+authority, reuse of SCIM identities, just-in-time user and membership creation,
+mapping external groups and roles into membership `roleIds`, and SCIM
+deprovisioning. These choices belong together because they all decide how an
+external identity changes the local auth model.
 
 Protocol-specific transport and validation settings stay in:
 
-- [`auth.connection.oidc`](/connection/oidc/)
-- [`auth.connection.saml`](/connection/saml/)
-- [`auth.connection.scim`](/connection/scim/)
+Configure the protocol through
+[`auth.connection.oidc`](/connection/oidc/),
+[`auth.connection.saml`](/connection/saml/), or
+[`auth.connection.scim`](/connection/scim/).
 
 `groups` and `roles` currently map external values into membership `roleIds`.
 They do not create or mirror nested app groups automatically.

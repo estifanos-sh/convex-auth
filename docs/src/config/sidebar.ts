@@ -30,7 +30,7 @@ export const sidebar: SidebarGroup[] = [
     label: "Guides",
     items: [
       { title: "Authorization", slug: "/guides/authorization" },
-      { title: "Multi-access", slug: "/guides/multi-access" },
+      { title: "One identity, every client", slug: "/guides/multi-access" },
       { title: "Device flow", slug: "/guides/device-flow" },
       { title: "Production", slug: "/guides/production" },
     ],
@@ -86,7 +86,7 @@ export const sidebar: SidebarGroup[] = [
       { title: "Typed returns", slug: "/reference/typed-returns" },
       { title: "Error codes", slug: "/reference/errors" },
       { title: "CLI", slug: "/reference/cli" },
-      { title: "Architecture", slug: "/reference/architecture" },
+      { title: "How Convex Auth works", slug: "/reference/architecture" },
       { title: ".well-known", slug: "/reference/well-known" },
     ],
   },

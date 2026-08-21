@@ -27,7 +27,7 @@ export const documentationPages: DocumentationPageMeta[] = [
     title: "auth.factor",
   },
   {
-    description: "Group management — create, list, update, and delete hierarchical groups.",
+    description: "Model organizations, workspaces, and teams in Convex Auth.",
     slug: "/api/group",
     title: "auth.group",
   },
@@ -52,7 +52,7 @@ export const documentationPages: DocumentationPageMeta[] = [
     title: "auth.session",
   },
   {
-    description: "User management — read, update, delete users and manage active groups.",
+    description: "Resolve and manage Convex Auth user identities.",
     slug: "/api/user",
     title: "auth.user",
   },
@@ -93,7 +93,7 @@ export const documentationPages: DocumentationPageMeta[] = [
     title: "auth.connection.policy",
   },
   {
-    description: "App-owned client-callable group SSO RPC built from convex-auth server helpers.",
+    description: "Expose the smallest authorized group SSO surface your application needs.",
     slug: "/connection/rpc",
     title: "Group SSO RPC",
   },
@@ -119,7 +119,7 @@ export const documentationPages: DocumentationPageMeta[] = [
     title: "Environment Variables",
   },
   {
-    description: "Set up convex-auth in your project.",
+    description: "Add Convex Auth to a Convex application.",
     slug: "/getting-started/installation",
     title: "Installation",
   },
@@ -129,9 +129,9 @@ export const documentationPages: DocumentationPageMeta[] = [
     title: "Providers",
   },
   {
-    description: "Identity, profile, and access control patterns.",
+    description: "Protect user-owned and group-owned application data.",
     slug: "/guides/authorization",
-    title: "Authorization Patterns",
+    title: "Authorization",
   },
   {
     description: "Authenticate input-constrained devices like CLIs, smart TVs, and IoT.",
@@ -145,9 +145,9 @@ export const documentationPages: DocumentationPageMeta[] = [
     title: "MCP Server (OAuth 2.1)",
   },
   {
-    description: "One app, any auth method — session, API key, SSO, device flow.",
+    description: "Use one user identity across browser, device, SSO, and API access.",
     slug: "/guides/multi-access",
-    title: "Multi-Access",
+    title: "One identity, every client",
   },
   {
     description:
@@ -156,9 +156,9 @@ export const documentationPages: DocumentationPageMeta[] = [
     title: "Native apps (iOS + Android)",
   },
   {
-    description: "Deploy convex-auth to production.",
+    description: "Move a Convex Auth application from local development to production.",
     slug: "/guides/production",
-    title: "Production Deploy",
+    title: "Production deployment",
   },
   {
     description: "Zero-boilerplate ctx.auth.userId, groupId, role, and grants via convex-helpers.",
@@ -171,9 +171,9 @@ export const documentationPages: DocumentationPageMeta[] = [
     title: "Fluent Convex",
   },
   {
-    description: "How convex-auth works as a Convex component.",
+    description: "The ownership model behind Convex Auth and your application.",
     slug: "/reference/architecture",
-    title: "Architecture",
+    title: "How Convex Auth works",
   },
   {
     description: "Command-line commands and options for the setup wizard.",

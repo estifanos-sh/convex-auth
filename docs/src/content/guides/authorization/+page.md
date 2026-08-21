@@ -1,306 +1,119 @@
 ---
-title: Authorization Patterns
-description: Identity, profile, and access control patterns.
+title: Authorization
+description: Protect user-owned and group-owned application data.
 ---
 
 <svelte:head>
 
-  <title>Authorization Patterns - convex-auth</title>
+  <title>Authorization</title>
 </svelte:head>
 
-# Authorization Patterns
+# Authorization
 
-Convex Auth keeps authorization simple. In vNext, define a permission system
-with `definePermissions(...)`, pass it to `defineAuth({ permissions })`, assign
-role ids to group memberships, and enforce access by checking grants with
-`auth.member.assert(...)` or `auth.member.get(...)`.
+Convex Auth establishes the caller's identity. Your application still decides
+whether that user may perform a particular operation. Keep those decisions close
+to the data they protect and base them on the trusted identity in `ctx.auth`, not
+on an email, a provider account ID, or a user ID supplied by the browser.
 
-Use the permissions vocabulary everywhere in new auth definitions.
+## User-owned data
 
-## Define permissions
-
-Use `definePermissions(...)` so grant strings and role ids stay typed everywhere
-else in your app. Grants are the atomic permissions your code checks. Roles are
-named bundles of grants that you assign to memberships and invites.
+Store the Convex Auth `userId` on documents that belong to a person. An
+authenticated builder resolves the caller before the handler runs, so creation
+can assign ownership without exposing an `ownerId` argument.
 
 ```ts
-import { defineAuth } from "@estifanos-sh/convex-auth/server";
+export const create = authMutation({
+  args: { title: v.string() },
+  handler: (ctx, args) =>
+    ctx.db.insert("projects", {
+      title: args.title,
+      ownerId: ctx.auth.userId,
+    }),
+});
+```
+
+Reads and updates must enforce the same boundary. A document ID is not proof of
+access.
+
+```ts
+export const rename = authMutation({
+  args: { id: v.id("projects"), title: v.string() },
+  handler: async (ctx, args) => {
+    const project = await ctx.db.get(args.id);
+    if (!project || project.ownerId !== ctx.auth.userId) {
+      throw new Error("Project not found");
+    }
+    await ctx.db.patch(args.id, { title: args.title });
+  },
+});
+```
+
+Returning the same result for a missing document and a document owned by someone
+else avoids revealing that another user's record exists.
+
+## Group access
+
+When access belongs to a user's relationship with a group, model it with Convex
+Auth memberships. `definePermissions` gives the application one typed vocabulary
+for grants. Roles collect grants for administration, but handlers authorize the
+grant itself so a role can evolve without changing product code.
+
+```ts
+// convex/permissions.ts
 import { definePermissions } from "@estifanos-sh/convex-auth/permissions";
 
 export const permissions = definePermissions({
-  grants: [
-    "members.create",
-    "members.update",
-    "members.delete",
-    "members.read",
-    "tickets.manage",
-    "sso.connection.manage",
-    "scim.manage",
-  ],
+  grants: ["projects.read", "projects.create", "members.manage"],
   roles: {
-    orgAdmin: {
-      label: "Organization Admin",
-      grants: [
-        "members.create",
-        "members.update",
-        "members.delete",
-        "members.read",
-        "sso.connection.manage",
-        "scim.manage",
-      ],
-    },
-    support: {
-      label: "Support",
-      grants: ["members.read", "tickets.manage"],
+    admin: {
+      label: "Administrator",
+      grants: ["projects.read", "projects.create", "members.manage"],
     },
     member: {
       label: "Member",
-      grants: ["members.read"],
+      grants: ["projects.read"],
     },
   },
 });
-
-export const auth = defineAuth(components.auth, {
-  providers: [
-    /* ... */
-  ],
-  permissions,
-});
 ```
 
-Role names are labels for humans. Grants are the contract your code should
-trust.
-
-## Assign roles with memberships
-
-Memberships store `roleIds`. That keeps authorization attached to a user's
-relationship with a group instead of scattering permission state across your own
-tables.
+Pass the same `permissions` value to `defineAuth` and `createAuthContext`. Before
+a protected group operation, assert the exact grant it requires.
 
 ```ts
-await auth.member.create(ctx, {
-  data: {
-    userId,
-    groupId: orgId,
-    roleIds: [permissions.roles.orgAdmin.id],
-  },
-});
-```
-
-You update memberships the same way:
-
-```ts
-await auth.member.update(ctx, {
-  id: memberId,
-  patch: {
-    roleIds: [permissions.roles.support.id],
-  },
-});
-```
-
-Invites can pre-assign role ids before the user joins:
-
-```ts
-await auth.invite.create(ctx, {
-  data: {
-    groupId: orgId,
-    email: "alice@example.com",
-    roleIds: [permissions.roles.member.id],
-  },
-});
-```
-
-## Use `userId` for authorization
-
-Key authorization to `userId`, not email and not provider account ids. `userId`
-is the stable identity in your app. Email is useful for lookup and onboarding,
-but people change email addresses and some providers do not guarantee one.
-
-If your app persists admin or support access outside memberships, store that
-state by `userId`.
-
-## What `getUserIdentity()` includes
-
-`ctx.auth.getUserIdentity()` returns Convex identity claims from the JWT. The
-token subject is the stable auth user id, and the token also mirrors common
-profile claims such as `email`, `name`, and `picture` when they exist on the
-user record.
-
-Use those claims when you want native Convex auth ergonomics in backend code.
-For the freshest profile data, prefer `ctx.auth.user` or `auth.user.viewer(ctx)`.
-
-In app code, resolve authentication once with `auth.ctx()` and then use
-`ctx.auth.userId` / `ctx.auth.user` in handlers.
-
-## App-level denied sessions
-
-Provider authentication and app authorization are separate decisions. If a user
-successfully signs in but your app-level gate denies access (for example an
-allowlist or billing check), call `auth.signOut()` immediately.
-
-This clears the active session on both the client and the server, prevents the
-browser from continuing to refresh a session your app does not intend to use,
-and gives you a clean denied-state UI.
-
-```ts
-if (access.authenticated && !access.allowed) {
-  await auth.signOut();
-}
-```
-
-Keep the denial reason or email you want to display in local UI state before
-signing out if the page needs to survive the unauthenticated rerender.
-
-## Authorization pattern
-
-These examples assume your handlers use auth-aware builders that inject
-`ctx.auth` once in `convex/functions.ts`:
-
-```ts
-import { customMutation, customQuery } from "convex-helpers/server/customFunctions";
-import { mutation, query } from "./_generated/server";
-import { auth } from "./auth";
-
-export const authQuery = customQuery(query, auth.ctx());
-export const authMutation = customMutation(mutation, auth.ctx());
-```
-
-```ts
-import { authQuery } from "./functions";
-import { auth } from "./auth";
-
-export const canAccessAdminTools = authQuery({
-  args: {},
-  handler: async (ctx) => {
-    const result = await auth.member.get(ctx, {
-      userId: ctx.auth.userId,
-      groupId: "group_id_here",
-    });
-    return result.grants.includes("admin.tools.read");
-  },
-});
-```
-
-Check grants instead of role names. A role name is a label. The grants attached
-to it are the real contract.
-
-```ts
-// Use this when the handler should fail instead of returning a boolean.
 await auth.member.assert(ctx, {
   userId: ctx.auth.userId,
-  groupId: orgId,
-  grants: ["sso.connection.manage"],
+  groupId: args.groupId,
+  grants: ["projects.create"],
 });
 ```
 
-## Membership traversal
+Use `auth.member.get` for a direct membership. Use
+`auth.member.resolve` only when the application deliberately supports inherited
+membership through nested groups. The explicit name makes a potentially broader
+authorization lookup visible at the call site.
 
-If your groups are nested, use the explicitly traversing
-`auth.member.resolve(...)` operation. `member.get` remains a direct indexed
-lookup.
+## Profiles are not identities
 
-```ts
-const result = await auth.member.resolve(ctx, {
-  userId: ctx.auth.userId,
-  groupId: teamId,
-});
+Email, name, and image are useful presentation data, but they are not durable
+authorization keys. Email addresses can change, and different providers expose
+different profile claims. Read `ctx.auth.user` when a handler needs the current
+auth profile and use `ctx.auth.userId` for ownership and access checks.
 
-if (result.grants.includes("members.read")) {
-  // allow read access
-}
-```
+An app-owned profile table is appropriate when the product needs biography,
+preferences, onboarding state, or other domain fields. Key it by `userId` and do
+not copy credentials, accounts, sessions, or recovery state into it. A profile
+extends the product; it does not replace the auth user.
 
-## Performance: derive permissions from resolved grants
+## Public and optional handlers
 
-When you already have a user's resolved grants (e.g. from `member.resolve`), you
-can derive permissions locally instead of making separate authorization calls:
+Use required authenticated builders for protected work. Optional auth is useful
+for a genuinely public page that adds viewer-specific state, such as whether the
+current user has bookmarked an article. It should not be used merely to avoid
+handling an authentication error.
 
-```ts
-const { grants } = await auth.member.resolve(ctx, {
-  userId: ctx.auth.userId,
-  groupId,
-});
-
-// Derive permissions from already-resolved grants (no extra DB reads)
-const abilities = {
-  canCreate: grants.includes("items.create"),
-  canEdit: grants.includes("items.edit"),
-  canDelete: grants.includes("items.delete"),
-};
-```
-
-This avoids redundant round trips when you need to check multiple grants for the
-same user and group.
-
-## Group connection admin RPC
-
-Group connection admin is exposed exactly like every other namespace: write
-ordinary `authMutation` / `authQuery` / `authAction` functions that call the flat
-`auth.connection.*` facade and authorize with `auth.member.assert`. There is no
-special builder — the grant check lives directly in each handler.
-
-```ts
-// convex/auth/group.ts
-import { v } from "convex/values";
-import { auth } from "../auth";
-import { authMutation } from "../functions";
-
-export const createConnection = authMutation({
-  args: {
-    groupId: v.string(),
-    protocol: v.union(v.literal("oidc"), v.literal("saml")),
-    name: v.optional(v.string()),
-  },
-  handler: async (ctx, args) => {
-    await auth.member.assert(ctx, {
-      userId: ctx.auth.userId,
-      groupId: args.groupId,
-      grants: ["connection.create"],
-    });
-    return auth.connection.create(ctx, args);
-  },
-});
-
-export const setScim = authMutation({
-  args: { connectionId: v.string(), profile: v.optional(v.any()) },
-  handler: async (ctx, args) => {
-    const connection = await auth.connection.get(ctx, { id: args.connectionId });
-    await auth.member.assert(ctx, {
-      userId: ctx.auth.userId,
-      groupId: connection!.groupId,
-      grants: ["connection.protocol.manage"],
-    });
-    return auth.connection.scim.upsert(ctx, args);
-  },
-});
-```
-
-The `auth.member.assert(...)` check decides whether the caller may perform the
-requested admin operation. Handlers use the same object args as the server
-facade: `{ id }` for primary IDs, `{ connectionId }` for foreign-key scoped
-operations, `{ data }` for payloads, and `paginationOpts` for unbounded lists.
-
-## Account/User relationship
-
-Accounts are many-to-one with users. One `User` can have many linked `Account`
-records, such as GitHub, Google, and password. Each `Account` still belongs to
-exactly one `User`.
-
-This is why authorization should be keyed on `userId`, not provider account IDs.
-
-## Common patterns
-
-Use `auth.ctx()` when a handler should always receive `ctx.auth.userId` and
-`ctx.auth.user`. Use `auth.member.get(...)` when you need a boolean-style
-access check. Use `auth.member.assert(...)` when the handler should throw on
-failure. Use `auth.ctx.optional()` when the same handler should work for
-both guests and signed-in users.
-
-## Recommended pattern
-
-Define permissions once in config. Assign `roleIds` per membership. Check grants
-in server functions. Treat role ids as labels and grants as the actual
-authorization contract.
-
-See [`auth.member`](/api/member) for the API surface and
-[Group SSO RPC](/connection/rpc) for the app-owned admin flow.
+Authentication and authorization failures should also remain distinct. A
+missing session means the caller must sign in. A signed-in user without the
+required ownership or grant is authenticated but forbidden. Keeping that
+distinction in the handler makes both the API and the user experience easier to
+reason about.

@@ -86,7 +86,7 @@ export const send = mutation
 
 This is app-specific code. The canonical `convex-auth` setup only needs:
 
-- `convex/convex.config.ts`
-- `convex/auth.ts`
-- `convex/auth.config.ts`
-- `convex/http.ts`
+Keep `convex/convex.config.ts`, `convex/auth.ts`, `convex/auth.config.ts`, and
+`convex/http.ts` as ordinary Convex Auth integration files. Fluent Convex wraps
+application functions; it does not replace component registration, provider
+configuration, JWT trust, or protocol routes.

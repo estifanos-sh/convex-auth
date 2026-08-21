@@ -25,10 +25,17 @@ defineAuth(components.auth, {
 
 ## How it works
 
-1. Device calls `signIn("device")` -> gets `userCode` and `deviceCode`
-2. Device displays: "Go to myapp.com/device, enter code: WDJB-MJHT"
-3. User visits URL on their phone/laptop, signs in, enters the code
-4. Device polls until authorized -> receives session tokens
+The device begins with `signIn("device")`, which returns a short code for the
+person and a private code for the polling client. It displays the verification
+URL and short code without asking the person to enter credentials on the
+device. The person opens that URL on a trusted browser, signs in, and approves
+the request. While that happens, the device polls with its private code. A
+successful approval completes the same Convex Auth session issuance used by
+other sign-in methods.
+
+The two-code design keeps browser credentials away from a CLI, television, or
+input-constrained device. The polling code is not a session and cannot be used
+as an identity before the user approves it.
 
 ## Device side (CLI)
 

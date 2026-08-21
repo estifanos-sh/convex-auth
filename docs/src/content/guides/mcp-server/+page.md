@@ -149,11 +149,14 @@ to your `permissions.grants`; `grant_types` are server-fixed to
 `["authorization_code", "refresh_token"]`. A client chooses its
 `token_endpoint_auth_method`:
 
-- **`none`** — a **public** client (e.g. a CLI or native app that can't keep a
-  secret). No `client_secret` is issued; the client proves itself with PKCE
-  alone, and presenting a secret is rejected.
-- **`client_secret_post`** (default) / **`client_secret_basic`** — a
-  **confidential** client; a one-time `client_secret` is issued.
+Use `none` for a public client such as a CLI or native app that cannot protect a
+secret. Convex Auth issues no client secret and requires PKCE as the proof that
+the token exchange belongs to the client that began authorization.
+
+Use `client_secret_post` or `client_secret_basic` for a confidential server
+client. Convex Auth returns the secret once at registration. The two values
+describe how the same credential is presented at the token endpoint;
+`client_secret_post` is the default.
 
 ```http
 POST /auth/oauth2/register
@@ -177,15 +180,16 @@ managing the client. `redirect_uris` must be `https://` or
 The `registration_client_uri` (`{prefix}/oauth2/register/{client_id}`) accepts,
 authenticated by `Authorization: Bearer {registration_access_token}`:
 
-- **`GET`** — read the client's current metadata.
-- **`PUT`** — replace its metadata. Re-validates exactly like registration
-  (redirect-uri rules, scope clamping); `client_id` is immutable and a client
-  cannot grant itself extra scopes. A confidential client may downgrade to
-  public, but a public client cannot be upgraded to confidential (register a new
-  one instead).
-- **`DELETE`** — deregister (soft-revoke); returns `204`. Outstanding refresh
-  and code exchanges are then rejected. Already-issued access tokens remain
-  valid until they expire (≤ 15 minutes).
+`GET` returns the client's current registration. `PUT` replaces its mutable
+registration and repeats the redirect URI and scope validation performed during
+creation. The client ID remains immutable and a client cannot grant itself new
+scopes. A confidential client may become public, but turning a public client
+into a confidential one requires a new registration so a secret can be issued
+through the correct one-time channel.
+
+`DELETE` revokes the registration and returns `204`. New code and refresh-token
+exchanges fail immediately. An access token already issued remains valid only
+until its short expiration.
 
 The token is bound to its one client: a registration access token for one client
 can never read, modify, or delete another.
@@ -213,18 +217,19 @@ mounted through `auth.http()`.
 
 ## Tokens, scopes, and resource binding
 
-- **Access tokens** are `at+jwt` JWTs valid for 15 minutes. `aud` is `"convex"`
-  (so the token is a valid Convex identity); `sub` is the user id, plus
-  `client_id`, `scope`, and — when bound — a `resource` claim.
-- **Resource binding (RFC 8707).** A client may send a `resource` indicator
-  (e.g. your MCP URL) on the authorize request; it flows onto the code, the
-  access token, and is carried across refresh rotation. Each MCP endpoint rejects
-  a token whose `resource` doesn't match its own canonical resource
-  (`CONVEX_SITE_URL` + `mcpPath`), so a token minted for one resource server is
-  not accepted by another.
-- **Refresh tokens** rotate on every use (RFC 6749 §6). Replaying a rotated
-  token outside a short reuse window is treated as theft and revokes the entire
-  chain, emitting an `oauth.refresh.reuse_detected` audit event.
+Access tokens are `at+jwt` JWTs valid for 15 minutes. Their `aud` is `"convex"`
+so Convex can verify them as identities; `sub` identifies the user, while
+`client_id` and `scope` describe the delegated client access.
+
+A client can bind authorization to a resource under RFC 8707. The resource
+indicator travels from the authorization request through the code, access
+token, and refresh rotation. An MCP endpoint rejects a token bound to a
+different canonical resource, which prevents a token minted for one server from
+being replayed at another.
+
+Refresh tokens rotate on every use. Replaying an older token outside the short
+reuse window is treated as credential theft, revokes the entire chain, and
+emits an `oauth.refresh.reuse_detected` audit event.
 
 ## Discovery & wire endpoints
 

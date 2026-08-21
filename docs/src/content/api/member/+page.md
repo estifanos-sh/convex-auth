@@ -19,7 +19,7 @@ direct membership, while `resolve` walks the group hierarchy.
 | `get`     | `(ctx, { userId, groupId })`                    | `{ membership, roleIds, grants }`         | Indexed direct lookup. Also accepts `groupIds` for a batch lookup.           |
 | `resolve` | `(ctx, { userId, groupId, maxDepth? })`         | Membership access plus traversal metadata | Explicitly resolves inherited access through parent groups.                  |
 | `list`    | `(ctx, options?)`                               | `PaginationResult<Doc<"GroupMember">>`    | Lists raw membership documents; it does not join groups or calculate grants. |
-| `update`  | `(ctx, { id, patch })`                          | `null`                                    | Updates roles or metadata.                                                   |
+| `update`  | `(ctx, { id, patch })`                          | `null`                                    | Updates roles or application extension data.                                 |
 | `remove`  | `(ctx, { id })`                                 | `null`                                    | Deletes a membership.                                                        |
 | `assert`  | `(ctx, { userId, groupId, roleIds?, grants? })` | `{ membership, roleIds, grants }`         | Enforces direct membership and requirements.                                 |
 

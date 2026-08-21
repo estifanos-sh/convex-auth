@@ -76,10 +76,7 @@ const response = await auth.proxy(request);
 
 `proxy()` handles:
 
-- **Sign-in** — forwards credentials to Convex, returns `Set-Cookie` headers
-  with the new session tokens.
-- **Sign-out** — clears the session on the backend and returns cookie-clearing
-  headers.
+**Sign-in** — forwards credentials to Convex, returns `Set-Cookie` headers with the new session tokens; **Sign-out** — clears the session on the backend and returns cookie-clearing headers.
 
 Mount this behind a `/api/auth` route (or similar) and point your client-side
 auth calls to that endpoint.
@@ -135,10 +132,10 @@ discovers persisted auth from storage.
 Pass a URL source so the client can safely read query parameters during SSR
 (where `window` is not available). Each framework provides this differently:
 
-- **SvelteKit:** `location: () => page.url` (from `$app/state`)
-- **Next.js:** pass from server props or `useSearchParams()`
-- **TanStack Start:** pass from `useServerFn()` or loader data
-- **SPA:** omit (defaults to `window.location` with SSR guard)
+In SvelteKit, return `page.url` from `$app/state`. In Next.js, pass the URL from
+server props or `useSearchParams()`. TanStack Start can provide it through a
+server function or loader. A browser-only SPA can omit the option because the
+client safely falls back to `window.location`.
 
 ### `auth.param(name)`
 
@@ -163,17 +160,15 @@ if (auth.invite) {
 }
 ```
 
-The client handles:
-
-- Reading `?invite=` and `?email=` from the URL
-- Persisting the token to storage before `signIn()` (survives OAuth redirects)
-- Recovering the token from storage after redirect
-- Cleaning up URL parameters after `accept()`
+The client reads `?invite=` and `?email=` from the URL and persists the token
+before sign-in so it survives an OAuth redirect. After the provider returns, it
+recovers the same token. Accepting the invite clears the stored value and
+removes the URL parameters, which keeps this transient credential out of later
+navigation and copied links.
 
 ## Next steps
 
 See the framework-specific guides for full integration examples:
 
-- [SvelteKit](/ssr/sveltekit/)
-- [TanStack Start](/ssr/tanstack/)
-- [Next.js](/ssr/nextjs/)
+Continue with the framework guide for [SvelteKit](/ssr/sveltekit/),
+[TanStack Start](/ssr/tanstack/), or [Next.js](/ssr/nextjs/).
