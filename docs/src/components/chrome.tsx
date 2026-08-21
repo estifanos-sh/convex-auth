@@ -1,17 +1,13 @@
 import { For, Show, createSignal, onCleanup, onMount, type JSX } from "solid-js";
 import { useRouterState } from "@tanstack/solid-router";
 import { sidebar } from "../config/sidebar";
-import { CloseIcon, MenuIcon, MoonIcon, SearchIcon, SunIcon } from "./icons";
+import { CloseIcon, MenuIcon, SearchIcon } from "./icons";
 
 interface SearchResult {
   excerpt: string;
   section: string;
   title: string;
   url: string;
-}
-
-function currentTheme(): "light" | "dark" {
-  return document.documentElement.classList.contains("dark") ? "dark" : "light";
 }
 
 export function Chrome(props: { children: JSX.Element; landing?: boolean; withSidebar?: boolean }) {
@@ -25,7 +21,6 @@ export function Chrome(props: { children: JSX.Element; landing?: boolean; withSi
   const [query, setQuery] = createSignal("");
   const [results, setResults] = createSignal<SearchResult[]>([]);
   const [activeIndex, setActiveIndex] = createSignal(0);
-  const [theme, setTheme] = createSignal<"light" | "dark">("light");
   let pagefind:
     | {
         init: () => Promise<void>;
@@ -76,15 +71,7 @@ export function Chrome(props: { children: JSX.Element; landing?: boolean; withSi
     );
     setActiveIndex(0);
   };
-  const toggleTheme = () => {
-    const next = theme() === "dark" ? "light" : "dark";
-    setTheme(next);
-    document.documentElement.classList.toggle("dark", next === "dark");
-    localStorage.setItem("convex-auth-theme", next);
-  };
-
   onMount(() => {
-    setTheme(currentTheme());
     void import(/* @vite-ignore */ `${import.meta.env.BASE_URL}pagefind/pagefind.js`)
       .then(async (module) => {
         const loaded = module as typeof pagefind;
@@ -123,23 +110,12 @@ export function Chrome(props: { children: JSX.Element; landing?: boolean; withSi
             src="/convex-auth/brand/convex-logo-white.svg"
             width="92"
           />
-          <span class="brand-title">convex-auth</span>
         </a>
         <div class="masthead-actions">
           <button class="search-chip" onClick={openSearch} type="button">
             <SearchIcon />
             <span>Search</span>
             <kbd>⌘K</kbd>
-          </button>
-          <button
-            aria-label={theme() === "dark" ? "Switch to light theme" : "Switch to dark theme"}
-            class="theme-switcher"
-            onClick={toggleTheme}
-            type="button"
-          >
-            <Show when={theme() === "dark"} fallback={<MoonIcon />}>
-              <SunIcon />
-            </Show>
           </button>
           <Show when={props.withSidebar}>
             <button

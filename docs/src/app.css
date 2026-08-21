@@ -56,22 +56,6 @@
   color-scheme: light;
 }
 
-html.dark {
-  --studio-paper: #211718;
-  --studio-paper-deep: #2a1e1d;
-  --studio-sheet: #2a1e1d;
-  --broadcast-ink: #fffaf0;
-  --broadcast-ink-soft: rgba(255, 250, 240, 0.78);
-  --caption-ink: rgba(255, 250, 240, 0.62);
-  --quiet-ink: rgba(255, 250, 240, 0.48);
-  --line-whisper: rgba(255, 250, 240, 0.1);
-  --line-standard: rgba(255, 250, 240, 0.16);
-  --line-emphasis: rgba(255, 250, 240, 0.28);
-  --control-inset: #3d2a2c;
-  --grid-ink: rgba(255, 250, 240, 0.045);
-  color-scheme: dark;
-}
-
 * {
   box-sizing: border-box;
 }
@@ -108,10 +92,6 @@ input {
 ::selection {
   background: var(--stripe-yellow);
   color: var(--broadcast-ink);
-}
-
-html.dark ::selection {
-  color: #211718;
 }
 
 :focus-visible {
@@ -175,10 +155,6 @@ html.dark ::selection {
   object-fit: contain;
 }
 
-.brand-title {
-  color: #fffaf0;
-}
-
 .masthead-actions {
   display: flex;
   align-items: center;
@@ -189,7 +165,6 @@ html.dark ::selection {
 .cta-ghost,
 .cta-solid,
 .icon-btn,
-.theme-switcher,
 .path-card {
   display: inline-flex;
   align-items: center;
@@ -199,8 +174,7 @@ html.dark ::selection {
 }
 
 .search-chip,
-.icon-btn,
-.theme-switcher {
+.icon-btn {
   min-height: 44px;
   border-color: rgba(255, 250, 240, 0.24);
   background: transparent;
@@ -217,8 +191,7 @@ html.dark ::selection {
 }
 
 .search-chip:hover,
-.icon-btn:hover,
-.theme-switcher:hover {
+.icon-btn:hover {
   background: rgba(255, 250, 240, 0.1);
   border-color: rgba(255, 250, 240, 0.44);
 }
@@ -259,8 +232,7 @@ html.dark ::selection {
   color: #fffaf0;
 }
 
-.icon-btn,
-.theme-switcher {
+.icon-btn {
   width: 44px;
   justify-content: center;
   border-radius: 50%;
@@ -438,11 +410,6 @@ html.dark ::selection {
   background: color-mix(in srgb, var(--broadcast-ink) 20%, transparent);
   color: var(--broadcast-ink);
   font-weight: 650;
-}
-
-html.dark .rail-group a.active {
-  background: rgba(255, 250, 240, 0.2);
-  color: #fffaf0;
 }
 
 .doc-pane {
@@ -1090,10 +1057,6 @@ html.dark .rail-group a.active {
   .brand-wordmark {
     width: 78px;
     height: 30px;
-  }
-
-  .brand-title {
-    display: none;
   }
 
   .home-hero {

@@ -3,8 +3,6 @@ import type { JSX } from "solid-js";
 import { HydrationScript } from "solid-js/web";
 import "../app.css";
 
-const themeBootstrap = `(()=>{try{const t=localStorage.getItem("convex-auth-theme");if(t==="dark")document.documentElement.classList.add("dark")}catch{}})();`;
-
 export const Route = createRootRoute({
   head: () => ({
     links: [
@@ -47,7 +45,6 @@ function RootDocument(props: { children: JSX.Element }) {
   return (
     <html data-theme="convex" lang="en">
       <head>
-        <script innerHTML={themeBootstrap} />
         <HydrationScript />
         <HeadContent />
       </head>
