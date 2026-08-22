@@ -9,7 +9,7 @@ const app = defineApp({
     APP_URL: v.optional(v.string()),
     GOOGLE_CLIENT_ID: v.optional(v.string()),
     GOOGLE_CLIENT_SECRET: v.optional(v.string()),
-    RESEND_API_KEY: v.string(),
+    RESEND_API_KEY: v.optional(v.string()),
     SESSION_INACTIVE_DURATION_MS: v.optional(v.string()),
     SESSION_TOTAL_DURATION_MS: v.optional(v.string()),
   },

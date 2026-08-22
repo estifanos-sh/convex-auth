@@ -265,7 +265,7 @@ test("session.revokeForUser advances the epoch before bounded cleanup", async ()
   expect(tokens).toEqual([]);
 
   const user = (await t.run((ctx) => ctx.runQuery(components.auth.user.get, { id: userId }))) as {
-    sessionEpoch?: number;
+    sessionEpoch: number;
   } | null;
   expect(user?.sessionEpoch).toBe(1);
 });

@@ -84,7 +84,7 @@ export async function mutateVerifierRemove(
  * the row is consumed only if its signature matches (a mismatch leaves it
  * intact).
  */
-export async function consumeVerifierById(
+export async function acceptVerifierById(
   ctx: ComponentCallCtx,
   verifierId: string,
   expectedSignature?: string,
@@ -92,7 +92,7 @@ export async function consumeVerifierById(
   const args = { selector: { id: verifierId } };
   if (expectedSignature !== undefined) Object.assign(args, { expectedSignature });
   return (await ctx.runMutation(
-    ctx.auth.config.component.token.pkce.consume,
+    ctx.auth.config.component.token.pkce.accept,
     args,
   )) as VerifierDoc | null;
 }

@@ -12,8 +12,9 @@ The current API uses Convex-native setup vocabulary:
 `defineAuth`, `definePermissions`, `permissions`, `grants`, object args,
 native Convex pagination, application-owned provider environment values, and a flat group
 connection (SSO) admin facade `auth.connection.*`. See
-[`packages/auth/MIGRATION-vNext.md`](./packages/auth/MIGRATION-vNext.md) for
-the breaking-change migration notes.
+[`packages/auth/LEXICON.md`](./packages/auth/LEXICON.md) for the canonical API
+contract and [the documentation site](https://estifanos.sh/convex-auth/) for
+current setup and usage.
 
 ## API design
 

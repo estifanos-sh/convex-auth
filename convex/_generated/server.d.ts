@@ -33,7 +33,7 @@ type Env = {
   readonly APP_URL: string | undefined;
   readonly GOOGLE_CLIENT_ID: string | undefined;
   readonly GOOGLE_CLIENT_SECRET: string | undefined;
-  readonly RESEND_API_KEY: string;
+  readonly RESEND_API_KEY: string | undefined;
   readonly SESSION_INACTIVE_DURATION_MS: string | undefined;
   readonly SESSION_TOTAL_DURATION_MS: string | undefined;
 };

@@ -3,14 +3,16 @@ import schema from "@convex/schema";
 import { afterEach, expect, test, vi } from "vite-plus/test";
 
 import { convexTest } from "./convex/setup";
-import { expectSignInSession, MOCK_EMAIL_ID, RESEND_API_URL } from "./helpers";
+import { expectSignInSession, flushEmailQueue, MOCK_EMAIL_ID, RESEND_API_URL } from "./helpers";
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
 });
 
 test("sign in with email", async () => {
   const t = convexTest(schema);
+  vi.useFakeTimers();
 
   let code;
   let capturedInit: any = null;
@@ -21,7 +23,7 @@ test("sign in with email", async () => {
         capturedInit = init;
 
         code = init.body.match(/\?code=([^\s\\]+)/)?.[1];
-        return new Response(JSON.stringify({ id: MOCK_EMAIL_ID }), {
+        return new Response(JSON.stringify({ data: [{ id: MOCK_EMAIL_ID }] }), {
           status: 200,
         });
       }
@@ -32,6 +34,8 @@ test("sign in with email", async () => {
   await t.action(api.auth.signIn, {
     request: { provider: "email", params: { email: "tom@gmail.com" } },
   });
+  await flushEmailQueue(t);
+  vi.useRealTimers();
   vi.unstubAllGlobals();
 
   expect(capturedInit).not.toBeNull();
@@ -52,6 +56,7 @@ test("sign in with email", async () => {
 
 test("redirectTo with email", async () => {
   const t = convexTest(schema);
+  vi.useFakeTimers();
 
   let capturedInit: any = null;
   vi.stubGlobal(
@@ -59,7 +64,7 @@ test("redirectTo with email", async () => {
     vi.fn(async (input, init) => {
       if (typeof input === "string" && input === RESEND_API_URL) {
         capturedInit = init;
-        return new Response(JSON.stringify({ id: MOCK_EMAIL_ID }), {
+        return new Response(JSON.stringify({ data: [{ id: MOCK_EMAIL_ID }] }), {
           status: 200,
         });
       }
@@ -70,6 +75,8 @@ test("redirectTo with email", async () => {
   await t.action(api.auth.signIn, {
     request: { provider: "email", params: { email: "tom@gmail.com", redirectTo: "/dashboard" } },
   });
+  await flushEmailQueue(t);
+  vi.useRealTimers();
   vi.unstubAllGlobals();
 
   expect(capturedInit).not.toBeNull();

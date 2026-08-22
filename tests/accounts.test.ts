@@ -7,6 +7,7 @@ import { convexTest } from "./convex/setup";
 import { expectSignInSession, signInViaMagicLink, TEST_EMAIL, TEST_PASSWORD } from "./helpers";
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
 });
 

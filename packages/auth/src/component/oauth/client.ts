@@ -110,7 +110,7 @@ export const update = mutation({
 });
 
 /**
- * Page over OAuth clients, optionally scoped by `createdBy`. Archived clients
+ * Page over OAuth clients, optionally scoped by `createdBy`. Revoked clients
  * are excluded unless `where.includeRevoked` is set.
  */
 export const list = query({

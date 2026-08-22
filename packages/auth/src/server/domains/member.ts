@@ -26,13 +26,13 @@ type MemberListOpts = {
   order?: "asc" | "desc";
 };
 
-type InspectResult = {
+type GetResult = {
   membership: MemberDocLike;
   roleIds: string[];
   grants: string[];
 };
 
-type ResolveResult = InspectResult & {
+type ResolveResult = GetResult & {
   matchedGroupId: string | null;
   depth: number | null;
   isDirect: boolean;
@@ -49,18 +49,18 @@ export type MemberDeps = {
 export function createMemberDomain(deps: MemberDeps) {
   const { config, normalizeRoleIds, resolveGrantedPermissions } = deps;
 
-  function memberInspect(
+  function memberGet(
     ctx: ComponentReadCtx,
     opts: {
       userId: GenericId<"User">;
       groupId: GenericId<"Group">;
     },
-  ): Promise<InspectResult>;
-  function memberInspect(
+  ): Promise<GetResult>;
+  function memberGet(
     ctx: ComponentReadCtx,
     opts: { userId: GenericId<"User">; groupIds: readonly GenericId<"Group">[] },
-  ): Promise<Array<InspectResult>>;
-  async function memberInspect(
+  ): Promise<Array<GetResult>>;
+  async function memberGet(
     ctx: ComponentReadCtx,
     opts:
       | {
@@ -68,7 +68,7 @@ export function createMemberDomain(deps: MemberDeps) {
           groupId: GenericId<"Group">;
         }
       | { userId: GenericId<"User">; groupIds: readonly GenericId<"Group">[] },
-  ): Promise<InspectResult | Array<InspectResult>> {
+  ): Promise<GetResult | Array<GetResult>> {
     const oauthCaller = await resolveOAuthCaller(ctx);
     if ("groupIds" in opts) {
       const { userId, groupIds } = opts;
@@ -76,7 +76,7 @@ export function createMemberDomain(deps: MemberDeps) {
       const unique = Array.from(new Set(groupIds));
       const toFetch: GenericId<"Group">[] = [];
       for (const groupId of unique) {
-        if (!ctxCacheHas(ctx, `member-inspect:${userId}:${groupId}:n`)) {
+        if (!ctxCacheHas(ctx, `member-get:${userId}:${groupId}:n`)) {
           toFetch.push(groupId);
         }
       }
@@ -88,12 +88,12 @@ export function createMemberDomain(deps: MemberDeps) {
         for (let i = 0; i < toFetch.length; i += 1) {
           const groupId = toFetch[i]!;
           const value = docs[i] ?? null;
-          void cached(ctx, `member-inspect:${userId}:${groupId}:n`, () => Promise.resolve(value));
+          void cached(ctx, `member-get:${userId}:${groupId}:n`, () => Promise.resolve(value));
         }
       }
       return await Promise.all(
         groupIds.map(async (groupId) => {
-          const membership = (await cached(ctx, `member-inspect:${userId}:${groupId}:n`, () =>
+          const membership = (await cached(ctx, `member-get:${userId}:${groupId}:n`, () =>
             ctx.runQuery(config.component.group.member.get, {
               userId,
               groupId,
@@ -121,7 +121,7 @@ export function createMemberDomain(deps: MemberDeps) {
       );
     }
 
-    const cacheKey = `member-inspect:${opts.userId}:${opts.groupId}:n`;
+    const cacheKey = `member-get:${opts.userId}:${opts.groupId}:n`;
     const membership = (await cached(ctx, cacheKey, () =>
       ctx.runQuery(config.component.group.member.get, {
         userId: opts.userId,
@@ -197,7 +197,7 @@ export function createMemberDomain(deps: MemberDeps) {
         ...data,
         roleIds,
       })) as GenericId<"GroupMember">;
-      invalidateCtxCache(ctx, `member-inspect:${data.userId}:${data.groupId}`);
+      invalidateCtxCache(ctx, `member-get:${data.userId}:${data.groupId}`);
       return memberId;
     },
     /**
@@ -250,7 +250,7 @@ export function createMemberDomain(deps: MemberDeps) {
     remove: async (ctx: ComponentCtx, opts: { id: GenericId<"GroupMember"> }) => {
       await ctx.runMutation(config.component.group.member.remove, { id: opts.id });
       invalidateCtxCache(ctx, "member");
-      invalidateCtxCache(ctx, "member-inspect");
+      invalidateCtxCache(ctx, "member-get");
       return null;
     },
     /**
@@ -289,7 +289,7 @@ export function createMemberDomain(deps: MemberDeps) {
         patch: nextData,
       });
       invalidateCtxCache(ctx, `member:${opts.id}`);
-      invalidateCtxCache(ctx, "member-inspect");
+      invalidateCtxCache(ctx, "member-get");
       return null;
     },
     /**
@@ -306,7 +306,7 @@ export function createMemberDomain(deps: MemberDeps) {
      * if (!result.membership) return null;
      * ```
      *
-     * @example Check grants after inspection
+     * @example Check grants after lookup
      * ```ts
      * const result = await auth.member.get(ctx, {
      *   userId, groupId,
@@ -321,7 +321,7 @@ export function createMemberDomain(deps: MemberDeps) {
      * });
      * ```
      */
-    get: memberInspect,
+    get: memberGet,
     /**
      * Resolve inherited membership explicitly by walking toward the root.
      *
@@ -358,7 +358,7 @@ export function createMemberDomain(deps: MemberDeps) {
       const validatedRoleIds = normalizeRoleIds(opts.roleIds);
       const requiredGrants = Array.from(new Set(opts.grants ?? []));
       const roleFilter = validatedRoleIds.length > 0 ? new Set(validatedRoleIds) : null;
-      const result: InspectResult = await memberInspect(ctx, {
+      const result: GetResult = await memberGet(ctx, {
         userId: opts.userId,
         groupId: opts.groupId,
       });

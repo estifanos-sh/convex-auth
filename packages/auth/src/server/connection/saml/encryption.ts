@@ -6,7 +6,7 @@ import { readPrivateKey, base64Encode } from "./encoding";
 import { getPublicKeyPemFromCert } from "./crypto";
 import { SamlNamespace } from "./constants";
 import { getContext } from "./api";
-import { selectXPath as select, isElementNode, serializeXmlNode } from "./dom/select";
+import { evaluateXPathToNodes, isElementNode, serializeXmlNode } from "./dom/select";
 import type { SamlEntitySettings } from "./types";
 import type { SamlMetadata } from "./metadata";
 
@@ -31,7 +31,9 @@ export function encryptAssertion(
     const targetEntityMetadata = targetEntity.entityMeta;
     const { dom } = getContext();
     const doc = dom!.parseFromString(xml);
-    const assertions = select("//*[local-name(.)='Assertion']", doc).filter(isElementNode);
+    const assertions = evaluateXPathToNodes("//*[local-name(.)='Assertion']", doc).filter(
+      isElementNode,
+    );
     if (assertions.length === 0) {
       throw new Error("ERR_NO_ASSERTION");
     }
@@ -83,7 +85,7 @@ export function decryptAssertion(here: { entitySetting: SamlEntitySettings }, en
     const hereSetting = here.entitySetting;
     const { dom } = getContext();
     const doc = dom!.parseFromString(entireXML);
-    const encryptedAssertions = select(
+    const encryptedAssertions = evaluateXPathToNodes(
       "/*[contains(local-name(), 'Response')]/*[local-name(.)='EncryptedAssertion']",
       doc,
     ).filter(isElementNode);

@@ -46,6 +46,12 @@ importers:
         specifier: latest
         version: 0.1.118(@standard-schema/spec@1.1.0)(convex@1.45.0(react@19.2.5))(react@19.2.5)(typescript@6.0.2)(zod@4.4.3)
     devDependencies:
+      '@convex-dev/rate-limiter':
+        specifier: ^0.3.2
+        version: 0.3.2(convex@1.45.0(react@19.2.5))(react@19.2.5)
+      '@convex-dev/workpool':
+        specifier: ^0.4.6
+        version: 0.4.9(convex-helpers@0.1.118(@standard-schema/spec@1.1.0)(convex@1.45.0(react@19.2.5))(react@19.2.5)(typescript@6.0.2)(zod@4.4.3))(convex@1.45.0(react@19.2.5))(react@19.2.5)
       '@edge-runtime/vm':
         specifier: latest
         version: 5.0.0
@@ -1368,12 +1374,6 @@ packages:
     peerDependenciesMeta:
       react:
         optional: true
-
-  '@convex-dev/workpool@0.4.6':
-    resolution: {integrity: sha512-e+cIgQePx5rrGizvzaYocWQCsDFbFlYqR1ZbtFPLa909izwc5GvoasPJPANeFhHRWaA5NBipNVqNtfHySi7Ldw==}
-    peerDependencies:
-      convex: ^1.31.7
-      convex-helpers: ^0.1.94
 
   '@convex-dev/workpool@0.4.9':
     resolution: {integrity: sha512-2EauCO+fXqhBE0qN3aC2G/CA8Udc1nDiSha2uwdJi5SaElz6HmuM3Rv60AeQ3snMZ8PdHugKKlVeEFvAhSaokQ==}
@@ -9813,7 +9813,7 @@ snapshots:
   '@convex-dev/resend@0.2.4(convex-helpers@0.1.118(@standard-schema/spec@1.1.0)(convex@1.45.0(react@19.2.5))(react@19.2.5)(typescript@6.0.2)(zod@4.4.3))(convex@1.45.0(react@19.2.5))(react@19.2.5)':
     dependencies:
       '@convex-dev/rate-limiter': 0.3.2(convex@1.45.0(react@19.2.5))(react@19.2.5)
-      '@convex-dev/workpool': 0.4.6(convex-helpers@0.1.118(@standard-schema/spec@1.1.0)(convex@1.45.0(react@19.2.5))(react@19.2.5)(typescript@6.0.2)(zod@4.4.3))(convex@1.45.0(react@19.2.5))
+      '@convex-dev/workpool': 0.4.9(convex-helpers@0.1.118(@standard-schema/spec@1.1.0)(convex@1.45.0(react@19.2.5))(react@19.2.5)(typescript@6.0.2)(zod@4.4.3))(convex@1.45.0(react@19.2.5))(react@19.2.5)
       convex: 1.45.0(react@19.2.5)
       convex-helpers: 0.1.118(@standard-schema/spec@1.1.0)(convex@1.45.0(react@19.2.5))(react@19.2.5)(typescript@6.0.2)(zod@4.4.3)
       remeda: 2.37.0
@@ -9840,10 +9840,13 @@ snapshots:
       - typescript
       - zod
 
-  '@convex-dev/workpool@0.4.6(convex-helpers@0.1.118(@standard-schema/spec@1.1.0)(convex@1.45.0(react@19.2.5))(react@19.2.5)(typescript@6.0.2)(zod@4.4.3))(convex@1.45.0(react@19.2.5))':
+  '@convex-dev/workpool@0.4.9(convex-helpers@0.1.118(@standard-schema/spec@1.1.0)(convex@1.45.0(react@19.2.5))(react@19.2.5)(typescript@6.0.2)(zod@4.4.3))(convex@1.45.0(react@19.2.5))(react@19.2.5)':
     dependencies:
+      '@convex-dev/batch-worker': 0.2.0(convex@1.45.0(react@19.2.5))(react@19.2.5)
       convex: 1.45.0(react@19.2.5)
       convex-helpers: 0.1.118(@standard-schema/spec@1.1.0)(convex@1.45.0(react@19.2.5))(react@19.2.5)(typescript@6.0.2)(zod@4.4.3)
+    transitivePeerDependencies:
+      - react
 
   '@convex-dev/workpool@0.4.9(convex-helpers@0.1.123(@standard-schema/spec@1.1.0)(convex@1.45.0(react@19.2.5))(react@19.2.5)(typescript@6.0.2)(zod@4.4.3))(convex@1.45.0(react@19.2.5))(react@19.2.5)':
     dependencies:

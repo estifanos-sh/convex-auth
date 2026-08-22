@@ -64,7 +64,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
             name?: string;
             phone?: string;
             phoneVerificationTime?: number;
-            sessionEpoch?: number;
+            sessionEpoch: number;
           };
         },
       Name
@@ -103,7 +103,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
             name?: string;
             phone?: string;
             phoneVerificationTime?: number;
-            sessionEpoch?: number;
+            sessionEpoch: number;
           };
         },
       Name
@@ -1577,7 +1577,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         session: {
           _creationTime: number;
           _id: string;
-          epoch?: number;
+          epoch: number;
           expirationTime: number;
           userId: string;
         } | null;
@@ -1595,7 +1595,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           name?: string;
           phone?: string;
           phoneVerificationTime?: number;
-          sessionEpoch?: number;
+          sessionEpoch: number;
         } | null;
       },
       Name
@@ -2925,7 +2925,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
               name?: string;
               phone?: string;
               phoneVerificationTime?: number;
-              sessionEpoch?: number;
+              sessionEpoch: number;
             };
           },
         Name
@@ -2984,7 +2984,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
               name?: string;
               phone?: string;
               phoneVerificationTime?: number;
-              sessionEpoch?: number;
+              sessionEpoch: number;
             };
           },
         Name
@@ -3035,7 +3035,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
             name?: string;
             phone?: string;
             phoneVerificationTime?: number;
-            sessionEpoch?: number;
+            sessionEpoch: number;
           };
         },
         Name
@@ -3091,7 +3091,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
               name?: string;
               phone?: string;
               phoneVerificationTime?: number;
-              sessionEpoch?: number;
+              sessionEpoch: number;
             };
           },
         Name
@@ -3273,7 +3273,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
               name?: string;
               phone?: string;
               phoneVerificationTime?: number;
-              sessionEpoch?: number;
+              sessionEpoch: number;
             };
           },
         Name
@@ -3320,7 +3320,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
             name?: string;
             phone?: string;
             phoneVerificationTime?: number;
-            sessionEpoch?: number;
+            sessionEpoch: number;
           };
           verifierId: string;
         },
@@ -4241,7 +4241,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           name?: string;
           phone?: string;
           phoneVerificationTime?: number;
-          sessionEpoch?: number;
+          sessionEpoch: number;
         };
         userId: string;
       },
@@ -4254,7 +4254,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       {
         _creationTime: number;
         _id: string;
-        epoch?: number;
+        epoch: number;
         expirationTime: number;
         userId: string;
       } | null,
@@ -4267,7 +4267,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       Array<{
         _creationTime: number;
         _id: string;
-        epoch?: number;
+        epoch: number;
         expirationTime: number;
         userId: string;
       }>,
@@ -4398,7 +4398,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       >;
     };
     pkce: {
-      consume: FunctionReference<
+      accept: FunctionReference<
         "mutation",
         "internal",
         {
@@ -4500,7 +4500,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
               name?: string;
               phone?: string;
               phoneVerificationTime?: number;
-              sessionEpoch?: number;
+              sessionEpoch: number;
             };
             userId: string;
           }
@@ -4619,7 +4619,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
               name?: string;
               phone?: string;
               phoneVerificationTime?: number;
-              sessionEpoch?: number;
+              sessionEpoch: number;
             };
           }
         | {
@@ -4642,7 +4642,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
               name?: string;
               phone?: string;
               phoneVerificationTime?: number;
-              sessionEpoch?: number;
+              sessionEpoch: number;
             };
           },
         Name
@@ -4784,7 +4784,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           name?: string;
           phone?: string;
           phoneVerificationTime?: number;
-          sessionEpoch?: number;
+          sessionEpoch: number;
         }
       | null
       | Array<{
@@ -4801,7 +4801,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           name?: string;
           phone?: string;
           phoneVerificationTime?: number;
-          sessionEpoch?: number;
+          sessionEpoch: number;
         } | null>,
       Name
     >;
@@ -4979,7 +4979,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           name?: string;
           phone?: string;
           phoneVerificationTime?: number;
-          sessionEpoch?: number;
+          sessionEpoch: number;
         }>;
         pageStatus?: "SplitRecommended" | "SplitRequired" | null;
         splitCursor?: string | null;

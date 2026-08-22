@@ -10,21 +10,21 @@ import { LOG_LEVELS, log, maybeRedact } from "../log";
 import { MutationCtx } from "../types";
 import { AUTH_STORE_REF } from "./store/refs";
 
-export const vModifyAccountArgs = v.object({
+export const vUpdateAccountArgs = v.object({
   provider: v.string(),
   account: v.object({ id: v.string(), secret: v.string() }),
 });
 
-export async function modifyAccountImpl(
+export async function updateAccountImpl(
   ctx: MutationCtx,
-  args: Infer<typeof vModifyAccountArgs>,
+  args: Infer<typeof vUpdateAccountArgs>,
   getProviderOrThrow: GetProviderOrThrowFunc,
   config: Provider.Config,
 ): Promise<void> {
   const { provider, account } = args;
   const db = authDb(ctx, config);
 
-  log(LOG_LEVELS.DEBUG, "modifyAccountImpl args:", {
+  log(LOG_LEVELS.DEBUG, "updateAccountImpl args:", {
     provider,
     account: { id: account.id, secret: maybeRedact(account.secret ?? "") },
   });
@@ -44,13 +44,13 @@ export async function modifyAccountImpl(
   });
 }
 
-export const callModifyAccount = async <DataModel extends GenericDataModel>(
+export const callUpdateAccount = async <DataModel extends GenericDataModel>(
   ctx: GenericActionCtx<DataModel>,
-  args: Infer<typeof vModifyAccountArgs>,
+  args: Infer<typeof vUpdateAccountArgs>,
 ): Promise<void> => {
   return ctx.runMutation(AUTH_STORE_REF, {
     args: {
-      type: "modifyAccount",
+      type: "updateAccount",
       ...args,
     },
   }) as Promise<void>;

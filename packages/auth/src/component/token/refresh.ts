@@ -11,7 +11,6 @@ import { v } from "convex/values";
 
 import { mutation, query } from "../_generated/server";
 import { vRefreshTokenDoc, vUserDoc } from "../documents";
-import { getSessionEpoch, getUserEpoch } from "../../shared/epoch";
 
 /**
  * Upper bound on a session's RefreshToken rows deleted in one cleanup. The
@@ -185,8 +184,8 @@ export const exchange = mutation({
       return { status: "invalid" as const };
     }
     const user = await ctx.db.get("User", session.userId);
-    const sessionEpoch = getSessionEpoch(session);
-    if (user === null || sessionEpoch !== getUserEpoch(user)) {
+    const sessionEpoch = session.epoch;
+    if (user === null || sessionEpoch !== user.sessionEpoch) {
       await cleanupSessionArtifacts();
       return { status: "invalid" as const };
     }

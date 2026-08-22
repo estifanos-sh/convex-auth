@@ -154,42 +154,6 @@ test("getAuthContext accepts the current session epoch", async () => {
   expect(calls.contextGet).toBe(1);
 });
 
-test("getAuthContext accepts legacy epoch-zero rows", async () => {
-  const { resolver } = makeResolver({
-    user: { _id: "u1" },
-    session: {
-      _id: "s1",
-      userId: "u1",
-      expirationTime: Date.now() + 60_000,
-    },
-  });
-  const context = {
-    auth: {
-      getUserIdentity: async () => ({ subject: "u1", sid: "s1" }),
-    },
-  } as any;
-
-  await expect(getAuthContext(resolver, context)).resolves.toMatchObject({ userId: "u1" });
-});
-
-test("getAuthContext never revives a legacy session after epoch revocation", async () => {
-  const { resolver } = makeResolver({
-    user: { _id: "u1", sessionEpoch: 1 },
-    session: {
-      _id: "s1",
-      userId: "u1",
-      expirationTime: Date.now() + 60_000,
-    },
-  });
-  const context = {
-    auth: {
-      getUserIdentity: async () => ({ subject: "u1", sid: "s1" }),
-    },
-  } as any;
-
-  await expect(getAuthContext(resolver, context)).resolves.toBeNull();
-});
-
 test("getAuthContext rejects expired sessions", async () => {
   const { resolver } = makeResolver({
     user: { _id: "u1", sessionEpoch: 0 },

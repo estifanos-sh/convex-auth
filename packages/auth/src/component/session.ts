@@ -1,8 +1,6 @@
 /**
  * `component.session.*` — auth sessions.
  *
- * `issue` is a kept domain verb (token issuance).
- *
  * @module
  */
 
@@ -12,7 +10,6 @@ import type { Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
 import { mutation, query } from "./_generated/server";
 import { vSessionDoc, vUserDoc } from "./documents";
-import { getSessionEpoch, getUserEpoch } from "../shared/epoch";
 
 /** Maximum number of current sessions retained for one user. */
 export const MAX_ACTIVE_SESSIONS = 16;
@@ -94,7 +91,7 @@ async function revokeUserSessions(
     };
   }
 
-  const epoch = getUserEpoch(user) + 1;
+  const epoch = user.sessionEpoch + 1;
   await ctx.db.patch("User", userId, { sessionEpoch: epoch });
 
   const retainedSessionIds: Id<"Session">[] = [];
@@ -142,7 +139,7 @@ export async function createSessionRows(ctx: MutationCtx, args: CreateSessionArg
   const now = Date.now();
   const user = await ctx.db.get("User", args.userId);
   if (user === null) return null;
-  const epoch = getUserEpoch(user);
+  const epoch = user.sessionEpoch;
 
   let sessionId = args.sessionId;
   let resolvedSessionExpirationTime: number;
@@ -158,7 +155,7 @@ export async function createSessionRows(ctx: MutationCtx, args: CreateSessionArg
         authenticatedUser !== null &&
         existingSession.userId === authenticatedUser._id &&
         existingSession.expirationTime > now &&
-        getSessionEpoch(existingSession) === getUserEpoch(authenticatedUser)
+        existingSession.epoch === authenticatedUser.sessionEpoch
       ) {
         await deleteSessionArtifacts(ctx, replacement.sessionId);
       } else {
@@ -188,7 +185,7 @@ export async function createSessionRows(ctx: MutationCtx, args: CreateSessionArg
       existingSession === null ||
       existingSession.userId !== user._id ||
       existingSession.expirationTime <= now ||
-      getSessionEpoch(existingSession) !== epoch
+      existingSession.epoch !== epoch
     ) {
       return null;
     }
@@ -224,10 +221,9 @@ export const get = query({
 });
 
 /**
- * List at most {@link MAX_ACTIVE_SESSIONS} current, non-expired sessions.
- * Legacy rows without an epoch remain visible only while the user is still at
- * epoch zero; an epoch advance makes them inert and removes them from the
- * current-devices view before the compatibility backfill reaches them.
+ * List at most {@link MAX_ACTIVE_SESSIONS} newest sessions from the user's
+ * current revocation epoch. Results include `expirationTime`; callers compare
+ * it with their own clock so this reactive query never depends on wall time.
  */
 export const list = query({
   args: { userId: v.id("User") },
@@ -235,25 +231,13 @@ export const list = query({
   handler: async (ctx, { userId }) => {
     const user = await ctx.db.get("User", userId);
     if (user === null) return [];
-    const now = Date.now();
-    const epoch = getUserEpoch(user);
-    const current = await ctx.db
+    return await ctx.db
       .query("Session")
       .withIndex("user_id_epoch_expiration_time", (q) =>
-        q.eq("userId", userId).eq("epoch", epoch).gt("expirationTime", now),
+        q.eq("userId", userId).eq("epoch", user.sessionEpoch),
       )
       .order("desc")
       .take(MAX_ACTIVE_SESSIONS);
-    if (epoch !== 0 || current.length === MAX_ACTIVE_SESSIONS) return current;
-
-    const legacy = await ctx.db
-      .query("Session")
-      .withIndex("user_id_epoch_expiration_time", (q) =>
-        q.eq("userId", userId).eq("epoch", undefined).gt("expirationTime", now),
-      )
-      .order("desc")
-      .take(MAX_ACTIVE_SESSIONS - current.length);
-    return [...current, ...legacy];
   },
 });
 

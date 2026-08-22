@@ -10,7 +10,7 @@ import { convexTest } from "./convex/setup";
 import { subjectToUserId } from "./helpers";
 
 // A scoped OAuth token must never surface grants beyond its scope through a
-// direct membership inspection, while a browser session keeps its full grants.
+// direct membership lookup, while a browser session keeps its full grants.
 
 afterEach(() => {
   vi.unstubAllGlobals();

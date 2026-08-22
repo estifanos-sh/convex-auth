@@ -272,7 +272,7 @@ type PublicAccountApi = RuntimeAuthApi["accountManagement"];
 
 /** App-facing OAuth administration and consent; wire-protocol helpers stay runtime-internal. */
 type PublicOAuthApi = {
-  authorize: RuntimeAuthApi["oauth"]["authorize"];
+  authorize: RuntimeAuthApi["oauth"]["code"]["authorize"];
   client: Omit<RuntimeAuthApi["oauth"]["client"], "verify" | "verifyRegistrationToken">;
 };
 
@@ -924,7 +924,7 @@ export function defineAuth<
   >(authResult.auth.member);
 
   const oauthApi: PublicOAuthApi = {
-    authorize: authResult.auth.oauth.authorize,
+    authorize: (ctx, args) => authResult.auth.oauth.code.authorize(ctx, args),
     client: {
       create: (ctx, args) => authResult.auth.oauth.client.create(ctx, args),
       get: (ctx, args) => authResult.auth.oauth.client.get(ctx, args),

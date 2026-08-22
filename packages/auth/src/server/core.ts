@@ -40,7 +40,7 @@ type CreateAccountArgs = {
   shouldLinkViaEmail?: boolean;
   shouldLinkViaPhone?: boolean;
 };
-type RetrieveAccountArgs = { provider: string; account: { id: string; secret?: string } };
+type GetAccountArgs = { provider: string; account: { id: string; secret?: string } };
 type UpdateAccountCredentialsArgs = {
   provider: string;
   account: { id: string; secret: string };
@@ -55,7 +55,7 @@ type ProviderSignInResult = ProviderImmediateSignInResult | ProviderDeferredSign
 
 type CoreDeps = {
   config: ReturnType<typeof configDefaults>;
-  callInvalidateSessions: <DataModel extends GenericDataModel>(
+  callRevokeSessions: <DataModel extends GenericDataModel>(
     ctx: GenericActionCtx<DataModel>,
     args: { userId: GenericId<"User">; except?: GenericId<"Session">[] },
   ) => Promise<void>;
@@ -63,13 +63,13 @@ type CoreDeps = {
     ctx: GenericActionCtx<DataModel>,
     args: CreateAccountArgs,
   ) => Promise<CredentialsAccountResult>;
-  callRetrieveAccountWithCredentials: <DataModel extends GenericDataModel>(
+  callGetAccountWithCredentials: <DataModel extends GenericDataModel>(
     ctx: GenericActionCtx<DataModel>,
-    args: RetrieveAccountArgs,
+    args: GetAccountArgs,
   ) => Promise<
     CredentialsAccountResult | "InvalidAccountId" | "InvalidSecret" | "TooManyFailedAttempts"
   >;
-  callModifyAccount: <DataModel extends GenericDataModel>(
+  callUpdateAccount: <DataModel extends GenericDataModel>(
     ctx: GenericActionCtx<DataModel>,
     args: UpdateAccountCredentialsArgs,
   ) => Promise<void>;
@@ -119,10 +119,10 @@ type CoreDeps = {
 export function createCoreDomains(deps: CoreDeps) {
   const {
     config,
-    callInvalidateSessions,
+    callRevokeSessions,
     callCreateAccountFromCredentials,
-    callRetrieveAccountWithCredentials,
-    callModifyAccount,
+    callGetAccountWithCredentials,
+    callUpdateAccount,
     inviteTokenAlphabet,
     inviteTokenLength,
     stageCredentialEnrollment,
@@ -162,7 +162,7 @@ export function createCoreDomains(deps: CoreDeps) {
     return Array.from(grants).sort();
   };
 
-  const session = createSessionDomain({ config, callInvalidateSessions });
+  const session = createSessionDomain({ config, callRevokeSessions });
   const context = createContextDomain({ config, resolveGrantedPermissions });
   const key = createKeyDomain({ config });
   const user = createUserDomain({ config });
@@ -181,8 +181,8 @@ export function createCoreDomains(deps: CoreDeps) {
   const account = createAccountDomain({
     config,
     callCreateAccountFromCredentials,
-    callRetrieveAccountWithCredentials,
-    callModifyAccount,
+    callGetAccountWithCredentials,
+    callUpdateAccount,
   });
   const accountManagement = createAccountManagementDomain({ config });
   const factor = createFactorDomain({ config });
@@ -274,7 +274,7 @@ export function createCoreDomains(deps: CoreDeps) {
         operation: WebAuthnSignInOperation;
       },
     ) => {
-      const verified = await callRetrieveAccountWithCredentials(ctx, {
+      const verified = await callGetAccountWithCredentials(ctx, {
         provider: args.verifier.id,
         account: args.account,
       });
@@ -318,7 +318,7 @@ export function createCoreDomains(deps: CoreDeps) {
         operation: WebAuthnRotateOperation;
       },
     ) => {
-      const existing = await callRetrieveAccountWithCredentials(ctx, {
+      const existing = await callGetAccountWithCredentials(ctx, {
         provider: args.verifier.id,
         account: args.account,
       });
@@ -463,7 +463,6 @@ export function createCoreDomains(deps: CoreDeps) {
     client: oauthClient,
     code: oauthCode,
     refresh: oauthRefresh,
-    authorize: (ctx, args) => oauthCode.authorize(ctx, args),
   };
 
   return {

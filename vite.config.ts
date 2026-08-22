@@ -9,6 +9,10 @@ const testProjectAliases = {
   "@convex": convexApp,
   "@convex/": `${convexApp}/`,
   "@estifanos-sh/convex-auth/test": path.join(authSrc, "test.ts"),
+  "@estifanos-sh/convex-auth/_generated/component.js": path.join(
+    authSrc,
+    "component/_generated/component.ts",
+  ),
   "@estifanos-sh/convex-auth": authSrc,
   "@estifanos-sh/convex-auth/": `${authSrc}/`,
 } as const;

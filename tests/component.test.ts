@@ -13,12 +13,7 @@ import {
   EVENT_CATEGORIES,
   EVENT_KIND_CATEGORY,
 } from "../packages/auth/src/shared/event/kinds";
-import {
-  backfillEpochsForTest,
-  convexTest,
-  privateAuthForTest,
-  pruneExpiredForTest,
-} from "./convex/setup";
+import { convexTest, privateAuthForTest, pruneExpiredForTest } from "./convex/setup";
 
 /** Literal values carried by a `v.union(v.literal(...), ...)` validator. */
 function unionLiteralValues(validator: unknown): string[] {
@@ -82,49 +77,6 @@ test("context.get resolves user, session, membership, and group in one snapshot"
   expect(snapshot.active?.membership.userId).toBe(userId);
   expect(snapshot.active?.groupId).toBe(groupId);
   expect(snapshot.active?.group?._id).toBe(groupId);
-});
-
-test("backfillEpochs migrates legacy users and sessions in resumable batches", async () => {
-  const t = convexTest(schema);
-  const userId = await t.run((ctx) =>
-    ctx.runMutation(components.auth.user.create, {
-      data: { email: "legacy-epoch@example.com" },
-    }),
-  );
-  const { sessionId } = await t.run((ctx) =>
-    ctx.runMutation(components.auth.session.create, {
-      userId,
-      sessionExpirationTime: Date.now() + 60_000,
-    }),
-  );
-
-  await (t as any).runInComponent("auth", async (ctx: any) => {
-    await ctx.db.patch("User", userId, { sessionEpoch: undefined });
-    await ctx.db.patch("Session", sessionId, { epoch: undefined });
-  });
-
-  const first = await t.run((ctx) =>
-    ctx.runMutation(backfillEpochsForTest(components.auth), { batchSize: 1 }),
-  );
-  expect(first).toMatchObject({ table: "User", scanned: 1, migrated: 1, isDone: false });
-
-  vi.useFakeTimers();
-  await t.finishAllScheduledFunctions(vi.runAllTimers);
-  vi.useRealTimers();
-
-  const snapshot = await t.run((ctx) =>
-    ctx.runQuery(components.auth.context.get, { userId, sessionId }),
-  );
-  expect(snapshot.user?.sessionEpoch).toBe(0);
-  expect(snapshot.session?.epoch).toBe(0);
-
-  const repeated = await t.run((ctx) =>
-    ctx.runMutation(backfillEpochsForTest(components.auth), { batchSize: 1 }),
-  );
-  expect(repeated.migrated).toBe(0);
-  vi.useFakeTimers();
-  await t.finishAllScheduledFunctions(vi.runAllTimers);
-  vi.useRealTimers();
 });
 
 test("connection.list combines every supplied filter and supports name ordering", async () => {
@@ -767,7 +719,7 @@ test("auth.member.get returns membership, roleIds, and grants", async () => {
 
   const userId = (await t.run(async (ctx) => {
     return await ctx.runMutation(components.auth.user.create, {
-      data: { email: "member-inspect@example.com" },
+      data: { email: "member-get@example.com" },
     });
   })) as GenericId<"User">;
 

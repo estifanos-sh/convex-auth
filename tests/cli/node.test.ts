@@ -3,6 +3,7 @@ import {
   deploymentTypeFromAdminKey,
   doesAlreadyMatchTemplate,
   isPreviewDeployKey,
+  resolveConvexSiteUrl,
   stripDeploymentTypePrefix,
   templateToSource,
 } from "@estifanos-sh/convex-auth/cli/index";
@@ -97,6 +98,29 @@ test("readConvexDeployment allows self-hosted admin keys with explicit url", () 
     name: "http://127.0.0.1:3210",
     type: null,
   });
+});
+
+test("resolveConvexSiteUrl derives a Convex site URL from a deployment name", () => {
+  const deployment = readConvexDeployment({ deployment: "disciplined-pony-306" });
+  expect(resolveConvexSiteUrl(deployment)).toBe("https://disciplined-pony-306.convex.site");
+});
+
+test("resolveConvexSiteUrl converts a Convex cloud URL to its HTTP actions URL", () => {
+  const deployment = readConvexDeployment({ url: "https://disciplined-pony-306.convex.cloud" });
+  expect(resolveConvexSiteUrl(deployment)).toBe("https://disciplined-pony-306.convex.site");
+});
+
+test("resolveConvexSiteUrl converts the standard local backend port", () => {
+  const deployment = readConvexDeployment({ url: "http://127.0.0.1:3210" });
+  expect(resolveConvexSiteUrl(deployment)).toBe("http://127.0.0.1:3211");
+});
+
+test("resolveConvexSiteUrl prefers an explicit site URL", () => {
+  const deployment = readConvexDeployment({
+    url: "https://disciplined-pony-306.convex.cloud",
+    siteUrl: "https://auth.example.com/",
+  });
+  expect(resolveConvexSiteUrl(deployment)).toBe("https://auth.example.com");
 });
 
 test("isPreviewDeployKey identifies preview deploy keys", () => {

@@ -6,8 +6,13 @@ import type { TestConvexForDataModel } from "./convex/setup";
 
 export const TEST_EMAIL = "sarah@gmail.com";
 export const TEST_PASSWORD = "44448888";
-export const RESEND_API_URL = "https://api.resend.com/emails";
+export const RESEND_API_URL = "https://api.resend.com/emails/batch";
 export const MOCK_EMAIL_ID = "email_123";
+
+/** Run the durable email component's scheduled delivery work in Convex tests. */
+export async function flushEmailQueue(t: TestConvexForDataModel<any>) {
+  await t.finishAllScheduledFunctions(vi.runAllTimers);
+}
 
 /**
  * Assert that a sign-in result has kind "signedIn" and return the session tokens.
@@ -37,6 +42,9 @@ export async function signInViaMagicLink(
   provider: "email",
   email: string,
 ) {
+  if (!vi.isFakeTimers()) {
+    vi.useFakeTimers();
+  }
   let code = "";
   vi.stubGlobal(
     "fetch",
@@ -45,7 +53,7 @@ export async function signInViaMagicLink(
         const body = String(init.body ?? "");
         code = body.match(/\?code=([^\s\\]+)/)?.[1] ?? "";
         expect(code).not.toEqual("");
-        return new Response(JSON.stringify({ id: MOCK_EMAIL_ID }), {
+        return new Response(JSON.stringify({ data: [{ id: MOCK_EMAIL_ID }] }), {
           status: 200,
         });
       }
@@ -53,8 +61,12 @@ export async function signInViaMagicLink(
     }),
   );
 
-  await t.action(api.auth.signIn, { request: { provider, params: { email } } });
-  vi.unstubAllGlobals();
+  try {
+    await t.action(api.auth.signIn, { request: { provider, params: { email } } });
+    await flushEmailQueue(t);
+  } finally {
+    vi.unstubAllGlobals();
+  }
 
   const result = await t.action(api.auth.signIn, { request: { params: { code } } });
   return expectSignInSession(result);
@@ -65,6 +77,9 @@ export async function signInViaMagicLink(
  * the email body. Returns a getter for the captured code and a teardown.
  */
 export function stubResendCapture() {
+  if (!vi.isFakeTimers()) {
+    vi.useFakeTimers();
+  }
   let code = "";
   let captured: { headers?: Record<string, string>; body?: unknown } | null = null;
   vi.stubGlobal(
@@ -75,7 +90,7 @@ export function stubResendCapture() {
         const rawBody = (init as { body?: unknown }).body;
         const body = typeof rawBody === "string" ? rawBody : "";
         code = body.match(/\?code=([^\s\\]+)/)?.[1] ?? "";
-        return new Response(JSON.stringify({ id: MOCK_EMAIL_ID }), { status: 200 });
+        return new Response(JSON.stringify({ data: [{ id: MOCK_EMAIL_ID }] }), { status: 200 });
       }
       throw new Error("Unexpected fetch");
     }),
@@ -83,6 +98,9 @@ export function stubResendCapture() {
   return {
     code: () => code,
     captured: () => captured,
-    restore: () => vi.unstubAllGlobals(),
+    restore: () => {
+      vi.useRealTimers();
+      vi.unstubAllGlobals();
+    },
   };
 }
