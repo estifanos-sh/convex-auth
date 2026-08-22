@@ -14,18 +14,16 @@ import { v, type Infer } from "convex/values";
 import { paginator } from "convex-helpers/server/pagination";
 
 import { api, components, internal } from "../../_generated/api";
-import type { Id } from "../../_generated/dataModel";
 import { internalAction, internalMutation, internalQuery, mutation, query } from "../../functions";
 import { unsafeFetchUrlReason } from "../../../shared/fetch/guard";
-import { logMessage } from "../../../shared/log";
 import {
   vAuthEventKind,
   vGroupWebhookDeliveryDoc,
   vGroupWebhookDeliveryPublicDoc,
   vPaginated,
-  vWebhookDeliveryStatus,
 } from "../../model";
 import schema from "../../schema";
+import { appendDeliveryEvent } from "./events";
 
 const MAX_ATTEMPTS = 5;
 
@@ -44,57 +42,6 @@ const workpool = new Workpool(components.webhookWorkpool, {
  */
 function isRetriableStatus(status: number): boolean {
   return status >= 500 || status === 408 || status === 429;
-}
-
-async function appendDeliveryEvent(
-  ctx: any,
-  args: {
-    deliveryId: string;
-    connectionId: string;
-    endpointId: string;
-    sourceEventId: string;
-    sourceEventType: Infer<typeof vAuthEventKind>;
-    kind:
-      | "webhook.delivery.created"
-      | "webhook.delivery.attempted"
-      | "webhook.delivery.succeeded"
-      | "webhook.delivery.failed";
-    outcome: "success" | "failure";
-    occurredAt: number;
-    data?: Record<string, unknown>;
-  },
-) {
-  const attemptPart =
-    typeof args.data?.attemptCount === "number" ? `:${args.data.attemptCount}` : "";
-  const event = {
-    eventId: `${args.kind}:${args.deliveryId}${attemptPart}`,
-    kind: args.kind,
-    category: "webhook" as const,
-    occurredAt: args.occurredAt,
-    actor: { type: "webhook" as const, id: args.endpointId },
-    subject: { type: "webhook_delivery" as const, id: args.deliveryId },
-    targets: [{ kind: "connection" as const, id: args.connectionId }],
-    outcome: args.outcome,
-    data: {
-      sourceEventId: args.sourceEventId,
-      sourceEventType: args.sourceEventType,
-      endpointId: args.endpointId,
-      deliveryId: args.deliveryId,
-      ...args.data,
-    },
-  };
-  try {
-    await ctx.runMutation(api.event.append, {
-      event,
-      targets: event.targets,
-      idempotencyKey: event.eventId,
-    });
-  } catch (error) {
-    logMessage("connection.webhook.delivery", "WARN", [
-      `audit event ${args.kind} emit failed (best-effort)`,
-      error,
-    ]);
-  }
 }
 
 function publicDelivery(
@@ -167,12 +114,86 @@ export const dueForDispatch = query({
   },
 });
 
+/** Mark a pending delivery as in progress and record its attempt atomically. */
+export const begin = internalMutation({
+  args: { id: v.id("GroupWebhookDelivery"), occurredAt: v.number() },
+  returns: v.union(vGroupWebhookDeliveryDoc, v.null()),
+  handler: async (ctx, { id: deliveryId, occurredAt }) => {
+    const delivery = await ctx.db.get("GroupWebhookDelivery", deliveryId);
+    if (delivery === null || delivery.status !== "pending") return null;
+
+    const attemptCount = delivery.attemptCount + 1;
+    await ctx.db.patch("GroupWebhookDelivery", deliveryId, {
+      status: "processing",
+      attemptCount,
+      lastAttemptAt: occurredAt,
+    });
+    await appendDeliveryEvent(ctx, {
+      deliveryId,
+      connectionId: delivery.connectionId,
+      endpointId: delivery.endpointId,
+      sourceEventId: delivery.eventId,
+      sourceEventType: delivery.kind,
+      kind: "webhook.delivery.attempted",
+      outcome: "success",
+      occurredAt,
+      data: { attemptCount },
+    });
+    return {
+      ...delivery,
+      status: "processing" as const,
+      attemptCount,
+      lastAttemptAt: occurredAt,
+    };
+  },
+});
+
+/** Settle an in-progress delivery and record its outcome atomically. */
+export const settle = internalMutation({
+  args: {
+    id: v.id("GroupWebhookDelivery"),
+    occurredAt: v.number(),
+    outcome: v.union(v.literal("success"), v.literal("failure")),
+    retry: v.boolean(),
+    responseStatus: v.optional(v.number()),
+    error: v.optional(v.string()),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const delivery = await ctx.db.get("GroupWebhookDelivery", args.id);
+    if (delivery === null || delivery.status !== "processing") return null;
+
+    const succeeded = args.outcome === "success";
+    await ctx.db.patch("GroupWebhookDelivery", args.id, {
+      status: succeeded ? "delivered" : args.retry ? "pending" : "failed",
+      nextAttemptAt: args.retry ? args.occurredAt : delivery.nextAttemptAt,
+      lastAttemptAt: args.occurredAt,
+      lastResponseStatus: args.responseStatus,
+      lastError: args.error,
+    });
+    await appendDeliveryEvent(ctx, {
+      deliveryId: args.id,
+      connectionId: delivery.connectionId,
+      endpointId: delivery.endpointId,
+      sourceEventId: delivery.eventId,
+      sourceEventType: delivery.kind,
+      kind: succeeded ? "webhook.delivery.succeeded" : "webhook.delivery.failed",
+      outcome: args.outcome,
+      occurredAt: args.occurredAt,
+      data: {
+        attemptCount: delivery.attemptCount,
+        status: args.responseStatus,
+        error: args.error,
+      },
+    });
+    return null;
+  },
+});
+
 /**
  * Queue a delivery for an endpoint. Idempotent on `(eventId, endpointId)` —
- * returns the existing id if already queued. On insert, emits a
- * `webhook.delivery.created` audit event and enqueues the `dispatch` action on
- * the workpool (running at `nextAttemptAt`, with `onDispatchComplete` as the
- * completion hook).
+ * returns the existing id if already queued. The row, its audit event, and the
+ * durable workpool entry commit together; an audit failure aborts all three.
  */
 export const create = mutation({
   args: {
@@ -237,33 +258,27 @@ export const onDispatchComplete = internalMutation({
   handler: async (ctx, { context, result }) => {
     if (result.kind === "success") return null;
     const delivery = await ctx.db.get("GroupWebhookDelivery", context.deliveryId);
-    if (delivery === null || delivery.status === "delivered" || delivery.status === "failed") {
+    if (delivery === null || delivery.status !== "processing") {
       return null;
     }
+    await appendDeliveryEvent(ctx, {
+      deliveryId: context.deliveryId,
+      connectionId: delivery.connectionId,
+      endpointId: delivery.endpointId,
+      sourceEventId: delivery.eventId,
+      sourceEventType: delivery.kind,
+      kind: "webhook.delivery.failed",
+      outcome: "failure",
+      occurredAt: Date.now(),
+      data: {
+        attemptCount: delivery.attemptCount,
+        error: result.kind === "failed" ? result.error : "delivery canceled",
+      },
+    });
     await ctx.db.patch("GroupWebhookDelivery", context.deliveryId, {
       status: "failed",
       lastError: result.kind === "failed" ? result.error : "delivery canceled",
     });
-    return null;
-  },
-});
-
-/** Patch fields on a delivery (attempt bookkeeping). */
-export const update = mutation({
-  args: {
-    id: v.id("GroupWebhookDelivery"),
-    patch: v.object({
-      status: v.optional(vWebhookDeliveryStatus),
-      attemptCount: v.optional(v.number()),
-      nextAttemptAt: v.optional(v.number()),
-      lastAttemptAt: v.optional(v.number()),
-      lastResponseStatus: v.optional(v.number()),
-      lastError: v.optional(v.string()),
-    }),
-  },
-  returns: v.null(),
-  handler: async (ctx, { id: deliveryId, patch }) => {
-    await ctx.db.patch("GroupWebhookDelivery", deliveryId, patch);
     return null;
   },
 });
@@ -280,78 +295,27 @@ export const dispatch = internalAction({
   args: { id: v.id("GroupWebhookDelivery") },
   returns: v.null(),
   handler: async (ctx, { id: deliveryId }) => {
-    const delivery = (await ctx.runQuery(internal.connection.webhook.delivery.get, {
+    const startedAt = Date.now();
+    const delivery = await ctx.runMutation(internal.connection.webhook.delivery.begin, {
       id: deliveryId,
-    })) as {
-      _id: string;
-      connectionId: string;
-      endpointId: string;
-      eventId: string;
-      kind: Infer<typeof vAuthEventKind>;
-      payload: unknown;
-      status: Infer<typeof vWebhookDeliveryStatus>;
-      attemptCount: number;
-      signature: string;
-      signedAt: number;
-    } | null;
-    if (!delivery) return null;
-
-    // At-least-once delivery. The workpool can re-invoke `dispatch` for a
-    // delivery whose previous attempt already settled — a retry scheduled
-    // before a sibling attempt committed its terminal status, a re-enqueue
-    // after a crash, or an `onDispatchComplete` that already failed the row.
-    // Re-read the row and bail before POSTing again once it is terminal, so a
-    // delivered/failed delivery is never re-sent. A crash in the narrow window
-    // between the POST and the status write still re-delivers, so receivers get
-    // at-least-once (not exactly-once) semantics and MUST dedup on the stable
-    // `X-Auth-Delivery-Id` header sent below.
-    if (delivery.status === "delivered" || delivery.status === "failed") {
-      return null;
-    }
+      occurredAt: startedAt,
+    });
+    if (delivery === null) return null;
 
     const endpoint = (await ctx.runQuery(api.connection.webhook.endpoint.get, {
-      id: delivery.endpointId as Id<"GroupWebhookEndpoint">,
+      id: delivery.endpointId,
     })) as { url: string; status: string } | null;
     if (!endpoint || endpoint.status !== "active") {
-      const failedAt = Date.now();
-      await appendDeliveryEvent(ctx, {
-        deliveryId,
-        connectionId: delivery.connectionId,
-        endpointId: delivery.endpointId,
-        sourceEventId: delivery.eventId,
-        sourceEventType: delivery.kind,
-        kind: "webhook.delivery.failed",
-        outcome: "failure",
-        occurredAt: failedAt,
-        data: {
-          attemptCount: delivery.attemptCount + 1,
-          error: "endpoint missing or disabled",
-        },
-      });
-      await ctx.runMutation(api.connection.webhook.delivery.update, {
+      await ctx.runMutation(internal.connection.webhook.delivery.settle, {
         id: deliveryId,
-        patch: {
-          status: "failed",
-          lastError: "endpoint missing or disabled",
-          lastAttemptAt: failedAt,
-          attemptCount: delivery.attemptCount + 1,
-        },
+        occurredAt: startedAt,
+        outcome: "failure",
+        retry: false,
+        error: "endpoint missing or disabled",
       });
       return null;
     }
 
-    const startedAt = Date.now();
-    await appendDeliveryEvent(ctx, {
-      deliveryId,
-      connectionId: delivery.connectionId,
-      endpointId: delivery.endpointId,
-      sourceEventId: delivery.eventId,
-      sourceEventType: delivery.kind,
-      kind: "webhook.delivery.attempted",
-      outcome: "success",
-      occurredAt: startedAt,
-      data: { attemptCount: delivery.attemptCount + 1 },
-    });
     const body = JSON.stringify({
       kind: delivery.kind,
       payload: delivery.payload,
@@ -376,87 +340,39 @@ export const dispatch = internalAction({
         signal: AbortSignal.timeout(15_000),
       });
     } catch (err) {
-      const exhausted = delivery.attemptCount + 1 >= MAX_ATTEMPTS;
-      await appendDeliveryEvent(ctx, {
-        deliveryId,
-        connectionId: delivery.connectionId,
-        endpointId: delivery.endpointId,
-        sourceEventId: delivery.eventId,
-        sourceEventType: delivery.kind,
-        kind: "webhook.delivery.failed",
-        outcome: "failure",
-        occurredAt: startedAt,
-        data: {
-          attemptCount: delivery.attemptCount + 1,
-          error: err instanceof Error ? err.message : String(err),
-        },
-      });
-      await ctx.runMutation(api.connection.webhook.delivery.update, {
+      const error = err instanceof Error ? err.message : String(err);
+      const retry = delivery.attemptCount < MAX_ATTEMPTS;
+      await ctx.runMutation(internal.connection.webhook.delivery.settle, {
         id: deliveryId,
-        patch: {
-          status: exhausted ? "failed" : "processing",
-          lastError: err instanceof Error ? err.message : String(err),
-          lastAttemptAt: startedAt,
-          attemptCount: delivery.attemptCount + 1,
-        },
+        occurredAt: startedAt,
+        outcome: "failure",
+        retry,
+        error,
       });
-      if (!exhausted) throw err;
+      if (retry) throw err;
       return null;
     }
 
     if (!response.ok) {
-      const terminal =
-        !isRetriableStatus(response.status) || delivery.attemptCount + 1 >= MAX_ATTEMPTS;
-      await appendDeliveryEvent(ctx, {
-        deliveryId,
-        connectionId: delivery.connectionId,
-        endpointId: delivery.endpointId,
-        sourceEventId: delivery.eventId,
-        sourceEventType: delivery.kind,
-        kind: "webhook.delivery.failed",
-        outcome: "failure",
-        occurredAt: startedAt,
-        data: {
-          attemptCount: delivery.attemptCount + 1,
-          status: response.status,
-        },
-      });
-      await ctx.runMutation(api.connection.webhook.delivery.update, {
+      const retry = isRetriableStatus(response.status) && delivery.attemptCount < MAX_ATTEMPTS;
+      await ctx.runMutation(internal.connection.webhook.delivery.settle, {
         id: deliveryId,
-        patch: {
-          status: terminal ? "failed" : "processing",
-          lastResponseStatus: response.status,
-          lastError: `HTTP ${response.status}`,
-          lastAttemptAt: startedAt,
-          attemptCount: delivery.attemptCount + 1,
-        },
+        occurredAt: startedAt,
+        outcome: "failure",
+        retry,
+        responseStatus: response.status,
+        error: `HTTP ${response.status}`,
       });
-      if (!terminal) throw new Error(`Webhook delivery failed: HTTP ${response.status}`);
+      if (retry) throw new Error(`Webhook delivery failed: HTTP ${response.status}`);
       return null;
     }
 
-    await appendDeliveryEvent(ctx, {
-      deliveryId,
-      connectionId: delivery.connectionId,
-      endpointId: delivery.endpointId,
-      sourceEventId: delivery.eventId,
-      sourceEventType: delivery.kind,
-      kind: "webhook.delivery.succeeded",
-      outcome: "success",
-      occurredAt: startedAt,
-      data: {
-        attemptCount: delivery.attemptCount + 1,
-        status: response.status,
-      },
-    });
-    await ctx.runMutation(api.connection.webhook.delivery.update, {
+    await ctx.runMutation(internal.connection.webhook.delivery.settle, {
       id: deliveryId,
-      patch: {
-        status: "delivered",
-        lastResponseStatus: response.status,
-        lastAttemptAt: startedAt,
-        attemptCount: delivery.attemptCount + 1,
-      },
+      occurredAt: startedAt,
+      outcome: "success",
+      retry: false,
+      responseStatus: response.status,
     });
     return null;
   },

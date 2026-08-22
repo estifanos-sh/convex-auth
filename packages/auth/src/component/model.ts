@@ -368,6 +368,24 @@ export const vAuthEvent = v.object({
   data: v.optional(vAuthEventData),
 });
 
+/**
+ * Auth event supplied by a caller. The category is deliberately absent: the
+ * component derives it from the canonical event-kind taxonomy before storing
+ * projections or appending to the private stream.
+ */
+export const vAuthEventInput = v.object({
+  eventId: v.string(),
+  kind: vAuthEventKind,
+  occurredAt: v.number(),
+  actor: vAuthEventActor,
+  subject: vAuthEventSubject,
+  targets: v.array(vAuthEventTarget),
+  request: v.optional(vAuthEventRequest),
+  outcome: vAuthEventOutcome,
+  errorCode: v.optional(v.string()),
+  data: v.optional(vAuthEventData),
+});
+
 /** Filter selector for querying auth-event projections. */
 export const vAuthEventWhere = v.object({
   target: v.optional(vAuthEventTarget),

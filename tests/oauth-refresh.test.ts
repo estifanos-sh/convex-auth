@@ -596,7 +596,6 @@ test("oauth.refresh.reuse_detected keeps clientId and userId through the project
   const event = {
     eventId: "oauth.refresh.reuse_detected:user:" + userId + ":deadbeef",
     kind: "oauth.refresh.reuse_detected" as const,
-    category: "oauth" as const,
     occurredAt: Date.now(),
     actor: { type: "oauth_client" as const, id: "oc_audit" },
     subject: { type: "user" as const, id: userId },
@@ -612,7 +611,6 @@ test("oauth.refresh.reuse_detected keeps clientId and userId through the project
     return await ctx.runMutation(components.auth.event.append, {
       event,
       targets: event.targets,
-      idempotencyKey: event.eventId,
     });
   });
   expect(appended.created).toBe(true);

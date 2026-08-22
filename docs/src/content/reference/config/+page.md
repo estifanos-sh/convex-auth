@@ -89,7 +89,7 @@ const auth = defineAuth(components.auth, {
 | `session.inactiveDurationMs`      | `number`                                            | varies    | Inactive session timeout                                                                                                                                               |
 | `jwt.durationMs`                  | `number`                                            | 60s       | JWT token lifetime                                                                                                                                                     |
 | `signIn.maxFailedAttemptsPerHour` | `number`                                            | 10        | Failed sign-in throttle (backed by `@convex-dev/rate-limiter` token bucket; resets on successful sign-in)                                                              |
-| `events`                          | `AuthEventHandlerMap`                               | —         | Stream-backed lifecycle handlers from `authEvents.handlers(...)`.                                                                                                      |
+| `events`                          | `AuthEventHandlerMap`                               | —         | Lifecycle handlers from `authEvents.handlers(...)`; event kinds and their audit categories are canonical library taxonomy.                                             |
 | `path`                            | `string`                                            | `"/auth"` | HTTP path where the app-owned auth protocol routes are mounted. Provider callbacks, the JWT issuer, OAuth discovery, and `auth.request.mount(http)` all use this path. |
 
 > **Note:** Email transport is configured via `email({ from, send })` in the

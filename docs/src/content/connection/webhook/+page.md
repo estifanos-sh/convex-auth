@@ -71,7 +71,10 @@ subcomponent mounted inside the auth component**. The workpool drives
 retries with exponential backoff (5 attempts, 1s initial, 2× base). On
 success the delivery row transitions `status: "delivered"`; after the
 final failed attempt it stays at `"failed"` with `lastError` and
-`lastResponseStatus` populated.
+`lastResponseStatus` populated. Creating a delivery and starting or settling
+an attempt each writes its matching audit event in the same transaction. An
+audit failure aborts the state transition instead of silently leaving an
+incomplete security record.
 
 You don't poll, schedule, or wire anything yourself — emitting an event
 is enough.

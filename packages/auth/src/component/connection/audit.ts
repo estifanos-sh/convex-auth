@@ -9,6 +9,7 @@ import { paginator } from "convex-helpers/server/pagination";
 import { ConvexError, v, type Infer } from "convex/values";
 
 import { ErrorCode } from "../../shared/codes";
+import { EVENT_KIND_CATEGORY, type AuthEventKind } from "../../shared/event/kinds";
 import type { Doc } from "../_generated/dataModel";
 import { query } from "../functions";
 import { vAuthEventData, vAuthEventProjectionDoc, vPaginated } from "../model";
@@ -64,11 +65,9 @@ const PUBLIC_DATA_KEYS = {
   security: ["reason", "errorCode"],
 } as const;
 
-function publicData(kind: string, value: unknown): Infer<typeof vAuthEventData> | undefined {
+function publicData(kind: AuthEventKind, value: unknown): Infer<typeof vAuthEventData> | undefined {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return undefined;
-  const category = kind.startsWith("api_key.")
-    ? "api_key"
-    : (kind.slice(0, kind.indexOf(".")) as keyof typeof PUBLIC_DATA_KEYS);
+  const category = EVENT_KIND_CATEGORY[kind];
   const keys = PUBLIC_DATA_KEYS[category] ?? [];
   const source = value as Record<string, unknown>;
   const redacted: Record<string, unknown> = {};

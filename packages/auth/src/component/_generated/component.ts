@@ -1212,23 +1212,6 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           },
           Name
         >;
-        update: FunctionReference<
-          "mutation",
-          "internal",
-          {
-            id: string;
-            patch: {
-              attemptCount?: number;
-              lastAttemptAt?: number;
-              lastError?: string;
-              lastResponseStatus?: number;
-              nextAttemptAt?: number;
-              status?: "pending" | "processing" | "delivered" | "failed";
-            };
-          },
-          null,
-          Name
-        >;
       };
       endpoint: {
         create: FunctionReference<
@@ -1550,21 +1533,6 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
             id?: string;
             type: "user" | "system" | "scim" | "api_key" | "oauth_client" | "webhook" | "anonymous";
           };
-          category:
-            | "user"
-            | "session"
-            | "account"
-            | "password"
-            | "passkey"
-            | "totp"
-            | "email"
-            | "phone"
-            | "api_key"
-            | "oauth"
-            | "connection"
-            | "scim"
-            | "webhook"
-            | "security";
           data?:
             | {
                 existingUserId?: string;
@@ -1785,7 +1753,6 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
               | "global";
           }>;
         };
-        idempotencyKey?: string;
         targets?: Array<{
           id: string;
           kind: "user" | "session" | "group" | "connection" | "oauth_client" | "api_key" | "global";
