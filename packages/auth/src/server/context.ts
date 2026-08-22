@@ -303,9 +303,8 @@ export async function getAuthContext(
     session === null ||
     user === null ||
     session.userId !== userId ||
-    session.expirationTime <= Date.now() ||
-    (session.epoch ?? 0) !== (user.sessionEpoch ?? 0) ||
-    (identity.session_epoch ?? 0) !== (session.epoch ?? 0)
+    session.epoch !== user.sessionEpoch ||
+    identity.session_epoch !== session.epoch
   ) {
     return null;
   }

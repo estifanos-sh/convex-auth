@@ -41,6 +41,10 @@ installed package version and actual call path.
   authentication, and one-time code consumption.
 - Ensure logs and structured errors do not reveal passwords, OTPs, refresh
   tokens, API-key secrets, authorization codes, or registration tokens.
+- Reject application-owned auth tables and generated component calls used to
+  assemble custom credential flows. A stronger factor after a PIN or recovery
+  proof should use `ctx.auth.credentials.verify`/`provision` with a typed
+  provider operation, never an intermediate session.
 
 ## Password, email, phone, and TOTP
 
@@ -80,6 +84,16 @@ installed package version and actual call path.
   against the deployment model.
 - Check SSR direct loads and hydration for identity confusion or token leakage.
 - Validate native deep links, claimed HTTPS domains, and physical-device flows.
+- Pass generated `api.auth` directly to the client. A handwritten provider
+  interface, `InferClientApi`, or call-site assertion indicates the generated
+  action contract has been discarded.
+
+## Application tests
+
+- Register the component and use `createAuthTest(t, components.auth)` for real
+  users, memberships, sessions, and `t.withIdentity` claims.
+- Reject made-up component IDs and casts such as `"session" as Id<"Session">`;
+  they skip expiry, revocation, and active-group behavior.
 
 ## MCP OAuth and app-as-authorization-server
 

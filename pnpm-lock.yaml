@@ -7,11 +7,11 @@ settings:
 catalogs:
   default:
     convex:
-      specifier: ^1.43.0
-      version: 1.43.0
+      specifier: ^1.45.0
+      version: 1.45.0
     convex-test:
-      specifier: ^0.0.55
-      version: 0.0.55
+      specifier: ^0.0.56
+      version: 0.0.56
     tsdown:
       specifier: 0.20.0-beta.3
       version: 0.20.0-beta.3
@@ -32,22 +32,19 @@ importers:
     dependencies:
       '@convex-dev/resend':
         specifier: latest
-        version: 0.2.4(convex-helpers@0.1.118(@standard-schema/spec@1.1.0)(convex@1.43.0(react@19.2.5))(react@19.2.5)(typescript@6.0.2)(zod@4.4.3))(convex@1.43.0(react@19.2.5))(react@19.2.5)
+        version: 0.2.4(convex-helpers@0.1.118(@standard-schema/spec@1.1.0)(convex@1.45.0(react@19.2.5))(react@19.2.5)(typescript@6.0.2)(zod@4.4.3))(convex@1.45.0(react@19.2.5))(react@19.2.5)
       '@convex-dev/static-hosting':
         specifier: ^0.2.1
-        version: 0.2.1(convex@1.43.0(react@19.2.5))(react@19.2.5)
+        version: 0.2.1(convex@1.45.0(react@19.2.5))(react@19.2.5)
       '@estifanos-sh/convex-auth':
         specifier: workspace:*
         version: link:packages/auth
-      arctic:
-        specifier: latest
-        version: 3.7.0
       convex:
         specifier: 'catalog:'
-        version: 1.43.0(react@19.2.5)
+        version: 1.45.0(react@19.2.5)
       convex-helpers:
         specifier: latest
-        version: 0.1.118(@standard-schema/spec@1.1.0)(convex@1.43.0(react@19.2.5))(react@19.2.5)(typescript@6.0.2)(zod@4.4.3)
+        version: 0.1.118(@standard-schema/spec@1.1.0)(convex@1.45.0(react@19.2.5))(react@19.2.5)(typescript@6.0.2)(zod@4.4.3)
     devDependencies:
       '@edge-runtime/vm':
         specifier: latest
@@ -69,7 +66,7 @@ importers:
         version: 0.9.10
       convex-test:
         specifier: 'catalog:'
-        version: 0.0.55(convex@1.43.0(react@19.2.5))
+        version: 0.0.56(convex@1.45.0(react@19.2.5))
       jose:
         specifier: latest
         version: 6.2.3
@@ -102,7 +99,7 @@ importers:
         version: link:../../packages/auth
       convex:
         specifier: 'catalog:'
-        version: 1.43.0(react@19.2.5)
+        version: 1.45.0(react@19.2.5)
       dotenv:
         specifier: ^17.2.4
         version: 17.4.2
@@ -142,7 +139,7 @@ importers:
         version: 7.2.2(react-native@0.81.5(@babel/core@7.29.7)(@react-native/metro-config@0.85.2(@babel/core@7.29.7))(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
       convex:
         specifier: 'catalog:'
-        version: 1.43.0(react@19.1.0)
+        version: 1.45.0(react@19.1.0)
       expo:
         specifier: ~54.0.34
         version: 54.0.34(@babel/core@7.29.7)(@expo/dom-webview@55.0.5)(@expo/metro-runtime@6.1.2)(expo-router@6.0.23)(react-native@0.81.5(@babel/core@7.29.7)(@react-native/metro-config@0.85.2(@babel/core@7.29.7))(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)(typescript@5.9.3)
@@ -251,10 +248,10 @@ importers:
         version: link:../../packages/auth
       convex:
         specifier: 'catalog:'
-        version: 1.43.0(react@19.2.5)
+        version: 1.45.0(react@19.2.5)
       convex-svelte:
         specifier: ^0.14.0
-        version: 0.14.0(@sveltejs/kit@2.57.1(@opentelemetry/api@1.9.1)(@sveltejs/vite-plugin-svelte@7.0.0(@voidzero-dev/vite-plus-core@0.1.18(@arethetypeswrong/core@0.18.2)(@types/node@25.6.0)(esbuild@0.27.7)(jiti@2.7.0)(publint@0.3.18)(terser@5.48.0)(tsx@4.21.0)(typescript@6.0.2)(yaml@2.9.0))(svelte@5.55.4(@typescript-eslint/types@8.59.0)))(@voidzero-dev/vite-plus-core@0.1.18(@arethetypeswrong/core@0.18.2)(@types/node@25.6.0)(esbuild@0.27.7)(jiti@2.7.0)(publint@0.3.18)(terser@5.48.0)(tsx@4.21.0)(typescript@6.0.2)(yaml@2.9.0))(svelte@5.55.4(@typescript-eslint/types@8.59.0))(typescript@6.0.2))(convex@1.43.0(react@19.2.5))(svelte@5.55.4(@typescript-eslint/types@8.59.0))(zod@4.4.3)
+        version: 0.14.0(@sveltejs/kit@2.57.1(@opentelemetry/api@1.9.1)(@sveltejs/vite-plugin-svelte@7.0.0(@voidzero-dev/vite-plus-core@0.1.18(@arethetypeswrong/core@0.18.2)(@types/node@25.6.0)(esbuild@0.27.7)(jiti@2.7.0)(publint@0.3.18)(terser@5.48.0)(tsx@4.21.0)(typescript@6.0.2)(yaml@2.9.0))(svelte@5.55.4(@typescript-eslint/types@8.59.0)))(@voidzero-dev/vite-plus-core@0.1.18(@arethetypeswrong/core@0.18.2)(@types/node@25.6.0)(esbuild@0.27.7)(jiti@2.7.0)(publint@0.3.18)(terser@5.48.0)(tsx@4.21.0)(typescript@6.0.2)(yaml@2.9.0))(svelte@5.55.4(@typescript-eslint/types@8.59.0))(typescript@6.0.2))(convex@1.45.0(react@19.2.5))(svelte@5.55.4(@typescript-eslint/types@8.59.0))(zod@4.4.3)
       svelte-radix:
         specifier: ^3.0.2
         version: 3.0.2(svelte@5.55.4(@typescript-eslint/types@8.59.0))
@@ -300,13 +297,13 @@ importers:
     dependencies:
       '@convex-dev/action-cache':
         specifier: ^0.3.0
-        version: 0.3.0(convex@1.43.0(react@19.2.5))
+        version: 0.3.0(convex@1.45.0(react@19.2.5))
       '@convex-dev/stream':
         specifier: https://pkg.pr.new/get-convex/stream/@convex-dev/stream@d04795d
-        version: https://pkg.pr.new/get-convex/stream/@convex-dev/stream@d04795d(@standard-schema/spec@1.1.0)(convex@1.43.0(react@19.2.5))(react@19.2.5)(typescript@6.0.2)(zod@4.4.3)
+        version: https://pkg.pr.new/get-convex/stream/@convex-dev/stream@d04795d(@standard-schema/spec@1.1.0)(convex@1.45.0(react@19.2.5))(react@19.2.5)(typescript@6.0.2)(zod@4.4.3)
       '@convex-dev/workpool':
         specifier: ^0.4.9
-        version: 0.4.9(convex-helpers@0.1.118(@standard-schema/spec@1.1.0)(convex@1.43.0(react@19.2.5))(react@19.2.5)(typescript@6.0.2)(zod@4.4.3))(convex@1.43.0(react@19.2.5))(react@19.2.5)
+        version: 0.4.9(convex-helpers@0.1.123(@standard-schema/spec@1.1.0)(convex@1.45.0(react@19.2.5))(react@19.2.5)(typescript@6.0.2)(zod@4.4.3))(convex@1.45.0(react@19.2.5))(react@19.2.5)
       '@noble/hashes':
         specifier: ^2.0.1
         version: 2.2.0
@@ -331,15 +328,12 @@ importers:
       '@xmldom/xmldom':
         specifier: ^0.8.11
         version: 0.8.13
-      arctic:
-        specifier: ^3.7.0
-        version: 3.7.0
       camelcase:
         specifier: ^6.3.0
         version: 6.3.0
       convex-helpers:
-        specifier: ^0.1.118
-        version: 0.1.118(@standard-schema/spec@1.1.0)(convex@1.43.0(react@19.2.5))(react@19.2.5)(typescript@6.0.2)(zod@4.4.3)
+        specifier: ^0.1.123
+        version: 0.1.123(@standard-schema/spec@1.1.0)(convex@1.45.0(react@19.2.5))(react@19.2.5)(typescript@6.0.2)(zod@4.4.3)
       cookie:
         specifier: ^1.1.1
         version: 1.1.1
@@ -409,10 +403,10 @@ importers:
         version: 1.1.3
       convex:
         specifier: 'catalog:'
-        version: 1.43.0(react@19.2.5)
+        version: 1.45.0(react@19.2.5)
       convex-test:
         specifier: 'catalog:'
-        version: 0.0.55(convex@1.43.0(react@19.2.5))
+        version: 0.0.56(convex@1.45.0(react@19.2.5))
       cspell:
         specifier: ^9.6.4
         version: 9.8.0
@@ -1366,7 +1360,7 @@ packages:
       react: ^18.3.1 || ^19.0.0
 
   '@convex-dev/stream@https://pkg.pr.new/get-convex/stream/@convex-dev/stream@d04795d':
-    resolution: {tarball: https://pkg.pr.new/get-convex/stream/@convex-dev/stream@d04795d}
+    resolution: {integrity: sha512-ArteyWD6D65GaWY1fO5WSV5gpi6Mcoizp2VPZ60D5DrDxOdEcdAsUtw230NXyYB3agwci3peB0aco1mnzgaJgA==, tarball: https://pkg.pr.new/get-convex/stream/@convex-dev/stream@d04795d}
     version: 0.0.1
     peerDependencies:
       convex: ^1.43.0
@@ -2412,17 +2406,11 @@ packages:
   '@oslojs/crypto@1.0.1':
     resolution: {integrity: sha512-7n08G8nWjAr/Yu3vu9zzrd0L9XnrJfpMioQcvCMxBIiF5orECHe5/3J0jmXRVvgfqMm/+4oxlQ+Sq39COYLcNQ==}
 
-  '@oslojs/encoding@0.4.1':
-    resolution: {integrity: sha512-hkjo6MuIK/kQR5CrGNdAPZhS01ZCXuWDRJ187zh6qqF2+yMHZpD9fAYpX8q2bOO6Ryhl3XpCT6kUX76N8hhm4Q==}
-
   '@oslojs/encoding@1.0.0':
     resolution: {integrity: sha512-dyIB0SdZgMm5BhGwdSp8rMxEFIopLKxDG1vxIBaiogyom6ZqH2aXPb6DEC2WzOOWKdPSq1cxdNeRx2wAn1Z+ZQ==}
 
   '@oslojs/encoding@1.1.0':
     resolution: {integrity: sha512-70wQhgYmndg4GCPxPPxPGevRKqTIJ2Nh4OkiMWmDAVYsTQ+Ta7Sq+rPevXyXGdzr30/qZBnyOalCszoMxlyldQ==}
-
-  '@oslojs/jwt@0.2.0':
-    resolution: {integrity: sha512-bLE7BtHrURedCn4Mco3ma9L4Y1GR2SMBuIvjWr7rmQ4/W/4Jy70TIAgZ+0nIlk0xHz1vNP8x8DCns45Sb2XRbg==}
 
   '@oslojs/otp@1.1.0':
     resolution: {integrity: sha512-tpdxlnCLcY6IZLLqH8kGD8PSvIVyev/+Gbglgvrk9e4YzgKO7+7FL8NWBofL7LZI6MgQ1HnNUuotRG6t1JJ0dg==}
@@ -4646,9 +4634,6 @@ packages:
     resolution: {integrity: sha512-KMReFUr0B4t+D+OBkjR3KYqvocp2XaSzO55UcB6mgQMd3KbcE+mWTyvVV7D/zsdEbNnV6acZUutkiHQXvTr1Rw==}
     engines: {node: '>= 8'}
 
-  arctic@3.7.0:
-    resolution: {integrity: sha512-ZMQ+f6VazDgUJOd+qNV+H7GohNSYal1mVjm5kEaZfE2Ifb7Ss70w+Q7xpJC87qZDkMZIXYf0pTIYZA0OPasSbw==}
-
   arg@5.0.2:
     resolution: {integrity: sha512-PYjyFOLKQ9y57JvQ6QLo8dAgNqswh8M1RMJYdQduT6xbWSgK36P/Z/v+p888pM69jMMfS8Xd8F6I1kQ/I9HUGg==}
 
@@ -5129,20 +5114,42 @@ packages:
       zod:
         optional: true
 
+  convex-helpers@0.1.123:
+    resolution: {integrity: sha512-E9W4tscZy6ZtNnwPDdL5UhMc7Rj9aUYlzjdYiKsfVIAwdarABWqvPB8+St3Q6IwS83r+QIGSO1lTidTamDdyPQ==}
+    hasBin: true
+    peerDependencies:
+      '@standard-schema/spec': ^1.0.0
+      convex: ^1.43.0
+      hono: ^4.0.5
+      react: ^17.0.2 || ^18.0.0 || ^19.0.0
+      typescript: ^5.5 || ^6.0.0 || ^7.0.0
+      zod: ^3.25.0 || ^4.0.0
+    peerDependenciesMeta:
+      '@standard-schema/spec':
+        optional: true
+      hono:
+        optional: true
+      react:
+        optional: true
+      typescript:
+        optional: true
+      zod:
+        optional: true
+
   convex-svelte@0.14.0:
     resolution: {integrity: sha512-eCaId++XnczQvEGc0sQi30BHkSEQ5AZjdDWaAqSlva2h9zKezGz8enp6MdFN7MIIMIlYZF3dKdzQ/LQ0d59KhQ==}
     peerDependencies:
       convex: ^1.30.0
       svelte: ^5.19.0
 
-  convex-test@0.0.55:
-    resolution: {integrity: sha512-ablJ6vR3WUpyTaYrrRQf8yxInGrhHyqBEQsCFzloda3G0MDEu2RMKNGUkvlBXYWPiiEP0UIKPS7gZuLbqGnvQw==}
+  convex-test@0.0.56:
+    resolution: {integrity: sha512-dLYXlQjKFoGqvjAmPzyLgb2HsYI7iLo1iuNTU2DZmSrMRLWosYk94erjSU67GG5ovfP6+MjX8RJO+ebhmL6QYA==}
     peerDependencies:
       convex: ^1.43.0
 
-  convex@1.43.0:
-    resolution: {integrity: sha512-huZWEUZQYxIRG104o22ZI99HkviSEVltwezZRDi+pQDPrQbc5EoCPa4Y7pJDqUBQw9dc/iEEXj2/rLZg1j7Dww==}
-    engines: {node: '>=18.0.0', npm: '>=7.0.0'}
+  convex@1.45.0:
+    resolution: {integrity: sha512-AV3B56Ptu/14d76g3urBJ50dwpiZa6uJaLT84OWox5aCwZIJiuAamdjv3lLHDzs8vv5kC31anEZohhUe3qJ2bA==}
+    engines: {node: '>=20.0.0', npm: '>=7.0.0'}
     hasBin: true
     peerDependencies:
       '@auth0/auth0-react': ^2.0.1
@@ -9788,27 +9795,27 @@ snapshots:
   '@colors/colors@1.5.0':
     optional: true
 
-  '@convex-dev/action-cache@0.3.0(convex@1.43.0(react@19.2.5))':
+  '@convex-dev/action-cache@0.3.0(convex@1.45.0(react@19.2.5))':
     dependencies:
-      convex: 1.43.0(react@19.2.5)
+      convex: 1.45.0(react@19.2.5)
 
-  '@convex-dev/batch-worker@0.2.0(convex@1.43.0(react@19.2.5))(react@19.2.5)':
+  '@convex-dev/batch-worker@0.2.0(convex@1.45.0(react@19.2.5))(react@19.2.5)':
     dependencies:
-      convex: 1.43.0(react@19.2.5)
+      convex: 1.45.0(react@19.2.5)
       react: 19.2.5
 
-  '@convex-dev/rate-limiter@0.3.2(convex@1.43.0(react@19.2.5))(react@19.2.5)':
+  '@convex-dev/rate-limiter@0.3.2(convex@1.45.0(react@19.2.5))(react@19.2.5)':
     dependencies:
-      convex: 1.43.0(react@19.2.5)
+      convex: 1.45.0(react@19.2.5)
     optionalDependencies:
       react: 19.2.5
 
-  '@convex-dev/resend@0.2.4(convex-helpers@0.1.118(@standard-schema/spec@1.1.0)(convex@1.43.0(react@19.2.5))(react@19.2.5)(typescript@6.0.2)(zod@4.4.3))(convex@1.43.0(react@19.2.5))(react@19.2.5)':
+  '@convex-dev/resend@0.2.4(convex-helpers@0.1.118(@standard-schema/spec@1.1.0)(convex@1.45.0(react@19.2.5))(react@19.2.5)(typescript@6.0.2)(zod@4.4.3))(convex@1.45.0(react@19.2.5))(react@19.2.5)':
     dependencies:
-      '@convex-dev/rate-limiter': 0.3.2(convex@1.43.0(react@19.2.5))(react@19.2.5)
-      '@convex-dev/workpool': 0.4.6(convex-helpers@0.1.118(@standard-schema/spec@1.1.0)(convex@1.43.0(react@19.2.5))(react@19.2.5)(typescript@6.0.2)(zod@4.4.3))(convex@1.43.0(react@19.2.5))
-      convex: 1.43.0(react@19.2.5)
-      convex-helpers: 0.1.118(@standard-schema/spec@1.1.0)(convex@1.43.0(react@19.2.5))(react@19.2.5)(typescript@6.0.2)(zod@4.4.3)
+      '@convex-dev/rate-limiter': 0.3.2(convex@1.45.0(react@19.2.5))(react@19.2.5)
+      '@convex-dev/workpool': 0.4.6(convex-helpers@0.1.118(@standard-schema/spec@1.1.0)(convex@1.45.0(react@19.2.5))(react@19.2.5)(typescript@6.0.2)(zod@4.4.3))(convex@1.45.0(react@19.2.5))
+      convex: 1.45.0(react@19.2.5)
+      convex-helpers: 0.1.118(@standard-schema/spec@1.1.0)(convex@1.45.0(react@19.2.5))(react@19.2.5)(typescript@6.0.2)(zod@4.4.3)
       remeda: 2.37.0
       resend: 6.12.4
       svix: 1.94.0
@@ -9816,15 +9823,15 @@ snapshots:
       - '@react-email/render'
       - react
 
-  '@convex-dev/static-hosting@0.2.1(convex@1.43.0(react@19.2.5))(react@19.2.5)':
+  '@convex-dev/static-hosting@0.2.1(convex@1.45.0(react@19.2.5))(react@19.2.5)':
     dependencies:
-      convex: 1.43.0(react@19.2.5)
+      convex: 1.45.0(react@19.2.5)
       react: 19.2.5
 
-  '@convex-dev/stream@https://pkg.pr.new/get-convex/stream/@convex-dev/stream@d04795d(@standard-schema/spec@1.1.0)(convex@1.43.0(react@19.2.5))(react@19.2.5)(typescript@6.0.2)(zod@4.4.3)':
+  '@convex-dev/stream@https://pkg.pr.new/get-convex/stream/@convex-dev/stream@d04795d(@standard-schema/spec@1.1.0)(convex@1.45.0(react@19.2.5))(react@19.2.5)(typescript@6.0.2)(zod@4.4.3)':
     dependencies:
-      convex: 1.43.0(react@19.2.5)
-      convex-helpers: 0.1.119(@standard-schema/spec@1.1.0)(convex@1.43.0(react@19.2.5))(react@19.2.5)(typescript@6.0.2)(zod@4.4.3)
+      convex: 1.45.0(react@19.2.5)
+      convex-helpers: 0.1.119(@standard-schema/spec@1.1.0)(convex@1.45.0(react@19.2.5))(react@19.2.5)(typescript@6.0.2)(zod@4.4.3)
     optionalDependencies:
       react: 19.2.5
     transitivePeerDependencies:
@@ -9833,16 +9840,16 @@ snapshots:
       - typescript
       - zod
 
-  '@convex-dev/workpool@0.4.6(convex-helpers@0.1.118(@standard-schema/spec@1.1.0)(convex@1.43.0(react@19.2.5))(react@19.2.5)(typescript@6.0.2)(zod@4.4.3))(convex@1.43.0(react@19.2.5))':
+  '@convex-dev/workpool@0.4.6(convex-helpers@0.1.118(@standard-schema/spec@1.1.0)(convex@1.45.0(react@19.2.5))(react@19.2.5)(typescript@6.0.2)(zod@4.4.3))(convex@1.45.0(react@19.2.5))':
     dependencies:
-      convex: 1.43.0(react@19.2.5)
-      convex-helpers: 0.1.118(@standard-schema/spec@1.1.0)(convex@1.43.0(react@19.2.5))(react@19.2.5)(typescript@6.0.2)(zod@4.4.3)
+      convex: 1.45.0(react@19.2.5)
+      convex-helpers: 0.1.118(@standard-schema/spec@1.1.0)(convex@1.45.0(react@19.2.5))(react@19.2.5)(typescript@6.0.2)(zod@4.4.3)
 
-  '@convex-dev/workpool@0.4.9(convex-helpers@0.1.118(@standard-schema/spec@1.1.0)(convex@1.43.0(react@19.2.5))(react@19.2.5)(typescript@6.0.2)(zod@4.4.3))(convex@1.43.0(react@19.2.5))(react@19.2.5)':
+  '@convex-dev/workpool@0.4.9(convex-helpers@0.1.123(@standard-schema/spec@1.1.0)(convex@1.45.0(react@19.2.5))(react@19.2.5)(typescript@6.0.2)(zod@4.4.3))(convex@1.45.0(react@19.2.5))(react@19.2.5)':
     dependencies:
-      '@convex-dev/batch-worker': 0.2.0(convex@1.43.0(react@19.2.5))(react@19.2.5)
-      convex: 1.43.0(react@19.2.5)
-      convex-helpers: 0.1.118(@standard-schema/spec@1.1.0)(convex@1.43.0(react@19.2.5))(react@19.2.5)(typescript@6.0.2)(zod@4.4.3)
+      '@convex-dev/batch-worker': 0.2.0(convex@1.45.0(react@19.2.5))(react@19.2.5)
+      convex: 1.45.0(react@19.2.5)
+      convex-helpers: 0.1.123(@standard-schema/spec@1.1.0)(convex@1.45.0(react@19.2.5))(react@19.2.5)(typescript@6.0.2)(zod@4.4.3)
     transitivePeerDependencies:
       - react
 
@@ -11193,15 +11200,9 @@ snapshots:
       '@oslojs/asn1': 1.0.0
       '@oslojs/binary': 1.0.0
 
-  '@oslojs/encoding@0.4.1': {}
-
   '@oslojs/encoding@1.0.0': {}
 
   '@oslojs/encoding@1.1.0': {}
-
-  '@oslojs/jwt@0.2.0':
-    dependencies:
-      '@oslojs/encoding': 0.4.1
 
   '@oslojs/otp@1.1.0':
     dependencies:
@@ -13469,12 +13470,6 @@ snapshots:
       normalize-path: 3.0.0
       picomatch: 2.3.2
 
-  arctic@3.7.0:
-    dependencies:
-      '@oslojs/crypto': 1.0.1
-      '@oslojs/encoding': 1.1.0
-      '@oslojs/jwt': 0.2.0
-
   arg@5.0.2: {}
 
   argparse@1.0.10:
@@ -14034,27 +14029,36 @@ snapshots:
 
   convert-source-map@2.0.0: {}
 
-  convex-helpers@0.1.118(@standard-schema/spec@1.1.0)(convex@1.43.0(react@19.2.5))(react@19.2.5)(typescript@6.0.2)(zod@4.4.3):
+  convex-helpers@0.1.118(@standard-schema/spec@1.1.0)(convex@1.45.0(react@19.2.5))(react@19.2.5)(typescript@6.0.2)(zod@4.4.3):
     dependencies:
-      convex: 1.43.0(react@19.2.5)
+      convex: 1.45.0(react@19.2.5)
     optionalDependencies:
       '@standard-schema/spec': 1.1.0
       react: 19.2.5
       typescript: 6.0.2
       zod: 4.4.3
 
-  convex-helpers@0.1.119(@standard-schema/spec@1.1.0)(convex@1.43.0(react@19.2.5))(react@19.2.5)(typescript@6.0.2)(zod@4.4.3):
+  convex-helpers@0.1.119(@standard-schema/spec@1.1.0)(convex@1.45.0(react@19.2.5))(react@19.2.5)(typescript@6.0.2)(zod@4.4.3):
     dependencies:
-      convex: 1.43.0(react@19.2.5)
+      convex: 1.45.0(react@19.2.5)
     optionalDependencies:
       '@standard-schema/spec': 1.1.0
       react: 19.2.5
       typescript: 6.0.2
       zod: 4.4.3
 
-  convex-svelte@0.14.0(@sveltejs/kit@2.57.1(@opentelemetry/api@1.9.1)(@sveltejs/vite-plugin-svelte@7.0.0(@voidzero-dev/vite-plus-core@0.1.18(@arethetypeswrong/core@0.18.2)(@types/node@25.6.0)(esbuild@0.27.7)(jiti@2.7.0)(publint@0.3.18)(terser@5.48.0)(tsx@4.21.0)(typescript@6.0.2)(yaml@2.9.0))(svelte@5.55.4(@typescript-eslint/types@8.59.0)))(@voidzero-dev/vite-plus-core@0.1.18(@arethetypeswrong/core@0.18.2)(@types/node@25.6.0)(esbuild@0.27.7)(jiti@2.7.0)(publint@0.3.18)(terser@5.48.0)(tsx@4.21.0)(typescript@6.0.2)(yaml@2.9.0))(svelte@5.55.4(@typescript-eslint/types@8.59.0))(typescript@6.0.2))(convex@1.43.0(react@19.2.5))(svelte@5.55.4(@typescript-eslint/types@8.59.0))(zod@4.4.3):
+  convex-helpers@0.1.123(@standard-schema/spec@1.1.0)(convex@1.45.0(react@19.2.5))(react@19.2.5)(typescript@6.0.2)(zod@4.4.3):
     dependencies:
-      convex: 1.43.0(react@19.2.5)
+      convex: 1.45.0(react@19.2.5)
+    optionalDependencies:
+      '@standard-schema/spec': 1.1.0
+      react: 19.2.5
+      typescript: 6.0.2
+      zod: 4.4.3
+
+  convex-svelte@0.14.0(@sveltejs/kit@2.57.1(@opentelemetry/api@1.9.1)(@sveltejs/vite-plugin-svelte@7.0.0(@voidzero-dev/vite-plus-core@0.1.18(@arethetypeswrong/core@0.18.2)(@types/node@25.6.0)(esbuild@0.27.7)(jiti@2.7.0)(publint@0.3.18)(terser@5.48.0)(tsx@4.21.0)(typescript@6.0.2)(yaml@2.9.0))(svelte@5.55.4(@typescript-eslint/types@8.59.0)))(@voidzero-dev/vite-plus-core@0.1.18(@arethetypeswrong/core@0.18.2)(@types/node@25.6.0)(esbuild@0.27.7)(jiti@2.7.0)(publint@0.3.18)(terser@5.48.0)(tsx@4.21.0)(typescript@6.0.2)(yaml@2.9.0))(svelte@5.55.4(@typescript-eslint/types@8.59.0))(typescript@6.0.2))(convex@1.45.0(react@19.2.5))(svelte@5.55.4(@typescript-eslint/types@8.59.0))(zod@4.4.3):
+    dependencies:
+      convex: 1.45.0(react@19.2.5)
       esm-env: 1.2.2
       runed: 0.37.1(@sveltejs/kit@2.57.1(@opentelemetry/api@1.9.1)(@sveltejs/vite-plugin-svelte@7.0.0(@voidzero-dev/vite-plus-core@0.1.18(@arethetypeswrong/core@0.18.2)(@types/node@25.6.0)(esbuild@0.27.7)(jiti@2.7.0)(publint@0.3.18)(terser@5.48.0)(tsx@4.21.0)(typescript@6.0.2)(yaml@2.9.0))(svelte@5.55.4(@typescript-eslint/types@8.59.0)))(@voidzero-dev/vite-plus-core@0.1.18(@arethetypeswrong/core@0.18.2)(@types/node@25.6.0)(esbuild@0.27.7)(jiti@2.7.0)(publint@0.3.18)(terser@5.48.0)(tsx@4.21.0)(typescript@6.0.2)(yaml@2.9.0))(svelte@5.55.4(@typescript-eslint/types@8.59.0))(typescript@6.0.2))(svelte@5.55.4(@typescript-eslint/types@8.59.0))(zod@4.4.3)
       svelte: 5.55.4(@typescript-eslint/types@8.59.0)
@@ -14062,11 +14066,11 @@ snapshots:
       - '@sveltejs/kit'
       - zod
 
-  convex-test@0.0.55(convex@1.43.0(react@19.2.5)):
+  convex-test@0.0.56(convex@1.45.0(react@19.2.5)):
     dependencies:
-      convex: 1.43.0(react@19.2.5)
+      convex: 1.45.0(react@19.2.5)
 
-  convex@1.43.0(react@19.1.0):
+  convex@1.45.0(react@19.1.0):
     dependencies:
       esbuild: 0.27.0
       prettier: 3.8.4
@@ -14077,7 +14081,7 @@ snapshots:
       - bufferutil
       - utf-8-validate
 
-  convex@1.43.0(react@19.2.5):
+  convex@1.45.0(react@19.2.5):
     dependencies:
       esbuild: 0.27.0
       prettier: 3.8.4
@@ -14543,9 +14547,9 @@ snapshots:
       '@typescript-eslint/eslint-plugin': 8.59.0(@typescript-eslint/parser@8.59.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3)
       '@typescript-eslint/parser': 8.59.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3)
       eslint: 9.39.4(jiti@2.7.0)
-      eslint-import-resolver-typescript: 3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.59.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.4(jiti@2.7.0)))(eslint@9.39.4(jiti@2.7.0))
+      eslint-import-resolver-typescript: 3.10.1(eslint-plugin-import@2.32.0)(eslint@9.39.4(jiti@2.7.0))
       eslint-plugin-expo: 1.0.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3)
-      eslint-plugin-import: 2.32.0(@typescript-eslint/parser@8.59.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.59.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.4(jiti@2.7.0)))(eslint@9.39.4(jiti@2.7.0)))(eslint@9.39.4(jiti@2.7.0))
+      eslint-plugin-import: 2.32.0(@typescript-eslint/parser@8.59.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint-import-resolver-typescript@3.10.1)(eslint@9.39.4(jiti@2.7.0))
       eslint-plugin-react: 7.37.5(eslint@9.39.4(jiti@2.7.0))
       eslint-plugin-react-hooks: 5.2.0(eslint@9.39.4(jiti@2.7.0))
       globals: 16.5.0
@@ -14563,7 +14567,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.59.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.4(jiti@2.7.0)))(eslint@9.39.4(jiti@2.7.0)):
+  eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0)(eslint@9.39.4(jiti@2.7.0)):
     dependencies:
       '@nolyfill/is-core-module': 1.0.39
       debug: 4.4.3
@@ -14574,18 +14578,18 @@ snapshots:
       tinyglobby: 0.2.16
       unrs-resolver: 1.11.1
     optionalDependencies:
-      eslint-plugin-import: 2.32.0(@typescript-eslint/parser@8.59.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.59.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.4(jiti@2.7.0)))(eslint@9.39.4(jiti@2.7.0)))(eslint@9.39.4(jiti@2.7.0))
+      eslint-plugin-import: 2.32.0(@typescript-eslint/parser@8.59.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint-import-resolver-typescript@3.10.1)(eslint@9.39.4(jiti@2.7.0))
     transitivePeerDependencies:
       - supports-color
 
-  eslint-module-utils@2.12.1(@typescript-eslint/parser@8.59.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint-import-resolver-node@0.3.10)(eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.59.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.4(jiti@2.7.0)))(eslint@9.39.4(jiti@2.7.0)))(eslint@9.39.4(jiti@2.7.0)):
+  eslint-module-utils@2.12.1(@typescript-eslint/parser@8.59.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint-import-resolver-node@0.3.10)(eslint-import-resolver-typescript@3.10.1)(eslint@9.39.4(jiti@2.7.0)):
     dependencies:
       debug: 3.2.7
     optionalDependencies:
       '@typescript-eslint/parser': 8.59.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3)
       eslint: 9.39.4(jiti@2.7.0)
       eslint-import-resolver-node: 0.3.10
-      eslint-import-resolver-typescript: 3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.59.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.4(jiti@2.7.0)))(eslint@9.39.4(jiti@2.7.0))
+      eslint-import-resolver-typescript: 3.10.1(eslint-plugin-import@2.32.0)(eslint@9.39.4(jiti@2.7.0))
     transitivePeerDependencies:
       - supports-color
 
@@ -14598,7 +14602,7 @@ snapshots:
       - supports-color
       - typescript
 
-  eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.59.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.59.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.4(jiti@2.7.0)))(eslint@9.39.4(jiti@2.7.0)))(eslint@9.39.4(jiti@2.7.0)):
+  eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.59.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint-import-resolver-typescript@3.10.1)(eslint@9.39.4(jiti@2.7.0)):
     dependencies:
       '@rtsao/scc': 1.1.0
       array-includes: 3.1.9
@@ -14609,7 +14613,7 @@ snapshots:
       doctrine: 2.1.0
       eslint: 9.39.4(jiti@2.7.0)
       eslint-import-resolver-node: 0.3.10
-      eslint-module-utils: 2.12.1(@typescript-eslint/parser@8.59.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint-import-resolver-node@0.3.10)(eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.59.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.4(jiti@2.7.0)))(eslint@9.39.4(jiti@2.7.0)))(eslint@9.39.4(jiti@2.7.0))
+      eslint-module-utils: 2.12.1(@typescript-eslint/parser@8.59.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint-import-resolver-node@0.3.10)(eslint-import-resolver-typescript@3.10.1)(eslint@9.39.4(jiti@2.7.0))
       hasown: 2.0.3
       is-core-module: 2.16.1
       is-glob: 4.0.3

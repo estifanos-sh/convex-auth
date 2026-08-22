@@ -5,7 +5,7 @@ import { constantTimeEqualHex } from "../../shared/compare";
 import { cached, invalidateCtxCache } from "../cache/context";
 import type { AuthComponentApi } from "../component/api";
 import type { ComponentCtx, ComponentReadCtx } from "../component/context";
-import { vOAuthClientDoc } from "../../component/model";
+import { vOAuthClientDoc } from "../../component/documents";
 import type { configDefaults } from "../config";
 import { emitAuthEvent } from "../events";
 import { generateApiKey, hashApiKey } from "../keys";

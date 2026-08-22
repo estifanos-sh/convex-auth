@@ -22,6 +22,11 @@ type PaginationOpts = {
   cursor: string | null;
 };
 
+type ScimMembershipProgress = {
+  isDone: boolean;
+  continueCursor: string;
+};
+
 type ConnectionDomainRecord = FunctionReturnType<ComponentConnection["domain"]["list"]>[number];
 type ConnectionDomainVerificationRecord = NonNullable<
   FunctionReturnType<ComponentConnection["domain"]["verification"]["get"]>
@@ -428,7 +433,7 @@ export const provisionScimGroup = (
   componentConnection: ComponentConnection,
   args: FunctionArgs<ComponentConnection["scim"]["identity"]["provisionGroup"]>,
 ) =>
-  componentMutation<typeof args, { groupId: string; created: boolean }>(
+  componentMutation<typeof args, { groupId: string; created: boolean } & ScimMembershipProgress>(
     ctx,
     componentConnection.scim.identity.provisionGroup,
     args,
@@ -438,13 +443,23 @@ export const updateScimGroup = (
   ctx: ComponentWriteCtx,
   componentConnection: ComponentConnection,
   args: FunctionArgs<ComponentConnection["scim"]["identity"]["updateGroup"]>,
-) => componentMutation<typeof args, null>(ctx, componentConnection.scim.identity.updateGroup, args);
+) =>
+  componentMutation<typeof args, ScimMembershipProgress>(
+    ctx,
+    componentConnection.scim.identity.updateGroup,
+    args,
+  );
 
 export const revokeScimGroup = (
   ctx: ComponentWriteCtx,
   componentConnection: ComponentConnection,
   args: FunctionArgs<ComponentConnection["scim"]["identity"]["revokeGroup"]>,
-) => componentMutation<typeof args, null>(ctx, componentConnection.scim.identity.revokeGroup, args);
+) =>
+  componentMutation<typeof args, ScimMembershipProgress>(
+    ctx,
+    componentConnection.scim.identity.revokeGroup,
+    args,
+  );
 
 export const insertUser = (
   ctx: ComponentWriteCtx,

@@ -206,7 +206,7 @@ test("SCIM → Convex: direct SCIM server protocol validation", async () => {
     logger: false,
   });
   const signInResult = (await convexClient.action(api.auth.signIn, {
-    provider: "anonymous",
+    request: { provider: "anonymous" },
   })) as ConvexSignInResult;
   expect(signInResult.kind).toBe("signedIn");
   const convexUserToken = signInResult.session?.token;

@@ -233,27 +233,13 @@ convex-auth so the public API does not depend on Arctic.
 
 ## Custom Credentials
 
-`credentials()` is the low-level escape hatch for authentication that is not
-OAuth-based. Provide an `authorize` callback that validates the submitted
-credentials and returns the authenticated user; return `null` to reject the
-attempt. The built-in `password()` provider is layered on top of this.
-
-This escape hatch is not a reason to build a password, PIN, passkey, recovery,
-or restricted-session system in the application schema. If the credential is a
-password-like secret, configure `password()` with its validation and crypto
-hooks. If authentication must continue into another provider ceremony, use the
-provider's typed continuation operation. Calling component internals from
-`authorize`, issuing an intermediate session, or coordinating the flow with
-application tables splits one security protocol across two owners.
-
-Import `credentials` from `@estifanos-sh/convex-auth/providers` and declare its
-input with a Convex validator. The validator is the contract for this provider:
-it validates requests at runtime, types `authorize`, and becomes the parameter
-shape of `auth.signIn("api-token", ...)` in the generated `api.auth` object.
-Its default ID is `"credentials"`; choose another ID only when the application
-deliberately has more than one custom credential protocol. The optional crypto
-hooks define secret handling, and `extraProviders` lets one custom entry point
-participate in other configured provider ceremonies.
+`credentials()` is the application-specific entry point for a non-OAuth proof,
+not a license to build another auth system. Its Convex validator is used three
+times: it rejects invalid requests at the action boundary, types the
+`authorize` callback, and becomes the exact parameter type of
+`authClient.signIn(provider, params)`. The generated `api.auth` reference carries
+that contract to the browser, so no `InferClientApi`, handwritten client
+interface, or assertion is necessary.
 
 ```ts
 import { v } from "convex/values";
@@ -279,6 +265,98 @@ Pass `crypto` (`hashSecret`/`verifySecret`) for password-style secret
 verification, and `extraProviders` to register additional providers alongside
 it.
 
+### Continue one proof into another
+
+When one credential is only the first part of authentication, return the next
+provider's operation instead of returning a user or session. Convex Auth stores
+the authorization ticket, binds it to the verified user and operation, and
+issues the session only after the second ceremony succeeds.
+
+The following pattern covers an invitation that enrolls a PIN and replacement
+security key, followed by normal PIN-plus-key sign-in. The application verifies
+the invitation because invitations are product policy. Convex Auth owns the PIN
+account, its hashing and attempt limits, the passkey continuation, rotation,
+session revocation, and final session.
+
+```ts
+import { v } from "convex/values";
+import { credentials, password, webauthn } from "@estifanos-sh/convex-auth/providers";
+
+const passkeys = webauthn({ securityKeysOnly: true });
+const pin = password({
+  id: "pin",
+  validatePasswordRequirements: validatePin,
+  crypto: { hashSecret: hashPin, verifySecret: verifyPin },
+});
+
+const access = credentials({
+  id: "access",
+  params: v.union(
+    v.object({
+      operation: v.literal("enroll"),
+      invite: v.string(),
+      pin: v.string(),
+    }),
+    v.object({
+      operation: v.literal("signIn"),
+      email: v.string(),
+      pin: v.string(),
+    }),
+  ),
+  authorize: async (params, ctx) => {
+    if (params.operation === "enroll") {
+      const invited = await verifyApplicationInvite(ctx, params.invite);
+      return await ctx.auth.credentials.provision(ctx, {
+        verifier: pin,
+        account: { id: invited.email, secret: params.pin },
+        profile: {
+          email: invited.email,
+          emailVerified: true,
+          name: invited.name,
+        },
+        match: ["email"],
+        operation: passkeys.rotate(),
+      });
+    }
+
+    return await ctx.auth.credentials.verify(ctx, {
+      verifier: pin,
+      account: { id: params.email, secret: params.pin },
+      operation: passkeys.signIn(),
+    });
+  },
+  extraProviders: [pin, passkeys],
+});
+
+defineAuth(components.auth, { providers: [access] });
+```
+
+`credentials.provision` first stages only the provider-hashed credential and
+verified profile. It does not create a user, account, or session while the
+passkey ceremony is pending. Successful registration materializes or safely
+links the auth user, stores both credentials, revokes prior passkeys and
+sessions, and issues the final session in one mutation transaction.
+`credentials.verify` applies the configured provider's verification and
+attempt limiting before starting a user-bound passkey assertion.
+`passkeys.rotate()` and `passkeys.signIn()` are the operation vocabulary;
+callers do not invent `flow`, `mode`, or `purpose` strings for continuation
+behavior.
+
+The browser call stays ordinary and fully inferred:
+
+```ts
+await authClient.signIn("access", {
+  operation: "signIn",
+  email,
+  pin,
+});
+```
+
+Do not call `components.auth.*` from `authorize`, return a temporary session,
+or store a recovery transaction in the application schema. Those approaches
+split one revocation boundary into several systems and are precisely what the
+credential continuation owns.
+
 ## Password
 
 ```ts
@@ -287,21 +365,17 @@ defineAuth(components.auth, {
 });
 ```
 
-The password provider supports six flows, all single-word camelCase. Pass the
-flow in the second argument to `signIn`:
+The password provider owns account creation, sign-in, verification, recovery,
+and authenticated password changes. Use `signUp` with `email` and `password`
+to create an account, or `signIn` with the same fields for an existing account.
+`reset` sends a recovery code; `recover` accepts that code with `newPassword`.
+`verify` accepts the post-signup verification code, while `change` requires the
+current authenticated user, `currentPassword`, and `newPassword`, then
+invalidates the user's other sessions.
 
-| Flow      | Authenticated? | Required params                           | Notes                                                  |
-| --------- | -------------- | ----------------------------------------- | ------------------------------------------------------ |
-| `signUp`  | No             | `email`, `password`                       | Creates a new account                                  |
-| `signIn`  | No             | `email`, `password`                       | Authenticate existing user                             |
-| `reset`   | No             | `email`                                   | Sends an OTP through the configured reset provider     |
-| `verify`  | No             | `email`, `code`                           | Verifies a post-signup email OTP                       |
-| `recover` | No             | `email`, `code`, `newPassword`            | Verifies a reset OTP and completes configured recovery |
-| `change`  | Yes            | `email`, `currentPassword`, `newPassword` | Authenticated change. Other sessions invalidated       |
-
-`reset` and `recover` require a `reset` email provider; `verify` requires a
-`verify` email provider. The OTP scope is enforced server-side, so reset and
-signup verification codes cannot be exchanged across flows.
+`reset` and `recover` require a configured reset email provider, and `verify`
+requires a verification email provider. Codes are scoped to their operation,
+so a signup verification code cannot be exchanged for password recovery.
 
 ```ts
 // Forgot password

@@ -200,6 +200,7 @@ async function credentialsSignInInner(
           status: "accepted";
           user: typeof user;
           sessionId: string;
+          sessionExpirationTime: number;
           refreshTokenId?: string;
           replacedSessionId?: string;
         };
@@ -269,6 +270,7 @@ async function credentialsSignInInner(
   const issuance: SessionIssuance = {
     userId,
     sessionId,
+    sessionExpirationTime: completed.sessionExpirationTime,
     identity: buildSessionIdentity(userId, sessionId, completed.user),
     refreshToken:
       generateTokens && refreshTokenId !== undefined

@@ -110,7 +110,7 @@ test("group oidc login interoperates with zitadel through api-driven flow", asyn
   });
 
   const signInResult = (await convexClient.action(api.auth.signIn, {
-    provider: "anonymous",
+    request: { provider: "anonymous" },
   })) as ConvexSignInResult;
 
   expect(signInResult.kind).toBe("signedIn");
@@ -244,8 +244,7 @@ test("group oidc login interoperates with zitadel through api-driven flow", asyn
   });
 
   const ssoResult = (await convexClient.action(api.auth.signIn, {
-    provider: "connection",
-    params: { connectionId },
+    request: { provider: "connection", params: { connectionId } },
   })) as ConvexConnectionStartResult;
   expect(ssoResult.kind).toBe("redirect");
   const { redirect: signInUrl, verifier } = ssoResult;
@@ -356,7 +355,7 @@ test("group oidc login interoperates with zitadel through api-driven flow", asyn
   expect(verificationCode).toBeTruthy();
 
   const exchanged = (await convexClient.action(api.auth.signIn, {
-    params: { code: verificationCode! },
+    request: { params: { code: verificationCode! } },
     verifier,
   })) as ConvexSignInResult;
 
@@ -381,7 +380,7 @@ test("group saml login interoperates with zitadel through api-driven flow", asyn
   });
 
   const signInResult = (await convexClient.action(api.auth.signIn, {
-    provider: "anonymous",
+    request: { provider: "anonymous" },
   })) as ConvexSignInResult;
 
   expect(signInResult.kind).toBe("signedIn");
@@ -524,8 +523,7 @@ test("group saml login interoperates with zitadel through api-driven flow", asyn
   );
 
   const ssoResult = (await convexClient.action(api.auth.signIn, {
-    provider: "connection",
-    params: { connectionId, protocol: "saml" },
+    request: { provider: "connection", params: { connectionId, protocol: "saml" } },
   })) as ConvexConnectionStartResult;
   expect(ssoResult.kind).toBe("redirect");
   const { redirect: signInUrl, verifier } = ssoResult;
@@ -664,7 +662,7 @@ test("group saml login interoperates with zitadel through api-driven flow", asyn
   expect(verificationCode).toBeTruthy();
 
   const exchanged = (await convexClient.action(api.auth.signIn, {
-    params: { code: verificationCode! },
+    request: { params: { code: verificationCode! } },
     verifier,
   })) as ConvexSignInResult;
 

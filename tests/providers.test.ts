@@ -9,7 +9,7 @@
  * tests pin that shape.
  *
  * OAuth factories that omit `redirectUri` derive one from `authUrlFromEnv()`
- * eagerly at construction (the arctic wrapper probes the provider on the first
+ * eagerly at construction (the OAuth runtime resolves the callback URL on the first
  * call), so importing the convex setup below seeds `CONVEX_SITE_URL`. Where a
  * test does not care about the derived URL it passes an explicit `redirectUri`
  * to stay hermetic.
@@ -33,7 +33,8 @@ import { microsoft } from "@estifanos-sh/convex-auth/providers/microsoft";
 import { password } from "@estifanos-sh/convex-auth/providers/password";
 import * as providers from "@estifanos-sh/convex-auth/providers/index";
 import { v } from "convex/values";
-import { expect, test } from "vite-plus/test";
+import { decodeJwt, decodeProtectedHeader } from "jose";
+import { expect, test, vi } from "vite-plus/test";
 
 // Importing the convex setup for its side effect: it seeds CONVEX_SITE_URL /
 // APP_URL so the env-derived-redirect-URI tests below have an auth site URL.
@@ -103,10 +104,48 @@ test("apple() emits name/email scopes and accepts a Uint8Array private key", () 
   expect(provider.id).toBe("apple");
   expect(provider.type).toBe("oauth");
   expect(provider.scopes).toEqual(["name", "email"]);
-  // Apple's client-secret JWT is minted lazily by arctic during the token
+  // Apple's client-secret JWT is minted lazily during the token
   // exchange, not at construction, so there is nothing synchronous to assert
   // beyond that the provider materialized without throwing.
   expect(provider.provider?.pkce).toBe("never");
+});
+
+test("apple() mints an ES256 client-secret JWT for the token request", async () => {
+  const keyPair = await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, true, [
+    "sign",
+    "verify",
+  ]);
+  const privateKey = new Uint8Array(await crypto.subtle.exportKey("pkcs8", keyPair.privateKey));
+  const pem = [
+    "-----BEGIN PRIVATE KEY-----",
+    btoa(String.fromCharCode(...privateKey)),
+    "-----END PRIVATE KEY-----",
+  ].join("\n");
+  const fetchMock = vi.fn(
+    async (_input: RequestInfo | URL, _init?: RequestInit) =>
+      new Response(JSON.stringify({ access_token: "access-token" }), { status: 200 }),
+  );
+  vi.stubGlobal("fetch", fetchMock);
+
+  const provider = apple({
+    clientId: "com.example.app",
+    teamId: "TEAM123",
+    keyId: "KEY123",
+    privateKey: pem,
+    redirectUri: "https://app.example/callback/apple",
+  });
+  await provider.provider!.validateAuthorizationCode({ code: "oauth-code" });
+
+  const body = fetchMock.mock.calls[0]![1]!.body as URLSearchParams;
+  const clientSecret = body.get("client_secret");
+  expect(clientSecret).toBeTruthy();
+  expect(decodeProtectedHeader(clientSecret!).kid).toBe("KEY123");
+  expect(decodeJwt(clientSecret!)).toMatchObject({
+    iss: "TEAM123",
+    aud: "https://appleid.apple.com",
+    sub: "com.example.app",
+  });
+  vi.unstubAllGlobals();
 });
 
 test("microsoft() requires a nonce and installs an id_token validator", () => {
@@ -222,8 +261,8 @@ test('custom() token exchange with authMethod:"basic" and no secret throws deter
 });
 
 test("OAuth providers derive redirectUri from CONVEX_SITE_URL when omitted", () => {
-  // Construction alone must succeed without an explicit redirectUri; the arctic
-  // wrapper probes the provider eagerly, which reads the env-derived auth URL.
+  // Construction alone must succeed without an explicit redirectUri; the OAuth
+  // runtime resolves the env-derived auth URL on its first use.
   // We assert the derived callback path is reflected in the built auth URL.
   const provider = custom({
     id: "envcheck",

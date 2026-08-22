@@ -4,7 +4,7 @@
   "title": "Convex Auth",
   "description": "The unofficial Convex authentication solution.",
   "repository": "estifanos-sh/convex-auth",
-  "installCommand": "pnpm add @estifanos-sh/convex-auth",
+  "installCommand": "npm install @estifanos-sh/convex-auth",
   "startSlug": "/getting-started/overview",
   "llmsDescription": "Authentication and authorization for Convex applications using @estifanos-sh/convex-auth.",
   "sidebar": [
@@ -35,6 +35,7 @@
         { "title": "Authorization", "slug": "/guides/authorization" },
         { "title": "One identity, every client", "slug": "/guides/multi-access" },
         { "title": "Device flow", "slug": "/guides/device-flow" },
+        { "title": "Testing", "slug": "/guides/testing" },
         { "title": "Production", "slug": "/guides/production" }
       ]
     },

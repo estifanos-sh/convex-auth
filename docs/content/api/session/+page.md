@@ -22,38 +22,25 @@ the current user and active-group authorization state. Applications should use
 active group, and membership; those extra calls repeat the same component reads
 without making authorization fresher.
 
-The `ctx.auth` examples on this page assume the handler is using `auth.ctx()`-
-backed builders such as `authQuery`, `authMutation`, or `authAction`.
+The `ctx.auth` examples on this page assume the handler uses `auth.ctx()`-backed
+builders such as `authQuery`, `authMutation`, or `authAction`. The resolver
+validates the session while loading one component snapshot of the current user,
+active group, membership, role, and grants. Reuse it instead of loading those
+records again.
 
-Existing deployments are compatible with the epoch change: a legacy user or
-session without an epoch is interpreted as epoch `0`. The next session
-revocation writes the user's current epoch. No application-table migration is
-required.
-
-## Methods
-
-| Method   | Signature                    | Returns                  | Description                                                                                     |
-| -------- | ---------------------------- | ------------------------ | ----------------------------------------------------------------------------------------------- |
-| `id`     | `(ctx)`                      | `Id<"Session"> \| null`  | Current session id, or `null` when unauthenticated. Pairs with `auth.user.id(ctx)`.             |
-| `revoke` | `(ctx, { userId, except? })` | `{ userId, except }`     | Revokes all sessions for a user. Pass `except` as an array of session IDs to keep those active. |
-| `get`    | `(ctx, { id })`              | `Doc<"Session"> \| null` | Reads a session document by ID.                                                                 |
-| `list`   | `(ctx, { userId })`          | `Doc<"Session">[]`       | Lists at most 16 non-expired sessions in the current epoch; it is not an audit-history export.  |
-
-## Examples
-
-### Read the current session ID
+`id(ctx)` reads the current session ID from the trusted identity claims without
+a database read. It returns a branded `Id<"Session">` or `null`, which can be
+passed directly to the other session methods.
 
 ```ts
-// Preferred — resolves the session id without parsing identity claims.
 const sessionId = await auth.session.id(ctx); // Id<"Session"> | null
 ```
 
-### Revoke all other sessions
-
-This is useful for a "sign out everywhere else" feature. The retained session
-is moved to the new epoch in the same mutation, so it remains valid while every
-other session is revoked. The component may clean up old rows later; cleanup is
-never the security boundary.
+`revoke(ctx, { userId, except? })` signs a user out by advancing the session
+epoch. For “sign out everywhere else,” retain the current branded session ID.
+The retained session moves to the new epoch in the same mutation, while every
+other access and refresh token stops working immediately. Physical row cleanup
+may happen later; it is never the security boundary.
 
 ```ts
 const sessionId = await auth.session.id(ctx);
@@ -67,8 +54,19 @@ await auth.session.revoke(ctx, {
 });
 ```
 
-### List sessions for a user
+`get(ctx, { id })` reads one session document. `list(ctx, { userId })` returns
+at most 16 sessions from the user's current epoch. Each row includes its
+absolute `expirationTime`; a current-devices UI compares that field with its
+own clock. The component query deliberately does not read wall-clock time,
+because a cached Convex query does not become invalid merely because time has
+passed.
 
 ```ts
 const sessions = await auth.session.list(ctx, { userId: ctx.auth.userId });
 ```
+
+Session storage, refresh tokens, handoff state, and restricted enrollment state
+belong to Convex Auth. An application should not mirror sessions in its own
+table or parse identity claims to manufacture component IDs. For tests, use
+`createAuthTest(...).session.create({ userId })`; it creates a real component
+session and returns the correctly branded ID and `t.withIdentity` claims.

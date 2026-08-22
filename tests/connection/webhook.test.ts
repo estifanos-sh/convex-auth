@@ -168,7 +168,7 @@ test("webhook delivery state transitions commit matching audit events", async ()
   const audit = await t.run(
     async (ctx) =>
       await ctx.runQuery(components.auth.connection.audit.list, {
-        connectionId,
+        scope: { connectionId },
         paginationOpts: { numItems: 10, cursor: null },
       }),
   );

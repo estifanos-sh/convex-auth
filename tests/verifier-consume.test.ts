@@ -23,14 +23,20 @@ test("pkce.consume is single-use: the first caller gets the doc, the rest get nu
   )) as string;
 
   const first = (await t.run((ctx) =>
-    ctx.runMutation(components.auth.token.pkce.consume, { id, expectedSignature: "sig-abc" }),
+    ctx.runMutation(components.auth.token.pkce.consume, {
+      selector: { id },
+      expectedSignature: "sig-abc",
+    }),
   )) as { _id: string } | null;
   expect(first?._id).toBe(id);
 
   // A second consume of the same verifier sees the now-absent row → null. This is
   // the invariant that keeps a concurrent ceremony from minting a second session.
   const second = await t.run((ctx) =>
-    ctx.runMutation(components.auth.token.pkce.consume, { id, expectedSignature: "sig-abc" }),
+    ctx.runMutation(components.auth.token.pkce.consume, {
+      selector: { id },
+      expectedSignature: "sig-abc",
+    }),
   );
   expect(second).toBeNull();
 });
@@ -43,13 +49,19 @@ test("pkce.consume rejects a signature mismatch WITHOUT burning the verifier", a
 
   // A wrong expected signature (a bad guess) must not consume the pending row.
   const mismatch = await t.run((ctx) =>
-    ctx.runMutation(components.auth.token.pkce.consume, { id, expectedSignature: "wrong-sig" }),
+    ctx.runMutation(components.auth.token.pkce.consume, {
+      selector: { id },
+      expectedSignature: "wrong-sig",
+    }),
   );
   expect(mismatch).toBeNull();
 
   // The legitimate caller can still consume it.
   const ok = (await t.run((ctx) =>
-    ctx.runMutation(components.auth.token.pkce.consume, { id, expectedSignature: "real-sig" }),
+    ctx.runMutation(components.auth.token.pkce.consume, {
+      selector: { id },
+      expectedSignature: "real-sig",
+    }),
   )) as { _id: string } | null;
   expect(ok?._id).toBe(id);
 });
@@ -63,10 +75,14 @@ test("pkce.consume treats an expired verifier as not consumed and clears it", as
     }),
   )) as string;
 
-  const expired = await t.run((ctx) => ctx.runMutation(components.auth.token.pkce.consume, { id }));
+  const expired = await t.run((ctx) =>
+    ctx.runMutation(components.auth.token.pkce.consume, { selector: { id } }),
+  );
   expect(expired).toBeNull();
 
   // It is gone rather than lingering.
-  const gone = await t.run((ctx) => ctx.runQuery(components.auth.token.pkce.get, { id }));
+  const gone = await t.run((ctx) =>
+    ctx.runQuery(components.auth.token.pkce.get, { selector: { id }, now: Date.now() }),
+  );
   expect(gone).toBeNull();
 });

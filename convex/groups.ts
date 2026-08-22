@@ -1,8 +1,8 @@
 import { ConvexError, v } from "convex/values";
 
-import { internal } from "./_generated/api";
+import { components, internal } from "./_generated/api";
 import { env, query, internalMutation } from "./_generated/server";
-import { auth } from "./auth/core";
+import { auth } from "./auth";
 import {
   type AuthGroupId,
   type AuthGroupInviteId,
@@ -115,15 +115,13 @@ type GroupRow = {
   grants: string[];
 };
 
-export const emailExists = query({
+export const emailExists = authQuery({
   args: { email: v.string() },
   returns: v.boolean(),
-  handler: async (ctx, args) => {
-    const result = await auth.user.list(ctx, {
-      where: { email: args.email.trim().toLowerCase() },
-      paginationOpts: { numItems: 1, cursor: null },
-    });
-    return result.page.length > 0;
+  handler: (ctx, args) => {
+    const email = args.email.trim().toLowerCase();
+    const currentEmail = ctx.auth.user.email?.trim().toLowerCase();
+    return currentEmail !== undefined && email === currentEmail;
   },
 });
 
@@ -344,6 +342,13 @@ export const updateMemberRole = authMutation({
       groupId: args.groupId,
       grants: ["members.manage"],
     });
+    const memberResult = await ctx.runQuery(components.auth.group.member.get, {
+      id: args.memberId,
+    });
+    const member = Array.isArray(memberResult) ? null : memberResult;
+    if (!member || member.groupId !== args.groupId) {
+      throw new ConvexError({ code: ErrorCode.NOT_FOUND, message: "Member not found." });
+    }
     const matched = validRoleIds.find((id) => id === args.roleId);
     if (!matched) {
       throw new ConvexError({ code: ErrorCode.INVALID_INPUT, message: "Invalid role." });
@@ -378,7 +383,11 @@ export const revokeInvite = authMutation({
       groupId: args.groupId,
       grants: ["members.manage"],
     });
-    await auth.invite.revoke(ctx, { id: args.inviteId });
+    const invite = await auth.invite.get(ctx, { id: args.inviteId });
+    if (!invite || invite.groupId !== args.groupId) {
+      throw new ConvexError({ code: ErrorCode.NOT_FOUND, message: "Invite not found." });
+    }
+    await auth.invite.revoke(ctx, { id: invite._id });
     return null;
   },
 });

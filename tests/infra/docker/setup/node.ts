@@ -292,7 +292,7 @@ async function warmUpAnonymousSignIn(baseUrl: string, timeoutMs: number) {
   while (Date.now() < deadline) {
     try {
       const result = (await convexClient.action(api.auth.signIn, {
-        provider: "anonymous",
+        request: { provider: "anonymous" },
       })) as { kind?: string };
       if (result.kind === "signedIn") {
         return;

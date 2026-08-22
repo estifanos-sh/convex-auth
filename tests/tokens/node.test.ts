@@ -13,6 +13,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.resetModules();
   for (const [name, value] of Object.entries(ORIGINAL_ENV)) {
     if (value === undefined) {
@@ -21,6 +22,30 @@ afterEach(() => {
       process.env[name] = value;
     }
   }
+});
+
+test("generateToken never outlives its durable session", async () => {
+  vi.useFakeTimers();
+  const now = new Date("2026-08-22T12:00:00.000Z");
+  vi.setSystemTime(now);
+  process.env.CONVEX_SITE_URL = "https://example.convex.site";
+  process.env.AUTH_KEYS = (await generateKeys()).AUTH_KEYS;
+
+  const tokens = await import("@estifanos-sh/convex-auth/server/tokens");
+  const sessionExpirationTime = now.getTime() + 5_000;
+  const token = await tokens.generateToken(
+    {
+      identity: {
+        subject: "user-session-cap" as any,
+        sessionId: "session-cap" as any,
+        sessionEpoch: 0,
+      },
+      sessionExpirationTime,
+    },
+    { jwt: { durationMs: 60 * 60 * 1000 } } as any,
+  );
+
+  expect(decodeJwt(token).exp).toBe(Math.floor(sessionExpirationTime / 1000));
 });
 
 async function keyringWithPrivateKey(jwtPrivateKey: string) {
@@ -56,6 +81,7 @@ test("generateToken retries private-key import after an invalid warmup", async (
     tokens.generateToken(
       {
         identity: { subject: "user1" as any, sessionId: "session1" as any, sessionEpoch: 0 },
+        sessionExpirationTime: Date.now() + 60 * 60 * 1000,
       },
       {} as any,
     ),
@@ -78,6 +104,7 @@ test("generateToken retries private-key import after an invalid warmup", async (
         name: "Test User",
         picture: "https://example.com/avatar.png",
       },
+      sessionExpirationTime: Date.now() + 60 * 60 * 1000,
     },
     {} as any,
   );
@@ -106,7 +133,10 @@ test("generateToken accepts flattened PKCS#8 private keys", async () => {
 
   const tokens = await import("@estifanos-sh/convex-auth/server/tokens");
   const token = await tokens.generateToken(
-    { identity: { subject: "user2" as any, sessionId: "session2" as any, sessionEpoch: 0 } },
+    {
+      identity: { subject: "user2" as any, sessionId: "session2" as any, sessionEpoch: 0 },
+      sessionExpirationTime: Date.now() + 60 * 60 * 1000,
+    },
     {} as any,
   );
 
@@ -126,7 +156,10 @@ test("generateToken uses the mounted auth route as issuer", async () => {
 
   const tokens = await import("@estifanos-sh/convex-auth/server/tokens");
   const token = await tokens.generateToken(
-    { identity: { subject: "user3" as any, sessionId: "session3" as any, sessionEpoch: 0 } },
+    {
+      identity: { subject: "user3" as any, sessionId: "session3" as any, sessionEpoch: 0 },
+      sessionExpirationTime: Date.now() + 60 * 60 * 1000,
+    },
     { path: "/custom-auth" } as any,
   );
 
@@ -146,7 +179,10 @@ test("generateToken defaults to the /auth issuer", async () => {
 
   const tokens = await import("@estifanos-sh/convex-auth/server/tokens");
   const token = await tokens.generateToken(
-    { identity: { subject: "user4" as any, sessionId: "session4" as any, sessionEpoch: 0 } },
+    {
+      identity: { subject: "user4" as any, sessionId: "session4" as any, sessionEpoch: 0 },
+      sessionExpirationTime: Date.now() + 60 * 60 * 1000,
+    },
     {} as any,
   );
 

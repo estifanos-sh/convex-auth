@@ -1,12 +1,12 @@
 import { base64urlDecode, createBrowserRuntime } from "@estifanos-sh/convex-auth/browser/runtime";
 import { localMutex } from "@estifanos-sh/convex-auth/client/runtime/mutex";
 import { parseRefreshToken } from "@estifanos-sh/convex-auth/server/token/refresh";
-import { createArcticOAuthClient } from "@estifanos-sh/convex-auth/server/oauth/factory";
+import { createOAuthClient } from "@estifanos-sh/convex-auth/server/oauth/factory";
 import {
   createSamlPostBindingResponse,
   parseSamlIdpMetadata,
 } from "@estifanos-sh/convex-auth/server/connection/saml";
-import { expect, test } from "vite-plus/test";
+import { expect, test, vi } from "vite-plus/test";
 
 test("refresh token parser rejects extra separators", () => {
   expect(() => parseRefreshToken("refresh|session|extra")).toThrow("INVALID_REFRESH_TOKEN");
@@ -56,28 +56,30 @@ test("SAML metadata rejects DTD and entity declarations", () => {
   ).toThrow("SAML metadata must not contain DTD or entity declarations.");
 });
 
-test("optional PKCE Arctic clients pass verifier through", async () => {
-  const calls: Array<unknown[]> = [];
-  const provider = {
-    createAuthorizationURL(state: string, verifier: string, scopes: string[]) {
-      calls.push(["authorize", state, verifier, scopes]);
-      return new URL("https://idp.example/authorize");
-    },
-    async validateAuthorizationCode(code: string, verifier: string) {
-      calls.push(["token", code, verifier]);
-      return { data: { access_token: "access" } };
-    },
-  };
-  const client = createArcticOAuthClient(
-    provider as Parameters<typeof createArcticOAuthClient>[0],
-    { pkce: "optional" },
+test("optional PKCE clients pass verifier through", async () => {
+  const fetchMock = vi.fn(
+    async (_input: RequestInfo | URL, _init?: RequestInit) =>
+      new Response(JSON.stringify({ access_token: "access" }), { status: 200 }),
   );
+  vi.stubGlobal("fetch", fetchMock);
+  const client = createOAuthClient({
+    clientId: "client-id",
+    redirectUri: () => "https://app.example/callback",
+    authorizationUrl: "https://idp.example/authorize",
+    tokenUrl: "https://idp.example/token",
+    pkce: "optional",
+    tokenAuth: "none",
+  });
 
-  client.createAuthorizationURL({ state: "state", codeVerifier: "verifier", scopes: ["openid"] });
+  const url = client.createAuthorizationURL({
+    state: "state",
+    codeVerifier: "verifier",
+    scopes: ["openid"],
+  });
   await client.validateAuthorizationCode({ code: "code", codeVerifier: "verifier" });
 
-  expect(calls).toEqual([
-    ["authorize", "state", "verifier", ["openid"]],
-    ["token", "code", "verifier"],
-  ]);
+  expect(url.searchParams.get("code_challenge")).toBeTruthy();
+  const body = fetchMock.mock.calls[0]![1]!.body as URLSearchParams;
+  expect(body.get("code_verifier")).toBe("verifier");
+  vi.unstubAllGlobals();
 });

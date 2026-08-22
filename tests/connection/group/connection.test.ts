@@ -767,7 +767,7 @@ test("group saml.register persists config directly on group connection", async (
   const auditEvents = (
     await t.run(async (ctx) => {
       return await ctx.runQuery(components.auth.connection.audit.list, {
-        connectionId,
+        scope: { connectionId },
         paginationOpts: { numItems: 10, cursor: null },
       });
     })
@@ -1039,7 +1039,7 @@ test("group oidc.register merges config and client.signIn requires verified doma
   const auditEvents = (
     await t.run(async (ctx) => {
       return await ctx.runQuery(components.auth.connection.audit.list, {
-        connectionId,
+        scope: { connectionId },
         paginationOpts: { numItems: 10, cursor: null },
       });
     })
@@ -1111,7 +1111,7 @@ test("group oidc.register merges config and client.signIn requires verified doma
     });
   });
   const clientResolved = await t.query(api.auth.group.signIn, {
-    domain: "oidc.example.com",
+    selector: { domain: "oidc.example.com" },
     redirectTo: "/dashboard",
     loginHint: "admin@oidc.example.com",
   });
@@ -1810,7 +1810,7 @@ test("group connection scim.configure stores hashed token and enqueues subscribe
   const auditEvents = (
     await t.run(async (ctx) => {
       return await ctx.runQuery(components.auth.connection.audit.list, {
-        connectionId,
+        scope: { connectionId },
         paginationOpts: { numItems: 10, cursor: null },
       });
     })

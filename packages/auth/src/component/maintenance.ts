@@ -13,7 +13,8 @@
 import { v } from "convex/values";
 
 import { internal } from "./_generated/api";
-import { internalMutation } from "./functions";
+import { authEventStream } from "./eventstream";
+import { internalMutation } from "./_generated/server";
 
 const DEFAULT_BATCH_SIZE = 200;
 const MAX_BATCH_SIZE = 1000;
@@ -23,6 +24,9 @@ const WEBHOOK_DELIVERY_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 
 /** Auth-event projections are pruned once they are older than this. */
 const AUTH_EVENT_PROJECTION_RETENTION_MS = 90 * 24 * 60 * 60 * 1000;
+
+/** Maximum expired stream buckets started per maintenance mutation. */
+const AUTH_EVENT_STREAM_BUCKET_BATCH_SIZE = 4;
 
 /** A token bucket is fully refilled after at most one hour and can be discarded. */
 const SIGN_IN_LIMIT_RETENTION_MS = 60 * 60 * 1000;
@@ -37,6 +41,24 @@ const INVITE_TERMINAL_RETENTION_MS = 90 * 24 * 60 * 60 * 1000;
 const TERMINAL_INVITE_STATUSES = ["expired", "revoked"] as const;
 
 /**
+ * Continue a paged auth-event stream deletion scheduled by the Stream
+ * component.
+ *
+ * @internal
+ */
+export const runAuthEventStream = internalMutation({
+  args: {
+    streamId: v.optional(v.id("AuthEventStream")),
+    sweep: v.optional(v.boolean()),
+  },
+  returns: v.object({ isDone: v.boolean() }),
+  handler: async (ctx, args): Promise<{ isDone: boolean }> =>
+    await authEventStream.run(ctx, args, {
+      run: internal.maintenance.runAuthEventStream,
+    }),
+});
+
+/**
  * Delete expired / over-retention rows across the auth tables, using each
  * table's expiration/time index and range-scanning up to `batchSize` rows per
  * table:
@@ -49,7 +71,8 @@ const TERMINAL_INVITE_STATUSES = ["expired", "revoked"] as const;
  *   scan.
  * - Retention-window-driven: fully-refilled sign-in limits, terminal webhook deliveries (older than
  *   {@link WEBHOOK_DELIVERY_RETENTION_MS}) and auth-event projections (older
- *   than {@link AUTH_EVENT_PROJECTION_RETENTION_MS}).
+ *   than {@link AUTH_EVENT_PROJECTION_RETENTION_MS}), plus expired auth-event
+ *   stream buckets.
  * - Invites: every past-`expiresTime` invite is reclaimed (so the index front
  *   always advances — no terminal-invite starvation), plus terminal invites
  *   whose `expiresTime` was cleared on transition are reclaimed by creation age.
@@ -61,6 +84,7 @@ const TERMINAL_INVITE_STATUSES = ["expired", "revoked"] as const;
 export const pruneExpired = internalMutation({
   args: {
     batchSize: v.optional(v.number()),
+    now: v.optional(v.number()),
   },
   returns: v.object({
     sessions: v.number(),
@@ -76,13 +100,14 @@ export const pruneExpired = internalMutation({
     oauthRefreshGrants: v.number(),
     webhookDeliveries: v.number(),
     authEventProjections: v.number(),
+    authEventStreams: v.number(),
     connectionDomainVerifications: v.number(),
     samlLoginRequests: v.number(),
     samlSeenAssertions: v.number(),
   }),
   handler: async (ctx, args) => {
     const batchSize = Math.min(Math.max(args.batchSize ?? DEFAULT_BATCH_SIZE, 1), MAX_BATCH_SIZE);
-    const now = Date.now();
+    const now = args.now ?? Date.now();
 
     let sessions = 0;
     let refreshTokens = 0;
@@ -97,6 +122,7 @@ export const pruneExpired = internalMutation({
     let oauthRefreshGrants = 0;
     let webhookDeliveries = 0;
     let authEventProjections = 0;
+    let authEventStreams = 0;
     let connectionDomainVerifications = 0;
     let samlLoginRequests = 0;
     let samlSeenAssertions = 0;
@@ -147,6 +173,10 @@ export const pruneExpired = internalMutation({
         .withIndex("continuation_id", (q) => q.eq("continuationId", doc._id))
         .unique();
       if (passwordReset !== null) await ctx.db.delete("PasswordReset", passwordReset._id);
+      if (doc.subject.kind === "enrollment") {
+        const enrollment = await ctx.db.get("CredentialEnrollment", doc.subject.enrollmentId);
+        if (enrollment !== null) await ctx.db.delete("CredentialEnrollment", enrollment._id);
+      }
       await ctx.db.delete("AuthContinuation", doc._id);
       authContinuations += 1;
     }
@@ -284,6 +314,26 @@ export const pruneExpired = internalMutation({
       authEventProjections += 1;
     }
 
+    // Streams are daily buckets with an expiry matching their projection
+    // retention window. The package's expiry index keeps this scan bounded;
+    // `deleteIfExpired` drains large event buckets through `runAuthEventStream`.
+    const authEventStreamBatchSize = Math.min(batchSize, AUTH_EVENT_STREAM_BUCKET_BATCH_SIZE);
+    const authEventStreamDocs = await ctx.db
+      .query("AuthEventStream")
+      .withIndex("by_expiresAt", (q) => q.gte("expiresAt", 0).lt("expiresAt", now))
+      .take(authEventStreamBatchSize);
+    for (const doc of authEventStreamDocs) {
+      if (doc.status === "pending" || doc.status === "streaming") {
+        await authEventStream.complete(ctx, { streamId: doc._id, attempt: doc.attempt });
+      }
+      const result = await authEventStream.deleteIfExpired(
+        ctx,
+        { streamId: doc._id, cutoff: now },
+        { run: internal.maintenance.runAuthEventStream },
+      );
+      if (result.isDone) authEventStreams += 1;
+    }
+
     if (
       sessions === batchSize ||
       refreshTokens === batchSize ||
@@ -300,6 +350,7 @@ export const pruneExpired = internalMutation({
       webhookDeliveries === batchSize ||
       connectionDomainVerifications === batchSize ||
       authEventDocs.length === batchSize ||
+      authEventStreamDocs.length === authEventStreamBatchSize ||
       samlLoginRequests === batchSize ||
       samlSeenAssertions === batchSize
     ) {
@@ -320,6 +371,7 @@ export const pruneExpired = internalMutation({
       oauthRefreshGrants,
       webhookDeliveries,
       authEventProjections,
+      authEventStreams,
       connectionDomainVerifications,
       samlLoginRequests,
       samlSeenAssertions,

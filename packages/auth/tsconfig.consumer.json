@@ -16,8 +16,6 @@
       "@estifanos-sh/convex-auth/client": ["./src/client/index"],
       "@estifanos-sh/convex-auth/react": ["./src/react/index"],
       "@estifanos-sh/convex-auth/svelte": ["./src/svelte/index"],
-      "@estifanos-sh/convex-auth/component": ["./src/component/index"],
-      "@estifanos-sh/convex-auth/core": ["./src/core/index"],
       "@estifanos-sh/convex-auth/convex.config": ["./src/component/convex.config"],
       "@estifanos-sh/convex-auth/expo": ["./src/expo/index"],
       "@estifanos-sh/convex-auth/server": ["./src/server/index"],

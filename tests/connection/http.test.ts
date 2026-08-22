@@ -111,9 +111,7 @@ function parseJwtPayload(token: string): { sub?: string; sid?: string; session_e
 }
 
 async function groupAdmin(t: any) {
-  const result = (await t.action(api.auth.signIn, {
-    provider: "anonymous",
-  })) as {
+  const result = (await t.action(api.auth.signIn, { request: { provider: "anonymous" } })) as {
     kind: string;
     session?: { token: string; refreshToken: string } | null;
   };

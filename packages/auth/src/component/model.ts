@@ -24,6 +24,7 @@ export const TABLES = {
   Account: "Account",
   AuthVerifier: "AuthVerifier",
   AuthContinuation: "AuthContinuation",
+  CredentialEnrollment: "CredentialEnrollment",
   PasswordReset: "PasswordReset",
   VerificationCode: "VerificationCode",
   RefreshToken: "RefreshToken",
@@ -430,13 +431,6 @@ export const vApiKeyRateLimitState = v.object({
 /** Kind of encrypted secret stored for a group connection. */
 export const vGroupConnectionSecretKind = v.union(v.literal("oidc_client_secret"));
 
-function vDocMeta<T extends (typeof TABLES)[keyof typeof TABLES]>(tableName: T) {
-  return {
-    _id: v.id(tableName),
-    _creationTime: v.number(),
-  };
-}
-
 /**
  * The shape of `v.id` — and any drop-in replacement that needs to type-claim
  * `Id<T>` while choosing a different runtime validator (e.g. `v.string()` for
@@ -472,7 +466,7 @@ export const userFields = <F extends IdValidatorFn>(vId: F) => ({
   phoneVerificationTime: v.optional(v.number()),
   isAnonymous: v.optional(v.boolean()),
   lastActiveGroup: v.optional(vId(TABLES.Group)),
-  sessionEpoch: v.optional(v.number()),
+  sessionEpoch: v.number(),
   extend: v.optional(v.any()),
 });
 
@@ -533,9 +527,6 @@ export const inviteFields = <F extends IdValidatorFn>(vId: F) => ({
   extend: v.optional(v.any()),
 });
 
-/** Validator for a `User` document. */
-export const vUserDoc = v.object(userFields(v.id));
-
 /** Origin that contributed a user's email address. */
 export const vUserEmailSource = v.union(
   v.literal("password"),
@@ -552,345 +543,20 @@ export const vProfileEmail = v.object({
   verified: v.optional(v.boolean()),
 });
 
-/** Validator for a `UserEmail` document. */
-export const vUserEmailDoc = v.object(emailFields(v.id));
+const vPayloadPrimitive = v.union(v.string(), v.number(), v.boolean(), v.null());
+const vPayloadArray = v.array(vPayloadPrimitive);
+const vPayloadNestedRecord = v.record(v.string(), v.union(vPayloadPrimitive, vPayloadArray));
 
-/** Validator for a `Session` document. */
-export const vSessionDoc = v.object({
-  ...vDocMeta(TABLES.Session),
-  userId: v.id(TABLES.User),
-  expirationTime: v.number(),
-  epoch: v.optional(v.number()),
-});
-
-/** Validator for an `Account` document. */
-export const vAccountDoc = v.object({
-  ...vDocMeta(TABLES.Account),
-  userId: v.id(TABLES.User),
-  provider: v.string(),
-  providerAccountId: v.string(),
-  secret: v.optional(v.string()),
-  emailVerified: v.optional(v.string()),
-  phoneVerified: v.optional(v.string()),
-  extend: v.optional(v.any()),
-});
-
-/** Validator for an `AuthVerifier` document. */
-export const vAuthVerifierDoc = v.object({
-  ...vDocMeta(TABLES.AuthVerifier),
-  sessionId: v.optional(v.id(TABLES.Session)),
-  continuationId: v.optional(v.id(TABLES.AuthContinuation)),
-  signature: v.optional(v.string()),
-  expirationTime: v.optional(v.number()),
-});
-
-/** Validator for an `AuthContinuation` document. */
-export const vAuthContinuationDoc = v.object({
-  ...vDocMeta(TABLES.AuthContinuation),
-  userId: v.id(TABLES.User),
-  provider: v.string(),
-  operation: v.literal("rotate"),
-  expirationTime: v.number(),
-});
-
-/** Validator for a `VerificationCode` document. */
-export const vVerificationCodeDoc = v.object({
-  ...vDocMeta(TABLES.VerificationCode),
-  accountId: v.id(TABLES.Account),
-  provider: v.string(),
-  code: v.string(),
-  expirationTime: v.number(),
-  verifier: v.optional(v.string()),
-  emailVerified: v.optional(v.string()),
-  phoneVerified: v.optional(v.string()),
-});
-
-/** Validator for a `RefreshToken` document. */
-export const vRefreshTokenDoc = v.object({
-  ...vDocMeta(TABLES.RefreshToken),
-  sessionId: v.id(TABLES.Session),
-  expirationTime: v.number(),
-  firstUsedTime: v.optional(v.number()),
-  parentRefreshTokenId: v.optional(v.id(TABLES.RefreshToken)),
-});
-
-/** Validator for a `Passkey` document. */
-export const vPasskeyDoc = v.object({
-  ...vDocMeta(TABLES.Passkey),
-  userId: v.id(TABLES.User),
-  credentialId: v.string(),
-  publicKey: v.bytes(),
-  algorithm: v.number(),
-  counter: v.number(),
-  transports: v.optional(v.array(v.string())),
-  deviceType: v.string(),
-  backedUp: v.boolean(),
-  name: v.optional(v.string()),
-  attestation: v.optional(
-    v.object({
-      verifier: v.string(),
-      aaguid: v.string(),
-      format: v.string(),
-      metadataDescription: v.optional(v.string()),
-      verifiedAt: v.number(),
-      status: v.literal("trusted"),
-    }),
-  ),
-  createdAt: v.number(),
-  lastUsedAt: v.optional(v.number()),
-});
-
-/** Validator for a `TotpFactor` document. */
-export const vTotpFactorDoc = v.object({
-  ...vDocMeta(TABLES.TotpFactor),
-  userId: v.id(TABLES.User),
-  secret: v.bytes(),
-  digits: v.number(),
-  period: v.number(),
-  verified: v.boolean(),
-  name: v.optional(v.string()),
-  createdAt: v.number(),
-  lastUsedAt: v.optional(v.number()),
-});
-
-/** Validator for a `Group` document. */
-export const vGroupDoc = v.object(groupFields(v.id));
-
-/** Validator for a `GroupMember` document. */
-export const vGroupMemberDoc = v.object(memberFields(v.id));
-
-/** Validator for a `GroupInvite` document. */
-export const vGroupInviteDoc = v.object(inviteFields(v.id));
-
-/** Validator for an `ApiKey` document. */
-export const vApiKeyDoc = v.object({
-  ...vDocMeta(TABLES.ApiKey),
-  userId: v.id(TABLES.User),
-  prefix: v.string(),
-  hashedKey: v.string(),
-  name: v.string(),
-  scopes: v.array(vApiKeyScope),
-  rateLimit: v.optional(vApiKeyRateLimit),
-  rateLimitState: v.optional(vApiKeyRateLimitState),
-  expiresAt: v.optional(v.number()),
-  lastUsedAt: v.optional(v.number()),
-  createdAt: v.number(),
-  revoked: v.boolean(),
-  extend: v.optional(v.any()),
-});
-
-/** Validator for an `OAuthClient` document. */
-export const vOAuthClientDoc = v.object({
-  ...vDocMeta(TABLES.OAuthClient),
-  clientId: v.string(),
-  clientSecretHash: v.optional(v.string()),
-  name: v.string(),
-  redirectUris: v.array(v.string()),
-  scopes: v.array(v.string()),
-  grantTypes: v.array(v.string()),
-  tokenEndpointAuthMethod: vTokenEndpointAuthMethod,
-  registrationAccessTokenHash: v.optional(v.string()),
-  createdBy: v.optional(v.id(TABLES.User)),
-  revoked: v.boolean(),
-  revokedAt: v.optional(v.number()),
-  extend: v.optional(v.any()),
-});
-
-/** Validator for an `OAuthCode` document. */
-export const vOAuthCodeDoc = v.object({
-  ...vDocMeta(TABLES.OAuthCode),
-  codeHash: v.string(),
-  userId: v.id(TABLES.User),
-  clientId: v.string(),
-  redirectUri: v.string(),
-  scopes: v.array(v.string()),
-  codeChallenge: v.string(),
-  resource: v.optional(v.string()),
-  expiresAt: v.number(),
-  usedAt: v.optional(v.number()),
-});
-
-/** Validator for an `OAuthRefreshGrant` document (the rotation-chain root). */
-export const vOAuthRefreshGrantDoc = v.object({
-  ...vDocMeta(TABLES.OAuthRefreshGrant),
-  clientId: v.string(),
-  userId: v.id(TABLES.User),
-  scopes: v.array(v.string()),
-  resource: v.optional(v.string()),
-  expiresAt: v.number(),
-  revokedAt: v.optional(v.number()),
-});
-
-/** Validator for an `OAuthRefreshToken` document (a leaf of a grant's chain). */
-export const vOAuthRefreshTokenDoc = v.object({
-  ...vDocMeta(TABLES.OAuthRefreshToken),
-  tokenHash: v.string(),
-  grantId: v.id(TABLES.OAuthRefreshGrant),
-  expiresAt: v.number(),
-  firstUsedTime: v.optional(v.number()),
-  parentTokenId: v.optional(v.id(TABLES.OAuthRefreshToken)),
-});
-
-/** Validator for a `DeviceCode` document. */
-export const vDeviceCodeDoc = v.object({
-  ...vDocMeta(TABLES.DeviceCode),
-  deviceCodeHash: v.string(),
-  userCode: v.string(),
-  expiresAt: v.number(),
-  interval: v.number(),
-  status: vDeviceStatus,
-  userId: v.optional(v.id(TABLES.User)),
-  sessionId: v.optional(v.id(TABLES.Session)),
-  lastPolledAt: v.optional(v.number()),
-});
-
-/** Validator for a `GroupConnection` document. */
-export const vGroupConnectionDoc = v.object({
-  ...vDocMeta(TABLES.GroupConnection),
-  groupId: v.id(TABLES.Group),
-  slug: v.optional(v.string()),
-  name: v.optional(v.string()),
-  protocol: vGroupConnectionProtocol,
-  status: vGroupConnectionStatus,
-  config: v.optional(v.any()),
-  extend: v.optional(v.any()),
-});
-
-/** Validator for a `GroupConnectionDomain` document. */
-export const vGroupConnectionDomainDoc = v.object({
-  ...vDocMeta(TABLES.GroupConnectionDomain),
-  connectionId: v.id(TABLES.GroupConnection),
-  groupId: v.id(TABLES.Group),
-  domain: v.string(),
-  isPrimary: v.boolean(),
-  verifiedAt: v.optional(v.number()),
-});
-
-/** Validator for a `SamlLoginRequest` document. */
-export const vSamlLoginRequestDoc = v.object({
-  ...vDocMeta(TABLES.SamlLoginRequest),
-  connectionId: v.id(TABLES.GroupConnection),
-  requestId: v.string(),
-  createdAt: v.number(),
-  expiresAt: v.number(),
-  acceptedAt: v.optional(v.number()),
-});
-
-/** Validator for a `SamlSeenAssertion` document. */
-export const vSamlSeenAssertionDoc = v.object({
-  ...vDocMeta(TABLES.SamlSeenAssertion),
-  connectionId: v.id(TABLES.GroupConnection),
-  assertionId: v.string(),
-  expiresAt: v.number(),
-});
-
-/** Validator for a `GroupConnectionDomainVerification` document. */
-export const vGroupConnectionDomainVerificationDoc = v.object({
-  ...vDocMeta(TABLES.GroupConnectionDomainVerification),
-  connectionId: v.id(TABLES.GroupConnection),
-  groupId: v.id(TABLES.Group),
-  domainId: v.id(TABLES.GroupConnectionDomain),
-  domain: v.string(),
-  recordName: v.string(),
-  token: v.string(),
-  tokenHash: v.string(),
-  requestedAt: v.number(),
-  expiresAt: v.number(),
-});
-
-/** Validator for a `GroupConnectionSecret` document. */
-export const vGroupConnectionSecretDoc = v.object({
-  ...vDocMeta(TABLES.GroupConnectionSecret),
-  connectionId: v.id(TABLES.GroupConnection),
-  groupId: v.id(TABLES.Group),
-  kind: vGroupConnectionSecretKind,
-  ciphertext: v.string(),
-  updatedAt: v.number(),
-});
-
-/** Validator for a `GroupConnectionScimConfig` document. */
-export const vGroupConnectionScimConfigDoc = v.object({
-  ...vDocMeta(TABLES.GroupConnectionScimConfig),
-  connectionId: v.id(TABLES.GroupConnection),
-  groupId: v.id(TABLES.Group),
-  status: vScimStatus,
-  basePath: v.string(),
-  tokenHash: v.string(),
-  lastRotatedAt: v.optional(v.number()),
-  extend: v.optional(v.any()),
-});
-
-/** Validator for a `GroupConnectionScimIdentity` document. */
-export const vGroupConnectionScimIdentityDoc = v.object({
-  ...vDocMeta(TABLES.GroupConnectionScimIdentity),
-  connectionId: v.id(TABLES.GroupConnection),
-  groupId: v.id(TABLES.Group),
-  resourceType: vScimResourceType,
-  externalId: v.optional(v.string()),
-  userId: v.optional(v.id(TABLES.User)),
-  mappedGroupId: v.optional(v.id(TABLES.Group)),
-  lastProvisionedAt: v.optional(v.number()),
-  active: v.optional(v.boolean()),
-  raw: v.optional(v.any()),
-});
-
-/** Validator for an `AuthEventProjection` document. */
-export const vAuthEventProjectionDoc = v.object({
-  ...vDocMeta(TABLES.AuthEventProjection),
-  eventId: v.string(),
-  targetKind: vAuthEventTargetKind,
-  targetId: v.string(),
-  kind: vAuthEventKind,
-  category: vAuthEventCategory,
-  occurredAt: v.number(),
-  actorType: vAuthEventActorType,
-  actorId: v.optional(v.string()),
-  subjectType: vAuthEventSubjectType,
-  subjectId: v.optional(v.string()),
-  outcome: vAuthEventOutcome,
-  errorCode: v.optional(v.string()),
-  requestId: v.optional(v.string()),
-  ip: v.optional(v.string()),
-  data: v.optional(vAuthEventData),
-});
-
-/** Validator for a `GroupWebhookEndpoint` document. */
-export const vGroupWebhookEndpointDoc = v.object({
-  ...vDocMeta(TABLES.GroupWebhookEndpoint),
-  connectionId: v.id(TABLES.GroupConnection),
-  groupId: v.id(TABLES.Group),
-  url: v.string(),
-  status: vWebhookEndpointStatus,
-  secretCiphertext: v.string(),
-  subscriptions: v.array(vAuthEventKind),
-  createdByUserId: v.optional(v.id(TABLES.User)),
-  lastSuccessAt: v.optional(v.number()),
-  lastFailureAt: v.optional(v.number()),
-  failureCount: v.number(),
-  extend: v.optional(v.any()),
-});
-
-/** Validator for a `GroupWebhookDelivery` document. */
-export const vGroupWebhookDeliveryDoc = v.object({
-  ...vDocMeta(TABLES.GroupWebhookDelivery),
-  connectionId: v.id(TABLES.GroupConnection),
-  endpointId: v.id(TABLES.GroupWebhookEndpoint),
-  eventId: v.string(),
-  kind: vAuthEventKind,
-  status: vWebhookDeliveryStatus,
-  attemptCount: v.number(),
-  nextAttemptAt: v.number(),
-  lastAttemptAt: v.optional(v.number()),
-  lastResponseStatus: v.optional(v.number()),
-  lastError: v.optional(v.string()),
-  payload: v.any(),
-  signature: v.string(),
-  signedAt: v.number(),
-});
+/** JSON-compatible provider payload record stored at auth boundaries. */
+export const vPayloadRecord = v.record(
+  v.string(),
+  v.union(vPayloadPrimitive, vPayloadArray, vPayloadNestedRecord),
+);
 
 /** Validator for the public (redacted) projection of a `GroupWebhookDelivery` document. */
 export const vGroupWebhookDeliveryPublicDoc = v.object({
-  ...vDocMeta(TABLES.GroupWebhookDelivery),
+  _id: v.id(TABLES.GroupWebhookDelivery),
+  _creationTime: v.number(),
   connectionId: v.id(TABLES.GroupConnection),
   endpointId: v.id(TABLES.GroupWebhookEndpoint),
   eventId: v.string(),

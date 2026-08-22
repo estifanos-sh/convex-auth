@@ -12,8 +12,9 @@ import { ConvexError, v } from "convex/values";
 import { ErrorCode } from "../../shared/codes";
 import type { Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
-import { mutation, query } from "../functions";
-import { vUserEmailDoc, vUserEmailSource } from "../model";
+import { mutation, query } from "../_generated/server";
+import { vUserEmailDoc } from "../documents";
+import { vUserEmailSource } from "../model";
 
 const USER_EMAIL_BATCH = 64;
 

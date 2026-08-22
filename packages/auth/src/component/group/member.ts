@@ -14,14 +14,16 @@ import { stream } from "convex-helpers/server/stream";
 import { ErrorCode } from "../../shared/codes";
 
 import type { Id } from "../_generated/dataModel";
-import { mutation, query } from "../functions";
-import { vGroupMemberDoc, vPaginated } from "../model";
+import { assertBatchSelectorSize } from "../batch";
+import { vGroupMemberDoc } from "../documents";
+import { mutation, query } from "../_generated/server";
+import { vPaginated } from "../model";
 import schema from "../schema";
 
 /**
  * Read a membership by `id`, by `{ groupId, userId }`, or — with
  * `{ userId, groupIds }` — batch-read one user's memberships across many
- * groups (result aligned to input order, `null` where absent).
+ * groups (result aligned to input order, `null` where absent; max 100 IDs).
  */
 export const get = query({
   args: {
@@ -34,6 +36,7 @@ export const get = query({
   handler: async (ctx, args) => {
     if (args.userId !== undefined && args.groupIds !== undefined) {
       const groupIds = args.groupIds;
+      assertBatchSelectorSize(groupIds, "groupIds");
       if (groupIds.length === 0) return [];
       const unique = Array.from(new Set(groupIds));
       const docs = await Promise.all(

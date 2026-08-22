@@ -15,13 +15,32 @@ import { paginator } from "convex-helpers/server/pagination";
 import { ErrorCode } from "../../../shared/codes";
 import type { Id } from "../../_generated/dataModel";
 import type { MutationCtx } from "../../_generated/server";
-import { mutation, query } from "../../functions";
-import { vGroupConnectionScimIdentityDoc, vPaginated, vScimResourceType } from "../../model";
+import { assertBatchSelectorSize } from "../../batch";
+import { mutation, query } from "../../_generated/server";
+import { vGroupConnectionScimIdentityDoc } from "../../documents";
+import { vPaginated, vScimResourceType } from "../../model";
 import schema from "../../schema";
 import { revokeSessionState } from "../../session";
 
-const vScimUserData = v.object(schema.tables.User.validator.fields);
+const vScimUserData = schema.tables.User.validator.omit("sessionEpoch");
 const vProfileUpdate = v.union(v.literal("never"), v.literal("missing"), v.literal("always"));
+
+/** Maximum memberships changed by one SCIM group mutation. */
+const SCIM_GROUP_MEMBERSHIP_BATCH_SIZE = 100;
+
+const vScimMembershipProgress = v.object({
+  isDone: v.boolean(),
+  continueCursor: v.string(),
+});
+
+function assertScimMembershipBatchSize(memberIds: Array<Id<"User">>) {
+  if (memberIds.length > SCIM_GROUP_MEMBERSHIP_BATCH_SIZE) {
+    throw new ConvexError({
+      code: ErrorCode.INVALID_PARAMETERS,
+      message: `SCIM group membership batches are limited to ${SCIM_GROUP_MEMBERSHIP_BATCH_SIZE} members.`,
+    });
+  }
+}
 
 type ScimUserData = Infer<typeof vScimUserData>;
 type ProfileUpdate = Infer<typeof vProfileUpdate>;
@@ -37,7 +56,7 @@ type ScimUserIdentity = Pick<
 /**
  * Read SCIM identities, overloaded by the args supplied. With
  * `{ connectionId, userIds }` it batch-resolves and returns an array aligned to
- * the input order (`null` per missing user). Otherwise it resolves a single
+ * the input order (`null` per missing user; max 100 IDs). Otherwise it resolves a single
  * identity by `(connectionId, resourceType, externalId)`, `(connectionId,
  * userId)`, `userId`, or `mappedGroupId`. Returns `null` when nothing matches.
  */
@@ -58,6 +77,7 @@ export const get = query({
   handler: async (ctx, args) => {
     if (args.connectionId !== undefined && args.userIds !== undefined) {
       const userIds = args.userIds;
+      assertBatchSelectorSize(userIds, "userIds");
       if (userIds.length === 0) return [];
       const unique = Array.from(new Set(userIds));
       const docs = await Promise.all(
@@ -200,7 +220,10 @@ export const provision = mutation({
     let userId = identity?.userId ?? account?.userId;
     let created = false;
     if (userId === undefined) {
-      userId = await ctx.db.insert("User", args.userData);
+      userId = await ctx.db.insert("User", {
+        ...args.userData,
+        sessionEpoch: 0,
+      });
       created = true;
     } else {
       const user = await ctx.db.get("User", userId);
@@ -544,24 +567,33 @@ async function replaceScimGroupMembers(
   groupId: Id<"Group">,
   memberIds: Array<Id<"User">>,
   roleIds: Array<string>,
+  cursor: string | undefined,
 ) {
-  const current = await ctx.db
-    .query("GroupMember")
-    .withIndex("group_id", (idx) => idx.eq("groupId", groupId))
-    .collect();
+  assertScimMembershipBatchSize(memberIds);
   const wanted = new Set(memberIds);
-  for (const member of current) {
-    if (!wanted.has(member.userId)) await ctx.db.delete("GroupMember", member._id);
-  }
+  const patch = { roleIds, status: "active" as const };
   for (const userId of wanted) {
-    const member = current.find((candidate) => candidate.userId === userId);
-    const patch = { roleIds, status: "active" as const };
-    if (member === undefined) await ctx.db.insert("GroupMember", { groupId, userId, ...patch });
+    const member = await ctx.db
+      .query("GroupMember")
+      .withIndex("group_id_user_id", (idx) => idx.eq("groupId", groupId).eq("userId", userId))
+      .unique();
+    if (member === null) await ctx.db.insert("GroupMember", { groupId, userId, ...patch });
     else await ctx.db.patch("GroupMember", member._id, patch);
   }
+  const current = await paginator(ctx.db, schema)
+    .query("GroupMember")
+    .withIndex("group_id", (idx) => idx.eq("groupId", groupId))
+    .paginate({ numItems: SCIM_GROUP_MEMBERSHIP_BATCH_SIZE, cursor: cursor ?? null });
+  for (const member of current.page) {
+    if (!wanted.has(member.userId)) await ctx.db.delete("GroupMember", member._id);
+  }
+  return { isDone: current.isDone, continueCursor: current.continueCursor };
 }
 
-/** Atomically provision a SCIM group, its identity, and its complete membership. */
+/**
+ * Provision a SCIM group and one bounded page of its authoritative membership.
+ * Repeat with `continueCursor` until `isDone` is true.
+ */
 export const provisionGroup = mutation({
   args: {
     connectionId: v.id("GroupConnection"),
@@ -570,11 +602,17 @@ export const provisionGroup = mutation({
     memberIds: v.array(v.id("User")),
     roleIds: v.array(v.string()),
     raw: v.optional(v.any()),
+    cursor: v.optional(v.string()),
   },
-  returns: v.object({ groupId: v.id("Group"), created: v.boolean() }),
+  returns: v.object({
+    groupId: v.id("Group"),
+    created: v.boolean(),
+    ...vScimMembershipProgress.fields,
+  }),
   handler: async (ctx, args) => {
     const connection = await activeScimConnection(ctx, args.connectionId);
     const externalId = args.externalId;
+    assertScimMembershipBatchSize(args.memberIds);
     await assertScimMembers(ctx, connection, args.memberIds);
     const identity =
       externalId === undefined
@@ -633,12 +671,18 @@ export const provisionGroup = mutation({
     };
     if (identity === null) await ctx.db.insert("GroupConnectionScimIdentity", identityData);
     else await ctx.db.patch("GroupConnectionScimIdentity", identity._id, identityData);
-    await replaceScimGroupMembers(ctx, groupId, args.memberIds, args.roleIds);
-    return { groupId, created };
+    return {
+      groupId,
+      created,
+      ...(await replaceScimGroupMembers(ctx, groupId, args.memberIds, args.roleIds, args.cursor)),
+    };
   },
 });
 
-/** Atomically update a SCIM group and replace its complete membership. */
+/**
+ * Update a SCIM group and one bounded page of its authoritative membership.
+ * Repeat with `continueCursor` until `isDone` is true.
+ */
 export const updateGroup = mutation({
   args: {
     connectionId: v.id("GroupConnection"),
@@ -647,10 +691,12 @@ export const updateGroup = mutation({
     memberIds: v.array(v.id("User")),
     roleIds: v.array(v.string()),
     raw: v.optional(v.any()),
+    cursor: v.optional(v.string()),
   },
-  returns: v.null(),
+  returns: vScimMembershipProgress,
   handler: async (ctx, args) => {
     const connection = await activeScimConnection(ctx, args.connectionId);
+    assertScimMembershipBatchSize(args.memberIds);
     const identity = await ctx.db
       .query("GroupConnectionScimIdentity")
       .withIndex("mapped_group_id", (idx) => idx.eq("mappedGroupId", args.groupId))
@@ -680,15 +726,27 @@ export const updateGroup = mutation({
       lastProvisionedAt: Date.now(),
       ...(args.raw === undefined ? {} : { raw: args.raw }),
     });
-    await replaceScimGroupMembers(ctx, args.groupId, args.memberIds, args.roleIds);
-    return null;
+    return await replaceScimGroupMembers(
+      ctx,
+      args.groupId,
+      args.memberIds,
+      args.roleIds,
+      args.cursor,
+    );
   },
 });
 
-/** Atomically revoke a SCIM group and its identity after verifying connection ownership. */
+/**
+ * Revoke a SCIM group in bounded membership pages. The identity and group are
+ * removed only when the final page returns `isDone`.
+ */
 export const revokeGroup = mutation({
-  args: { connectionId: v.id("GroupConnection"), groupId: v.id("Group") },
-  returns: v.null(),
+  args: {
+    connectionId: v.id("GroupConnection"),
+    groupId: v.id("Group"),
+    cursor: v.optional(v.string()),
+  },
+  returns: vScimMembershipProgress,
   handler: async (ctx, args) => {
     const connection = await activeScimConnection(ctx, args.connectionId);
     const identity = await ctx.db
@@ -713,13 +771,15 @@ export const revokeGroup = mutation({
         message: "SCIM group ownership mismatch.",
       });
     }
-    const members = await ctx.db
+    const members = await paginator(ctx.db, schema)
       .query("GroupMember")
       .withIndex("group_id", (idx) => idx.eq("groupId", args.groupId))
-      .collect();
-    for (const member of members) await ctx.db.delete("GroupMember", member._id);
-    await ctx.db.delete("GroupConnectionScimIdentity", identity._id);
-    await ctx.db.delete("Group", args.groupId);
-    return null;
+      .paginate({ numItems: SCIM_GROUP_MEMBERSHIP_BATCH_SIZE, cursor: args.cursor ?? null });
+    for (const member of members.page) await ctx.db.delete("GroupMember", member._id);
+    if (members.isDone) {
+      await ctx.db.delete("GroupConnectionScimIdentity", identity._id);
+      await ctx.db.delete("Group", args.groupId);
+    }
+    return { isDone: members.isDone, continueCursor: members.continueCursor };
   },
 });

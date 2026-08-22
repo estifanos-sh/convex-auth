@@ -24,6 +24,11 @@ export function Root() {
 }
 ```
 
+Always pass the generated `api.auth` reference directly. It carries configured
+provider IDs, custom credential validator shapes, action results, and factor
+capabilities. Do not add `InferClientApi`, a handwritten client interface, or a
+cast around `authClient.signIn`.
+
 Pass `authClient` to `SignedIn`, `SignedOut`, `AuthLoading`, and `useAuth`.
 Call `signIn`, `signOut`, and configured factor helpers directly on that
 app-owned client. Do not create a new client during render.
@@ -53,7 +58,7 @@ app-owned client. Do not create a new client during render.
 {/if}
 ```
 
-Do not also call `setupAuth` from `convex-svelte`; the Robelest browser client
+Do not also call `setupAuth` from `convex-svelte`; the estifanos.sh browser client
 owns the Convex `setAuth` lifecycle. Pass the same `authClient` to
 `useConvexAuth(authClient)` in descendants. Prefer reactive `{#if}`
 conditionals to global gate components.

@@ -1,5 +1,5 @@
 import { Auth, GenericActionCtx, GenericDataModel } from "convex/server";
-import { ConvexError } from "convex/values";
+import { ConvexError, type GenericId } from "convex/values";
 
 import { ErrorCode } from "../../shared/codes";
 import type { ComponentCtx, ComponentReadCtx } from "../component/context";
@@ -157,8 +157,15 @@ export function createAccountDomain(deps: AccountDeps) {
   };
 }
 
+/**
+ * A safe, non-secret capability summary for one linked provider account.
+ *
+ * This deliberately excludes `providerAccountId`, `secret`, and `extend` so
+ * app-facing account reads cannot leak credential or provider-private data.
+ */
 export type AccountSummary = {
-  id: string;
+  id: GenericId<"Account">;
+  userId: GenericId<"User">;
   provider: string;
   createdAt: number;
   emailVerified: boolean;
@@ -169,6 +176,17 @@ const FACTOR_ACCOUNT_PROVIDERS = new Set(["passkey"]);
 
 function isFactorAccount(account: Pick<Doc<"Account">, "provider">): boolean {
   return FACTOR_ACCOUNT_PROVIDERS.has(account.provider);
+}
+
+function toAccountSummary(account: Doc<"Account">): AccountSummary {
+  return {
+    id: account._id,
+    userId: account.userId,
+    provider: account.provider,
+    createdAt: account._creationTime,
+    emailVerified: account.emailVerified !== undefined,
+    phoneVerified: account.phoneVerified !== undefined,
+  };
 }
 
 /** Build the safe, current-user account-management surface. */
@@ -185,28 +203,52 @@ export function createAccountManagementDomain({ config }: Pick<AccountDeps, "con
   };
 
   return {
-    /** List the current user's linked accounts without credential secrets. */
-    list: async (ctx: ComponentReadCtx & { auth: Auth }): Promise<AccountSummary[]> => {
-      const userId = await currentUserId(ctx);
-      const accounts = (await ctx.runQuery(config.component.account.list, {
-        userId,
-      })) as Doc<"Account">[];
-      return accounts
-        .filter((account) => !isFactorAccount(account))
-        .map((account) => ({
-          id: account._id,
-          provider: account.provider,
-          createdAt: account._creationTime,
-          emailVerified: account.emailVerified !== undefined,
-          phoneVerified: account.phoneVerified !== undefined,
-        }));
+    /**
+     * List safe linked-account capabilities for the current user or a bounded
+     * batch of users. Batch reads are for app-authorized user lists and avoid
+     * one component call per user; they never expose credential material.
+     *
+     * @param ctx - Convex query or mutation context. Required when reading the
+     *   current user's accounts; authorization for an explicit user batch is
+     *   owned by the calling app function.
+     * @param opts - Optional explicit bounded user batch.
+     * @param opts.userIds - User IDs to read in one component call. Duplicate
+     *   IDs are ignored and the component caps the batch at 100 users.
+     * @param opts.provider - Optional provider ID (for example, `"password"`)
+     *   to read only that capability for each user.
+     * @returns Safe account capability summaries, with no provider account ID,
+     *   credential secret, or extension data.
+     *
+     * @example Batch accounts for an authorized member list
+     * ```ts
+     * const accounts = await auth.account.list(ctx, {
+     *   userIds: members.map((member) => member.userId),
+     *   provider: "password",
+     * });
+     * ```
+     */
+    list: async (
+      ctx: ComponentReadCtx & { auth: Auth },
+      opts?: { userIds?: readonly GenericId<"User">[]; provider?: string },
+    ): Promise<AccountSummary[]> => {
+      const userIds = opts?.userIds;
+      const provider = opts?.provider;
+      const args =
+        userIds === undefined
+          ? { userId: await currentUserId(ctx), provider }
+          : { userIds: Array.from(new Set(userIds)), provider };
+      const accounts = (await ctx.runQuery(
+        config.component.account.list,
+        args,
+      )) as Doc<"Account">[];
+      return accounts.filter((account) => !isFactorAccount(account)).map(toAccountSummary);
     },
 
     /** Remove one of the current user's linked accounts, preserving a sign-in path. */
     remove: async (
       ctx: ComponentCtx & { auth: Auth },
-      args: { id: string },
-    ): Promise<{ id: string }> => {
+      args: { id: GenericId<"Account"> },
+    ): Promise<{ id: GenericId<"Account"> }> => {
       const userId = await currentUserId(ctx);
       const account = (await ctx.runQuery(config.component.account.get, {
         id: args.id,

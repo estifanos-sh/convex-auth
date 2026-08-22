@@ -160,6 +160,11 @@ export type SignInActionResult = SignInFlowResult<AuthTokens | null>;
 
 /** @internal */
 export type WebAuthnRotationResult = Extract<SignInWebAuthnOptionsResult, { operation: "rotate" }>;
+/** @internal Passkey sign-in options returned by a provider continuation. */
+export type WebAuthnContinuationSignInResult = Extract<
+  SignInWebAuthnOptionsResult,
+  { operation: "signIn" }
+>;
 
 /**
  * Device authorization payload returned from the `deviceCode` sign-in flow.
@@ -222,11 +227,13 @@ type DefaultSignInReference = FunctionReference<
   "action",
   "public",
   {
-    provider?: string;
-    params?: AuthParameters;
+    request: {
+      provider?: string;
+      params?: AuthParameters;
+      refreshToken?: string;
+    };
     verifier?: string;
     continuation?: string;
-    refreshToken?: string;
     calledBy?: string;
   },
   unknown
@@ -316,6 +323,9 @@ export interface WebAuthnClient {
 
   /** @internal Complete registration options returned by a provider continuation. */
   completeRegistration(result: WebAuthnRotationResult): Promise<SignInResult>;
+
+  /** @internal Complete passkey sign-in options returned by a provider continuation. */
+  completeSignIn(result: WebAuthnContinuationSignInResult): Promise<SignInResult>;
 
   /**
    * Sign in with an existing passkey and complete the WebAuthn ceremony.
@@ -508,9 +518,16 @@ export interface DeviceClient {
  *
  * @typeParam Api - An AuthApiRefs type to extract capability flags from.
  */
+type SignInRequest<Api extends AuthApiRefs> =
+  FunctionArgs<Api["signIn"]> extends infer Args
+    ? Args extends { request: infer Request }
+      ? Request
+      : Args
+    : never;
+
 type ProviderIds<Api extends AuthApiRefs> = [Api["signIn"]] extends [never]
   ? string
-  : FunctionArgs<Api["signIn"]> extends infer Args
+  : SignInRequest<Api> extends infer Args
     ? Args extends unknown
       ? "provider" extends keyof Args
         ? Exclude<Args[keyof Args & "provider"], undefined>
@@ -610,11 +627,7 @@ type DefaultParamsForProvider<P> = P extends "password"
             : OAuthSignInParams | undefined;
 
 type ConfiguredProviderArgs<Api extends AuthApiRefs, P> =
-  FunctionArgs<Api["signIn"]> extends infer Args
-    ? Args extends { provider: P }
-      ? Args
-      : never
-    : never;
+  SignInRequest<Api> extends infer Args ? (Args extends { provider: P } ? Args : never) : never;
 
 /** Resolve a provider's exact params from the generated auth action reference. */
 export type ParamsForProvider<Api extends AuthApiRefs, P> =
@@ -727,7 +740,7 @@ export type PlatformAuthClient<Api extends AuthApiRefs = AuthApiRefs> = AuthClie
  *
  * @typeParam Api - An AuthApiRefs type.
  */
-export type ClientOptions<Api extends AuthApiRefs = AuthApiRefs> = {
+type ClientOptionsBase = {
   /** Any Convex client implementation used to run auth actions. */
   convex: ConvexTransport;
   /** Platform runtime implementation used by the client core. */
@@ -736,18 +749,8 @@ export type ClientOptions<Api extends AuthApiRefs = AuthApiRefs> = {
   adapters?: ClientAdapters;
   /** Platform-specific adapter factories supplied by higher-level entrypoints. */
   adapterFactories?: ClientAdapterFactories;
-  /**
-   * Typed auth function refs from your generated `api` object.
-   * Required outside proxy mode.
-   */
-  api?: Api;
   /** Explicit Convex deployment URL when it cannot be inferred from the client. */
   url?: string;
-  /**
-   * Optional action-only transport for direct code exchange outside proxy mode.
-   * Required in non-browser runtimes when `proxyPath` is not set.
-   */
-  httpClient?: ActionTransport | null;
   /**
    * Storage backend for persisted tokens.
    *
@@ -763,12 +766,6 @@ export type ClientOptions<Api extends AuthApiRefs = AuthApiRefs> = {
    * `storage`.
    */
   token?: string | null;
-  /**
-   * Proxy endpoint used instead of direct Convex auth calls.
-   * When set, provide `runtime.proxy` and omit direct `api`/`httpClient`
-   * transport requirements.
-   */
-  proxyPath?: string;
   /** SSR-safe URL source for reading query parameters. */
   location?: URL | (() => URL | null);
   /**
@@ -784,6 +781,37 @@ export type ClientOptions<Api extends AuthApiRefs = AuthApiRefs> = {
    */
   handshakeTimeoutMs?: number;
 };
+
+/** Direct Convex mode. Generated auth references are the client contract. */
+export type DirectClientOptions<Api extends AuthApiRefs = AuthApiRefs> = ClientOptionsBase & {
+  /** Typed auth function refs from the application's generated `api` object. */
+  api: Api;
+  /** Proxy transport and direct transport are mutually exclusive. */
+  proxyPath?: never;
+  /**
+   * Action-only transport used for direct code exchange. Browser and Expo
+   * entrypoints provide one automatically; headless runtimes must inject it.
+   */
+  httpClient?: ActionTransport | null;
+};
+
+/** HTTP proxy mode. The proxy owns the Convex function references. */
+export type ProxyClientOptions = ClientOptionsBase & {
+  /** Proxy endpoint used instead of direct Convex auth calls. */
+  proxyPath: string;
+  /** Generated references belong to direct mode and cannot be mixed with a proxy. */
+  api?: never;
+  /** Direct action transports belong to direct mode. */
+  httpClient?: never;
+};
+
+/**
+ * Client configuration. Selecting direct or proxy mode makes every required
+ * transport explicit and prevents the two modes from being combined.
+ */
+export type ClientOptions<Api extends AuthApiRefs = AuthApiRefs> =
+  | DirectClientOptions<Api>
+  | ProxyClientOptions;
 
 export type OAuthCompletionResult = { handled: false } | { handled: true; cleanupUrl: URL | null };
 

@@ -220,6 +220,9 @@ type ScimFilterOperator = NonNullable<
  */
 const SCIM_COLLECT_LIMIT = 5000;
 
+/** Maximum members accepted by one authoritative SCIM group replacement. */
+const SCIM_GROUP_MEMBERSHIP_BATCH_SIZE = 100;
+
 /**
  * Lifetime of a persisted pending SAML AuthnRequest. Bounds how long an ACS
  * response can accept the request; comfortably covers IdP round-trips and the
@@ -955,39 +958,42 @@ export function addGroupHttpRuntime(deps: GroupHttpRuntimeDeps) {
         return out;
       };
 
-      /**
-       * Fully enumerate a group's active members for an authoritative
-       * (destructive) membership replace. Unlike {@link collectMembers}, this
-       * refuses to truncate: a `replace` diffs the incoming set against the
-       * current set and removes the difference, so a partial read would
-       * silently drop overflow members. Throws {@link scimCollectOverflow} past
-       * the collect limit so the caller fails the reconcile (413) rather than
-       * completing a partial authoritative replace.
-       */
+      /** Read a bounded complete snapshot for an authoritative membership replace. */
       const collectMembersForReplace = async (
         ctx: GenericActionCtx<GenericDataModel>,
         where: { groupId: string; status?: "active" },
       ) => {
-        const first = await auth.member.list(ctx, {
+        const result = await auth.member.list(ctx, {
           where,
-          paginationOpts: { numItems: 200, cursor: null },
+          paginationOpts: { numItems: SCIM_GROUP_MEMBERSHIP_BATCH_SIZE, cursor: null },
         });
-        const out = [...first.page];
-        let cursor = first.continueCursor;
-        let done = first.isDone;
-        while (!done) {
-          if (out.length > SCIM_COLLECT_LIMIT) {
+        if (!result.isDone) throw scimCollectOverflow();
+        return result.page;
+      };
+
+      const assertScimMembershipBatchSize = (memberIds: Iterable<string>) => {
+        let count = 0;
+        for (const _memberId of memberIds) {
+          count += 1;
+          if (count > SCIM_GROUP_MEMBERSHIP_BATCH_SIZE) {
             throw scimCollectOverflow();
           }
-          const next = await auth.member.list(ctx, {
-            where,
-            paginationOpts: { numItems: 200, cursor },
-          });
-          out.push(...next.page);
-          done = next.isDone;
-          cursor = next.continueCursor;
         }
-        return out;
+      };
+
+      const completeScimGroupReplacement = async (
+        state: ScimState,
+        args: Parameters<typeof updateScimGroup>[2],
+      ) => {
+        let cursor: string | undefined;
+        for (;;) {
+          const result = await updateScimGroup(state.ctx, config.component.connection, {
+            ...args,
+            cursor,
+          });
+          if (result.isDone) return;
+          cursor = result.continueCursor;
+        }
       };
 
       const collectGroups = async (
@@ -1505,24 +1511,31 @@ export function addGroupHttpRuntime(deps: GroupHttpRuntimeDeps) {
         const memberIds = (Array.isArray(body.members) ? body.members : []).map((member) =>
           String(member.value),
         );
+        assertScimMembershipBatchSize(memberIds);
         const externalIdForGroup =
           typeof body.externalId === "string" ? body.externalId : undefined;
-        const provisioned = await provisionScimGroup(state.ctx, config.component.connection, {
-          connectionId: state.connection._id,
-          externalId: externalIdForGroup,
-          name: typeof body.displayName === "string" ? body.displayName : "Group",
-          memberIds,
-          roleIds: resolveProvisionedRoleIds({
-            policy: state.policy,
-            groups: typeof body.displayName === "string" ? [body.displayName] : undefined,
-            roles: pickStringArray((body as Record<string, unknown>).roles),
-          }),
-          raw: body,
-        });
+        let cursor: string | undefined;
+        let provisioned: Awaited<ReturnType<typeof provisionScimGroup>>;
+        let created = false;
+        do {
+          provisioned = await provisionScimGroup(state.ctx, config.component.connection, {
+            connectionId: state.connection._id,
+            externalId: externalIdForGroup,
+            name: typeof body.displayName === "string" ? body.displayName : "Group",
+            memberIds,
+            roleIds: resolveProvisionedRoleIds({
+              policy: state.policy,
+              groups: typeof body.displayName === "string" ? [body.displayName] : undefined,
+              roles: pickStringArray((body as Record<string, unknown>).roles),
+            }),
+            raw: body,
+            cursor,
+          });
+          created ||= provisioned.created;
+          cursor = provisioned.continueCursor;
+        } while (!provisioned.isDone);
         await state.recordScimEvent(
-          provisioned.created
-            ? "connection.scim.group.provisioned"
-            : "connection.scim.group.updated",
+          created ? "connection.scim.group.provisioned" : "connection.scim.group.updated",
           "success",
           { type: "group", id: provisioned.groupId },
         );
@@ -1536,7 +1549,7 @@ export function addGroupHttpRuntime(deps: GroupHttpRuntimeDeps) {
             location,
             members: memberIds.map((value) => ({ value })),
           }),
-          provisioned.created ? 201 : 200,
+          created ? 201 : 200,
           { Location: location },
         );
       };
@@ -1617,7 +1630,8 @@ export function addGroupHttpRuntime(deps: GroupHttpRuntimeDeps) {
           }
           unsupportedScimPatch();
         }
-        await updateScimGroup(state.ctx, config.component.connection, {
+        assertScimMembershipBatchSize(nextMemberIds);
+        await completeScimGroupReplacement(state, {
           connectionId: state.connection._id,
           groupId,
           name,
@@ -1659,10 +1673,16 @@ export function addGroupHttpRuntime(deps: GroupHttpRuntimeDeps) {
         if (!identity || identity.connectionId !== state.connection._id) {
           return scimError(404, "notFound", "Group not found.");
         }
-        await revokeScimGroup(state.ctx, config.component.connection, {
-          connectionId: state.connection._id,
-          groupId,
-        });
+        let cursor: string | undefined;
+        for (;;) {
+          const result = await revokeScimGroup(state.ctx, config.component.connection, {
+            connectionId: state.connection._id,
+            groupId,
+            cursor,
+          });
+          if (result.isDone) break;
+          cursor = result.continueCursor;
+        }
         await state.recordScimEvent("connection.scim.group.deactivated", "success", {
           type: "group",
           id: groupId,
@@ -1927,7 +1947,6 @@ export function addGroupHttpRuntime(deps: GroupHttpRuntimeDeps) {
       await ctx.runMutation(config.component.connection.saml.request.create, {
         connectionId: connection._id,
         requestId: signInRequest.requestId,
-        createdAt: nowMs,
         expiresAt: nowMs + SAML_LOGIN_REQUEST_TTL_MS,
       });
       const redirectTo = url.searchParams.get("redirectTo");

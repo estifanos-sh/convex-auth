@@ -6,13 +6,13 @@
 
 import { paginationOptsValidator } from "convex/server";
 import { paginator } from "convex-helpers/server/pagination";
-import { ConvexError, v, type Infer } from "convex/values";
+import { v, type Infer } from "convex/values";
 
-import { ErrorCode } from "../../shared/codes";
 import { EVENT_KIND_CATEGORY, type AuthEventKind } from "../../shared/event/kinds";
 import type { Doc } from "../_generated/dataModel";
-import { query } from "../functions";
-import { vAuthEventData, vAuthEventProjectionDoc, vPaginated } from "../model";
+import { vAuthEventProjectionDoc } from "../documents";
+import { query } from "../_generated/server";
+import { vAuthEventData, vPaginated } from "../model";
 import schema from "../schema";
 
 const PUBLIC_DATA_KEYS = {
@@ -110,36 +110,31 @@ function publicProjection(doc: Doc<"AuthEventProjection">) {
  */
 export const list = query({
   args: {
-    connectionId: v.optional(v.id("GroupConnection")),
-    groupId: v.optional(v.id("Group")),
+    scope: v.union(
+      v.object({ connectionId: schema.id("GroupConnection") }),
+      v.object({ groupId: schema.id("Group") }),
+    ),
     paginationOpts: paginationOptsValidator,
   },
   returns: vPaginated(vAuthEventProjectionDoc),
-  handler: async (ctx, args) => {
-    if (args.connectionId !== undefined) {
+  handler: async (ctx, { scope, paginationOpts }) => {
+    if ("connectionId" in scope) {
       const result = await paginator(ctx.db, schema)
         .query("AuthEventProjection")
         .withIndex("target_time", (idx) =>
-          idx.eq("targetKind", "connection").eq("targetId", args.connectionId!),
+          idx.eq("targetKind", "connection").eq("targetId", scope.connectionId),
         )
         .order("desc")
-        .paginate(args.paginationOpts);
+        .paginate(paginationOpts);
       return { ...result, page: result.page.map(publicProjection) };
     }
-    if (args.groupId !== undefined) {
-      const result = await paginator(ctx.db, schema)
-        .query("AuthEventProjection")
-        .withIndex("target_time", (idx) =>
-          idx.eq("targetKind", "group").eq("targetId", args.groupId!),
-        )
-        .order("desc")
-        .paginate(args.paginationOpts);
-      return { ...result, page: result.page.map(publicProjection) };
-    }
-    throw new ConvexError({
-      code: ErrorCode.INVALID_PARAMETERS,
-      message:
-        "connection.audit.list requires either `connectionId` or `groupId` to target the query. Passing neither would walk the entire audit log.",
-    });
+    const result = await paginator(ctx.db, schema)
+      .query("AuthEventProjection")
+      .withIndex("target_time", (idx) =>
+        idx.eq("targetKind", "group").eq("targetId", scope.groupId),
+      )
+      .order("desc")
+      .paginate(paginationOpts);
+    return { ...result, page: result.page.map(publicProjection) };
   },
 });

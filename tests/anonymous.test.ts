@@ -14,9 +14,7 @@ afterEach(() => {
 test("sign in anonymously", async () => {
   const t = convexTest(schema);
   const tokens = expectSignInSession(
-    await t.action(api.auth.signIn, {
-      provider: "anonymous",
-    }),
+    await t.action(api.auth.signIn, { request: { provider: "anonymous" } }),
   );
   expect(tokens).not.toBeNull();
 });
@@ -24,9 +22,7 @@ test("sign in anonymously", async () => {
 test("anonymous sign-in is not auto-converted during email sign-in", async () => {
   const t = convexTest(schema);
   const tokens = expectSignInSession(
-    await t.action(api.auth.signIn, {
-      provider: "anonymous",
-    }),
+    await t.action(api.auth.signIn, { request: { provider: "anonymous" } }),
   );
   const claims = decodeJwt(tokens!.token);
   const asAnonymous = t.withIdentity({ subject: claims.sub, sid: claims.sid as any });

@@ -30,7 +30,7 @@ test("Convex identity rejects the at+jwt typ header but accepts the same claims 
   });
 
   const signInResult = (await convexClient.action(api.auth.signIn, {
-    provider: "anonymous",
+    request: { provider: "anonymous" },
   })) as ConvexSignInResult;
   expect(signInResult.kind).toBe("signedIn");
   const sessionToken = signInResult.session?.token;

@@ -60,7 +60,7 @@ export function createTotpClient(deps: FactorDeps): TotpClient {
       if (proxy) {
         const result = (await proxyFetch({
           action: "auth:signIn",
-          args: { provider: "totp", params },
+          args: { request: { provider: "totp", params } },
         })) as SignInActionResult;
         if (!isTotpSetupResult(result)) {
           throw new Error("Server did not return TOTP setup data.");
@@ -74,8 +74,7 @@ export function createTotpClient(deps: FactorDeps): TotpClient {
       }
 
       const result = (await convex.action(requireApiRefs().signIn, {
-        provider: "totp",
-        params,
+        request: { provider: "totp", params },
       })) as SignInActionResult;
       if (!isTotpSetupResult(result)) {
         throw new Error("Server did not return TOTP setup data.");
@@ -103,11 +102,10 @@ export function createTotpClient(deps: FactorDeps): TotpClient {
         proxy
           ? await proxyFetch({
               action: "auth:signIn",
-              args: { provider: "totp", params, verifier: opts.verifier },
+              args: { request: { provider: "totp", params }, verifier: opts.verifier },
             })
           : await convex.action(requireApiRefs().signIn, {
-              provider: "totp",
-              params,
+              request: { provider: "totp", params },
               verifier: opts.verifier,
             })
       ) as SignInActionResult;
@@ -124,11 +122,10 @@ export function createTotpClient(deps: FactorDeps): TotpClient {
         proxy
           ? await proxyFetch({
               action: "auth:signIn",
-              args: { provider: "totp", params, verifier: opts.verifier },
+              args: { request: { provider: "totp", params }, verifier: opts.verifier },
             })
           : await convex.action(requireApiRefs().signIn, {
-              provider: "totp",
-              params,
+              request: { provider: "totp", params },
               verifier: opts.verifier,
             })
       ) as SignInActionResult;

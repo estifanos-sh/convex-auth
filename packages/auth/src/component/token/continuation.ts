@@ -6,21 +6,25 @@
 
 import { v } from "convex/values";
 
-import { mutation, query } from "../functions";
+import { mutation, query } from "../_generated/server";
 import { recordSignInLimit, resetSignInLimit } from "../limits";
-import { vAuthContinuationDoc } from "../model";
+import { vAuthContinuationDoc } from "../documents";
 
 /** Create a short-lived provider continuation. */
 export const create = mutation({
   args: {
     userId: v.id("User"),
     provider: v.string(),
-    operation: v.literal("rotate"),
+    operation: v.union(v.literal("rotate"), v.literal("signIn")),
     expirationTime: v.number(),
   },
   returns: v.id("AuthContinuation"),
   handler: async (ctx, args) => {
-    return await ctx.db.insert("AuthContinuation", args);
+    const { userId, ...continuation } = args;
+    return await ctx.db.insert("AuthContinuation", {
+      ...continuation,
+      subject: { kind: "user", userId },
+    });
   },
 });
 
@@ -95,7 +99,7 @@ export const recover = mutation({
       .query("AuthContinuation")
       .withIndex("user_id_provider_operation_expiration_time", (q) =>
         q
-          .eq("userId", user._id)
+          .eq("subject.userId", user._id)
           .eq("provider", args.provider)
           .eq("operation", args.operation)
           .gt("expirationTime", args.now),
@@ -114,7 +118,7 @@ export const recover = mutation({
     for (const key of limitKeys) await resetSignInLimit(ctx, key);
 
     const continuationId = await ctx.db.insert("AuthContinuation", {
-      userId: user._id,
+      subject: { kind: "user", userId: user._id },
       provider: args.provider,
       operation: args.operation,
       expirationTime: args.expirationTime,
@@ -130,10 +134,10 @@ export const recover = mutation({
 
 /** Read an unexpired continuation by id. */
 export const get = query({
-  args: { id: v.id("AuthContinuation") },
+  args: { id: v.id("AuthContinuation"), now: v.number() },
   returns: v.union(vAuthContinuationDoc, v.null()),
-  handler: async (ctx, { id }) => {
+  handler: async (ctx, { id, now }) => {
     const continuation = await ctx.db.get("AuthContinuation", id);
-    return continuation !== null && continuation.expirationTime >= Date.now() ? continuation : null;
+    return continuation !== null && continuation.expirationTime >= now ? continuation : null;
   },
 });

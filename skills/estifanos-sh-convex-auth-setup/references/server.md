@@ -73,16 +73,18 @@ This trust configuration is independent from the `providers` configured in
 `defineAuth`. Missing it commonly produces a browser session whose identity is
 never accepted by Convex functions.
 
-## Create the lightweight function context
+## Protect application functions
+
+Import the configured `auth` value from `convex/auth.ts` in the shared function
+builder. `auth.ctx()` resolves the current user and authorization snapshot;
+there is no separate core module or second auth factory to maintain.
 
 ```ts
-// convex/auth/core.ts
-import { createAuthContext } from "@estifanos-sh/convex-auth/core";
-import { components } from "../_generated/api";
+// convex/functions.ts
+import { customMutation, customQuery } from "convex-helpers/server/customFunctions";
+import { mutation, query } from "./_generated/server";
+import { auth } from "./auth";
 
-export const auth = createAuthContext(components.auth);
+export const authQuery = customQuery(query, auth.ctx());
+export const authMutation = customMutation(mutation, auth.ctx());
 ```
-
-Import this lightweight context from queries and mutations. Keep provider,
-OAuth, email, and cryptographic initialization in the canonical `auth.ts`
-bundle.

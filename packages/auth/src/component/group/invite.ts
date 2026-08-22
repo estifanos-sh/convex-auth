@@ -13,9 +13,10 @@ import { stream } from "convex-helpers/server/stream";
 
 import { ErrorCode } from "../../shared/codes";
 import type { Id } from "../_generated/dataModel";
-import { mutation, query } from "../functions";
+import { vGroupInviteDoc } from "../documents";
+import { mutation, query } from "../_generated/server";
 import schema from "../schema";
-import { vGroupInviteDoc, vInviteAcceptResult, vInviteStatus, vPaginated } from "../model";
+import { vInviteAcceptResult, vInviteStatus, vPaginated } from "../model";
 
 const STALE_INVITE_EXPIRATION_BATCH = 32;
 

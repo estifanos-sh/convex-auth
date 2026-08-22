@@ -20,7 +20,14 @@ import { createUserDomain } from "./domains/user";
 import { createGroupDomain } from "./domains/group";
 import { capGrantsForCaller, resolveOAuthCaller } from "./domains/access";
 import { createFactorDomain } from "./domains/factor";
-import type { AuthProviderConfig, AuthProviderContinueArgs, Doc } from "./types";
+import type {
+  AuthProviderConfig,
+  AuthProviderContinueArgs,
+  ConvexCredentialsConfig,
+  Doc,
+  WebAuthnRotateOperation,
+  WebAuthnSignInOperation,
+} from "./types";
 import type { SignInParams } from "./payloads";
 import type { SignInFlowResult } from "../shared/results";
 
@@ -83,6 +90,17 @@ type CoreDeps = {
     ctx: GenericActionCtx<DataModel>,
     args: AuthProviderContinueArgs,
   ) => Promise<ProviderDeferredSignInResult>;
+  stageCredentialEnrollment: <DataModel extends GenericDataModel>(
+    ctx: GenericActionCtx<DataModel>,
+    args: {
+      verifier: ConvexCredentialsConfig;
+      account: { id: string; secret?: string };
+      profile: import("./payloads").AuthProfile;
+      shouldLinkViaEmail: boolean;
+      shouldLinkViaPhone: boolean;
+      operation: WebAuthnRotateOperation;
+    },
+  ) => Promise<ProviderDeferredSignInResult>;
 };
 
 /**
@@ -107,6 +125,7 @@ export function createCoreDomains(deps: CoreDeps) {
     callModifyAccount,
     inviteTokenAlphabet,
     inviteTokenLength,
+    stageCredentialEnrollment,
   } = deps;
 
   const roleDefinitions = config.permissions.roles as Record<
@@ -236,6 +255,102 @@ export function createCoreDomains(deps: CoreDeps) {
     ) => await deps.continueWithProvider(ctx, args),
   };
 
+  const credentials = {
+    /**
+     * Verify a credentials-provider account and continue directly into a
+     * passkey assertion. No session exists until the passkey completes.
+     *
+     * @param ctx - Convex action context.
+     * @param args.verifier - Configured credentials provider that verifies the secret.
+     * @param args.account - Provider account identifier and plaintext secret.
+     * @param args.operation - Typed passkey sign-in operation.
+     * @returns Deferred passkey options bound to the verified account user.
+     */
+    verify: async <DataModel extends GenericDataModel>(
+      ctx: GenericActionCtx<DataModel>,
+      args: {
+        verifier: ConvexCredentialsConfig;
+        account: { id: string; secret: string };
+        operation: WebAuthnSignInOperation;
+      },
+    ) => {
+      const verified = await callRetrieveAccountWithCredentials(ctx, {
+        provider: args.verifier.id,
+        account: args.account,
+      });
+      if (typeof verified === "string") {
+        throw new ConvexError({
+          code:
+            verified === "TooManyFailedAttempts"
+              ? ErrorCode.RATE_LIMITED
+              : ErrorCode.INVALID_CREDENTIALS,
+          message:
+            verified === "TooManyFailedAttempts"
+              ? "Too many failed credentials attempts. Please try again later."
+              : "Invalid credentials.",
+        });
+      }
+      return await deps.continueWithProvider(ctx, {
+        userId: verified.account.userId as GenericId<"User">,
+        operation: args.operation,
+      });
+    },
+    /**
+     * Stage a credentials identity (linking a safely matched user when
+     * requested), then continue directly into passkey rotation. No user,
+     * account, or session is created until the rotation completes.
+     *
+     * @param ctx - Convex action context.
+     * @param args.verifier - Configured credentials provider that hashes the secret.
+     * @param args.account - Provider-owned account identifier and optional secret.
+     * @param args.profile - Profile used to create or link the auth user.
+     * @param args.match - Verified profile fields allowed to link an existing user.
+     * @param args.operation - Typed passkey rotation operation.
+     * @returns Deferred passkey registration options bound to the staged identity.
+     */
+    provision: async <DataModel extends GenericDataModel>(
+      ctx: GenericActionCtx<DataModel>,
+      args: {
+        verifier: ConvexCredentialsConfig;
+        account: { id: string; secret?: string };
+        profile: import("./payloads").AuthProfile;
+        match?: Array<"email" | "phone">;
+        operation: WebAuthnRotateOperation;
+      },
+    ) => {
+      const existing = await callRetrieveAccountWithCredentials(ctx, {
+        provider: args.verifier.id,
+        account: args.account,
+      });
+      if (typeof existing !== "string") {
+        return await deps.continueWithProvider(ctx, {
+          userId: existing.account.userId as GenericId<"User">,
+          operation: args.operation,
+        });
+      }
+      if (existing !== "InvalidAccountId") {
+        throw new ConvexError({
+          code:
+            existing === "TooManyFailedAttempts"
+              ? ErrorCode.RATE_LIMITED
+              : ErrorCode.INVALID_CREDENTIALS,
+          message:
+            existing === "TooManyFailedAttempts"
+              ? "Too many failed credentials attempts. Please try again later."
+              : "Invalid credentials.",
+        });
+      }
+      return await stageCredentialEnrollment(ctx, {
+        verifier: args.verifier,
+        account: args.account,
+        profile: args.profile,
+        shouldLinkViaEmail: args.match?.includes("email") ?? false,
+        shouldLinkViaPhone: args.match?.includes("phone") ?? false,
+        operation: args.operation,
+      });
+    },
+  };
+
   /**
    * The current user's active group — a stored preference with deterministic
    * membership fallback.
@@ -359,6 +474,7 @@ export function createCoreDomains(deps: CoreDeps) {
     accountManagement,
     factor,
     provider,
+    credentials,
     group,
     member,
     invite,

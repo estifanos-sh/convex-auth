@@ -16,14 +16,9 @@ import { ErrorCode } from "../shared/codes";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
-import { internalMutation, mutation, query } from "./functions";
-import {
-  vGroupConnectionDoc,
-  vGroupConnectionDomainDoc,
-  vGroupConnectionProtocol,
-  vGroupConnectionStatus,
-  vPaginated,
-} from "./model";
+import { vGroupConnectionDoc, vGroupConnectionDomainDoc } from "./documents";
+import { internalMutation, mutation, query } from "./_generated/server";
+import { vGroupConnectionProtocol, vGroupConnectionStatus, vPaginated } from "./model";
 import schema from "./schema";
 
 /**
@@ -39,7 +34,7 @@ import schema from "./schema";
  */
 export const get = query({
   args: {
-    id: v.optional(v.id("GroupConnection")),
+    id: v.optional(schema.id("GroupConnection")),
     domain: v.optional(v.string()),
   },
   returns: v.union(
@@ -75,7 +70,7 @@ export const list = query({
   args: {
     where: v.optional(
       v.object({
-        groupId: v.optional(v.id("Group")),
+        groupId: v.optional(schema.id("Group")),
         slug: v.optional(v.string()),
         status: v.optional(vGroupConnectionStatus),
       }),
@@ -159,7 +154,7 @@ export const list = query({
 /** Insert a new connection (defaults `status` to `"draft"`). */
 export const create = mutation({
   args: {
-    groupId: v.id("Group"),
+    groupId: schema.id("Group"),
     slug: v.optional(v.string()),
     name: v.optional(v.string()),
     protocol: vGroupConnectionProtocol,
@@ -167,7 +162,7 @@ export const create = mutation({
     config: v.optional(v.any()),
     extend: v.optional(v.any()),
   },
-  returns: v.id("GroupConnection"),
+  returns: schema.id("GroupConnection"),
   handler: async (ctx, args) => {
     return await ctx.db.insert("GroupConnection", {
       ...args,
@@ -179,7 +174,7 @@ export const create = mutation({
 /** Patch fields on a connection. */
 export const update = mutation({
   args: {
-    id: v.id("GroupConnection"),
+    id: schema.id("GroupConnection"),
     patch: v.object({
       slug: v.optional(v.string()),
       name: v.optional(v.string()),
@@ -267,7 +262,7 @@ async function purgeConnectionDependents(
  * credentials live).
  */
 const remove = mutation({
-  args: { id: v.id("GroupConnection") },
+  args: { id: schema.id("GroupConnection") },
   returns: v.null(),
   handler: async (ctx, { id: connectionId }) => {
     const scimConfigs = await ctx.db
@@ -314,7 +309,7 @@ const remove = mutation({
  * no longer exists.
  */
 export const purgeConnectionData = internalMutation({
-  args: { connectionId: v.id("GroupConnection") },
+  args: { connectionId: schema.id("GroupConnection") },
   returns: v.null(),
   handler: async (ctx, { connectionId }) => {
     const hasMore = await purgeConnectionDependents(ctx, connectionId);

@@ -6,6 +6,7 @@
 
 import type {
   WebAuthnAttestationPolicy,
+  WebAuthnSignInOperation,
   WebAuthnProviderConfig,
   WebAuthnRotateOperation,
 } from "../server/types";
@@ -135,6 +136,9 @@ export const webauthn = Object.assign(
       type: "webauthn",
       rotate(): WebAuthnRotateOperation {
         return Object.freeze({ provider, operation: "rotate" });
+      },
+      signIn(): WebAuthnSignInOperation {
+        return Object.freeze({ provider, operation: "signIn" });
       },
       options: {
         rpName: config.rpName,

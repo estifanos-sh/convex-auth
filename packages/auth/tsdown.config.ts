@@ -28,7 +28,6 @@ const publicDeclarationEntries = {
   "browser/index": "src/browser/index.ts",
   "expo/index": "src/expo/index.ts",
   "react/index": "src/react/index.tsx",
-  "core/index": "src/core/index.ts",
   "permissions/index": "src/permissions/index.ts",
   otel: "src/otel.ts",
   test: "src/test.ts",
@@ -70,7 +69,6 @@ export default defineConfig([
   },
   {
     entry: {
-      "core/index": "src/core/index.ts",
       "permissions/index": "src/permissions/index.ts",
       otel: "src/otel.ts",
       test: "src/test.ts",
@@ -93,19 +91,6 @@ export default defineConfig([
     unbundle: true,
     platform: "node",
     external: [/^convex/],
-    outExtensions: jsExtensions,
-  },
-  {
-    entry: {
-      "component/index": "src/component/index.ts",
-    },
-    format: "esm",
-    outDir: "dist",
-    dts: true,
-    clean: false,
-    unbundle: true,
-    platform: "node",
-    external: clientExternals,
     outExtensions: jsExtensions,
   },
   {

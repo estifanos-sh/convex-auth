@@ -127,7 +127,7 @@ async function startGroupConnectionContext(prefix: string, protocol: "oidc" | "s
   const convexClient = createInteropClient(convexApiUrl);
 
   const signInResult = (await convexClient.action(api.auth.signIn, {
-    provider: "anonymous",
+    request: { provider: "anonymous" },
   })) as ConvexSignInResult;
   expect(signInResult.kind).toBe("signedIn");
   const convexUserToken = signInResult.session?.token;
@@ -166,8 +166,10 @@ async function startConnectionSignIn(
   protocol?: "oidc" | "saml",
 ) {
   const ssoResult = (await convexClient.action(api.auth.signIn, {
-    provider: "connection",
-    params: { connectionId, ...(protocol ? { protocol } : {}) },
+    request: {
+      provider: "connection",
+      params: { connectionId, ...(protocol ? { protocol } : {}) },
+    },
   })) as ConvexConnectionStartResult;
   expect(ssoResult.kind).toBe("redirect");
   expect(ssoResult.redirect).toBeTruthy();
@@ -441,7 +443,7 @@ test("SCIM + OIDC reuses provisioned userId", async () => {
   expect(verificationCode).toBeTruthy();
 
   const exchanged = (await signInClient.action(api.auth.signIn, {
-    params: { code: verificationCode! },
+    request: { params: { code: verificationCode! } },
     verifier,
   })) as ConvexSignInResult;
   expect(exchanged.kind).toBe("signedIn");
@@ -727,7 +729,7 @@ test("SCIM + SAML reuses provisioned userId", async () => {
   expect(verificationCode).toBeTruthy();
 
   const exchanged = (await signInClient.action(api.auth.signIn, {
-    params: { code: verificationCode! },
+    request: { params: { code: verificationCode! } },
     verifier,
   })) as ConvexSignInResult;
   expect(exchanged.kind).toBe("signedIn");

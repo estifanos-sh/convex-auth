@@ -1097,7 +1097,7 @@ export async function constructSamlSignature(opts: ConstructSamlSignatureOptions
   sig.signatureAlgorithm = signatureAlgorithm;
   sig.setPublicCert(getKeyInfo(signingCertString, signatureConfig).getKey());
   sig.getKeyInfoContent = getKeyInfo(signingCertString, signatureConfig).getKeyInfo;
-  sig.setPrivateKey(readPrivateKey(privateKey, privateKeyPass, true) as BinaryLike);
+  sig.setPrivateKey(readPrivateKey(privateKey, privateKeyPass) as BinaryLike);
   sig.canonicalizationAlgorithm = "http://www.w3.org/2001/10/xml-exc-c14n#";
 
   if (signatureConfig) {

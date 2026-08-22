@@ -11,8 +11,8 @@
 import { ConvexError, v } from "convex/values";
 import { ErrorCode } from "../../shared/codes";
 
-import { mutation, query } from "../functions";
-import { vGroupConnectionDomainDoc } from "../model";
+import { mutation, query } from "../_generated/server";
+import { vGroupConnectionDomainDoc } from "../documents";
 
 const CONNECTION_DOMAIN_BATCH = 500;
 

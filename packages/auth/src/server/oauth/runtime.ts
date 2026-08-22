@@ -7,8 +7,9 @@
  * @module
  */
 
-import * as arctic from "arctic";
+import { encodeBase64urlNoPadding } from "@oslojs/encoding";
 import { ConvexError as ConvexErrorCtor } from "convex/values";
+import { decodeJwt } from "jose";
 
 import { ErrorCode } from "../../shared/codes";
 import { constantTimeEqualHex as constantTimeEqual } from "../../shared/compare";
@@ -18,6 +19,7 @@ import { log } from "../log";
 import type { OAuthProfile, OAuthRuntimeClient, OAuthTokens } from "../types";
 import { isLocalHost } from "../url";
 import { withSpan } from "../utils/span";
+import { OAuthProviderFetchError, OAuthProviderRequestError } from "./factory";
 
 type OAuthErrorData = {
   code: string;
@@ -83,6 +85,12 @@ const COOKIE_TTL = 60 * 15;
 const convexSiteUrl = readConfigSync(envOptionalString("CONVEX_SITE_URL"));
 const oauthCookiePrefix = !isLocalHost(convexSiteUrl ?? undefined) ? "__Host-" : "";
 
+function generateOAuthValue() {
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  return encodeBase64urlNoPadding(bytes);
+}
+
 function oauthCookieName(type: "state" | "pkce" | "nonce", providerId: string) {
   return oauthCookiePrefix + providerId + "OAuth" + type;
 }
@@ -136,7 +144,7 @@ async function exchangeCode(
   return tryConvex({
     try: () => provider.validateAuthorizationCode({ code, codeVerifier, redirectUri }),
     catch: (error) => {
-      if (error instanceof arctic.OAuth2RequestError) {
+      if (error instanceof OAuthProviderRequestError) {
         console.error("[auth] OAuth token exchange rejected by provider", {
           providerCode: error.code,
           description: error.description,
@@ -146,7 +154,7 @@ async function exchangeCode(
           message: "The identity provider rejected the token exchange.",
         };
       }
-      if (error instanceof arctic.ArcticFetchError) {
+      if (error instanceof OAuthProviderFetchError) {
         console.error("[auth] Network error during OAuth token exchange", {
           message: error.message,
         });
@@ -201,7 +209,15 @@ async function extractProfile(
   }
 
   if (typeof tokens.idToken === "string") {
-    const claims = arctic.decodeIdToken(tokens.idToken) as Record<string, unknown>;
+    let claims: Record<string, unknown>;
+    try {
+      claims = decodeJwt(tokens.idToken) as Record<string, unknown>;
+    } catch {
+      return failConvex({
+        code: ErrorCode.OAUTH_INVALID_PROFILE,
+        message: `Provider "${providerId}" returned an invalid ID token.`,
+      });
+    }
     return {
       id: (claims.sub as string) ?? crypto.randomUUID(),
       name: (claims.name as string) ?? undefined,
@@ -249,7 +265,7 @@ export async function createOAuthAuthorizationURL(
   if (oauthConfig.provider === null) {
     throw new Error(`OAuth provider "${providerId}" is missing a runtime client.`);
   }
-  const rawState = arctic.generateState();
+  const rawState = generateOAuthValue();
   const state = options?.stateTransform ? options.stateTransform(rawState) : rawState;
   const cookies: OAuthCookie[] = [];
   let codeVerifier: string | undefined;
@@ -257,7 +273,7 @@ export async function createOAuthAuthorizationURL(
   const scopes = oauthConfig.scopes ?? [];
 
   if (requiresPKCE(oauthConfig.provider)) {
-    codeVerifier = arctic.generateCodeVerifier();
+    codeVerifier = generateOAuthValue();
     cookies.push(createCookie("pkce", providerId, codeVerifier));
   }
 
@@ -265,7 +281,7 @@ export async function createOAuthAuthorizationURL(
 
   let nonce: string | undefined;
   if (oauthConfig.nonce === true) {
-    nonce = arctic.generateState();
+    nonce = generateOAuthValue();
     cookies.push(createCookie("nonce", providerId, nonce));
   }
 

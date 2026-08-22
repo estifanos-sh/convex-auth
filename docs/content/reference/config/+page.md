@@ -47,6 +47,7 @@ const auth = defineAuth(components.auth, {
   permissions,
   extend: {
     User: v.object({ stripeCustomerId: v.optional(v.string()) }),
+    GroupInvite: v.object({ campaign: v.optional(v.string()) }),
   },
   session: {
     totalDurationMs: 30 * 24 * 60 * 60 * 1000, // 30 days
@@ -76,17 +77,17 @@ const auth = defineAuth(components.auth, {
 
 ## Config options
 
-| Option                            | Type                                                | Default   | Description                                                                                                                                                            |
-| --------------------------------- | --------------------------------------------------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `providers`                       | `AuthProviderConfig[]`                              | required  | Auth methods to enable                                                                                                                                                 |
-| `permissions`                     | `PermissionsDefinition`                             | `{}`      | App-defined grants and role bundles from `definePermissions(...)`.                                                                                                     |
-| `extend`                          | `{ User?, Group?, GroupMember? }` Convex validators | `{}`      | Validator for each table's `extend` field. Types `auth.v.*` (so `viewer.extend.<field>` is typed) and validates return shapes.                                         |
-| `session.totalDurationMs`         | `number`                                            | 30 days   | Maximum session lifetime                                                                                                                                               |
-| `session.inactiveDurationMs`      | `number`                                            | varies    | Inactive session timeout                                                                                                                                               |
-| `jwt.durationMs`                  | `number`                                            | 60s       | JWT token lifetime                                                                                                                                                     |
-| `signIn.maxFailedAttemptsPerHour` | `number`                                            | 10        | Failed sign-in throttle (backed by `@convex-dev/rate-limiter` token bucket; resets on successful sign-in)                                                              |
-| `events`                          | `AuthEventHandlerMap`                               | —         | Lifecycle handlers from `authEvents.handlers(...)`; event kinds and their audit categories are canonical library taxonomy.                                             |
-| `path`                            | `string`                                            | `"/auth"` | HTTP path where the app-owned auth protocol routes are mounted. Provider callbacks, the JWT issuer, OAuth discovery, and `auth.request.mount(http)` all use this path. |
+| Option                            | Type                                                              | Default   | Description                                                                                                                                                            |
+| --------------------------------- | ----------------------------------------------------------------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `providers`                       | `AuthProviderConfig[]`                                            | required  | Auth methods to enable                                                                                                                                                 |
+| `permissions`                     | `PermissionsDefinition`                                           | `{}`      | App-defined grants and role bundles from `definePermissions(...)`.                                                                                                     |
+| `extend`                          | `{ User?, Group?, GroupMember?, GroupInvite? }` Convex validators | `{}`      | Validator for each table's `extend` field. Types `auth.v.*` (so `viewer.extend.<field>` is typed) and validates return shapes.                                         |
+| `session.totalDurationMs`         | `number`                                                          | 30 days   | Maximum session lifetime                                                                                                                                               |
+| `session.inactiveDurationMs`      | `number`                                                          | varies    | Inactive session timeout                                                                                                                                               |
+| `jwt.durationMs`                  | `number`                                                          | 60s       | JWT token lifetime                                                                                                                                                     |
+| `signIn.maxFailedAttemptsPerHour` | `number`                                                          | 10        | Failed sign-in throttle (backed by `@convex-dev/rate-limiter` token bucket; resets on successful sign-in)                                                              |
+| `events`                          | `AuthEventHandlerMap`                                             | —         | Lifecycle handlers from `authEvents.handlers(...)`; event kinds and their audit categories are canonical library taxonomy.                                             |
+| `path`                            | `string`                                                          | `"/auth"` | HTTP path where the app-owned auth protocol routes are mounted. Provider callbacks, the JWT issuer, OAuth discovery, and `auth.request.mount(http)` all use this path. |
 
 > **Note:** Email transport is configured via `email({ from, send })` in the
 > providers array, not as a top-level config option.
@@ -114,12 +115,13 @@ routes. When the `connection()` provider is configured, `auth.connection`
 provides the private group SSO administration facade.
 
 The returned `auth.v` validators describe public read results for Convex
-`returns:` validation. The exported `Doc`, `Viewer`, `Group`, and `Membership`
-types carry configured extension fields. The exported `signIn` and `signOut`
-actions become the generated `api.auth` client contract; passing that object to
-the browser, Expo, or framework client carries provider IDs, validated sign-in
-parameters, and enabled factor helpers automatically. See [Typed
-Returns](/reference/typed-returns) for the validator and type relationship.
+`returns:` validation and carry configured extension fields. Derive a named
+document type from a configured validator only when a separate annotation is
+actually needed. The exported `signIn` and `signOut` actions become the
+generated `api.auth` client contract; passing that object to the browser, Expo,
+or framework client carries provider IDs, validated sign-in parameters, and
+enabled factor helpers automatically. See [Typed Returns](/reference/typed-returns)
+for the validator and type relationship.
 
 Do not call generated component functions from application code and do not
 build a parallel account, password, session, passkey, or recovery table. The

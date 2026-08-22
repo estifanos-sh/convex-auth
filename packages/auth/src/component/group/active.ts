@@ -9,8 +9,8 @@ import { ConvexError, v } from "convex/values";
 import { ErrorCode } from "../../shared/codes";
 import type { Id } from "../_generated/dataModel";
 import type { QueryCtx } from "../_generated/server";
-import { mutation, query } from "../functions";
-import { vGroupDoc, vGroupMemberDoc } from "../model";
+import { mutation, query } from "../_generated/server";
+import { vGroupDoc, vGroupMemberDoc } from "../documents";
 
 export const vActiveGroup = v.object({
   groupId: v.id("Group"),

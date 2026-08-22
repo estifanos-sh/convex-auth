@@ -30,8 +30,7 @@ test("sign in with email", async () => {
   );
 
   await t.action(api.auth.signIn, {
-    provider: "email",
-    params: { email: "tom@gmail.com" },
+    request: { provider: "email", params: { email: "tom@gmail.com" } },
   });
   vi.unstubAllGlobals();
 
@@ -45,9 +44,7 @@ test("sign in with email", async () => {
   }
 
   const tokens = expectSignInSession(
-    await t.action(api.auth.signIn, {
-      params: { code },
-    }),
+    await t.action(api.auth.signIn, { request: { params: { code } } }),
   );
 
   expect(tokens).not.toBeNull();
@@ -71,8 +68,7 @@ test("redirectTo with email", async () => {
   );
 
   await t.action(api.auth.signIn, {
-    provider: "email",
-    params: { email: "tom@gmail.com", redirectTo: "/dashboard" },
+    request: { provider: "email", params: { email: "tom@gmail.com", redirectTo: "/dashboard" } },
   });
   vi.unstubAllGlobals();
 

@@ -189,6 +189,7 @@ async function verifyCodeAndSignInImplInner(
           status: "signedIn";
           user: CrossComponentUserDoc;
           sessionId: string;
+          sessionExpirationTime: number;
           refreshTokenId?: string;
           replacedSessionId?: string;
         };
@@ -234,6 +235,7 @@ async function verifyCodeAndSignInImplInner(
     return {
       userId: typedUserId,
       sessionId,
+      sessionExpirationTime: completed.sessionExpirationTime,
       identity: buildSessionIdentity(typedUserId, sessionId, completed.user),
       refreshToken:
         generateTokens && refreshTokenId !== undefined

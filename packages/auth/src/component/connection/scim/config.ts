@@ -10,8 +10,9 @@
 
 import { v } from "convex/values";
 
-import { mutation, query } from "../../functions";
-import { vGroupConnectionScimConfigDoc, vScimStatus } from "../../model";
+import { mutation, query } from "../../_generated/server";
+import { vGroupConnectionScimConfigDoc } from "../../documents";
+import { vScimStatus } from "../../model";
 
 /**
  * Read a SCIM config. Overloaded: lookup by `{ tokenHash }` (bearer-token

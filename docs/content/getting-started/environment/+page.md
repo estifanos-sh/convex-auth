@@ -30,7 +30,10 @@ the whole value as a secret and do not edit it by hand.
 | ----------------- | ------------------------------------------------------------- |
 | `CONVEX_SITE_URL` | HTTP actions URL. Used as JWT issuer and OAuth callback base. |
 
-Your `convex/auth.config.ts` should trust this same value as the native Convex
+Convex provides this value automatically and includes it in the generated
+`env` type. Do not redeclare it in `convex/convex.config.ts`.
+
+Your `convex/auth.config.ts` then trusts this same value as the native Convex
 JWT issuer:
 
 ```ts

@@ -92,8 +92,7 @@ async function invalidAssertionCode(
   credentialId: string,
 ): Promise<string> {
   const options = await t.action(api.auth.signIn, {
-    provider: "webauthn",
-    params: { flow: "signIn" },
+    request: { provider: "webauthn", params: { flow: "signIn" } },
   });
   if (options.kind !== "webauthnOptions") throw new Error("expected webauthnOptions");
   const challenge = (options.options as { challenge: string }).challenge;
@@ -102,13 +101,15 @@ async function invalidAssertionCode(
   );
   const error = await t
     .action(api.auth.signIn, {
-      provider: "webauthn",
-      params: {
-        flow: "verify",
-        credentialId,
-        clientDataJSON,
-        signature: "AA",
-        authenticatorData: await assertionAuthenticatorData(),
+      request: {
+        provider: "webauthn",
+        params: {
+          flow: "verify",
+          credentialId,
+          clientDataJSON,
+          signature: "AA",
+          authenticatorData: await assertionAuthenticatorData(),
+        },
       },
       verifier: options.verifier,
     })
@@ -155,8 +156,7 @@ test("WebAuthn does not inherit the guessable-secret sign-in limiter", async () 
   // Issue a real challenge and submit an invalid signature. The unrelated
   // sign-in bucket must not intercept WebAuthn; its protocol checks still run.
   const options = await t.action(api.auth.signIn, {
-    provider: "webauthn",
-    params: { flow: "signIn" },
+    request: { provider: "webauthn", params: { flow: "signIn" } },
   });
   expect(options.kind).toBe("webauthnOptions");
   if (options.kind !== "webauthnOptions") throw new Error("expected webauthnOptions");
@@ -167,13 +167,15 @@ test("WebAuthn does not inherit the guessable-secret sign-in limiter", async () 
 
   const error = await t
     .action(api.auth.signIn, {
-      provider: "webauthn",
-      params: {
-        flow: "verify",
-        credentialId,
-        clientDataJSON,
-        signature: "AA",
-        authenticatorData: await assertionAuthenticatorData(0x0d),
+      request: {
+        provider: "webauthn",
+        params: {
+          flow: "verify",
+          credentialId,
+          clientDataJSON,
+          signature: "AA",
+          authenticatorData: await assertionAuthenticatorData(0x0d),
+        },
       },
       verifier: options.verifier,
     })
@@ -189,8 +191,7 @@ test("passkey verify against an unknown credential uses the public signature err
   const t = convexTest(schema);
 
   const options = await t.action(api.auth.signIn, {
-    provider: "webauthn",
-    params: { flow: "signIn" },
+    request: { provider: "webauthn", params: { flow: "signIn" } },
   });
   if (options.kind !== "webauthnOptions") throw new Error("expected webauthnOptions");
   const challenge = (options.options as { challenge: string }).challenge;
@@ -200,13 +201,15 @@ test("passkey verify against an unknown credential uses the public signature err
 
   const error = await t
     .action(api.auth.signIn, {
-      provider: "webauthn",
-      params: {
-        flow: "verify",
-        credentialId: base64url("does-not-exist"),
-        clientDataJSON,
-        signature: "AA",
-        authenticatorData: await assertionAuthenticatorData(),
+      request: {
+        provider: "webauthn",
+        params: {
+          flow: "verify",
+          credentialId: base64url("does-not-exist"),
+          clientDataJSON,
+          signature: "AA",
+          authenticatorData: await assertionAuthenticatorData(),
+        },
       },
       verifier: options.verifier,
     })
@@ -258,8 +261,7 @@ test("WebAuthn does not reveal whether an invalid assertion names a stored crede
 test("WebAuthn rejects cross-origin client data before consuming the challenge", async () => {
   const t = convexTest(schema);
   const options = await t.action(api.auth.signIn, {
-    provider: "webauthn",
-    params: { flow: "signIn" },
+    request: { provider: "webauthn", params: { flow: "signIn" } },
   });
   if (options.kind !== "webauthnOptions") throw new Error("expected webauthnOptions");
   const challenge = (options.options as { challenge: string }).challenge;
@@ -269,13 +271,15 @@ test("WebAuthn rejects cross-origin client data before consuming the challenge",
 
   const error = await t
     .action(api.auth.signIn, {
-      provider: "webauthn",
-      params: {
-        flow: "verify",
-        credentialId: "unused",
-        clientDataJSON,
-        signature: "AA",
-        authenticatorData: "AA",
+      request: {
+        provider: "webauthn",
+        params: {
+          flow: "verify",
+          credentialId: "unused",
+          clientDataJSON,
+          signature: "AA",
+          authenticatorData: "AA",
+        },
       },
       verifier: options.verifier,
     })
@@ -287,7 +291,10 @@ test("WebAuthn rejects cross-origin client data before consuming the challenge",
   expect((error as ConvexError<{ code: string }>).data.code).toBe("PASSKEY_INVALID_CLIENT_DATA");
 
   const verifier = await t.run((ctx) =>
-    ctx.runQuery(components.auth.token.pkce.get, { id: options.verifier as never }),
+    ctx.runQuery(components.auth.token.pkce.get, {
+      selector: { id: options.verifier as never },
+      now: Date.now(),
+    }),
   );
   expect(verifier).not.toBeNull();
 });

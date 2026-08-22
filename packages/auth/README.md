@@ -13,8 +13,13 @@ Configure the component in `convex/convex.config.ts`:
 ```ts
 import auth from "@estifanos-sh/convex-auth/convex.config";
 import { defineApp } from "convex/server";
+import { v } from "convex/values";
 
-const app = defineApp();
+const app = defineApp({
+  env: {
+    CONVEX_SITE_URL: v.string(),
+  },
+});
 app.use(auth);
 
 export default app;
@@ -37,7 +42,25 @@ export const auth = defineAuth(components.auth, {
   permissions,
   providers: [password(), webauthn()],
 });
+
+export const { signIn, signOut, store } = auth;
 ```
+
+Pass the generated actions directly to the browser client. The provider IDs,
+custom credential validators, action results, and enabled factor helpers are
+inferred without a generic or type assertion.
+
+```ts
+import { client } from "@estifanos-sh/convex-auth/browser";
+import { api } from "../convex/_generated/api";
+
+export const authClient = client({ convex, api: api.auth });
+```
+
+Convex Auth owns users, provider accounts, credential secrets, passkeys,
+recovery continuations, and sessions. Application tables should reference the
+branded auth `userId`; they should not mirror those records or manufacture auth
+IDs in tests.
 
 Read the [installation guide](https://estifanos.sh/convex-auth/getting-started/installation/)
 for the complete setup, generated files, environment variables, client bindings,

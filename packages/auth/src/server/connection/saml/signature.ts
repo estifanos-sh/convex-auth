@@ -110,8 +110,8 @@ export async function constructSamlSignature(opts: SignatureConstructor): Promis
     signatureAlgorithm: opts.signatureAlgorithm || signatureAlgorithms.RSA_SHA256,
     getDigestMethod,
     getKeyInfo,
-    readPrivateKey: (keyString, passphrase, isOutputString) =>
-      readPrivateKey(keyString, passphrase, isOutputString),
+    readPrivateKey: (keyString, passphrase, _isOutputString) =>
+      readPrivateKey(keyString, passphrase),
     base64Encode: base64Encode,
   });
 }
@@ -320,8 +320,8 @@ export async function constructMessageSignature(
     signingAlgorithm,
     nrsaAliasMapping,
     defaultSignatureAlgorithm: signatureAlgorithms.RSA_SHA1,
-    readPrivateKey: (keyString, keyPassphrase, isOutputString) =>
-      readPrivateKey(keyString, keyPassphrase, isOutputString),
+    readPrivateKey: (keyString, keyPassphrase, _isOutputString) =>
+      readPrivateKey(keyString, keyPassphrase),
     signMessage: async ({ octetString: source, privateKey, signingScheme, isBase64Output }) => {
       const privateKeyPem =
         typeof privateKey === "string" ? privateKey : new TextDecoder().decode(privateKey);

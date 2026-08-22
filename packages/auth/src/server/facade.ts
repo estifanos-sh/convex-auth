@@ -42,10 +42,6 @@ type AuthIdentityCtx = {
 
 type AuthQueryCtx = ComponentReadCtx;
 
-type CustomFunctionInputResult<TAuth extends object> = Promise<{
-  ctx: { auth: TAuth };
-}>;
-
 type AuthContextBase = {
   getUserIdentity: () => Promise<UserIdentity | null>;
 };
@@ -104,36 +100,6 @@ interface OptionalAuthContextFactory {
     config?: AuthContextConfig<TResolve>,
   ): AuthContextCustomization<OptionalAuthContextState & TResolve>;
 }
-
-/**
- * Extract the resolved `auth` context type from an `auth.ctx()` customization.
- *
- * Use this to type function parameters or variables that receive the
- * enriched auth context produced by `auth.ctx()`. The inferred type includes
- * `userId`, `user`, `groupId`, `role`, `grants`, `getUserIdentity`, and any
- * additional fields added by the `resolve` callback. This is the generic
- * utility for reusing the enriched auth shape without manually duplicating
- * conditional auth types.
- *
- * @typeParam T - An `auth.ctx()` return value (must have an `input` method
- *   that returns `{ ctx: { auth: ... } }`).
- *
- * @example
- * ```ts
- * const authCtx = auth.ctx({
- *   resolve: async (ctx, user) => ({ orgId: user.orgId }),
- * });
- * type Auth = InferAuth<typeof authCtx>;
- * // Auth = { userId: Id<"User">; user: UserDoc; getUserIdentity: ...; orgId: string }
- * ```
- *
- * @see {@link defineAuth}
- */
-export type InferAuth<
-  T extends {
-    input: (...args: never[]) => CustomFunctionInputResult<object>;
-  },
-> = Awaited<ReturnType<T["input"]>>["ctx"]["auth"];
 
 type AuthContextFacade = {
   context: AuthContextResolver & { optional: OptionalAuthContextResolver };
@@ -296,8 +262,7 @@ function createAuthContextCustomization<
 }
 
 /**
- * Build the shared public auth context facade used by both `defineAuth()` and
- * `createAuthContext()`.
+ * Build the auth context facade attached to a configured `defineAuth()` result.
  *
  * @internal
  */

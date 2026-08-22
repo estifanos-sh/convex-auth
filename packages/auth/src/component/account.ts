@@ -11,11 +11,15 @@ import { ConvexError, v } from "convex/values";
 import { ErrorCode } from "../shared/codes";
 
 import { recordSignInLimit, resetSignInLimit } from "./limits";
-import { mutation, query } from "./functions";
-import { vAccountDoc, vUserDoc } from "./model";
+import { mutation, query } from "./_generated/server";
+import { vAccountDoc, vUserDoc } from "./documents";
 import { createSessionRows, type SessionRows, vSessionReplacement } from "./session";
 
+/** Maximum linked accounts returned for one user by the bounded read surface. */
 const ACCOUNT_LIST_BATCH = 128;
+
+/** Maximum users accepted by one batched account read. */
+const ACCOUNT_LIST_USER_BATCH = 100;
 
 type AcceptedCredentialsSignIn = Omit<SessionRows, "epoch"> & { status: "accepted" };
 
@@ -95,6 +99,7 @@ export const completeCredentialsSignIn = mutation({
       status: v.literal("accepted"),
       user: vUserDoc,
       sessionId: v.id("Session"),
+      sessionExpirationTime: v.number(),
       refreshTokenId: v.optional(v.id("RefreshToken")),
       replacedSessionId: v.optional(v.id("Session")),
     }),
@@ -116,6 +121,7 @@ export const completeCredentialsSignIn = mutation({
       status: "accepted" as const,
       user: created.user,
       sessionId: created.sessionId,
+      sessionExpirationTime: created.sessionExpirationTime,
     };
     if (created.refreshTokenId !== undefined) result.refreshTokenId = created.refreshTokenId;
     if (created.replacedSessionId !== undefined) {
@@ -150,15 +156,44 @@ export const get = query({
   },
 });
 
-/** List the accounts owned by a user. */
+/**
+ * List the accounts owned by one user, or by a bounded batch of users.
+ *
+ * The batch form serves one component crossing for app-owned user lists. The
+ * public server facade projects these raw records into safe capability
+ * summaries before exposing them to application code.
+ */
 export const list = query({
-  args: { userId: v.id("User") },
+  args: {
+    userId: v.optional(v.id("User")),
+    userIds: v.optional(v.array(v.id("User"))),
+    provider: v.optional(v.string()),
+  },
   returns: v.array(vAccountDoc),
-  handler: async (ctx, { userId }) => {
-    return await ctx.db
-      .query("Account")
-      .withIndex("user_id_provider", (q) => q.eq("userId", userId))
-      .take(ACCOUNT_LIST_BATCH);
+  handler: async (ctx, args) => {
+    const userIds = args.userId === undefined ? (args.userIds ?? []) : [args.userId];
+    const uniqueUserIds = Array.from(new Set(userIds));
+    const provider = args.provider;
+    if (uniqueUserIds.length > ACCOUNT_LIST_USER_BATCH) {
+      throw new ConvexError({
+        code: ErrorCode.INVALID_PARAMETERS,
+        message: `At most ${ACCOUNT_LIST_USER_BATCH} users can be read at once.`,
+      });
+    }
+    const accounts = await Promise.all(
+      uniqueUserIds.map(async (userId) =>
+        provider === undefined
+          ? await ctx.db
+              .query("Account")
+              .withIndex("user_id_provider", (q) => q.eq("userId", userId))
+              .take(ACCOUNT_LIST_BATCH)
+          : await ctx.db
+              .query("Account")
+              .withIndex("user_id_provider", (q) => q.eq("userId", userId).eq("provider", provider))
+              .take(ACCOUNT_LIST_BATCH),
+      ),
+    );
+    return accounts.flat();
   },
 });
 

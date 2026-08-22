@@ -1,6 +1,7 @@
 export { callModifyAccount } from "./account";
 export { callCreateVerificationCode } from "./code";
 export { callCredentialsSignIn } from "./credentials/signin";
+export { callCompleteCredentialEnrollment } from "./enrollment";
 export { callInvalidateSessions } from "./invalidate";
 export { callUserOAuth } from "./oauth";
 export { callRefreshSession } from "./refresh";

@@ -1,6 +1,6 @@
 import { ConvexError, type Infer } from "convex/values";
 
-import { vOAuthCodeDoc } from "../../component/model";
+import { vOAuthCodeDoc } from "../../component/documents";
 import { ErrorCode } from "../../shared/codes";
 import { cached } from "../cache/context";
 import type { AuthComponentApi } from "../component/api";

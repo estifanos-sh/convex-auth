@@ -53,8 +53,8 @@ export function createInviteDomain(deps: InviteDeps) {
       ctx: ComponentCtx,
       opts: {
         data: {
-          groupId?: string;
-          invitedByUserId?: string;
+          groupId?: GenericId<"Group">;
+          invitedByUserId?: GenericId<"User">;
           email?: string;
           roleIds?: string[];
           expiresTime?: number;
@@ -94,7 +94,7 @@ export function createInviteDomain(deps: InviteDeps) {
      */
     get: async (
       ctx: ComponentReadCtx,
-      opts: { id: string },
+      opts: { id: GenericId<"GroupInvite"> },
     ): Promise<Doc<"GroupInvite"> | null> => {
       return (await ctx.runQuery(config.component.group.invite.get, {
         id: opts.id,
@@ -206,12 +206,12 @@ export function createInviteDomain(deps: InviteDeps) {
       opts?: {
         where?: {
           tokenHash?: string;
-          groupId?: string;
+          groupId?: GenericId<"Group">;
           status?: "pending" | "accepted" | "revoked" | "expired";
           email?: string;
-          invitedByUserId?: string;
+          invitedByUserId?: GenericId<"User">;
           roleId?: string;
-          acceptedByUserId?: string;
+          acceptedByUserId?: GenericId<"User">;
         };
         paginationOpts: { numItems: number; cursor: string | null };
         orderBy?: "_creationTime" | "status" | "email" | "expiresTime" | "acceptedTime";
@@ -243,7 +243,10 @@ export function createInviteDomain(deps: InviteDeps) {
      * await auth.invite.accept(ctx, { id: inviteId, acceptedByUserId: userId });
      * ```
      */
-    accept: async (ctx: ComponentCtx, opts: { id: string; acceptedByUserId?: string }) => {
+    accept: async (
+      ctx: ComponentCtx,
+      opts: { id: GenericId<"GroupInvite">; acceptedByUserId?: GenericId<"User"> },
+    ) => {
       const args = { id: opts.id };
       if (opts.acceptedByUserId !== undefined) {
         Object.assign(args, { acceptedByUserId: opts.acceptedByUserId });
@@ -269,7 +272,7 @@ export function createInviteDomain(deps: InviteDeps) {
      * await auth.invite.revoke(ctx, { id: inviteId });
      * ```
      */
-    revoke: async (ctx: ComponentCtx, opts: { id: string }) => {
+    revoke: async (ctx: ComponentCtx, opts: { id: GenericId<"GroupInvite"> }) => {
       await ctx.runMutation(config.component.group.invite.revoke, { id: opts.id });
       return null;
     },

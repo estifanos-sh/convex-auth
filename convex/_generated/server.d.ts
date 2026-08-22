@@ -22,23 +22,18 @@ import {
 import type { DataModel } from "./dataModel.js";
 
 /**
- * Typesafe environment variables declared in `convex.config.ts`.
+ * Typesafe environment variables.
+ *
+ * This includes platform-provided env vars and any variables declared in
+ * `convex.config.ts`.
  */
 type Env = {
-  readonly ANDROID_APP_LINKS: string | undefined;
+  readonly CONVEX_CLOUD_URL: string;
+  readonly CONVEX_SITE_URL: string;
   readonly APP_URL: string | undefined;
-  readonly AUTH_KEYS: string | undefined;
-  readonly AUTH_LOG_LEVEL: "DEBUG" | "INFO" | "WARN" | "ERROR" | undefined;
-  readonly AUTH_LOG_SECRETS: "true" | "false" | undefined;
-  readonly CHANGE_PASSWORD_URL: string | undefined;
-  readonly CONVEX_SITE_URL: string | undefined;
   readonly GOOGLE_CLIENT_ID: string | undefined;
   readonly GOOGLE_CLIENT_SECRET: string | undefined;
-  readonly IOS_APPLINK_PATHS: string | undefined;
-  readonly IOS_APP_IDS: string | undefined;
   readonly RESEND_API_KEY: string;
-  readonly SECURITY_CONTACT: string | undefined;
-  readonly SECURITY_TXT_EXPIRES_DAYS: string | undefined;
   readonly SESSION_INACTIVE_DURATION_MS: string | undefined;
   readonly SESSION_TOTAL_DURATION_MS: string | undefined;
 };
@@ -118,7 +113,10 @@ export declare const internalAction: ActionBuilder<DataModel, "internal">;
 export declare const httpAction: HttpActionBuilder;
 
 /**
- * Typesafe environment variables declared in `convex.config.ts`.
+ * Typesafe environment variables.
+ *
+ * This includes platform-provided env vars and any variables declared in
+ * `convex.config.ts`.
  */
 export declare const env: Env;
 

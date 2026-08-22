@@ -1,12 +1,13 @@
-import { Infer, v } from "convex/values";
+import { type Infer, v } from "convex/values";
 
 import { LOG_LEVELS } from "../log";
 import { log } from "../log";
 import type { ServerServices } from "../services/resolve";
-import { MutationCtx } from "../types";
+import type { MutationCtx } from "../types";
 import { vModifyAccountArgs, modifyAccountImpl } from "./account";
 import { vCreateVerificationCodeArgs, createVerificationCodeImpl } from "./code";
 import { vCredentialsSignInArgs, credentialsSignInImpl } from "./credentials/signin";
+import { completeCredentialEnrollmentImpl, vCompleteCredentialEnrollmentArgs } from "./enrollment";
 import { vInvalidateSessionsArgs, invalidateSessionsImpl } from "./invalidate";
 import { vUserOAuthArgs, userOAuthImpl } from "./oauth";
 import { vRefreshSessionArgs, refreshSessionImpl } from "./refresh";
@@ -59,6 +60,10 @@ export const vStoreArgs = v.object({
       ...vCreateAccountFromCredentialsArgs.fields,
     }),
     v.object({
+      type: v.literal("completeCredentialEnrollment"),
+      ...vCompleteCredentialEnrollmentArgs.fields,
+    }),
+    v.object({
       type: v.literal("retrieveAccountWithCredentials"),
       ...vRetrieveAccountWithCredentialsArgs.fields,
     }),
@@ -108,6 +113,8 @@ export const storeImpl = async (
       return await createVerificationCodeImpl(ctx, args, getProviderOrThrow, config);
     case "createAccountFromCredentials":
       return await createAccountFromCredentialsImpl(ctx, args, getProviderOrThrow, config);
+    case "completeCredentialEnrollment":
+      return await completeCredentialEnrollmentImpl(ctx, args, services);
     case "retrieveAccountWithCredentials":
       return await retrieveAccountWithCredentialsImpl(ctx, args, getProviderOrThrow, config);
     case "credentialsSignIn":

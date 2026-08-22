@@ -51,7 +51,7 @@ function useAuthForm() {
     try {
       try {
         const ssoInfo = await client.query(api.auth.group.signInLookup, {
-          email: normalized,
+          selector: { email: normalized },
         });
         if (!ssoInfo) throw new Error("No group connection matched the provided input.");
         await signIn("connection", { connectionId: ssoInfo.connectionId });

@@ -6,9 +6,9 @@
 
 import { v } from "convex/values";
 
-import { query } from "./functions";
+import { query } from "./_generated/server";
 import { resolveActiveGroup, vActiveGroup } from "./group/active";
-import { vSessionDoc, vUserDoc } from "./model";
+import { vSessionDoc, vUserDoc } from "./documents";
 
 const vAuthContextSnapshot = v.object({
   user: v.union(vUserDoc, v.null()),

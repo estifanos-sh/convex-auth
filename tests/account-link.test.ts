@@ -2,20 +2,16 @@ import { components } from "@convex/_generated/api";
 import { auth as backendAuth } from "@convex/auth";
 import schema from "@convex/schema";
 import { ErrorCode } from "@estifanos-sh/convex-auth/shared/codes";
+import { createAuthTest } from "@estifanos-sh/convex-auth/test";
 import { ConvexError } from "convex/values";
 import { expect, test } from "vite-plus/test";
 
 import { convexTest } from "./convex/setup";
 
-async function makeUser(t: ReturnType<typeof convexTest>, email: string): Promise<string> {
-  return await t.run(async (ctx) => {
-    return await ctx.runMutation(components.auth.user.create, { data: { email } });
-  });
-}
-
 test("provider account creation is idempotent for the same user", async () => {
   const t = convexTest(schema);
-  const userId = await makeUser(t, "link-idempotent@example.com");
+  const auth = createAuthTest(t, components.auth);
+  const userId = await auth.user.create({ data: { email: "link-idempotent@example.com" } });
 
   const first = await t.run((ctx) =>
     ctx.runMutation(components.auth.account.create, {
@@ -37,8 +33,9 @@ test("provider account creation is idempotent for the same user", async () => {
 
 test("provider account creation refuses an identity owned by another user", async () => {
   const t = convexTest(schema);
-  const userA = await makeUser(t, "owner@example.com");
-  const userB = await makeUser(t, "intruder@example.com");
+  const auth = createAuthTest(t, components.auth);
+  const userA = await auth.user.create({ data: { email: "owner@example.com" } });
+  const userB = await auth.user.create({ data: { email: "intruder@example.com" } });
 
   await t.run((ctx) =>
     ctx.runMutation(components.auth.account.create, {
@@ -65,50 +62,99 @@ test("provider account creation refuses an identity owned by another user", asyn
 
 test("account management is sanitized, owned, and preserves a sign-in method", async () => {
   const t = convexTest(schema);
-  const { userId, strangerId, firstAccountId, secondAccountId } = await t.run(async (ctx) => {
-    const userId = await ctx.runMutation(components.auth.user.create, {
-      data: { email: "managed@example.com" },
-    });
-    const strangerId = await ctx.runMutation(components.auth.user.create, {
-      data: { email: "managed-stranger@example.com" },
-    });
-    const firstAccountId = await ctx.runMutation(components.auth.account.create, {
+  const auth = createAuthTest(t, components.auth);
+  const userId = await auth.user.create({ data: { email: "managed@example.com" } });
+  const strangerId = await auth.user.create({
+    data: { email: "managed-stranger@example.com" },
+  });
+  await t.run(async (ctx) => {
+    await ctx.runMutation(components.auth.account.create, {
       userId,
       provider: "password",
       providerAccountId: "managed@example.com",
       secret: "do-not-return",
     });
-    const secondAccountId = await ctx.runMutation(components.auth.account.create, {
+    await ctx.runMutation(components.auth.account.create, {
       userId,
       provider: "github",
       providerAccountId: "github-managed",
     });
-    return { userId, strangerId, firstAccountId, secondAccountId };
   });
 
-  const owner = t.withIdentity({ subject: userId, sid: "account-owner" as any });
-  const accounts = await owner.run((ctx) => backendAuth.account.list(ctx as any));
+  const ownerSession = await auth.session.create({ userId });
+  const strangerSession = await auth.session.create({ userId: strangerId });
+  const owner = t.withIdentity(ownerSession.identity);
+  const accounts = await owner.run((ctx) => backendAuth.account.list(ctx));
   expect(accounts).toHaveLength(2);
   expect(JSON.stringify(accounts)).not.toContain("do-not-return");
   expect(accounts[0]).not.toHaveProperty("secret");
+  const passwordAccount = accounts.find((account) => account.provider === "password");
+  const githubAccount = accounts.find((account) => account.provider === "github");
+  if (passwordAccount === undefined || githubAccount === undefined) {
+    throw new Error("Expected both password and GitHub accounts.");
+  }
 
-  const stranger = t.withIdentity({ subject: strangerId, sid: "account-stranger" as any });
+  const stranger = t.withIdentity(strangerSession.identity);
   await expect(
-    stranger.run((ctx) => backendAuth.account.remove(ctx as any, { id: firstAccountId })),
+    stranger.run((ctx) => backendAuth.account.remove(ctx, { id: passwordAccount.id })),
   ).rejects.toThrow("Account not found");
 
-  await owner.run((ctx) => backendAuth.account.remove(ctx as any, { id: secondAccountId }));
+  await owner.run((ctx) => backendAuth.account.remove(ctx, { id: githubAccount.id }));
   await expect(
-    owner.run((ctx) => backendAuth.account.remove(ctx as any, { id: firstAccountId })),
+    owner.run((ctx) => backendAuth.account.remove(ctx, { id: passwordAccount.id })),
   ).rejects.toThrow();
 });
 
-test("account management leaves WebAuthn backing accounts to the factor API", async () => {
+test("account management batches safe capabilities for user lists", async () => {
   const t = convexTest(schema);
-  const { userId, passkeyAccountId } = await t.run(async (ctx) => {
-    const userId = await ctx.runMutation(components.auth.user.create, {
-      data: { email: "factor-boundary@example.com" },
+  const auth = createAuthTest(t, components.auth);
+  const firstUserId = await auth.user.create({ data: { email: "batch-first@example.com" } });
+  const secondUserId = await auth.user.create({ data: { email: "batch-second@example.com" } });
+  await t.run(async (ctx) => {
+    await ctx.runMutation(components.auth.account.create, {
+      userId: firstUserId,
+      provider: "password",
+      providerAccountId: "batch-first@example.com",
+      secret: "do-not-return",
+      extend: { private: "also-do-not-return" },
     });
+    await ctx.runMutation(components.auth.account.create, {
+      userId: secondUserId,
+      provider: "password",
+      providerAccountId: "batch-second@example.com",
+      secret: "also-do-not-return",
+    });
+    await ctx.runMutation(components.auth.account.create, {
+      userId: secondUserId,
+      provider: "github",
+      providerAccountId: "batch-second-github",
+    });
+  });
+
+  const accounts = await t.run((ctx) =>
+    backendAuth.account.list(ctx, {
+      userIds: [firstUserId, secondUserId, firstUserId],
+      provider: "password",
+    }),
+  );
+
+  expect(accounts).toHaveLength(2);
+  expect(accounts.map((account) => account.userId).sort()).toEqual(
+    [firstUserId, secondUserId].sort(),
+  );
+  expect(JSON.stringify(accounts)).not.toContain("do-not-return");
+  expect(JSON.stringify(accounts)).not.toContain("also-do-not-return");
+  expect(accounts.map((account) => account.provider)).toEqual(["password", "password"]);
+  expect(accounts[0]).not.toHaveProperty("providerAccountId");
+  expect(accounts[0]).not.toHaveProperty("secret");
+  expect(accounts[0]).not.toHaveProperty("extend");
+});
+
+test("account management hides WebAuthn backing accounts from the application facade", async () => {
+  const t = convexTest(schema);
+  const auth = createAuthTest(t, components.auth);
+  const userId = await auth.user.create({ data: { email: "factor-boundary@example.com" } });
+  await t.run(async (ctx) => {
     await ctx.runMutation(components.auth.account.create, {
       userId,
       provider: "password",
@@ -125,17 +171,14 @@ test("account management leaves WebAuthn backing accounts to the factor API", as
       backedUp: false,
       createdAt: Date.now(),
     });
-    const passkeyAccount = await ctx.runQuery(components.auth.account.get, {
-      provider: "passkey",
-      providerAccountId: "factor-boundary-credential",
-    });
-    return { userId, passkeyAccountId: passkeyAccount!._id };
   });
 
-  const current = t.withIdentity({ subject: userId, sid: "factor-boundary" as any });
-  const accounts = await current.run((ctx) => backendAuth.account.list(ctx as any));
+  const session = await auth.session.create({ userId });
+  const current = t.withIdentity(session.identity);
+  const accounts = await current.run((ctx) => backendAuth.account.list(ctx));
   expect(accounts.map((account) => account.provider)).toEqual(["password"]);
-  await expect(
-    current.run((ctx) => backendAuth.account.remove(ctx as any, { id: passkeyAccountId })),
-  ).rejects.toThrow("auth.factor.remove");
+  const passkeys = await t.run((ctx) =>
+    ctx.runQuery(components.auth.factor.passkey.list, { userId }),
+  );
+  expect(passkeys).toHaveLength(1);
 });

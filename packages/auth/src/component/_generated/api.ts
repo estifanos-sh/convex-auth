@@ -9,6 +9,7 @@
  */
 
 import type * as account from "../account.js";
+import type * as batch from "../batch.js";
 import type * as connection from "../connection.js";
 import type * as connection_audit from "../connection/audit.js";
 import type * as connection_cache from "../connection/cache.js";
@@ -21,12 +22,15 @@ import type * as connection_scim_identity from "../connection/scim/identity.js";
 import type * as connection_secret from "../connection/secret.js";
 import type * as connection_webhook_delivery from "../connection/webhook/delivery.js";
 import type * as connection_webhook_endpoint from "../connection/webhook/endpoint.js";
+import type * as connection_webhook_events from "../connection/webhook/events.js";
+import type * as context from "../context.js";
 import type * as crons from "../crons.js";
+import type * as documents from "../documents.js";
 import type * as event from "../event.js";
+import type * as eventstream from "../eventstream.js";
 import type * as factor_device from "../factor/device.js";
 import type * as factor_passkey from "../factor/passkey.js";
 import type * as factor_totp from "../factor/totp.js";
-import type * as functions from "../functions.js";
 import type * as group from "../group.js";
 import type * as group_active from "../group/active.js";
 import type * as group_invite from "../group/invite.js";
@@ -42,6 +46,7 @@ import type * as oauth_code from "../oauth/code.js";
 import type * as oauth_refresh from "../oauth/refresh.js";
 import type * as session from "../session.js";
 import type * as token_continuation from "../token/continuation.js";
+import type * as token_enrollment from "../token/enrollment.js";
 import type * as token_pkce from "../token/pkce.js";
 import type * as token_refresh from "../token/refresh.js";
 import type * as token_verification from "../token/verification.js";
@@ -54,6 +59,7 @@ import { anyApi, componentsGeneric } from "convex/server";
 
 const fullApi: ApiFromModules<{
   account: typeof account;
+  batch: typeof batch;
   connection: typeof connection;
   "connection/audit": typeof connection_audit;
   "connection/cache": typeof connection_cache;
@@ -66,12 +72,15 @@ const fullApi: ApiFromModules<{
   "connection/secret": typeof connection_secret;
   "connection/webhook/delivery": typeof connection_webhook_delivery;
   "connection/webhook/endpoint": typeof connection_webhook_endpoint;
+  "connection/webhook/events": typeof connection_webhook_events;
+  context: typeof context;
   crons: typeof crons;
+  documents: typeof documents;
   event: typeof event;
+  eventstream: typeof eventstream;
   "factor/device": typeof factor_device;
   "factor/passkey": typeof factor_passkey;
   "factor/totp": typeof factor_totp;
-  functions: typeof functions;
   group: typeof group;
   "group/active": typeof group_active;
   "group/invite": typeof group_invite;
@@ -87,6 +96,7 @@ const fullApi: ApiFromModules<{
   "oauth/refresh": typeof oauth_refresh;
   session: typeof session;
   "token/continuation": typeof token_continuation;
+  "token/enrollment": typeof token_enrollment;
   "token/pkce": typeof token_pkce;
   "token/refresh": typeof token_refresh;
   "token/verification": typeof token_verification;

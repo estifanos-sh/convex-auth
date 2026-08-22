@@ -10,8 +10,8 @@ import { type Infer, v } from "convex/values";
 
 import type { Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
-import { mutation, query } from "./functions";
-import { vSessionDoc, vUserDoc } from "./model";
+import { mutation, query } from "./_generated/server";
+import { vSessionDoc, vUserDoc } from "./documents";
 
 /** Maximum number of current sessions retained for one user. */
 export const MAX_ACTIVE_SESSIONS = 16;
@@ -45,15 +45,11 @@ export const vSessionReplacement = v.object({
 export type SessionRows = {
   user: Infer<typeof vUserDoc>;
   sessionId: Id<"Session">;
+  sessionExpirationTime: number;
   epoch: number;
   refreshTokenId?: Id<"RefreshToken">;
   replacedSessionId?: Id<"Session">;
 };
-
-/** Legacy users and sessions predate epochs and are treated as epoch zero. */
-export function getSessionEpoch(value: { sessionEpoch?: number; epoch?: number }): number {
-  return value.sessionEpoch ?? value.epoch ?? 0;
-}
 
 async function deleteSessionArtifacts(ctx: MutationCtx, sessionId: Id<"Session">) {
   const tokens = await ctx.db
@@ -84,6 +80,7 @@ async function revokeUserSessions(
   userId: Id<"User">,
   except: readonly Id<"Session">[] = [],
 ): Promise<SessionRevocation> {
+  const now = Date.now();
   const user = await ctx.db.get("User", userId);
   if (user === null) {
     return {
@@ -96,13 +93,13 @@ async function revokeUserSessions(
     };
   }
 
-  const epoch = getSessionEpoch(user) + 1;
+  const epoch = user.sessionEpoch + 1;
   await ctx.db.patch("User", userId, { sessionEpoch: epoch });
 
   const retainedSessionIds: Id<"Session">[] = [];
   for (const sessionId of new Set(except)) {
     const session = await ctx.db.get("Session", sessionId);
-    if (session !== null && session.userId === userId && session.expirationTime > Date.now()) {
+    if (session !== null && session.userId === userId && session.expirationTime > now) {
       await ctx.db.patch("Session", sessionId, { epoch });
       retainedSessionIds.push(sessionId);
     }
@@ -141,11 +138,13 @@ async function revokeUserSessions(
  * @internal
  */
 export async function createSessionRows(ctx: MutationCtx, args: CreateSessionArgs) {
+  const now = Date.now();
   const user = await ctx.db.get("User", args.userId);
   if (user === null) return null;
-  const epoch = getSessionEpoch(user);
+  const epoch = user.sessionEpoch;
 
   let sessionId = args.sessionId;
+  let resolvedSessionExpirationTime: number;
   const replacement = args.replaceSession;
   let replacedSessionId = replacement?.sessionId;
 
@@ -157,8 +156,8 @@ export async function createSessionRows(ctx: MutationCtx, args: CreateSessionArg
         existingSession !== null &&
         authenticatedUser !== null &&
         existingSession.userId === authenticatedUser._id &&
-        existingSession.expirationTime > Date.now() &&
-        getSessionEpoch(existingSession) === getSessionEpoch(authenticatedUser)
+        existingSession.expirationTime > now &&
+        existingSession.epoch === authenticatedUser.sessionEpoch
       ) {
         await deleteSessionArtifacts(ctx, replacement.sessionId);
       } else {
@@ -168,7 +167,7 @@ export async function createSessionRows(ctx: MutationCtx, args: CreateSessionArg
       const active = await ctx.db
         .query("Session")
         .withIndex("user_id_epoch_expiration_time", (q) =>
-          q.eq("userId", user._id).eq("epoch", epoch).gt("expirationTime", Date.now()),
+          q.eq("userId", user._id).eq("epoch", epoch).gt("expirationTime", now),
         )
         .take(MAX_ACTIVE_SESSIONS);
       if (active.length === MAX_ACTIVE_SESSIONS) {
@@ -181,16 +180,18 @@ export async function createSessionRows(ctx: MutationCtx, args: CreateSessionArg
       expirationTime: args.sessionExpirationTime,
       epoch,
     });
+    resolvedSessionExpirationTime = args.sessionExpirationTime;
   } else {
     const existingSession = await ctx.db.get("Session", sessionId);
     if (
       existingSession === null ||
       existingSession.userId !== user._id ||
-      existingSession.expirationTime <= Date.now() ||
-      getSessionEpoch(existingSession) !== epoch
+      existingSession.expirationTime <= now ||
+      existingSession.epoch !== epoch
     ) {
       return null;
     }
+    resolvedSessionExpirationTime = existingSession.expirationTime;
   }
 
   const refreshTokenId =
@@ -204,6 +205,7 @@ export async function createSessionRows(ctx: MutationCtx, args: CreateSessionArg
   const rows: SessionRows = {
     user,
     sessionId,
+    sessionExpirationTime: resolvedSessionExpirationTime,
     epoch,
   };
   if (refreshTokenId !== undefined) rows.refreshTokenId = refreshTokenId;
@@ -221,10 +223,9 @@ export const get = query({
 });
 
 /**
- * List at most {@link MAX_ACTIVE_SESSIONS} current, non-expired sessions.
- * Legacy rows without an epoch remain visible only while the user is still at
- * epoch zero; an epoch advance makes them inert and removes them from the
- * current-devices view without a migration.
+ * List at most {@link MAX_ACTIVE_SESSIONS} sessions from the user's current
+ * revocation epoch. Callers can compare `expirationTime` with their own clock
+ * when presenting a current-devices view.
  */
 export const list = query({
   args: { userId: v.id("User") },
@@ -232,25 +233,13 @@ export const list = query({
   handler: async (ctx, { userId }) => {
     const user = await ctx.db.get("User", userId);
     if (user === null) return [];
-    const now = Date.now();
-    const epoch = getSessionEpoch(user);
-    const current = await ctx.db
+    return await ctx.db
       .query("Session")
       .withIndex("user_id_epoch_expiration_time", (q) =>
-        q.eq("userId", userId).eq("epoch", epoch).gt("expirationTime", now),
+        q.eq("userId", userId).eq("epoch", user.sessionEpoch),
       )
       .order("desc")
       .take(MAX_ACTIVE_SESSIONS);
-    if (epoch !== 0 || current.length === MAX_ACTIVE_SESSIONS) return current;
-
-    const legacy = await ctx.db
-      .query("Session")
-      .withIndex("user_id_epoch_expiration_time", (q) =>
-        q.eq("userId", userId).eq("epoch", undefined).gt("expirationTime", now),
-      )
-      .order("desc")
-      .take(MAX_ACTIVE_SESSIONS - current.length);
-    return [...current, ...legacy];
   },
 });
 
@@ -276,6 +265,7 @@ export const create = mutation({
   returns: v.object({
     userId: v.id("User"),
     sessionId: v.id("Session"),
+    sessionExpirationTime: v.number(),
     refreshTokenId: v.optional(v.id("RefreshToken")),
     replacedSessionId: v.optional(v.id("Session")),
     epoch: v.number(),

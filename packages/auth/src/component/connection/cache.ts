@@ -24,7 +24,7 @@ import type { FunctionReference } from "convex/server";
 import { v, type Infer } from "convex/values";
 
 import { components, internal } from "../_generated/api";
-import { action, internalAction, mutation } from "../functions";
+import { action, internalAction, mutation } from "../_generated/server";
 import { assertSafeIdpFetchUrl, assertSafeIdpHost } from "../../shared/fetch/guard";
 
 /**

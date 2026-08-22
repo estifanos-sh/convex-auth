@@ -1,7 +1,8 @@
+import { paginationOptsValidator } from "convex/server";
 import { ConvexError, v } from "convex/values";
 import type { Doc } from "./_generated/dataModel";
 
-import { auth } from "./auth/core";
+import { auth } from "./auth";
 import { vAuthGroupId, vAuthUserId } from "./auth/ids";
 import { ErrorCode } from "./errors";
 import { authMutation, authQuery } from "./functions";
@@ -49,8 +50,14 @@ const vIssue = v.object({
   groupId: vAuthGroupId,
 });
 
+const DEFAULT_ISSUE_PAGE_SIZE = 50;
+const ISSUE_DELETE_COMMENT_LIMIT = 100;
+
 export const list = authQuery({
-  args: { projectId: v.id("projects") },
+  args: {
+    projectId: v.id("projects"),
+    paginationOpts: v.optional(paginationOptsValidator),
+  },
   returns: v.object({
     project: v.union(
       v.object({
@@ -67,10 +74,14 @@ export const list = authQuery({
       v.null(),
     ),
     issues: v.array(vIssue),
+    isDone: v.boolean(),
+    continueCursor: v.string(),
   }),
   handler: async (ctx, args) => {
     const project = await ctx.db.get(args.projectId);
-    if (!project) return { project: null, issues: [] };
+    if (!project) {
+      return { project: null, issues: [], isDone: true, continueCursor: "" };
+    }
     const userId = ctx.auth.userId;
 
     await auth.member.assert(ctx, {
@@ -79,10 +90,11 @@ export const list = authQuery({
       grants: ["projects.read"],
     });
 
-    const issues = await ctx.db
+    const result = await ctx.db
       .query("issues")
-      .withIndex("by_projectId", (q) => q.eq("projectId", project._id))
-      .take(200);
+      .withIndex("by_projectId_and_position", (q) => q.eq("projectId", project._id))
+      .paginate(args.paginationOpts ?? { numItems: DEFAULT_ISSUE_PAGE_SIZE, cursor: null });
+    const issues = result.page;
 
     const allUserIds = Array.from(
       new Set(
@@ -110,9 +122,9 @@ export const list = authQuery({
         issueCounter: project.issueCounter,
         openIssueCount: project.openIssueCount ?? 0,
       },
-      issues: [...issues]
-        .sort((a, b) => a.position - b.position)
-        .map((issue) => toIssueView(project, issue, userMap)),
+      issues: issues.map((issue) => toIssueView(project, issue, userMap)),
+      isDone: result.isDone,
+      continueCursor: result.continueCursor,
     };
   },
 });
@@ -239,6 +251,19 @@ export const update = authMutation({
     if (needsAssign) {
       const grant = args.patch.assigneeUserId !== userId ? "issues.assign" : "issues.move";
       await auth.member.assert(ctx, { userId, groupId: issue.groupId, grants: [grant] });
+      const assigneeUserId = args.patch.assigneeUserId;
+      if (assigneeUserId !== null && assigneeUserId !== undefined) {
+        const assignee = await auth.member.get(ctx, {
+          userId: assigneeUserId,
+          groupId: issue.groupId,
+        });
+        if (!assignee.membership) {
+          throw new ConvexError({
+            code: ErrorCode.INVALID_INPUT,
+            message: "Assignee must be a member of this group.",
+          });
+        }
+      }
     }
 
     const patch: Partial<
@@ -285,18 +310,17 @@ export const remove = authMutation({
       grants: ["issues.delete"],
     });
 
-    let batch = await ctx.db
+    const comments = await ctx.db
       .query("comments")
       .withIndex("by_issueId", (q) => q.eq("issueId", issue._id))
-      .take(200);
-    while (batch.length > 0) {
-      for (const comment of batch) await ctx.db.delete(comment._id);
-      if (batch.length < 200) break;
-      batch = await ctx.db
-        .query("comments")
-        .withIndex("by_issueId", (q) => q.eq("issueId", issue._id))
-        .take(200);
+      .take(ISSUE_DELETE_COMMENT_LIMIT + 1);
+    if (comments.length > ISSUE_DELETE_COMMENT_LIMIT) {
+      throw new ConvexError({
+        code: ErrorCode.INVALID_INPUT,
+        message: "Issue has too many comments to delete in one operation.",
+      });
     }
+    for (const comment of comments) await ctx.db.delete(comment._id);
 
     const isOpen = issue.status !== "done" && issue.status !== "cancelled";
     if (isOpen) {

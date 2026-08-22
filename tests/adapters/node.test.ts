@@ -100,19 +100,27 @@ type TestAuthApi<SignIn extends FunctionReference<"action", "public", any, any>>
   signIn: SignIn;
   signOut: FunctionReference<"action", "public", Record<string, Value>, unknown>;
 };
+type TestSignInArgs<Request> = {
+  request: Request;
+  verifier?: string;
+  continuation?: string;
+  calledBy?: string;
+};
 type TestSignInReference = FunctionReference<
   "action",
   "public",
-  | {
-      provider: "password";
-      params: {
-        flow: "signIn";
-        email: string;
-        password: string;
-      };
-    }
-  | { provider: "totp"; params?: TestParams }
-  | { provider: "device"; params?: TestParams },
+  TestSignInArgs<
+    | {
+        provider: "password";
+        params: {
+          flow: "signIn";
+          email: string;
+          password: string;
+        };
+      }
+    | { provider: "totp"; params?: TestParams }
+    | { provider: "device"; params?: TestParams }
+  >,
   unknown
 >;
 
@@ -232,16 +240,18 @@ test("password recovery automatically completes the returned passkey rotation", 
   type WebAuthnSignInReference = FunctionReference<
     "action",
     "public",
-    | {
-        provider: "password";
-        params: {
-          flow: "recover";
-          email: string;
-          code: string;
-          newPassword: string;
-        };
-      }
-    | { provider: "webauthn"; params?: TestParams },
+    TestSignInArgs<
+      | {
+          provider: "password";
+          params: {
+            flow: "recover";
+            email: string;
+            code: string;
+            newPassword: string;
+          };
+        }
+      | { provider: "webauthn"; params?: TestParams }
+    >,
     unknown
   >;
   const api: TestAuthApi<WebAuthnSignInReference> = {
@@ -277,10 +287,12 @@ test("password recovery automatically completes the returned passkey rotation", 
   expect(result).toEqual({ kind: "signedIn" });
   expect(calls).toHaveLength(2);
   expect(calls[1]).toMatchObject({
-    provider: "webauthn",
     verifier: "verifier",
     continuation: "continuation",
-    params: { flow: "verify", credentialId: "replacement-credential" },
+    request: {
+      provider: "webauthn",
+      params: { flow: "verify", credentialId: "replacement-credential" },
+    },
   });
 });
 

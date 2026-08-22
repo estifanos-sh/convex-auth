@@ -53,12 +53,10 @@ export async function signInViaMagicLink(
     }),
   );
 
-  await t.action(api.auth.signIn, { provider, params: { email } });
+  await t.action(api.auth.signIn, { request: { provider, params: { email } } });
   vi.unstubAllGlobals();
 
-  const result = await t.action(api.auth.signIn, {
-    params: { code },
-  });
+  const result = await t.action(api.auth.signIn, { request: { params: { code } } });
   return expectSignInSession(result);
 }
 

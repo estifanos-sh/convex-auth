@@ -34,16 +34,23 @@ import { auth } from "../auth";
 
 const convex = createBuilder<DataModel>();
 
-// auth.context() resolves { userId, user, groupId, role, grants }
-// and throws ConvexError if unauthenticated.
 const withRequiredAuth = convex.createMiddleware(async (ctx, next) => {
-  return next({ ...ctx, auth: await auth.context(ctx) });
+  const authState = await auth.context(ctx);
+  return next({ ...ctx, auth: authState });
 });
 
 export const query = convex.query().use(withRequiredAuth).extend(WithZod);
 export const mutation = convex.mutation().use(withRequiredAuth).extend(WithZod);
 export const internalMutation = convex.mutation().extend(WithZod);
 ```
+
+Leave the context type inferred inside the middleware. Do not reproduce or
+export its fields in a handwritten application interface: that loses branded
+IDs, extension types, and new snapshot fields as the package evolves. A
+protected request should resolve this snapshot once and reuse `ctx.auth.user`,
+`ctx.auth.groupId`, `ctx.auth.role`, and `ctx.auth.grants`; immediately calling
+the corresponding facade reads again repeats component work without making the
+authorization decision fresher.
 
 ## Usage
 
@@ -60,8 +67,6 @@ export const send = mutation
   })
   .public();
 ```
-
-This is app-specific code. The canonical `convex-auth` setup only needs:
 
 Keep `convex/convex.config.ts`, `convex/auth.ts`, `convex/auth.config.ts`, and
 `convex/http.ts` as ordinary Convex Auth integration files. Fluent Convex wraps

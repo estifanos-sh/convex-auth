@@ -593,7 +593,8 @@ test("headless client completes OAuth manually and returns cleanup URL", async (
   const storage = createMemoryStorage();
   const convex = createConvexMock();
   convex.action = vi.fn(async (_action: unknown, args: Record<string, unknown>) => {
-    if (args.provider === "google") {
+    const request = args.request as { provider?: string; params?: { code?: string } };
+    if (request.provider === "google") {
       return {
         kind: "redirect",
         redirect: "https://example.com/oauth/google",
@@ -601,7 +602,7 @@ test("headless client completes OAuth manually and returns cleanup URL", async (
       };
     }
 
-    if ((args.params as { code?: string } | undefined)?.code === "oauth-code") {
+    if (request.params?.code === "oauth-code") {
       expect(args.verifier).toBe("oauth-verifier");
       return {
         kind: "signedIn",

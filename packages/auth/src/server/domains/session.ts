@@ -76,7 +76,10 @@ export function createSessionDomain(deps: SessionDeps) {
      * if (!session) throw new Error("Session not found");
      * ```
      */
-    get: async (ctx: ComponentReadCtx, opts: { id: string }): Promise<Doc<"Session"> | null> => {
+    get: async (
+      ctx: ComponentReadCtx,
+      opts: { id: GenericId<"Session"> },
+    ): Promise<Doc<"Session"> | null> => {
       return (await cached(ctx, `session:${opts.id}`, () =>
         ctx.runQuery(config.component.session.get, {
           id: opts.id,
@@ -101,8 +104,9 @@ export function createSessionDomain(deps: SessionDeps) {
     /**
      * List a bounded set of sessions belonging to a user.
      *
-     * Returns at most 16 non-expired sessions in the user's current epoch.
-     * It is suitable for a current-devices UI, not an unbounded audit history.
+     * Returns at most 16 sessions in the user's current revocation epoch. The
+     * result includes `expirationTime` so a UI can compare it with the client
+     * clock without making a cached Convex query depend on wall-clock time.
      *
      * @param ctx - Convex query or mutation context.
      * @param opts.userId - The user whose sessions to list.
@@ -114,7 +118,10 @@ export function createSessionDomain(deps: SessionDeps) {
      * console.log(`User has ${sessions.length} sessions`);
      * ```
      */
-    list: async (ctx: ComponentReadCtx, opts: { userId: string }): Promise<Doc<"Session">[]> => {
+    list: async (
+      ctx: ComponentReadCtx,
+      opts: { userId: GenericId<"User"> },
+    ): Promise<Doc<"Session">[]> => {
       return (await ctx.runQuery(config.component.session.list, {
         userId: opts.userId,
       })) as Doc<"Session">[];

@@ -1,6 +1,6 @@
 import { ConvexError, v, type GenericId } from "convex/values";
 
-import { auth } from "./auth/core";
+import { auth } from "./auth";
 import { vAuthApiKeyId } from "./auth/ids";
 import { ErrorCode } from "./errors";
 import { authUserMutation, authUserQuery } from "./functions";

@@ -9,11 +9,12 @@ Convex Auth is an authentication and authorization component for Convex applicat
 
 ## What Convex Auth provides
 
-- server APIs for users, sessions, accounts, factors, groups, members, invites, and keys
-- browser, React, Svelte, Expo, and server-rendering clients
-- password, OAuth, email, phone, passkey, TOTP, and anonymous sign-in flows
-- OIDC, SAML, SCIM, connection policy, audit, and webhook support
-- typed configuration, errors, events, and return values
+Convex Auth provides one system for users, sessions, accounts, factors, groups,
+members, invites, and keys. The same identity works through browser, React,
+Svelte, Expo, and server-rendered clients. Password, OAuth, email, phone,
+passkey, TOTP, anonymous, OIDC, SAML, and SCIM flows all resolve through the
+same account and session model, with typed configuration, errors, events, and
+return values at the application boundary.
 
 ## How it fits into a Convex application
 

@@ -37,9 +37,7 @@ import { createExpoWebAuthnClient } from "./webauthn";
  * @typeParam Api - An AuthApiRefs type that controls which factor helpers are
  *   available on the returned client.
  */
-export interface ExpoClientOptions<
-  Api extends AuthApiRefs = AuthApiRefs,
-> extends ClientOptions<Api> {
+export type ExpoClientOptions<Api extends AuthApiRefs = AuthApiRefs> = ClientOptions<Api> & {
   /**
    * Expo auth-session options. `redirectUri` overrides the auto-derived
    * redirect URI; `preferEphemeralSession` requests a private browser session.
@@ -48,7 +46,7 @@ export interface ExpoClientOptions<
     redirectUri?: string;
     preferEphemeralSession?: boolean;
   };
-}
+};
 
 export type { PlatformAuthClient as AuthClient } from "../client/index";
 
@@ -98,28 +96,38 @@ export function client<Api extends AuthApiRefs = AuthApiRefs>(
   options: ExpoClientOptions<Api>,
 ): PlatformAuthClient<Api> {
   if (isWebRuntime()) {
-    return createBrowserClient(options) as PlatformAuthClient<Api>;
+    return createBrowserClient<Api>(options);
   }
 
-  const proxyMode = options.proxyPath !== undefined;
-  const url = proxyMode ? undefined : (options.url ?? resolveUrl(options.convex));
   const redirectUri = resolveRedirectUri(options.authSession);
+  const runtime = mergeExpoRuntime(options.runtime, {
+    redirectUri,
+    preferEphemeralSession: options.authSession?.preferEphemeralSession,
+    proxyMode: options.proxyPath !== undefined,
+  });
+  const adapterFactories = {
+    ...options.adapterFactories,
+    webauthn: options.adapterFactories?.webauthn ?? ((deps) => createExpoWebAuthnClient(deps)),
+  };
 
-  return createClient({
+  if (options.proxyPath !== undefined) {
+    return createClient<Api>({
+      ...options,
+      oauthRedirectTo: options.oauthRedirectTo ?? redirectUri,
+      storage: options.storage ?? null,
+      runtime,
+      adapterFactories,
+    }) as unknown as PlatformAuthClient<Api>;
+  }
+
+  const url = options.url ?? resolveUrl(options.convex);
+  return createClient<Api>({
     ...options,
     oauthRedirectTo: options.oauthRedirectTo ?? redirectUri,
-    storage: options.storage === undefined && proxyMode ? null : options.storage,
-    runtime: mergeExpoRuntime(options.runtime, {
-      redirectUri,
-      preferEphemeralSession: options.authSession?.preferEphemeralSession,
-      proxyMode,
-    }),
-    adapterFactories: {
-      ...options.adapterFactories,
-      webauthn: options.adapterFactories?.webauthn ?? ((deps) => createExpoWebAuthnClient(deps)),
-    },
-    httpClient: proxyMode ? null : (options.httpClient ?? (url ? new ConvexHttpClient(url) : null)),
-  }) as PlatformAuthClient<Api>;
+    runtime,
+    adapterFactories,
+    httpClient: options.httpClient ?? new ConvexHttpClient(url),
+  }) as unknown as PlatformAuthClient<Api>;
 }
 
 function isWebRuntime() {

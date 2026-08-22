@@ -16,13 +16,15 @@ import { ErrorCode } from "../shared/codes";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
-import { internalMutation, mutation, query } from "./functions";
+import { assertBatchSelectorSize } from "./batch";
+import { vGroupDoc } from "./documents";
+import { internalMutation, mutation, query } from "./_generated/server";
 import schema from "./schema";
-import { vGroupConnectionPolicy, vGroupDoc, vPaginated } from "./model";
+import { vGroupConnectionPolicy, vPaginated } from "./model";
 
 /**
  * Read a group by `id`, or batch-read by `ids` (result aligned to input
- * order, with `null` for missing ids and duplicates preserved).
+ * order, with `null` for missing ids and duplicates preserved; at most 100 IDs).
  */
 export const get = query({
   args: {
@@ -32,6 +34,7 @@ export const get = query({
   returns: v.union(vGroupDoc, v.null(), v.array(v.union(vGroupDoc, v.null()))),
   handler: async (ctx, args) => {
     if (args.ids !== undefined) {
+      assertBatchSelectorSize(args.ids, "ids");
       if (args.ids.length === 0) return [];
       const unique = Array.from(new Set(args.ids));
       const docs = await Promise.all(unique.map((id) => ctx.db.get("Group", id)));

@@ -156,7 +156,7 @@ async function refreshSessionIfNeeded(client: ConvexHttpClient) {
     return session;
   }
   const result = await client.action(api.auth.signIn, {
-    refreshToken: session.refreshToken,
+    request: { refreshToken: session.refreshToken },
   });
   if (isSignedInResult(result) && result.session) {
     await writeStoredSession(result.session);
@@ -179,7 +179,7 @@ async function doAuthLogin() {
   const s = p.spinner();
   s.start("Starting device login...");
   const result = await client.action(api.auth.signIn, {
-    provider: "device",
+    request: { provider: "device" },
   });
   if (!isRecord(result) || result.kind !== "deviceCode" || !isDeviceCodeResult(result.deviceCode)) {
     s.stop("Failed.");
@@ -207,8 +207,10 @@ async function doAuthLogin() {
     await sleep(code.interval * 1000);
     try {
       const pollResult = await client.action(api.auth.signIn, {
-        provider: "device",
-        params: { flow: "poll", deviceCode: code.deviceCode },
+        request: {
+          provider: "device",
+          params: { flow: "poll", deviceCode: code.deviceCode },
+        },
       });
       if (isSignedInResult(pollResult) && pollResult.session) {
         await writeStoredSession(pollResult.session);

@@ -14,8 +14,10 @@ afterEach(() => {
 
 async function setupAdminMember(t: ReturnType<typeof convexTest>) {
   const signUp = await t.action(api.auth.signIn, {
-    provider: "password",
-    params: { email: "admin@example.com", password: "44448888", flow: "signUp" },
+    request: {
+      provider: "password",
+      params: { email: "admin@example.com", password: "44448888", flow: "signUp" },
+    },
   });
   if (signUp.kind !== "signedIn") {
     throw new Error("Expected password signUp to return a session");

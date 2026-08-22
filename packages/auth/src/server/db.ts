@@ -101,6 +101,7 @@ export function authDb(ctx: ComponentRunContext, config: AuthComponentBoundaryCo
         runMutation(ctx, component.session.create, args) as Promise<{
           userId: GenericId<"User">;
           sessionId: GenericId<"Session">;
+          sessionExpirationTime: number;
           refreshTokenId?: GenericId<"RefreshToken">;
           replacedSessionId?: GenericId<"Session">;
           epoch: number;
@@ -139,7 +140,10 @@ export function authDb(ctx: ComponentRunContext, config: AuthComponentBoundaryCo
           expirationTime,
         }),
       get: (args: { id: string } | { signature: string }) =>
-        runQuery(ctx, component.token.pkce.get, args) as Promise<Doc<"AuthVerifier"> | null>,
+        runQuery(ctx, component.token.pkce.get, {
+          selector: args,
+          now: Date.now(),
+        }) as Promise<Doc<"AuthVerifier"> | null>,
       update: (verifierId: string, data: Record<string, unknown>) =>
         runMutation(ctx, component.token.pkce.update, { id: verifierId, patch: data }),
       delete: (verifierId: string) =>
@@ -188,6 +192,7 @@ export function authDb(ctx: ComponentRunContext, config: AuthComponentBoundaryCo
               userId: string;
               user: Doc<"User">;
               sessionId: string;
+              sessionExpirationTime: number;
               refreshTokenId: string;
               epoch: number;
             }
