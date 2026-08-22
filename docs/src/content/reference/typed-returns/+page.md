@@ -18,9 +18,9 @@ matching document types.
 
 The facade reads are fully typed end to end: `auth.user.list` returns a
 Convex-native `PaginationResult<Doc<"User">>` (`{ page, isDone, continueCursor }`)
-and `auth.user.get` / `auth.user.viewer` return `Doc<"User"> | null` — no
-casts required. The pagination shape matches what `usePaginatedQuery` from
-`convex/react` expects, so list queries can be passed directly to the hook.
+and `auth.user.get` returns `Doc<"User"> | null` — no casts required. The
+pagination shape matches what `usePaginatedQuery` from `convex/react` expects,
+so list queries can be passed directly to the hook.
 
 ## `auth.v.*`
 
@@ -49,44 +49,37 @@ import { authQuery } from "./functions";
 import { auth } from "./auth";
 
 export const viewer = authQuery({
-  returns: auth.v.viewer,
-  handler: (ctx) => ctx.auth.user.viewer(ctx),
+  returns: auth.v.user,
+  handler: (ctx) => ctx.auth.user,
 });
 
 export const users = authQuery({
   returns: auth.v.list(auth.v.user),
-  handler: (ctx) => ctx.auth.user.list(ctx),
+  handler: (ctx) =>
+    auth.user.list(ctx, {
+      paginationOpts: { cursor: null, numItems: 25 },
+    }),
 });
 ```
 
 ## Composing richer reads
 
-There is no bespoke "viewer with groups" helper — compose the existing
-`auth.user.viewer`, `auth.member.list`, and `auth.group.get` facade methods
-and build the `returns:` validator from the building blocks.
+`auth.ctx()` already reads the current user, current session, active
+membership, active group, role, and grants in one component snapshot. Return
+`ctx.auth.user` for a viewer query and use `ctx.auth.groupId`, `ctx.auth.role`,
+or `ctx.auth.grants` for the active authorization state. Calling
+`auth.user.viewer`, `auth.group.active.get`, or `auth.member.get` immediately
+afterward repeats component work without making the decision more current.
+
+Use an explicit facade read only when the requested data is outside that
+snapshot, such as a paginated membership directory or a group selected by an
+administrator. Compose the matching `auth.v` validators at that boundary:
 
 ```ts
-export const groups = authQuery({
-  returns: v.union(
-    v.object({
-      ...auth.v.user.fields,
-      memberships: v.array(auth.v.member),
-      groups: v.array(auth.v.group),
-    }),
-    v.null(),
-  ),
-  handler: async (ctx) => {
-    const me = await ctx.auth.user.viewer(ctx);
-    if (me === null) return null;
-    const { page: memberships } = await ctx.auth.member.list(ctx, {
-      where: { userId: me._id },
-    });
-    const groups = await ctx.auth.group.get(
-      ctx,
-      memberships.map((m) => m.groupId),
-    );
-    return { ...me, memberships, groups };
-  },
+export const group = authQuery({
+  args: { id: v.id("Group") },
+  returns: v.union(auth.v.group, v.null()),
+  handler: (ctx, args) => auth.group.get(ctx, { id: args.id }),
 });
 ```
 

@@ -66,6 +66,23 @@ the configured provider IDs and their validated parameter objects. Passing it
 directly to the client preserves that information without a manual client type
 or API-reference annotation.
 
+```ts
+// src/auth-client.ts
+import { client } from "@estifanos-sh/convex-auth/browser";
+import { ConvexReactClient } from "convex/react";
+import { api } from "../convex/_generated/api";
+
+const convex = new ConvexReactClient(import.meta.env.VITE_CONVEX_URL);
+
+export const authClient = client({ convex, api: api.auth });
+```
+
+There is deliberately no `InferClientApi`, generic argument, or assertion in
+this setup. The exported Convex actions are the complete contract between the
+application and the client. Keep one app-owned client instance and pass it to
+your framework bindings; it automatically continues redirects and typed
+provider ceremonies, including a recovery passkey rotation.
+
 ## Protect application functions
 
 Create the lightweight context once and use it to define the builders for

@@ -1,26 +1,19 @@
-## Features
+## What it provides
 
-- **Every auth method** — Password, Google/GitHub/Apple/Microsoft OAuth, magic
-  links, passkeys, TOTP, anonymous, phone, device flow (RFC 8628)
-- **Group SSO** — OIDC, SAML 2.0, SCIM 2.0 via the `auth.connection.*` admin
-  facade
-- **API keys** — Scoped permissions, per-key rate limiting, rotation, SHA-256
-  hashing
-- **Groups and memberships** — Hierarchical groups, permissions, grants, roles,
-  invites, cascade operations
-- **SSR** — Cookie-based auth for SvelteKit, TanStack Start, Next.js
-- **Multi-access** — `auth.ctx()`, `auth.context(ctx)`, and
-  `auth.request.context(ctx, request)` cover app, imperative, and raw HTTP auth
-- **Convex component** — Isolated tables, typed helpers, zero-config defaults
+Convex Auth brings passwords, OAuth, magic links, passkeys, TOTP, anonymous
+access, phone, and device flow into one user and session lifecycle. It also
+provides group memberships and permissions, OIDC/SAML/SCIM connection
+administration, API keys, and SSR integrations without requiring application
+code to build a second authentication system.
 
-## vNext preview
+## Current API
 
-The vNext docs use the new Convex-native setup vocabulary:
+The current API uses Convex-native setup vocabulary:
 `defineAuth`, `definePermissions`, `permissions`, `grants`, object args,
-native Convex pagination, typed app env via `authEnv`, and a flat group
+native Convex pagination, application-owned provider environment values, and a flat group
 connection (SSO) admin facade `auth.connection.*`. See
-[`packages/auth/MIGRATION-vNext.md`](./packages/auth/MIGRATION-vNext.md) for the
-target shape and migration notes.
+[`packages/auth/MIGRATION-vNext.md`](./packages/auth/MIGRATION-vNext.md) for
+the breaking-change migration notes.
 
 ## API design
 
@@ -67,7 +60,7 @@ shape contract.
 
 | Import path                                              | Use                                                                                                                         |
 | -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| `@estifanos-sh/convex-auth/server`                       | Backend: `defineAuth`, the `auth.*` facade, `authEnv`, `authEvents`, and HTTP route helpers                                 |
+| `@estifanos-sh/convex-auth/server`                       | Backend: `defineAuth`, the `auth.*` facade, `authEvents`, and HTTP route helpers                                            |
 | `@estifanos-sh/convex-auth/convex.config`                | The component definition for `app.use(auth)` in `convex.config.ts`                                                          |
 | `@estifanos-sh/convex-auth/permissions`                  | `definePermissions` and the grant/role types                                                                                |
 | `@estifanos-sh/convex-auth/providers` (+ `/providers/*`) | Auth providers: `password`, `google`, `github`, `apple`, `microsoft`, `webauthn`, `totp`, `anonymous`, `email`, `device`, … |

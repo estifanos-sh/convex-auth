@@ -690,9 +690,8 @@ async function configureConvexConfig(config: ProjectConfig) {
   const sourceTemplate = `\
 import { defineApp } from "convex/server";
 import auth from "@estifanos-sh/convex-auth/convex.config";
-import { authEnv } from "@estifanos-sh/convex-auth/server";
 
-const app = defineApp({ env: authEnv });
+const app = defineApp();
 
 app.use(auth);
 

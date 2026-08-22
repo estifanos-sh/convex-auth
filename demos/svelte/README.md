@@ -1,8 +1,7 @@
 # convex-auth Svelte demo
 
-The live demo for `@estifanos-sh/convex-auth`, served at
-[estifanos.sh/convex-auth/demo/](https://estifanos.sh/convex-auth/demo/).
-It is a SvelteKit static SPA backed by the repository's root Convex deployment.
+This SvelteKit static SPA exercises `@estifanos-sh/convex-auth` against the
+repository's Convex backend.
 
 ## Work locally
 
@@ -23,8 +22,7 @@ vp run check:demo
 vp run build:demo
 ```
 
-The app uses `/demo` as its SvelteKit base path so the documentation and demo
-can share one Convex static-hosting origin.
+The app uses `/demo` as its SvelteKit base path.
 
 ## Deploy
 
@@ -32,5 +30,8 @@ can share one Convex static-hosting origin.
 vp run deploy:demo
 ```
 
-This deploys the production Convex backend and uploads `demos/svelte/build` to
-Convex static hosting. Use `vp run deploy:demo:dev` for a development upload.
+The GitHub workflow is manual-only and uses the isolated `demo` environment.
+Configure that environment with a deploy key for a dedicated Convex project
+before running it. The estifanos.sh landing/docs deployment is a different
+project and must never be used for this demo. Use `vp run deploy:demo:dev` for a
+development upload.

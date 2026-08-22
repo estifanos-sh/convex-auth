@@ -48,19 +48,19 @@ export default {
 
 ## Application-owned environment
 
-Provider credentials and delivery-service secrets are not part of `authEnv`.
-Declare them in your app and pass them explicitly to the provider that consumes
-them:
+Provider credentials and delivery-service secrets belong to the application.
+Declare the values your application actually uses and pass each one to the
+provider that consumes it. Convex Auth does not reserve a second set of
+prefixed credential names and does not configure Resend, Twilio, or another
+delivery service for you:
 
 ```ts
 // convex/convex.config.ts
-import { authEnv } from "@estifanos-sh/convex-auth/server";
 import { defineApp } from "convex/server";
 import { v } from "convex/values";
 
 export default defineApp({
   env: {
-    ...authEnv,
     GITHUB_CLIENT_ID: v.string(),
     GITHUB_CLIENT_SECRET: v.string(),
     RESEND_API_KEY: v.string(),

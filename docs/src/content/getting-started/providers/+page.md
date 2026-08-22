@@ -27,9 +27,9 @@ convex-auth currently ships first-party OAuth wrappers for Google, GitHub,
 Apple, and Microsoft. Each wrapper owns the provider defaults and automatically
 derives the callback URL from `CONVEX_SITE_URL` unless you override it.
 These examples use application-owned environment names. Declare the values in
-your own `defineApp({ env: { ...authEnv, ... } })` definition and import the
-generated `env` from `./_generated/server`. Convex Auth does not read or reserve
-provider credential names.
+your own `defineApp({ env: { ... } })` definition and import the generated
+`env` from `./_generated/server`. Convex Auth does not read or reserve provider
+credential names.
 
 ```ts
 import { defineAuth } from "@estifanos-sh/convex-auth/server";
@@ -64,7 +64,7 @@ defineAuth(components.auth, {
     microsoft({
       tenant: env.MICROSOFT_TENANT_ID,
       clientId: env.MICROSOFT_CLIENT_ID,
-      clientSecret: env.MICROSOFT_CLIENT_SECRET!,
+      clientSecret: env.MICROSOFT_CLIENT_SECRET,
     }),
   ],
 });
@@ -181,7 +181,7 @@ defineAuth(components.auth, {
     microsoft({
       tenant: env.MICROSOFT_TENANT_ID,
       clientId: env.MICROSOFT_CLIENT_ID,
-      clientSecret: env.MICROSOFT_CLIENT_SECRET!,
+      clientSecret: env.MICROSOFT_CLIENT_SECRET,
     }),
   ],
 });
@@ -200,8 +200,8 @@ defineAuth(components.auth, {
   providers: [
     custom({
       id: "discord",
-      clientId: env.AUTH_DISCORD_ID!,
-      clientSecret: env.AUTH_DISCORD_SECRET!,
+      clientId: env.DISCORD_CLIENT_ID,
+      clientSecret: env.DISCORD_CLIENT_SECRET,
       scopes: ["identify", "email"],
       authorization: {
         url: "https://discord.com/oauth2/authorize",

@@ -34,13 +34,10 @@ The `auth.connection.*` namespace is the canonical server-side group SSO facade.
 If your app wants a client-callable group SSO management API, expose it
 explicitly from your Convex app. See the [Group SSO RPC guide](/connection/rpc/).
 
-> **Server facade vs app-owned RPC**
->
-> - `auth.connection.*` is the server-side facade namespace for Convex code.
-> - `api.auth.group.*` is optional public RPC only after you expose app-owned
->   group SSO wrappers.
-> - The frontend auth client only needs `api.auth.signIn` and
->   `api.auth.signOut`.
+`auth.connection.*` is the server-side facade namespace for Convex code.
+`api.auth.group.*` exists only after the application exposes its own group SSO
+wrappers, and the frontend auth client itself needs only `api.auth.signIn` and
+`api.auth.signOut`.
 
 For the common case, create a single app-owned file such as
 `convex/auth/group.ts` and export the group SSO functions your app needs. Each
@@ -75,9 +72,10 @@ export const setOidc = authMutation({
   args: { connectionId: v.string(), discovery: v.any(), client: v.any() },
   handler: async (ctx, args) => {
     const connection = await auth.connection.get(ctx, { id: args.connectionId });
+    if (connection === null) throw new Error("Connection not found.");
     await auth.member.assert(ctx, {
       userId: ctx.auth.userId,
-      groupId: connection!.groupId,
+      groupId: connection.groupId,
       grants: ["connection.protocol.manage"],
     });
     return auth.connection.oidc.upsert(ctx, args);

@@ -3,11 +3,6 @@ title: Fluent Convex
 description: Optional app-side middleware patterns with fluent-convex.
 ---
 
-<script>
-  import Tabs from '$lib/components/docs/Tabs.svelte';
-  import TabItem from '$lib/components/docs/TabItem.svelte';
-</script>
-
 <svelte:head>
 
   <title>Fluent Convex - convex-auth</title>
@@ -16,35 +11,17 @@ description: Optional app-side middleware patterns with fluent-convex.
 # Fluent Convex
 
 This is an optional pattern for apps that want app-side Convex middleware on top
-of the minimal auth setup. You do not need this to use `convex-auth`.
+of the minimal auth setup. You do not need this to use `convex-auth`; use the
+shared `auth.ctx()` builder from the installation guide unless fluent-convex is
+already an application convention.
 
 If you do want custom app helpers,
 [`fluent-convex`](https://www.npmjs.com/package/fluent-convex) keeps auth
 middleware concise and explicit.
 
-<Tabs syncKey="pkg">
-  <TabItem label="npm">
-
 ```bash
 npm install fluent-convex zod
 ```
-
-  </TabItem>
-  <TabItem label="pnpm">
-
-```bash
-pnpm add fluent-convex zod
-```
-
-  </TabItem>
-  <TabItem label="yarn">
-
-```bash
-yarn add fluent-convex zod
-```
-
-  </TabItem>
-</Tabs>
 
 ## Setup
 

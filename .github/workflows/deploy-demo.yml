@@ -7,25 +7,15 @@ on:
         description: "Git ref to deploy. Defaults to the current branch."
         required: false
         type: string
-  push:
-    branches:
-      - main
-    paths:
-      - "convex/**"
-      - "demos/svelte/**"
-      - "packages/auth/**"
-      - "package.json"
-      - "pnpm-lock.yaml"
-      - ".github/workflows/deploy-demo.yml"
 
 concurrency:
-  group: deploy-demo-${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref }}
+  group: convex-auth-demo
   cancel-in-progress: true
 
 jobs:
   deploy-demo:
     runs-on: ubuntu-latest
-    environment: production
+    environment: demo
     permissions:
       contents: read
 

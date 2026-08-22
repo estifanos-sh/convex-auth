@@ -77,21 +77,20 @@ export const permissions = definePermissions({
 });
 ```
 
-Pass the same `permissions` value to `defineAuth` and `createAuthContext`. Before
-a protected group operation, assert the exact grant it requires.
+Pass the same `permissions` value to `defineAuth`. Before a protected group
+operation, assert the exact grant against the context snapshot that already
+resolved the active membership. This avoids a second user, active-group, or
+membership lookup in every handler.
 
 ```ts
-await auth.member.assert(ctx, {
-  userId: ctx.auth.userId,
-  groupId: args.groupId,
-  grants: ["projects.create"],
-});
+ctx.auth.assert("projects.create", project);
 ```
 
-Use `auth.member.get` for a direct membership. Use
-`auth.member.resolve` only when the application deliberately supports inherited
-membership through nested groups. The explicit name makes a potentially broader
-authorization lookup visible at the call site.
+Use `auth.member.get` for an explicit direct-membership read outside the active
+context, such as an administration screen. Use `auth.member.resolve` only when
+the application deliberately supports inherited membership through nested
+groups. The explicit name makes a potentially broader authorization lookup
+visible at the call site.
 
 ## Profiles are not identities
 

@@ -24,8 +24,6 @@ export type {
   UserDoc,
 } from "./auth";
 export { createAuthValidators } from "./validators";
-export { authEnv } from "./env";
-export type { AuthEnv } from "./env";
 export type { AuthComponentApi } from "./component/api";
 export { authEvents } from "./events";
 export type {

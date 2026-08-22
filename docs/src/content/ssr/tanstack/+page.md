@@ -25,7 +25,10 @@ import { server } from "@estifanos-sh/convex-auth/server";
 import { createServerFn } from "@tanstack/start";
 import { getRequest, setCookie } from "@tanstack/start/server";
 
-const auth = server({ url: process.env.CONVEX_URL! });
+const convexUrl = process.env.CONVEX_URL;
+if (convexUrl === undefined) throw new Error("CONVEX_URL is required.");
+
+const auth = server({ url: convexUrl });
 
 export const getAuthToken = createServerFn("GET", async () => {
   const request = getRequest();
@@ -85,7 +88,10 @@ import { server } from "@estifanos-sh/convex-auth/server";
 import { createServerFn } from "@tanstack/start";
 import { getRequest } from "@tanstack/start/server";
 
-const auth = server({ url: process.env.CONVEX_URL! });
+const convexUrl = process.env.CONVEX_URL;
+if (convexUrl === undefined) throw new Error("CONVEX_URL is required.");
+
+const auth = server({ url: convexUrl });
 
 export const authProxy = createServerFn("POST", async () => {
   const request = getRequest();
