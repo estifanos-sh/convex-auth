@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import process from "node:process";
@@ -41,43 +42,30 @@ function getPackageVersion(): string {
 
 const version = getPackageVersion();
 
-type PackageRunner = { cmd: string; args: string[] };
-
-function detectPackageRunner(): PackageRunner {
-  let dir = process.cwd();
-  const root = path.parse(dir).root;
-
-  while (dir !== root) {
-    const pkgPath = path.join(dir, "package.json");
-    if (existsSync(pkgPath)) {
-      try {
-        const pkg = JSON.parse(readFileSync(pkgPath, "utf-8"));
-        if (typeof pkg.packageManager === "string") {
-          const name = pkg.packageManager.split("@")[0];
-          if (name === "pnpm") return { cmd: "pnpm", args: ["exec"] };
-          if (name === "bun") return { cmd: "bunx", args: [] };
-          if (name === "yarn") return { cmd: "yarn", args: ["dlx"] };
-        }
-      } catch {
-        /* empty */
-      }
-    }
-
-    if (existsSync(path.join(dir, "pnpm-lock.yaml"))) return { cmd: "pnpm", args: ["exec"] };
-    if (existsSync(path.join(dir, "bun.lockb")) || existsSync(path.join(dir, "bun.lock")))
-      return { cmd: "bunx", args: [] };
-    if (existsSync(path.join(dir, "yarn.lock"))) return { cmd: "yarn", args: ["dlx"] };
-
-    dir = path.dirname(dir);
+/** @internal */
+export function convexCmd(...subArgs: string[]): { file: string; args: string[] } {
+  const requireFromProject = createRequire(path.join(process.cwd(), "package.json"));
+  let packagePath: string;
+  try {
+    packagePath = requireFromProject.resolve("convex/package.json");
+  } catch {
+    throw new Error(
+      'Could not find the project-local "convex" package. Install Convex in this project before running convex-auth.',
+    );
   }
 
-  return { cmd: "npx", args: [] };
-}
+  const packageJson = JSON.parse(readFileSync(packagePath, "utf-8")) as {
+    bin?: string | Record<string, string>;
+  };
+  const bin = typeof packageJson.bin === "string" ? packageJson.bin : packageJson.bin?.convex;
+  if (!bin) {
+    throw new Error('The installed "convex" package does not expose a convex CLI executable.');
+  }
 
-const runner = detectPackageRunner();
-
-function convexCmd(...subArgs: string[]): { file: string; args: string[] } {
-  return { file: runner.cmd, args: [...runner.args, "convex", ...subArgs] };
+  return {
+    file: process.execPath,
+    args: [path.resolve(path.dirname(packagePath), bin), ...subArgs],
+  };
 }
 
 type DeploymentOptions = {

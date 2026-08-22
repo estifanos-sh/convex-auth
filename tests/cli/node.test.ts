@@ -1,4 +1,5 @@
 import {
+  convexCmd,
   readConvexDeployment,
   deploymentTypeFromAdminKey,
   doesAlreadyMatchTemplate,
@@ -37,6 +38,14 @@ test("templateToSource strips $$ markers", () => {
   const result = templateToSource(template);
   expect(result).toBe("const config = {\n  providers: [],\n};");
   expect(result).not.toContain("$$");
+});
+
+test("convexCmd launches the project-local Convex CLI without a package manager", () => {
+  const command = convexCmd("env", "get", "APP_URL");
+
+  expect(command.file).toBe(process.execPath);
+  expect(command.args[0]).toMatch(/[/\\]convex[/\\]bin[/\\]main\.js$/);
+  expect(command.args.slice(1)).toEqual(["env", "get", "APP_URL"]);
 });
 
 test("templateToSource returns unchanged string when no $$ markers", () => {
