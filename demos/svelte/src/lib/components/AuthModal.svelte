@@ -104,7 +104,9 @@
 		let shouldFallbackToPassword = false;
 
 		try {
-			const ssoInfo = await convexClient.query(api.auth.group.signInLookup, { email });
+			const ssoInfo = await convexClient.query(api.auth.group.signInLookup, {
+				selector: { email },
+			});
 			if (!ssoInfo) {
 				shouldFallbackToPassword = true;
 			} else {
