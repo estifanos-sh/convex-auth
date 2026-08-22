@@ -9,7 +9,7 @@ import { Doc, MutationCtx } from "../types";
 import { withSpan } from "../utils/span";
 import { AUTH_STORE_REF } from "./store/refs";
 
-export const vRetrieveAccountWithCredentialsArgs = v.object({
+export const vGetAccountWithCredentialsArgs = v.object({
   provider: v.string(),
   account: v.object({ id: v.string(), secret: v.optional(v.string()) }),
 });
@@ -20,15 +20,15 @@ type ReturnType =
   | "InvalidSecret"
   | { account: Doc<"Account">; user: Doc<"User"> };
 
-export async function retrieveAccountWithCredentialsImpl(
+export async function getAccountWithCredentialsImpl(
   ctx: MutationCtx,
-  args: Infer<typeof vRetrieveAccountWithCredentialsArgs>,
+  args: Infer<typeof vGetAccountWithCredentialsArgs>,
   getProviderOrThrow: Provider.GetProviderOrThrowFunc,
   config: Provider.Config,
 ): Promise<ReturnType> {
   const { provider: providerId, account } = args;
   const limitIdentifier = credentialsSignInLimitIdentifier(providerId, account.id);
-  log(LOG_LEVELS.DEBUG, "retrieveAccountWithCredentialsImpl args:", {
+  log(LOG_LEVELS.DEBUG, "getAccountWithCredentialsImpl args:", {
     provider: providerId,
     account: { id: account.id, secret: maybeRedact(account.secret ?? "") },
   });
@@ -79,13 +79,13 @@ export async function retrieveAccountWithCredentialsImpl(
   }
 }
 
-export const callRetrieveAccountWithCredentials = async <DataModel extends GenericDataModel>(
+export const callGetAccountWithCredentials = async <DataModel extends GenericDataModel>(
   ctx: GenericActionCtx<DataModel>,
-  args: Infer<typeof vRetrieveAccountWithCredentialsArgs>,
+  args: Infer<typeof vGetAccountWithCredentialsArgs>,
 ): Promise<ReturnType> => {
   return ctx.runMutation(AUTH_STORE_REF, {
     args: {
-      type: "retrieveAccountWithCredentials",
+      type: "getAccountWithCredentials",
       ...args,
     },
   }) as Promise<ReturnType>;

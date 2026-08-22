@@ -43,17 +43,17 @@ for explicit or self-hosted targets.
 
 ## Options
 
-| Option                     | Description                                               |
-| -------------------------- | --------------------------------------------------------- |
-| `--app-url <url>`          | Value for `APP_URL`; avoids interactive prompt            |
-| `--prod`                   | Target production deployment                              |
-| `--preview-name <name>`    | Target preview deployment                                 |
-| `--deployment-name <name>` | Target specific named deployment                          |
-| `--url <url>`              | Target deployment by explicit URL or self-hosted endpoint |
-| `--admin-key <key>`        | Use explicit admin key (typed for Convex Cloud)           |
-| `--variables <json>`       | Additional variables for configuration                    |
-| `--skip-git-check`         | Skip the "outside Git repo" warning                       |
-| `--allow-dirty-git-state`  | Skip all source-control checks                            |
+| Option                    | Description                                               |
+| ------------------------- | --------------------------------------------------------- |
+| `--app-url <url>`         | Value for `APP_URL`; avoids interactive prompt            |
+| `--prod`                  | Target production deployment                              |
+| `--deployment <selector>` | Target a named deployment or Convex deployment selector   |
+| `--url <url>`             | Target deployment by explicit URL or self-hosted endpoint |
+| `--site-url <url>`        | Set the HTTP actions URL when it cannot be derived        |
+| `--admin-key <key>`       | Use explicit admin key (typed for Convex Cloud)           |
+| `--variables <json>`      | Additional variables for configuration                    |
+| `--skip-git-check`        | Skip the "outside Git repo" warning                       |
+| `--allow-dirty-git-state` | Skip all source-control checks                            |
 
 ## Group Connection API
 

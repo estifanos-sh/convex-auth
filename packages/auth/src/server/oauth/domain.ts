@@ -14,6 +14,4 @@ export interface OAuthRuntimeDomain {
   code: OAuthCodeDomain;
   /** Rotating refresh tokens: `create`/`exchange`/`revoke`. */
   refresh: OAuthRefreshDomain;
-  /** Consent shortcut — alias of `code.authorize`; preserves `auth.oauth.authorize(ctx, …)`. */
-  authorize: OAuthCodeDomain["authorize"];
 }

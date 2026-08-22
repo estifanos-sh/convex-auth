@@ -2,7 +2,6 @@ import { Auth } from "convex/server";
 import { GenericId } from "convex/values";
 
 import type { RefreshToken } from "../../shared/brand";
-import { getUserEpoch } from "../../shared/epoch";
 import { authDb } from "../db";
 import { queueAuthEvent } from "../events";
 import {
@@ -81,7 +80,7 @@ export function buildSessionIdentity(
   return {
     subject: userId,
     sessionId,
-    sessionEpoch: getUserEpoch(user),
+    sessionEpoch: user.sessionEpoch,
     ...(typeof user.name === "string" ? { name: user.name } : null),
     ...(typeof user.email === "string" ? { email: user.email } : null),
     ...(user.emailVerificationTime !== undefined

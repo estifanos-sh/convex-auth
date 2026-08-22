@@ -466,7 +466,7 @@ export const userFields = <F extends IdValidatorFn>(vId: F) => ({
   phoneVerificationTime: v.optional(v.number()),
   isAnonymous: v.optional(v.boolean()),
   lastActiveGroup: v.optional(vId(TABLES.Group)),
-  sessionEpoch: v.optional(v.number()),
+  sessionEpoch: v.number(),
   extend: v.optional(v.any()),
 });
 

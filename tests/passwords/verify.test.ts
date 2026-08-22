@@ -6,9 +6,10 @@ import { decodeJwt } from "jose";
 import { afterEach, expect, test, vi } from "vite-plus/test";
 
 import { convexTest } from "../convex/setup";
-import { expectSignInSession, stubResendCapture, TEST_PASSWORD } from "../helpers";
+import { expectSignInSession, flushEmailQueue, stubResendCapture, TEST_PASSWORD } from "../helpers";
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
 });
 
@@ -25,6 +26,7 @@ test("reset verification returns a passkey rotation without issuing a session", 
   const resetStart = await t.action(api.auth.signIn, {
     request: { provider: "password", params: { email, flow: "reset" } },
   });
+  await flushEmailQueue(t);
   resetCapture.restore();
 
   expect(resetStart.kind).toBe("started");
@@ -95,6 +97,7 @@ test("verify without newPassword completes post-signup email confirmation", asyn
       params: { email, password: TEST_PASSWORD, flow: "signUp" },
     },
   });
+  await flushEmailQueue(t);
   capture.restore();
   expect(signUpResult.kind).toBe("started");
   expect(capture.code()).not.toEqual("");
@@ -134,6 +137,7 @@ test("reset flow does not reveal whether an email is registered", async () => {
       params: { email: "no-such-reset-user@example.com", flow: "reset" },
     },
   });
+  await flushEmailQueue(t);
   capture.restore();
 
   expect(result.kind).toBe("started");
@@ -150,6 +154,7 @@ test("verify resend flow does not reveal whether an email is registered", async 
       params: { email: "no-such-verify-user@example.com", flow: "verify" },
     },
   });
+  await flushEmailQueue(t);
   capture.restore();
 
   expect(result.kind).toBe("started");

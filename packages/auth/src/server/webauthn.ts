@@ -59,7 +59,7 @@ import { queueAuthEvent } from "./events";
 import { getAuthenticatedUserIdOrNull } from "./identity/claims";
 import { LOG_LEVELS, log } from "./log";
 import {
-  consumeVerifierById,
+  acceptVerifierById,
   mutatePasskeyBeginRotation,
   mutatePasskeyBeginAssertion,
   mutatePasskeyBeginRegistration,
@@ -345,7 +345,7 @@ function verifyOrigin<T extends { origin: string }>(clientData: T, rp: RpOptions
   return clientData;
 }
 
-async function verifyAndConsumeChallenge<T extends { challenge: Uint8Array }>(
+async function verifyAndAcceptChallenge<T extends { challenge: Uint8Array }>(
   clientData: T,
   ctx: EnrichedActionCtx,
   verifierValue: string,
@@ -358,7 +358,7 @@ async function verifyAndConsumeChallenge<T extends { challenge: Uint8Array }>(
   // and deletes atomically, so only the single winner gets the doc back.
   let doc;
   try {
-    doc = await consumeVerifierById(ctx, verifierValue, challengeHash);
+    doc = await acceptVerifierById(ctx, verifierValue, challengeHash);
   } catch (err) {
     console.error("[auth] passkey error:", err);
     throw convexError(ErrorCode.PASSKEY_INVALID_CHALLENGE, "Invalid or expired passkey challenge.");
@@ -980,7 +980,7 @@ export async function handleWebAuthn(
     verifyClientDataType(clientData, ClientDataType.Create, "webauthn.create");
     verifySameOrigin(clientData);
     verifyOrigin(clientData, rp);
-    const challenge = await verifyAndConsumeChallenge(clientData, ctx, verifier);
+    const challenge = await verifyAndAcceptChallenge(clientData, ctx, verifier);
     if (challenge.continuationId !== args.continuation) {
       throw convexError(ErrorCode.CONTINUATION_INVALID, "Invalid or expired continuation.");
     }

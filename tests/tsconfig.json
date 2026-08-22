@@ -13,6 +13,9 @@
     "paths": {
       "@convex/*": ["../convex/*"],
       "@estifanos-sh/convex-auth/test": ["../packages/auth/src/test.ts"],
+      "@estifanos-sh/convex-auth/_generated/component.js": [
+        "../packages/auth/src/component/_generated/component.ts"
+      ],
       "@estifanos-sh/convex-auth/*": ["../packages/auth/src/*"]
     }
   },

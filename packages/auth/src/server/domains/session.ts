@@ -11,14 +11,14 @@ type ComponentAuthReadCtx = ComponentReadCtx & { auth: import("convex/server").A
 
 export type SessionDeps = {
   config: ReturnType<typeof configDefaults>;
-  callInvalidateSessions: <DataModel extends GenericDataModel>(
+  callRevokeSessions: <DataModel extends GenericDataModel>(
     ctx: GenericActionCtx<DataModel>,
     args: { userId: GenericId<"User">; except?: GenericId<"Session">[] },
   ) => Promise<void>;
 };
 
 export function createSessionDomain(deps: SessionDeps) {
-  const { config, callInvalidateSessions } = deps;
+  const { config, callRevokeSessions } = deps;
 
   return {
     /**
@@ -31,8 +31,7 @@ export function createSessionDomain(deps: SessionDeps) {
      * when you want to sign out all *other* devices while keeping the
      * current session alive.
      *
-     * This method delegates to the component's internal session
-     * invalidation RPC.
+     * This method delegates to the component's internal session revocation RPC.
      *
      * @param ctx - Convex action context.
      * @param args.userId - The user whose sessions should be revoked.
@@ -53,7 +52,7 @@ export function createSessionDomain(deps: SessionDeps) {
       ctx: GenericActionCtx<DataModel>,
       args: { userId: GenericId<"User">; except?: GenericId<"Session">[] },
     ) => {
-      await callInvalidateSessions(ctx, args);
+      await callRevokeSessions(ctx, args);
       return {
         userId: args.userId,
         except: args.except ?? [],

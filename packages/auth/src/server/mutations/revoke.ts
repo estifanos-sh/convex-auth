@@ -9,29 +9,29 @@ import { log } from "../log";
 import { MutationCtx } from "../types";
 import { AUTH_STORE_REF } from "./store/refs";
 
-export const vInvalidateSessionsArgs = v.object({
+export const vRevokeSessionsArgs = v.object({
   userId: v.string(),
   except: v.optional(v.array(v.string())),
 });
 
-export const callInvalidateSessions = async <DataModel extends GenericDataModel>(
+export const callRevokeSessions = async <DataModel extends GenericDataModel>(
   ctx: GenericActionCtx<DataModel>,
-  args: Infer<typeof vInvalidateSessionsArgs>,
+  args: Infer<typeof vRevokeSessionsArgs>,
 ): Promise<void> => {
   return ctx.runMutation(AUTH_STORE_REF, {
     args: {
-      type: "invalidateSessions",
+      type: "revokeSessions",
       ...args,
     },
   }) as Promise<void>;
 };
 
-export async function invalidateSessionsImpl(
+export async function revokeSessionsImpl(
   ctx: MutationCtx,
-  args: Infer<typeof vInvalidateSessionsArgs>,
+  args: Infer<typeof vRevokeSessionsArgs>,
   config: Provider.Config,
 ): Promise<void> {
-  log(LOG_LEVELS.DEBUG, "invalidateSessionsImpl args:", args);
+  log(LOG_LEVELS.DEBUG, "revokeSessionsImpl args:", args);
   const { userId, except } = args;
   const typedUserId = userId as GenericId<"User">;
   const revoked = await authDb(ctx, config).sessions.revokeForUser({

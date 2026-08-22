@@ -267,7 +267,7 @@ export function createGroupDomain(deps: GroupDeps) {
       await ctx.runMutation(config.component.group.remove, { id: opts.id });
       invalidateCtxCache(ctx, `group:${opts.id}`);
       invalidateCtxCache(ctx, "member");
-      invalidateCtxCache(ctx, "member-inspect");
+      invalidateCtxCache(ctx, "member-get");
       return null;
     },
     /**

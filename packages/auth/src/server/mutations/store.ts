@@ -4,18 +4,15 @@ import { LOG_LEVELS } from "../log";
 import { log } from "../log";
 import type { ServerServices } from "../services/resolve";
 import type { MutationCtx } from "../types";
-import { vModifyAccountArgs, modifyAccountImpl } from "./account";
+import { updateAccountImpl, vUpdateAccountArgs } from "./account";
 import { vCreateVerificationCodeArgs, createVerificationCodeImpl } from "./code";
 import { vCredentialsSignInArgs, credentialsSignInImpl } from "./credentials/signin";
 import { completeCredentialEnrollmentImpl, vCompleteCredentialEnrollmentArgs } from "./enrollment";
-import { vInvalidateSessionsArgs, invalidateSessionsImpl } from "./invalidate";
+import { getAccountWithCredentialsImpl, vGetAccountWithCredentialsArgs } from "./get";
+import { revokeSessionsImpl, vRevokeSessionsArgs } from "./revoke";
 import { vUserOAuthArgs, userOAuthImpl } from "./oauth";
 import { vRefreshSessionArgs, refreshSessionImpl } from "./refresh";
 import { vCreateAccountFromCredentialsArgs, createAccountFromCredentialsImpl } from "./register";
-import {
-  vRetrieveAccountWithCredentialsArgs,
-  retrieveAccountWithCredentialsImpl,
-} from "./retrieve";
 import { vVerifierSignatureArgs, verifierSignatureImpl } from "./signature";
 import { vSignInArgs, signInSessionImpl } from "./signin";
 import { signOutImpl } from "./signout";
@@ -64,20 +61,20 @@ export const vStoreArgs = v.object({
       ...vCompleteCredentialEnrollmentArgs.fields,
     }),
     v.object({
-      type: v.literal("retrieveAccountWithCredentials"),
-      ...vRetrieveAccountWithCredentialsArgs.fields,
+      type: v.literal("getAccountWithCredentials"),
+      ...vGetAccountWithCredentialsArgs.fields,
     }),
     v.object({
       type: v.literal("credentialsSignIn"),
       ...vCredentialsSignInArgs.fields,
     }),
     v.object({
-      type: v.literal("modifyAccount"),
-      ...vModifyAccountArgs.fields,
+      type: v.literal("updateAccount"),
+      ...vUpdateAccountArgs.fields,
     }),
     v.object({
-      type: v.literal("invalidateSessions"),
-      ...vInvalidateSessionsArgs.fields,
+      type: v.literal("revokeSessions"),
+      ...vRevokeSessionsArgs.fields,
     }),
   ),
 });
@@ -115,13 +112,13 @@ export const storeImpl = async (
       return await createAccountFromCredentialsImpl(ctx, args, getProviderOrThrow, config);
     case "completeCredentialEnrollment":
       return await completeCredentialEnrollmentImpl(ctx, args, services);
-    case "retrieveAccountWithCredentials":
-      return await retrieveAccountWithCredentialsImpl(ctx, args, getProviderOrThrow, config);
+    case "getAccountWithCredentials":
+      return await getAccountWithCredentialsImpl(ctx, args, getProviderOrThrow, config);
     case "credentialsSignIn":
       return await credentialsSignInImpl(ctx, args, getProviderOrThrow, config);
-    case "modifyAccount":
-      return await modifyAccountImpl(ctx, args, getProviderOrThrow, config);
-    case "invalidateSessions":
-      return await invalidateSessionsImpl(ctx, args, config);
+    case "updateAccount":
+      return await updateAccountImpl(ctx, args, getProviderOrThrow, config);
+    case "revokeSessions":
+      return await revokeSessionsImpl(ctx, args, config);
   }
 };

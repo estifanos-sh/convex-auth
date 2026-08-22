@@ -40,6 +40,8 @@
     "convex-helpers": "latest"
   },
   "devDependencies": {
+    "@convex-dev/rate-limiter": "^0.3.2",
+    "@convex-dev/workpool": "^0.4.6",
     "@edge-runtime/vm": "latest",
     "@oxlint/plugins": "latest",
     "@trestleinc/convex-oxlint": "latest",

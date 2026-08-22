@@ -15,7 +15,7 @@ import { expect, test } from "vite-plus/test";
 
 import { convexTest } from "./convex/setup";
 
-test("passkeyDelete removes the passkey row", async () => {
+test("passkey removal removes the passkey row", async () => {
   const t = convexTest(schema);
 
   const { userId, passkeyId } = await t.run(async (ctx) => {

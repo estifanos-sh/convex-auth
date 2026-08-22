@@ -62,7 +62,7 @@ export const get = query({
  * legitimate pending verifier); an expired row IS deleted but reported as not
  * consumed.
  */
-export const consume = mutation({
+export const accept = mutation({
   args: {
     selector: v.union(
       v.object({ id: schema.id("AuthVerifier") }),

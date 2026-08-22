@@ -880,7 +880,7 @@ type AuthCreateAccountArgs = {
 };
 
 /** Arguments for `auth.account.get()`. */
-type AuthRetrieveAccountArgs = {
+type AuthGetAccountArgs = {
   provider: string;
   account: AuthAccountCredentials;
 };
@@ -895,7 +895,7 @@ type AuthUpdateAccountArgs = {
 };
 
 /** Arguments for `auth.session.revoke()`. */
-type AuthInvalidateSessionsArgs = {
+type AuthRevokeSessionsArgs = {
   userId: GenericId<"User">;
   except?: GenericId<"Session">[];
 };
@@ -906,12 +906,12 @@ type AuthUnlinkAccountArgs = {
 };
 
 /** Arguments for provider-callback passkey removal. */
-type AuthDeletePasskeyArgs = {
+type AuthRemovePasskeyArgs = {
   passkeyId: GenericId<"Passkey">;
 };
 
 /** Arguments for `auth.totp.remove()`. */
-type AuthDeleteTotpArgs = {
+type AuthRemoveTotpArgs = {
   totpId: GenericId<"TotpFactor">;
 };
 
@@ -969,20 +969,26 @@ type AuthCredentialsProvisionArgs = {
 };
 
 /** Arguments for `auth.member.get()`. */
-type AuthMemberInspectArgs = {
+type AuthMemberGetArgs = {
   userId: GenericId<"User">;
   groupId: GenericId<"Group">;
 };
 
+/** Arguments for batched `auth.member.get()`. */
+type AuthMemberGetManyArgs = {
+  userId: GenericId<"User">;
+  groupIds: readonly GenericId<"Group">[];
+};
+
 /** Result of `auth.member.get()` — membership state and derived access details. */
-export type AuthMemberInspectResult = {
+export type AuthMemberGetResult = {
   membership: GenericDoc<GenericDataModel, "GroupMember"> | null;
   roleIds: string[];
   grants: string[];
 };
 
 /** Result of explicit inherited membership resolution. */
-export type AuthMemberResolveResult = AuthMemberInspectResult & {
+export type AuthMemberResolveResult = AuthMemberGetResult & {
   matchedGroupId: GenericId<"Group"> | null;
   depth: number | null;
   isDirect: boolean;
@@ -991,7 +997,7 @@ export type AuthMemberResolveResult = AuthMemberInspectResult & {
 };
 
 /** Arguments for `auth.member.assert()`. */
-type AuthMemberAssertArgs = AuthMemberInspectArgs & {
+type AuthMemberAssertArgs = AuthMemberGetArgs & {
   roleIds?: string[];
   grants?: string[];
 };
@@ -1016,7 +1022,7 @@ type AuthMemberAssertArgs = AuthMemberInspectArgs & {
  */
 type AuthServerHelpers = {
   /**
-   * Account management: create, retrieve, update, and unlink
+   * Account management: create, get, update, and unlink
    * provider-linked accounts.
    */
   account: {
@@ -1029,11 +1035,11 @@ type AuthServerHelpers = {
     }>;
     get: (
       ctx: GenericActionCtx<GenericDataModel>,
-      args: AuthRetrieveAccountArgs,
+      args: AuthGetAccountArgs,
     ) => Promise<{
       account: Doc<"Account">;
       user: Doc<"User">;
-    }>;
+    } | null>;
     update: (
       ctx: GenericActionCtx<GenericDataModel>,
       args: AuthUpdateAccountArgs,
@@ -1054,12 +1060,12 @@ type AuthServerHelpers = {
   /** Passkey credential management exposed to provider authorize callbacks. */
   passkey: {
     /**
-     * Delete a passkey credential by ID and fire the `passkeyRemoved`
+     * Remove a passkey credential by ID and fire the `passkeyRemoved`
      * lifecycle event with the owning `userId`.
      */
     remove: (
       ctx: GenericActionCtx<GenericDataModel>,
-      args: AuthDeletePasskeyArgs,
+      args: AuthRemovePasskeyArgs,
     ) => Promise<{
       passkeyId: GenericId<"Passkey">;
       userId: GenericId<"User">;
@@ -1068,42 +1074,56 @@ type AuthServerHelpers = {
   /** TOTP factor management exposed to provider authorize callbacks. */
   totp: {
     /**
-     * Delete a TOTP factor by ID and fire the `totpRemoved` lifecycle
+     * Remove a TOTP factor by ID and fire the `totpRemoved` lifecycle
      * event.
      */
     remove: (
       ctx: GenericActionCtx<GenericDataModel>,
-      args: AuthDeleteTotpArgs,
+      args: AuthRemoveTotpArgs,
     ) => Promise<{
       totpId: GenericId<"TotpFactor">;
       userId: GenericId<"User">;
     }>;
   };
   session: {
-    current: (ctx: {
+    id: (ctx: {
       auth: GenericActionCtx<GenericDataModel>["auth"];
     }) => Promise<GenericId<"Session"> | null>;
+    get: (
+      ctx: GenericActionCtx<GenericDataModel>,
+      args: { id: GenericId<"Session"> },
+    ) => Promise<Doc<"Session"> | null>;
+    list: (
+      ctx: GenericActionCtx<GenericDataModel>,
+      args: { userId: GenericId<"User"> },
+    ) => Promise<Doc<"Session">[]>;
     revoke: (
       ctx: GenericActionCtx<GenericDataModel>,
-      args: AuthInvalidateSessionsArgs,
+      args: AuthRevokeSessionsArgs,
     ) => Promise<{
       userId: GenericId<"User">;
       except: GenericId<"Session">[];
     }>;
   };
   member: {
-    get: (
-      ctx: GenericActionCtx<GenericDataModel>,
-      args: AuthMemberInspectArgs,
-    ) => Promise<AuthMemberInspectResult>;
+    get: {
+      (
+        ctx: GenericActionCtx<GenericDataModel>,
+        args: AuthMemberGetArgs,
+      ): Promise<AuthMemberGetResult>;
+      (
+        ctx: GenericActionCtx<GenericDataModel>,
+        args: AuthMemberGetManyArgs,
+      ): Promise<AuthMemberGetResult[]>;
+    };
     resolve: (
       ctx: GenericActionCtx<GenericDataModel>,
-      args: AuthMemberInspectArgs & { maxDepth?: number },
+      args: AuthMemberGetArgs & { maxDepth?: number },
     ) => Promise<AuthMemberResolveResult>;
     assert: (
       ctx: GenericActionCtx<GenericDataModel>,
       args: AuthMemberAssertArgs,
-    ) => Promise<AuthMemberInspectResult>;
+    ) => Promise<AuthMemberGetResult>;
   };
   provider: {
     signIn: (

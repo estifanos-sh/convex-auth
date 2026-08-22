@@ -2,7 +2,6 @@ import type { UserIdentity } from "convex/server";
 import { ConvexError, type GenericId } from "convex/values";
 
 import { ErrorCode } from "../shared/codes";
-import { getSessionEpoch, getUserEpoch } from "../shared/epoch";
 import type { ComponentReadCtx as AuthQueryCtx } from "./component/context";
 import type { Doc } from "./types";
 import {
@@ -305,8 +304,8 @@ export async function getAuthContext(
     user === null ||
     session.userId !== userId ||
     session.expirationTime <= Date.now() ||
-    getSessionEpoch(session) !== getUserEpoch(user) ||
-    (identity.session_epoch ?? 0) !== getSessionEpoch(session)
+    session.epoch !== user.sessionEpoch ||
+    identity.session_epoch !== session.epoch
   ) {
     return null;
   }

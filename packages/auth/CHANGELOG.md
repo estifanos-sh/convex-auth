@@ -1,22 +1,39 @@
 # Changelog
 
-## 0.0.5-alpha.0
+## 0.0.5
+
+### Breaking
+
+- Revocation epochs are required component data again. The temporary
+  compatibility readers, legacy session query, and component-owned epoch
+  backfill from `0.0.5-alpha.0` have been removed after the known deployments
+  completed their migration.
+- The CLI now uses Convex's canonical `--deployment` selector. The hidden
+  `--preview-name` and `--deployment-name` compatibility flags were removed.
+- The component PKCE verifier operation is `token.pkce.accept`; the stale
+  internal `consume` name was removed.
 
 ### Fixed
 
-- Restored zero-downtime compatibility for users and sessions created before
-  revocation epochs were introduced. Missing values continue to mean epoch
-  zero, while legacy sessions remain invalid after a user's epoch advances.
 - Restored the durable-session expiration check in authenticated context
   resolution.
+- Corrected authenticated context contracts for nullable accounts, session
+  reads, and bounded multi-group membership reads, and made session listing
+  deterministic without reading wall-clock time in a reactive query.
+- `convex-auth urls` derives `.convex.site` endpoints from deployment names
+  and `.convex.cloud` URLs. `convex-auth doctor` now checks required
+  environment variables plus the mounted discovery and JWKS endpoints.
+- Source and test typechecks now resolve the generated component contract from
+  source, preventing stale `dist` declarations from masking API drift.
 
-### Migration
+### Changed
 
-- Added the component-owned, bounded `maintenance:backfillEpochs` migration.
-  After deploying this release, normalize legacy rows with
-  `npx convex run --component auth maintenance:backfillEpochs '{}'`. The
-  mutation paginates users and sessions and schedules its own continuation;
-  rerunning it is safe.
+- Removed migration-only epoch helpers, duplicate internal OAuth/XPath aliases,
+  and stale retrieve/inspect/modify/delete/invalidate vocabulary from internal
+  types and RPCs.
+- The demo queues email through the durable Resend component. `RESEND_API_KEY`
+  is optional at deployment time and produces a structured
+  `EMAIL_NOT_CONFIGURED` error only when an email operation is requested.
 
 ## 0.0.4
 

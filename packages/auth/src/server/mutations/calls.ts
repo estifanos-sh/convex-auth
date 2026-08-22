@@ -1,12 +1,12 @@
-export { callModifyAccount } from "./account";
+export { callUpdateAccount } from "./account";
 export { callCreateVerificationCode } from "./code";
 export { callCredentialsSignIn } from "./credentials/signin";
 export { callCompleteCredentialEnrollment } from "./enrollment";
-export { callInvalidateSessions } from "./invalidate";
+export { callRevokeSessions } from "./revoke";
 export { callUserOAuth } from "./oauth";
 export { callRefreshSession } from "./refresh";
 export { callCreateAccountFromCredentials } from "./register";
-export { callRetrieveAccountWithCredentials } from "./retrieve";
+export { callGetAccountWithCredentials } from "./get";
 export { callVerifierSignature } from "./signature";
 export { callSignIn } from "./signin";
 export { callSignOut } from "./signout";

@@ -8,6 +8,7 @@ import { convexTest } from "./convex/setup";
 import { expectSignInSession, signInViaMagicLink, subjectToUserId } from "./helpers";
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
 });
 

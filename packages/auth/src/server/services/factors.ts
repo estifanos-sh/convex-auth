@@ -21,11 +21,11 @@ import { emitAuthEvent } from "../events";
 const convexError = (data: Record<string, Value>) => new ConvexError(data);
 
 /**
- * Build the factor-unlink helpers bound to a resolved auth `config`.
+ * Build the account and factor management helpers bound to a resolved auth `config`.
  *
- * @returns `accountUnlink`, `passkeyDelete`, and `totpDelete`.
+ * @returns `accountUnlink`, `passkeyRemove`, and `totpRemove`.
  */
-export function createFactorUnlinkHelpers(config: ReturnType<typeof configDefaults>) {
+export function createFactorManagementHelpers(config: ReturnType<typeof configDefaults>) {
   const accountUnlink = async (
     ctx: GenericActionCtx<GenericDataModel>,
     args: { accountId: GenericId<"Account"> },
@@ -57,7 +57,7 @@ export function createFactorUnlinkHelpers(config: ReturnType<typeof configDefaul
     return { accountId: args.accountId, userId, provider };
   };
 
-  const passkeyDelete = async (
+  const passkeyRemove = async (
     ctx: GenericActionCtx<GenericDataModel>,
     args: { passkeyId: GenericId<"Passkey"> },
   ) => {
@@ -84,7 +84,7 @@ export function createFactorUnlinkHelpers(config: ReturnType<typeof configDefaul
     return { passkeyId: args.passkeyId, userId };
   };
 
-  const totpDelete = async (
+  const totpRemove = async (
     ctx: GenericActionCtx<GenericDataModel>,
     args: { totpId: GenericId<"TotpFactor"> },
   ) => {
@@ -111,5 +111,5 @@ export function createFactorUnlinkHelpers(config: ReturnType<typeof configDefaul
     return { totpId: args.totpId, userId };
   };
 
-  return { accountUnlink, passkeyDelete, totpDelete };
+  return { accountUnlink, passkeyRemove, totpRemove };
 }

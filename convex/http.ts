@@ -122,7 +122,7 @@ auth.request.mcp(
       scope: "members.manage",
       args: v.object({ groupId: vAuthGroupId, email: v.string(), roleId: v.string() }),
       handler: (ctx, a) =>
-        ctx.runAction(api.groups.inviteMember, {
+        ctx.runMutation(api.groups.inviteMember, {
           groupId: a.groupId,
           email: a.email,
           roleId: a.roleId,

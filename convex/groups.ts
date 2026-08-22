@@ -1,11 +1,10 @@
 import { ConvexError, v } from "convex/values";
 
-import { components, internal } from "./_generated/api";
-import { env, query, internalMutation } from "./_generated/server";
+import { components } from "./_generated/api";
+import { env, query } from "./_generated/server";
 import { auth } from "./auth";
 import {
   type AuthGroupId,
-  type AuthGroupInviteId,
   type AuthUserId,
   vAuthGroupId,
   vAuthGroupInviteId,
@@ -13,7 +12,8 @@ import {
   vAuthUserId,
 } from "./auth/ids";
 import { ErrorCode } from "./errors";
-import { authAction, authMutation, authQuery } from "./functions";
+import { sendEmail } from "./email";
+import { authMutation, authQuery } from "./functions";
 import { roles } from "./roles";
 
 const validRoleIds = [roles.orgAdmin.id, roles.member.id, roles.viewer.id] as const;
@@ -392,74 +392,45 @@ export const revokeInvite = authMutation({
   },
 });
 
-export const createInviteInternal = internalMutation({
+export const inviteMember = authMutation({
   args: {
     groupId: vAuthGroupId,
     email: v.string(),
     roleId: v.string(),
-    invitedByUserId: vAuthUserId,
   },
-  returns: v.object({ inviteId: vAuthGroupInviteId, token: v.string() }),
+  returns: v.object({ inviteId: vAuthGroupInviteId }),
   handler: async (ctx, args) => {
+    const userId = ctx.auth.userId;
+    const email = args.email.trim().toLowerCase();
     await auth.member.assert(ctx, {
-      userId: args.invitedByUserId,
+      userId,
       groupId: args.groupId,
       grants: ["members.manage"],
     });
-    const matched = validRoleIds.find((id) => id === args.roleId);
-    if (!matched) {
+    const roleId = validRoleIds.find((id) => id === args.roleId);
+    if (!roleId) {
       throw new ConvexError({ code: ErrorCode.INVALID_INPUT, message: "Invalid role." });
     }
     const result = await auth.invite.create(ctx, {
       data: {
         groupId: args.groupId,
-        email: args.email,
-        roleIds: [matched],
-        invitedByUserId: args.invitedByUserId,
+        email,
+        roleIds: [roleId],
+        invitedByUserId: userId,
       },
     });
-    return { inviteId: result.id, token: result.token };
-  },
-});
-
-export const inviteMember = authAction({
-  args: {
-    groupId: vAuthGroupId,
-    email: v.string(),
-    roleId: v.string(),
-  },
-  returns: v.object({ inviteId: v.string() }),
-  handler: async (ctx, args) => {
-    const userId = ctx.auth.userId;
-    const email = args.email.trim().toLowerCase();
-    const result: { inviteId: AuthGroupInviteId; token: string } = await ctx.runMutation(
-      internal.groups.createInviteInternal,
-      { groupId: args.groupId, email, roleId: args.roleId, invitedByUserId: userId },
-    );
 
     const appUrl = env.APP_URL ?? "http://localhost:3001";
     const inviteLink = `${appUrl}/?invite=${result.token}&email=${encodeURIComponent(email)}`;
     const from = "My App <onboarding@resend.dev>";
 
-    try {
-      const res = await fetch("https://api.resend.com/emails", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${env.RESEND_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          from,
-          to: email,
-          subject: "You've been invited to an organization",
-          html: `<p>You've been invited to join an organization.</p><p><a href="${inviteLink}">Accept invitation</a></p>`,
-        }),
-      });
-      if (!res.ok) console.error("Invite email failed:", res.status);
-    } catch (error) {
-      console.error("Invite email error:", error);
-    }
+    await sendEmail(ctx, {
+      from,
+      to: email,
+      subject: "You've been invited to an organization",
+      html: `<p>You've been invited to join an organization.</p><p><a href="${inviteLink}">Accept invitation</a></p>`,
+    });
 
-    return { inviteId: result.inviteId };
+    return { inviteId: result.id };
   },
 });

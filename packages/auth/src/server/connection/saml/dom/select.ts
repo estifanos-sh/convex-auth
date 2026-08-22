@@ -348,8 +348,3 @@ export function evaluateXPathToNodes(expression: string, source: Container): Sel
 
   return current;
 }
-
-/** Alias of {@link evaluateXPathToNodes}. */
-export function selectXPath(expression: string, source: Container): SelectedValue[] {
-  return evaluateXPathToNodes(expression, source);
-}

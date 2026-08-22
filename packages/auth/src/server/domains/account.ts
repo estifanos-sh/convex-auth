@@ -17,7 +17,7 @@ type CreateAccountArgs = {
   shouldLinkViaEmail?: boolean;
   shouldLinkViaPhone?: boolean;
 };
-type RetrieveAccountArgs = { provider: string; account: AccountCredentials };
+type GetAccountArgs = { provider: string; account: AccountCredentials };
 type UpdateAccountCredentialsArgs = {
   provider: string;
   account: { id: string; secret: string };
@@ -33,24 +33,21 @@ export type AccountDeps = {
     ctx: GenericActionCtx<DataModel>,
     args: CreateAccountArgs,
   ) => Promise<CredentialsAccountResult>;
-  callRetrieveAccountWithCredentials: <DataModel extends GenericDataModel>(
+  callGetAccountWithCredentials: <DataModel extends GenericDataModel>(
     ctx: GenericActionCtx<DataModel>,
-    args: RetrieveAccountArgs,
+    args: GetAccountArgs,
   ) => Promise<
     CredentialsAccountResult | "InvalidAccountId" | "InvalidSecret" | "TooManyFailedAttempts"
   >;
-  callModifyAccount: <DataModel extends GenericDataModel>(
+  callUpdateAccount: <DataModel extends GenericDataModel>(
     ctx: GenericActionCtx<DataModel>,
     args: UpdateAccountCredentialsArgs,
   ) => Promise<void>;
 };
 
 export function createAccountDomain(deps: AccountDeps) {
-  const {
-    callCreateAccountFromCredentials,
-    callRetrieveAccountWithCredentials,
-    callModifyAccount,
-  } = deps;
+  const { callCreateAccountFromCredentials, callGetAccountWithCredentials, callUpdateAccount } =
+    deps;
 
   return {
     /**
@@ -91,7 +88,7 @@ export function createAccountDomain(deps: AccountDeps) {
       return { ...created };
     },
     /**
-     * Retrieve an auth account by provider and credentials.
+     * Get an auth account by provider and credentials.
      *
      * Looks up an account matching the given provider and account ID,
      * optionally verifying the secret (e.g. password). If the account
@@ -117,9 +114,9 @@ export function createAccountDomain(deps: AccountDeps) {
      */
     get: async <DataModel extends GenericDataModel>(
       ctx: GenericActionCtx<DataModel>,
-      args: RetrieveAccountArgs,
+      args: GetAccountArgs,
     ) => {
-      const result = await callRetrieveAccountWithCredentials(ctx, args);
+      const result = await callGetAccountWithCredentials(ctx, args);
       if (typeof result === "string") {
         return null;
       }
@@ -151,7 +148,7 @@ export function createAccountDomain(deps: AccountDeps) {
       ctx: GenericActionCtx<DataModel>,
       args: UpdateAccountCredentialsArgs,
     ) => {
-      await callModifyAccount(ctx, args);
+      await callUpdateAccount(ctx, args);
       return { accountId: args.account.id };
     },
   };

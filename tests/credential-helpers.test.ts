@@ -15,7 +15,7 @@ function credentialDomains() {
     account: { _id: "account", userId: "user" },
     user: {},
   }));
-  const callRetrieveAccountWithCredentials = vi.fn(
+  const callGetAccountWithCredentials = vi.fn(
     async (): Promise<
       | { account: { _id: string; userId: string }; user: Record<string, never> }
       | "InvalidAccountId"
@@ -30,10 +30,10 @@ function credentialDomains() {
   const stageCredentialEnrollment = vi.fn(async () => CONTINUATION);
   const domains = createCoreDomains({
     config: { permissions: { roles: {} } },
-    callInvalidateSessions: vi.fn(),
+    callRevokeSessions: vi.fn(),
     callCreateAccountFromCredentials,
-    callRetrieveAccountWithCredentials,
-    callModifyAccount: vi.fn(),
+    callGetAccountWithCredentials,
+    callUpdateAccount: vi.fn(),
     getEnrichCtx: () => (ctx: unknown) => ctx,
     inviteTokenAlphabet: "test",
     inviteTokenLength: 1,
@@ -44,7 +44,7 @@ function credentialDomains() {
   return {
     domains,
     callCreateAccountFromCredentials,
-    callRetrieveAccountWithCredentials,
+    callGetAccountWithCredentials,
     continueWithProvider,
     stageCredentialEnrollment,
   };
@@ -58,7 +58,7 @@ test("credentials.verify binds a verified credentials account to passkey sign-in
     params: {},
     authorize: async () => null,
   } as never;
-  const { domains, callRetrieveAccountWithCredentials, continueWithProvider } = credentialDomains();
+  const { domains, callGetAccountWithCredentials, continueWithProvider } = credentialDomains();
 
   const result = await domains.credentials.verify({} as never, {
     verifier,
@@ -67,7 +67,7 @@ test("credentials.verify binds a verified credentials account to passkey sign-in
   });
 
   expect(result).toBe(CONTINUATION);
-  expect(callRetrieveAccountWithCredentials).toHaveBeenCalledWith(expect.anything(), {
+  expect(callGetAccountWithCredentials).toHaveBeenCalledWith(expect.anything(), {
     provider: "pin",
     account: { id: "member@example.com", secret: "1234" },
   });
@@ -88,11 +88,11 @@ test("credentials.provision stages a missing account before passkey rotation", a
   const {
     domains,
     callCreateAccountFromCredentials,
-    callRetrieveAccountWithCredentials,
+    callGetAccountWithCredentials,
     continueWithProvider,
     stageCredentialEnrollment,
   } = credentialDomains();
-  callRetrieveAccountWithCredentials.mockResolvedValueOnce("InvalidAccountId");
+  callGetAccountWithCredentials.mockResolvedValueOnce("InvalidAccountId");
 
   await domains.credentials.provision({} as never, {
     verifier,

@@ -80,17 +80,26 @@ function convexCmd(...subArgs: string[]): { file: string; args: string[] } {
   return { file: runner.cmd, args: [...runner.args, "convex", ...subArgs] };
 }
 
-type CliOptions = {
+type DeploymentOptions = {
+  url?: string;
+  siteUrl?: string;
+  adminKey?: string;
+  prod?: boolean;
+  deployment?: string;
+};
+
+type ConvexDeployment = {
+  name: string | null;
+  type: "dev" | "prod" | "preview" | null;
+  options: DeploymentOptions;
+};
+
+type CliOptions = DeploymentOptions & {
   command: "setup" | "doctor" | "urls" | "keys";
   appUrl?: string;
   variables?: string;
   skipGitCheck: boolean;
   allowDirtyGitState: boolean;
-  url?: string;
-  adminKey?: string;
-  prod: boolean;
-  previewName?: string;
-  deploymentName?: string;
 };
 
 const flagDefs = new Map<string, { type: "string" | "boolean"; description: string }>([
@@ -124,6 +133,13 @@ const flagDefs = new Map<string, { type: "string" | "boolean"; description: stri
     },
   ],
   ["url", { type: "string", description: "Convex deployment URL." }],
+  [
+    "site-url",
+    {
+      type: "string",
+      description: "Convex HTTP actions URL (required when it cannot be derived).",
+    },
+  ],
   ["admin-key", { type: "string", description: "Convex admin key." }],
   [
     "prod",
@@ -132,20 +148,7 @@ const flagDefs = new Map<string, { type: "string" | "boolean"; description: stri
       description: "Set environment variables on this project's production deployment.",
     },
   ],
-  [
-    "preview-name",
-    {
-      type: "string",
-      description: "Set environment variables on the preview deployment with the given name.",
-    },
-  ],
-  [
-    "deployment-name",
-    {
-      type: "string",
-      description: "Set environment variables on the specified deployment.",
-    },
-  ],
+  ["deployment", { type: "string", description: "Target a Convex deployment selector." }],
   ["help", { type: "boolean", description: "Show this help message." }],
   ["version", { type: "boolean", description: "Show version." }],
 ]);
@@ -222,10 +225,10 @@ function parseArgs(argv: string[]): CliOptions {
     skipGitCheck: booleans.has("skip-git-check"),
     allowDirtyGitState: booleans.has("allow-dirty-git-state"),
     url: strings.get("url"),
+    siteUrl: strings.get("site-url"),
     adminKey: strings.get("admin-key"),
     prod: booleans.has("prod"),
-    previewName: strings.get("preview-name"),
-    deploymentName: strings.get("deployment-name"),
+    deployment: strings.get("deployment"),
   };
 }
 
@@ -233,11 +236,10 @@ function validateDeploymentSelectionOptions(options: CliOptions) {
   const selectionCount = [
     options.url !== undefined,
     options.prod,
-    options.previewName !== undefined,
-    options.deploymentName !== undefined,
+    options.deployment !== undefined,
   ].filter(Boolean).length;
   if (selectionCount > 1) {
-    logErrorAndExit("Choose only one of --url, --prod, --preview-name, or --deployment-name.");
+    logErrorAndExit("Choose only one of --url, --prod, or --deployment.");
   }
 }
 
@@ -303,22 +305,86 @@ async function runDoctor(options: CliOptions) {
   const configPath = existingNonEmptySourcePath(path.join(convexFolderPath, "convex.config"));
   const authPath = existingNonEmptySourcePath(path.join(convexFolderPath, "auth"));
   const authConfigPath = existingNonEmptySourcePath(path.join(convexFolderPath, "auth.config"));
+  let healthy = true;
 
-  if (configPath === null) p.log.warn("Missing convex.config.ts/js.");
-  else p.log.success(`Found ${configPath}`);
-  if (authPath === null) p.log.warn("Missing auth.ts/js.");
-  else p.log.success(`Found ${authPath}`);
-  if (authConfigPath === null) p.log.warn("Missing auth.config.ts/js.");
-  else p.log.success(`Found ${authConfigPath}`);
+  if (configPath === null) {
+    healthy = false;
+    p.log.warn("Missing convex.config.ts/js.");
+  } else p.log.success(`Found ${configPath}`);
+  if (authPath === null) {
+    healthy = false;
+    p.log.warn("Missing auth.ts/js.");
+  } else p.log.success(`Found ${authPath}`);
+  if (authConfigPath === null) {
+    healthy = false;
+    p.log.warn("Missing auth.config.ts/js.");
+  } else p.log.success(`Found ${authConfigPath}`);
 
-  p.outro("Doctor checks complete.");
+  const deployment = readConvexDeployment(options);
+  const config: ProjectConfig = {
+    isExpo: false,
+    isNextjs: false,
+    isVite: false,
+    usesTypeScript: true,
+    convexFolderPath,
+    deployment,
+    step: 1,
+  };
+  for (const name of ["AUTH_KEYS", "APP_URL"]) {
+    if (hasBackendEnvVar(config, name)) p.log.success(`${name} is configured.`);
+    else {
+      healthy = false;
+      p.log.warn(`${name} is missing or unreadable.`);
+    }
+  }
+
+  const siteUrl = resolveConvexSiteUrl(deployment);
+  if (siteUrl === null) {
+    healthy = false;
+    p.log.warn("Could not derive the HTTP actions URL. Pass --site-url.");
+  } else {
+    const authSiteUrl = `${siteUrl}/auth`;
+    healthy =
+      (await checkAuthEndpoint(
+        `${authSiteUrl}/.well-known/openid-configuration`,
+        "OpenID configuration",
+      )) && healthy;
+    healthy = (await checkAuthEndpoint(`${authSiteUrl}/.well-known/jwks.json`, "JWKS")) && healthy;
+  }
+
+  if (!healthy) process.exitCode = 1;
+  p.outro(healthy ? "Convex Auth is healthy." : "Convex Auth needs attention.");
+}
+
+async function checkAuthEndpoint(url: string, label: string): Promise<boolean> {
+  try {
+    const response = await fetch(url, {
+      headers: { Accept: "application/json" },
+      redirect: "error",
+    });
+    if (!response.ok) {
+      p.log.warn(`${label} returned HTTP ${response.status}: ${url}`);
+      return false;
+    }
+    await response.json();
+    p.log.success(`${label} is reachable.`);
+    return true;
+  } catch (error) {
+    p.log.warn(
+      `${label} is unreachable: ${error instanceof Error ? error.message : String(error)}`,
+    );
+    return false;
+  }
 }
 
 async function runUrls(options: CliOptions) {
   validateDeploymentSelectionOptions(options);
   printBanner();
   const deployment = readConvexDeployment(options);
-  const convexSiteUrl = deployment.options.url ?? "https://<deployment>.convex.site";
+  const convexSiteUrl = resolveConvexSiteUrl(deployment);
+  if (convexSiteUrl === null) {
+    logErrorAndExit("Could not derive the HTTP actions URL. Pass --site-url.");
+  }
   const authSiteUrl = `${convexSiteUrl.replace(/\/$/, "")}/auth`;
   p.log.info("Convex Auth URLs:");
   p.log.message(
@@ -385,17 +451,7 @@ type ProjectConfig = {
   isVite: boolean;
   usesTypeScript: boolean;
   convexFolderPath: string;
-  deployment: {
-    name: string | null;
-    type: string | null;
-    options: {
-      url?: string;
-      adminKey?: string;
-      prod?: boolean;
-      previewName?: string;
-      deploymentName?: string;
-    };
-  };
+  deployment: ConvexDeployment;
   step: number;
 };
 
@@ -515,6 +571,14 @@ function backendEnvVar(config: ProjectConfig, name: string): string {
   }).slice(0, -1);
 }
 
+function hasBackendEnvVar(config: ProjectConfig, name: string): boolean {
+  try {
+    return backendEnvVar(config, name).trim() !== "";
+  } catch {
+    return false;
+  }
+}
+
 async function setEnvVar(
   config: ProjectConfig,
   name: string,
@@ -557,7 +621,7 @@ async function setEnvVarFromFile(config: ProjectConfig, name: string, value: str
 function deploymentArgs(config: ProjectConfig): string[] {
   const {
     deployment: {
-      options: { adminKey, url, prod, previewName, deploymentName },
+      options: { adminKey, url, prod, deployment },
     },
   } = config;
   const args: string[] = [];
@@ -570,8 +634,7 @@ function deploymentArgs(config: ProjectConfig): string[] {
     [
       url ? ["--url", url] : null,
       prod ? ["--prod"] : null,
-      previewName ? ["--preview-name", previewName] : null,
-      deploymentName ? ["--deployment-name", deploymentName] : null,
+      deployment ? ["--deployment", deployment] : null,
     ].find((s): s is string[] => s !== null) ?? [];
 
   args.push(...selectionArgs);
@@ -615,7 +678,7 @@ const validTsConfig = `\
 `;
 
 async function modifyTsConfig(config: ProjectConfig) {
-  logStep(config, "Modify tsconfig file");
+  logStep(config, "Update tsconfig file");
   const projectLevelTsConfigPath = "tsconfig.json";
   const tsConfigPath = path.join(config.convexFolderPath, "tsconfig.json");
   if (!existsSync(tsConfigPath)) {
@@ -640,7 +703,7 @@ async function modifyTsConfig(config: ProjectConfig) {
   }
 
   if (!compilerOptionsPattern.test(existingTsConfig)) {
-    p.log.info(`Modify your ${tsConfigPath} to include the following:`);
+    p.log.info(`Update your ${tsConfigPath} to include the following:`);
     p.log.message(indent(`\n"moduleResolution": "Bundler",\n"skipLibCheck": true\n`));
     const ready = await p.confirm({ message: "Ready to continue?" });
     handleCancel(ready);
@@ -1083,12 +1146,12 @@ function loadEnvFiles() {
 /** @internal */
 export function readConvexDeployment(options: {
   url?: string;
+  siteUrl?: string;
   adminKey?: string;
   prod?: boolean;
-  previewName?: string;
-  deploymentName?: string;
-}) {
-  const { adminKey, url, prod, previewName, deploymentName } = options;
+  deployment?: string;
+}): ConvexDeployment {
+  const { adminKey, url, prod, deployment } = options;
 
   if (url) {
     return { name: url, type: null, options };
@@ -1096,18 +1159,24 @@ export function readConvexDeployment(options: {
 
   const adminKeyName = adminKey ? deploymentNameFromAdminKey(adminKey) : null;
   const adminKeyType = adminKey ? deploymentTypeFromAdminKey(adminKey) : null;
+  const deploymentType =
+    adminKeyType ??
+    (deployment === "prod"
+      ? "prod"
+      : deployment === "dev" || deployment === "local"
+        ? "dev"
+        : null);
 
   const explicitSelection = [
     prod ? { name: adminKeyName, type: "prod" as const } : null,
-    previewName ? { name: previewName, type: "preview" as const } : null,
-    deploymentName ? { name: deploymentName, type: adminKeyType } : null,
+    deployment ? { name: deployment, type: deploymentType } : null,
     adminKey ? { name: adminKeyName, type: adminKeyType } : null,
   ].find(
     (
       selection,
     ): selection is {
       name: string | null;
-      type: string | null;
+      type: ConvexDeployment["type"];
     } => selection !== null,
   );
 
@@ -1128,6 +1197,41 @@ export function readConvexDeployment(options: {
   logErrorAndExit(
     "Could not find a configured CONVEX_DEPLOYMENT. Did you forget to run `npx convex dev` first?",
   );
+}
+
+/** @internal */
+export function resolveConvexSiteUrl(deployment: ConvexDeployment): string | null {
+  const explicitSiteUrl = deployment.options.siteUrl;
+  if (explicitSiteUrl !== undefined) {
+    return normalizedHttpUrl(explicitSiteUrl);
+  }
+
+  const cloudUrl = deployment.options.url;
+  if (cloudUrl !== undefined) {
+    const parsed = new URL(cloudUrl);
+    if (parsed.hostname.endsWith(".convex.cloud")) {
+      parsed.hostname = `${parsed.hostname.slice(0, -".convex.cloud".length)}.convex.site`;
+    } else if (
+      (parsed.hostname === "127.0.0.1" || parsed.hostname === "localhost") &&
+      parsed.port === "3210"
+    ) {
+      parsed.port = "3211";
+    }
+    return parsed.toString().replace(/\/$/, "");
+  }
+
+  if (deployment.name !== null && /^[a-z0-9]+(?:-[a-z0-9]+)+$/.test(deployment.name)) {
+    return `https://${deployment.name}.convex.site`;
+  }
+  return null;
+}
+
+function normalizedHttpUrl(value: string): string {
+  const parsed = new URL(value);
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    logErrorAndExit("Invalid --site-url.", "Expected an HTTP or HTTPS URL.");
+  }
+  return parsed.toString().replace(/\/$/, "");
 }
 
 /** @internal */

@@ -137,7 +137,7 @@
     isInviting = true;
     const emailToSend = inviteEmail;
     try {
-      const result = await client.action(api.groups.inviteMember, {
+      const result = await client.mutation(api.groups.inviteMember, {
         groupId: groupId,
         email: inviteEmail,
         roleId: inviteRoleId,

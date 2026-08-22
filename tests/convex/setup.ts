@@ -1,7 +1,9 @@
 /// <reference types="vite-plus/client" />
 
 import resendTest from "@convex-dev/resend/test";
+import rateLimiterTest from "@convex-dev/rate-limiter/test";
 import staticHostingTest from "@convex-dev/static-hosting/test";
+import workpoolTest from "@convex-dev/workpool/test";
 import authTest from "@estifanos-sh/convex-auth/test";
 import { convexTest as baseConvexTest } from "convex-test";
 import type { FunctionReference } from "convex/server";
@@ -46,12 +48,6 @@ type PrivateAuthTestApi = {
     >;
   };
   maintenance: {
-    backfillEpochs: FunctionReference<
-      "mutation",
-      "internal",
-      { batchSize?: number; cursor?: string; table?: "User" | "Session" },
-      { isDone: boolean; migrated: number; scanned: number; table: "User" | "Session" }
-    >;
     pruneExpired: FunctionReference<
       "mutation",
       "internal",
@@ -63,10 +59,6 @@ type PrivateAuthTestApi = {
 
 /** Access component-private functions from white-box tests. */
 export const privateAuthForTest = (auth: unknown): PrivateAuthTestApi => auth as PrivateAuthTestApi;
-
-/** Access the component-owned legacy epoch backfill from white-box tests. */
-export const backfillEpochsForTest = (auth: unknown) =>
-  privateAuthForTest(auth).maintenance.backfillEpochs;
 
 /**
  * A typed handle for the auth component's `maintenance.pruneExpired`, which is an internal
@@ -116,6 +108,9 @@ export const convexTest = ((
   const t = baseConvexTest(schema as never, modules as never);
   authTest.register(t as any, "auth");
   resendTest.register(t as any, "resend");
+  rateLimiterTest.register(t as any, "resend/rateLimiter");
+  workpoolTest.register(t as any, "resend/emailWorkpool");
+  workpoolTest.register(t as any, "resend/callbackWorkpool");
   staticHostingTest.register(t as any, "staticHosting");
   return t;
 }) as typeof baseConvexTest;

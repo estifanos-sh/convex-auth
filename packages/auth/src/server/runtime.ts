@@ -38,9 +38,9 @@ import { wellKnown } from "./wellknown";
 import { log } from "./log";
 import {
   callCreateAccountFromCredentials,
-  callInvalidateSessions,
-  callModifyAccount,
-  callRetrieveAccountWithCredentials,
+  callRevokeSessions,
+  callUpdateAccount,
+  callGetAccountWithCredentials,
   callSignOut,
   callUserOAuth,
   callVerifierSignature,
@@ -52,7 +52,7 @@ import { generateRandomString, INVITE_TOKEN_ALPHABET, sha256 } from "./random";
 import { extractBearerToken } from "./utils/bearer";
 import { encryptSecret } from "./secret";
 import { createGroupService } from "./connection/group/service";
-import { createFactorUnlinkHelpers } from "./services/factors";
+import { createFactorManagementHelpers } from "./services/factors";
 import {
   mutateContinuationCreate,
   mutateCredentialEnrollmentCreate,
@@ -337,10 +337,10 @@ export function Auth(config_: ConvexAuthConfig<any>) {
   const authBase: AuthRuntimeBase = {
     ...createCoreDomains({
       config,
-      callInvalidateSessions,
+      callRevokeSessions,
       callCreateAccountFromCredentials,
-      callRetrieveAccountWithCredentials,
-      callModifyAccount,
+      callGetAccountWithCredentials,
+      callUpdateAccount,
       getEnrichCtx: () => enrichCtx,
       inviteTokenAlphabet: INVITE_TOKEN_ALPHABET,
       inviteTokenLength: INVITE_TOKEN_LENGTH,
@@ -686,11 +686,11 @@ export function Auth(config_: ConvexAuthConfig<any>) {
     return router;
   };
 
-  const { accountUnlink, passkeyDelete, totpDelete } = createFactorUnlinkHelpers(config);
+  const { accountUnlink, passkeyRemove, totpRemove } = createFactorManagementHelpers(config);
 
   const enrichedAccount = Object.assign({}, auth.account, { unlink: accountUnlink });
-  const passkeyHelpers = { remove: passkeyDelete };
-  const totpHelpers = { remove: totpDelete };
+  const passkeyHelpers = { remove: passkeyRemove };
+  const totpHelpers = { remove: totpRemove };
 
   const enrichCtx = <DataModel extends GenericDataModel>(ctx: GenericActionCtx<DataModel>) =>
     enrichActionCtx(ctx, {

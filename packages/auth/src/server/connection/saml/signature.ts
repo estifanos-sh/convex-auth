@@ -17,7 +17,7 @@ import {
 } from "./xmldsig";
 import { getContext } from "./api";
 import {
-  selectXPath as select,
+  evaluateXPathToNodes,
   type SelectedValue,
   isElementNode,
   isTextNode,
@@ -159,9 +159,9 @@ export async function verifySignature(
     "/*[contains(local-name(), 'Response')]/*[local-name(.)='Assertion']/*[local-name(.)='Subject']/*[local-name(.)='SubjectConfirmation']/*[local-name(.)='SubjectConfirmationData']//*[local-name(.)='Assertion' or local-name(.)='Signature']";
 
   let selection: SelectedValue[] = [];
-  const messageSignatureNode = select(messageSignatureXpath, doc);
-  const assertionSignatureNode = select(assertionSignatureXpath, doc);
-  const wrappingElementNode = select(wrappingElementsXPath, doc);
+  const messageSignatureNode = evaluateXPathToNodes(messageSignatureXpath, doc);
+  const assertionSignatureNode = evaluateXPathToNodes(assertionSignatureXpath, doc);
+  const wrappingElementNode = evaluateXPathToNodes(wrappingElementsXPath, doc);
 
   selection = selection.concat(assertionSignatureNode);
   selection = selection.concat(messageSignatureNode);
@@ -197,7 +197,10 @@ export async function verifySignature(
     }
 
     if (opts.metadata) {
-      const certificateNode = select(".//*[local-name(.)='X509Certificate']", signatureNode);
+      const certificateNode = evaluateXPathToNodes(
+        ".//*[local-name(.)='X509Certificate']",
+        signatureNode,
+      );
       let metadataCertList: string | unknown[] | null = opts.metadata.getX509Certificate("signing");
       if (Array.isArray(metadataCertList)) {
         metadataCertList = flattenDeep(metadataCertList);
@@ -258,9 +261,12 @@ export async function verifySignature(
     const signedVerifiedXML = sig.getSignedReferences()[0];
     const rootNode = docParser!.parseFromString(signedVerifiedXML).documentElement;
     if (rootNode.localName === "Response") {
-      const assertions = select("./*[local-name()='Assertion']", rootNode);
+      const assertions = evaluateXPathToNodes("./*[local-name()='Assertion']", rootNode);
 
-      const encryptedAssertions = select("./*[local-name()='EncryptedAssertion']", rootNode);
+      const encryptedAssertions = evaluateXPathToNodes(
+        "./*[local-name()='EncryptedAssertion']",
+        rootNode,
+      );
       if (assertions.length === 1) {
         return [true, serializeXmlNode(assertions[0])];
       } else if (encryptedAssertions.length >= 1) {
