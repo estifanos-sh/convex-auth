@@ -1,16 +1,17 @@
 import { ConvexError, v } from "convex/values";
 
 import { auth } from "./auth/core";
+import { vAuthGroupId } from "./auth/ids";
 import { ErrorCode } from "./errors";
 import { authMutation, authQuery } from "./functions";
 import { projectStatus } from "./schema";
 
 export const list = authQuery({
-  args: { groupId: v.string() },
+  args: { groupId: vAuthGroupId },
   returns: v.array(
     v.object({
       _id: v.id("projects"),
-      groupId: v.string(),
+      groupId: vAuthGroupId,
       name: v.string(),
       identifier: v.string(),
       slug: v.string(),
@@ -49,7 +50,7 @@ export const list = authQuery({
 
 export const create = authMutation({
   args: {
-    groupId: v.string(),
+    groupId: vAuthGroupId,
     name: v.string(),
     identifier: v.optional(v.string()),
     description: v.optional(v.string()),
@@ -129,7 +130,7 @@ export const get = authQuery({
   returns: v.union(
     v.object({
       _id: v.id("projects"),
-      groupId: v.string(),
+      groupId: vAuthGroupId,
       name: v.string(),
       identifier: v.string(),
       slug: v.string(),

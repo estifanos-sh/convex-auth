@@ -1,6 +1,7 @@
 import { api } from "$convex/_generated/api";
 import type { Id } from "$convex/_generated/dataModel";
 import { useQuery } from "convex/react";
+import type { FunctionArgs } from "convex/server";
 import * as Haptics from "expo-haptics";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useState } from "react";
@@ -61,12 +62,7 @@ export default function IssueDetail() {
   );
 
   type CommentItem = NonNullable<typeof commentsData>[number];
-  type IssuePatch = {
-    title?: string;
-    status?: "backlog" | "cancelled" | "done" | "in_progress" | "todo";
-    priority?: "high" | "low" | "medium" | "none" | "urgent";
-    assigneeUserId?: string | null;
-  };
+  type IssuePatch = FunctionArgs<typeof api.issues.update>["patch"];
   const comments = commentsData ?? [];
 
   const updateIssue = useCallback(
@@ -328,7 +324,7 @@ export default function IssueDetail() {
         <AssigneePicker
           value={issue.assigneeUserId}
           assigneeName={issue.assigneeName}
-          members={members.map((m: { userId: string; name: string }) => ({
+          members={members.map((m) => ({
             userId: m.userId,
             name: m.name,
           }))}

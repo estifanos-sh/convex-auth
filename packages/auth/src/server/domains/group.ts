@@ -1,3 +1,5 @@
+import type { GenericId } from "convex/values";
+
 import type { ComponentCtx, ComponentReadCtx } from "../component/context";
 import { configDefaults } from "../config";
 import { cached, ctxCacheHas, invalidateCtxCache } from "../cache/context";
@@ -21,14 +23,14 @@ export type GroupDeps = {
 export function createGroupDomain(deps: GroupDeps) {
   const { config } = deps;
 
-  function groupGet(ctx: ComponentReadCtx, opts: { id: string }): Promise<GroupDocLike>;
+  function groupGet(ctx: ComponentReadCtx, opts: { id: GenericId<"Group"> }): Promise<GroupDocLike>;
   function groupGet(
     ctx: ComponentReadCtx,
-    opts: { ids: readonly string[] },
+    opts: { ids: readonly GenericId<"Group">[] },
   ): Promise<Array<GroupDocLike>>;
   async function groupGet(
     ctx: ComponentReadCtx,
-    opts: { id: string } | { ids: readonly string[] },
+    opts: { id: GenericId<"Group"> } | { ids: readonly GenericId<"Group">[] },
   ): Promise<GroupDocLike | Array<GroupDocLike>> {
     if ("id" in opts) {
       return (await cached(ctx, `group:${opts.id}`, () =>
@@ -40,7 +42,7 @@ export function createGroupDomain(deps: GroupDeps) {
     const groupIds = opts.ids;
     if (groupIds.length === 0) return [];
     const unique = Array.from(new Set(groupIds));
-    const toFetch: string[] = [];
+    const toFetch: GenericId<"Group">[] = [];
     for (const id of unique) {
       if (!ctxCacheHas(ctx, `group:${id}`)) {
         toFetch.push(id);
@@ -63,15 +65,18 @@ export function createGroupDomain(deps: GroupDeps) {
     )) as Array<GroupDocLike>;
   }
 
-  function groupGetEx(ctx: ComponentReadCtx, opts: { id: string }): Promise<GroupDocLike>;
   function groupGetEx(
     ctx: ComponentReadCtx,
-    opts: { ids: readonly string[] },
+    opts: { id: GenericId<"Group"> },
+  ): Promise<GroupDocLike>;
+  function groupGetEx(
+    ctx: ComponentReadCtx,
+    opts: { ids: readonly GenericId<"Group">[] },
   ): Promise<Array<GroupDocLike>>;
   function groupGetEx(ctx: ComponentReadCtx, selector: { slug: string }): Promise<GroupDocLike>;
   async function groupGetEx(
     ctx: ComponentReadCtx,
-    opts: { id: string } | { ids: readonly string[] } | { slug: string },
+    opts: { id: GenericId<"Group"> } | { ids: readonly GenericId<"Group">[] } | { slug: string },
   ): Promise<GroupDocLike | Array<GroupDocLike>> {
     if ("slug" in opts) {
       const { page } = await group.list(ctx, {
@@ -126,12 +131,15 @@ export function createGroupDomain(deps: GroupDeps) {
           name: string;
           slug?: string;
           type?: string;
-          parentGroupId?: string;
+          parentGroupId?: GenericId<"Group">;
           extend?: Record<string, unknown>;
         };
       },
-    ): Promise<string> => {
-      return (await ctx.runMutation(config.component.group.create, opts.data)) as string;
+    ): Promise<GenericId<"Group">> => {
+      return (await ctx.runMutation(
+        config.component.group.create,
+        opts.data,
+      )) as GenericId<"Group">;
     },
     /**
      * Fetch a group document by ID, or a batch of group documents by IDs.
@@ -193,7 +201,7 @@ export function createGroupDomain(deps: GroupDeps) {
         where?: {
           slug?: string;
           type?: string;
-          parentGroupId?: string;
+          parentGroupId?: GenericId<"Group">;
           name?: string;
           isRoot?: boolean;
         };
@@ -231,7 +239,10 @@ export function createGroupDomain(deps: GroupDeps) {
      * });
      * ```
      */
-    update: async (ctx: ComponentCtx, opts: { id: string; patch: Record<string, unknown> }) => {
+    update: async (
+      ctx: ComponentCtx,
+      opts: { id: GenericId<"Group">; patch: Record<string, unknown> },
+    ) => {
       await ctx.runMutation(config.component.group.update, {
         id: opts.id,
         patch: opts.patch,
@@ -252,7 +263,7 @@ export function createGroupDomain(deps: GroupDeps) {
      * await auth.group.remove(ctx, { id: groupId });
      * ```
      */
-    remove: async (ctx: ComponentCtx, opts: { id: string }) => {
+    remove: async (ctx: ComponentCtx, opts: { id: GenericId<"Group"> }) => {
       await ctx.runMutation(config.component.group.remove, { id: opts.id });
       invalidateCtxCache(ctx, `group:${opts.id}`);
       invalidateCtxCache(ctx, "member");
@@ -281,7 +292,7 @@ export function createGroupDomain(deps: GroupDeps) {
      */
     ancestors: async (
       ctx: ComponentReadCtx,
-      opts: { groupId: string; maxDepth?: number; includeSelf?: boolean },
+      opts: { groupId: GenericId<"Group">; maxDepth?: number; includeSelf?: boolean },
     ) => {
       const result = (await ctx.runQuery(config.component.group.ancestors, {
         id: opts.groupId,

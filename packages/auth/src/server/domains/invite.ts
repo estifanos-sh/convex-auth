@@ -1,5 +1,5 @@
 import type { Auth } from "convex/server";
-import { ConvexError, type Value } from "convex/values";
+import { ConvexError, type GenericId, type Value } from "convex/values";
 
 import { ErrorCode } from "../../shared/codes";
 import type { ComponentCtx, ComponentReadCtx } from "../component/context";
@@ -70,7 +70,7 @@ export function createInviteDomain(deps: InviteDeps) {
         ...data,
         roleIds,
         tokenHash,
-      })) as string;
+      })) as GenericId<"GroupInvite">;
       return { id: inviteId, token };
     },
     /**
@@ -151,9 +151,9 @@ export function createInviteDomain(deps: InviteDeps) {
         ctx: ComponentCtx & { auth: Auth },
         args: { token: string },
       ): Promise<{
-        inviteId: string;
-        groupId: string | null;
-        memberId?: string;
+        inviteId: GenericId<"GroupInvite">;
+        groupId: GenericId<"Group"> | null;
+        memberId?: GenericId<"GroupMember">;
         inviteStatus: string;
         membershipStatus: string;
       }> => {
@@ -169,9 +169,9 @@ export function createInviteDomain(deps: InviteDeps) {
           tokenHash,
           acceptedByUserId,
         })) as {
-          inviteId: string;
-          groupId: string | null;
-          memberId?: string;
+          inviteId: GenericId<"GroupInvite">;
+          groupId: GenericId<"Group"> | null;
+          memberId?: GenericId<"GroupMember">;
           inviteStatus: string;
           membershipStatus: string;
         };

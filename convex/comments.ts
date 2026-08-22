@@ -1,6 +1,7 @@
 import { ConvexError, v } from "convex/values";
 
 import { auth } from "./auth/core";
+import { vAuthUserId } from "./auth/ids";
 import { ErrorCode } from "./errors";
 import { authMutation, authQuery } from "./functions";
 
@@ -10,7 +11,7 @@ export const list = authQuery({
     v.object({
       _id: v.id("comments"),
       authorName: v.string(),
-      authorUserId: v.string(),
+      authorUserId: vAuthUserId,
       body: v.string(),
       createdAt: v.number(),
     }),

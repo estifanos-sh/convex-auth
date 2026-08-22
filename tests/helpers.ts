@@ -1,4 +1,5 @@
 import { api } from "@convex/_generated/api";
+import type { GenericId } from "convex/values";
 import { expect, vi } from "vite-plus/test";
 
 import type { TestConvexForDataModel } from "./convex/setup";
@@ -20,11 +21,11 @@ export function expectSignInSession(result: {
   return result.kind === "signedIn" ? (result.session ?? null) : null;
 }
 
-export function subjectToUserId(subject: unknown) {
+export function subjectToUserId(subject: unknown): GenericId<"User"> {
   if (typeof subject !== "string" || subject.length === 0) {
     throw new Error("Expected subject claim");
   }
-  return subject;
+  return subject as GenericId<"User">;
 }
 
 /**

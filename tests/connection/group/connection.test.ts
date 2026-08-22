@@ -517,8 +517,8 @@ test("group connection component stores scim config, audit events, and webhook d
       type: "organization",
     });
   });
-  const connectionId = await t.run(async (ctx) => {
-    return await ctx.runMutation(components.auth.connection.create, {
+  const { connectionId } = await t.run(async (ctx) => {
+    return await auth.connection.create(ctx as any, {
       groupId,
       slug: "globex",
       name: "Globex",
@@ -1227,8 +1227,8 @@ test("connection read facade redacts the SAML SP private key on get, saml.get, a
       type: "organization",
     });
   });
-  const connectionId = await t.run(async (ctx) => {
-    return await ctx.runMutation(components.auth.connection.create, {
+  const { connectionId } = await t.run(async (ctx) => {
+    return await auth.connection.create(ctx as any, {
       groupId,
       slug: "redact-co",
       name: "Redact Co",

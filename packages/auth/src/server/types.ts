@@ -187,7 +187,7 @@ export type ConvexAuthConfig<TExtend = {}> = {
         protocol: ConnectionHookProtocol;
         connectionId?: string;
         profile: ConnectionHookProfile;
-        userId: string;
+        userId: GenericId<"User">;
       }) => Awaitable<void>;
       /**
        * Gate linking a sign-in onto an EXISTING user. Called when an SSO
@@ -202,7 +202,7 @@ export type ConvexAuthConfig<TExtend = {}> = {
         protocol: ConnectionHookProtocol | "credentials";
         connectionId?: string;
         profile: ConnectionHookProfile;
-        userId: string;
+        userId: GenericId<"User">;
       }) => Awaitable<boolean | void>;
     };
   };
@@ -1362,9 +1362,9 @@ export interface ScopeChecker {
  */
 export interface KeyRecord {
   /** Document ID. */
-  _id: string;
+  _id: GenericId<"ApiKey">;
   /** Owner user ID. */
-  userId: string;
+  userId: GenericId<"User">;
   /** Display prefix (e.g. `"sk_abc1"`). Safe to show in UIs. */
   prefix: string;
   /** Human-readable name (e.g. "CI Pipeline"). */
@@ -1422,9 +1422,9 @@ export type UserOrderBy = "_creationTime" | "email" | "phone";
 export interface HttpKeyContext {
   key: {
     /** The user ID that owns the verified API key. */
-    userId: string;
+    userId: GenericId<"User">;
     /** The API key document ID. */
-    keyId: string;
+    keyId: GenericId<"ApiKey">;
     /** Scope checker for the verified key's permissions. */
     scopes: ScopeChecker;
   };

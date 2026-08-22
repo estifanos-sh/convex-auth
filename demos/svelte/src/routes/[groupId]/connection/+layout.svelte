@@ -1,6 +1,7 @@
 <script lang="ts">
   import { useQuery } from "convex-svelte";
   import { getContext } from "svelte";
+  import type { GenericId } from "convex/values";
   import { page } from "$app/state";
   import { goto } from "$app/navigation";
   import { base } from "$app/paths";
@@ -10,7 +11,7 @@
 
   let { children } = $props();
   const app = getContext<AppContext>("app");
-  const groupId = $derived(page.params.groupId!);
+  const groupId = $derived(page.params.groupId! as GenericId<"Group">);
 
   const dashboard = useQuery(api.groups.get, () => (app.isAuthenticated ? { groupId } : "skip"));
   const canManage = $derived(

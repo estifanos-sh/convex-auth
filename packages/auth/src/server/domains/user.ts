@@ -27,14 +27,14 @@ export type UserDeps = {
 export function createUserDomain(deps: UserDeps) {
   const { config } = deps;
 
-  function userGet(ctx: ComponentReadCtx, opts: { id: string }): Promise<UserDocLike>;
+  function userGet(ctx: ComponentReadCtx, opts: { id: GenericId<"User"> }): Promise<UserDocLike>;
   function userGet(
     ctx: ComponentReadCtx,
-    opts: { ids: readonly string[] },
+    opts: { ids: readonly GenericId<"User">[] },
   ): Promise<Array<UserDocLike>>;
   async function userGet(
     ctx: ComponentReadCtx,
-    opts: { id: string } | { ids: readonly string[] },
+    opts: { id: GenericId<"User"> } | { ids: readonly GenericId<"User">[] },
   ): Promise<UserDocLike | Array<UserDocLike>> {
     if ("id" in opts) {
       return (await cached(ctx, `user:${opts.id}`, () =>
@@ -46,7 +46,7 @@ export function createUserDomain(deps: UserDeps) {
     const userIds = opts.ids;
     if (userIds.length === 0) return [];
     const unique = Array.from(new Set(userIds));
-    const toFetch: string[] = [];
+    const toFetch: GenericId<"User">[] = [];
     for (const id of unique) {
       if (!ctxCacheHas(ctx, `user:${id}`)) {
         toFetch.push(id);
@@ -292,7 +292,10 @@ export function createUserDomain(deps: UserDeps) {
      * });
      * ```
      */
-    update: async (ctx: ComponentCtx, opts: { id: string; patch: Record<string, unknown> }) => {
+    update: async (
+      ctx: ComponentCtx,
+      opts: { id: GenericId<"User">; patch: Record<string, unknown> },
+    ) => {
       await ctx.runMutation(config.component.user.update, {
         id: opts.id,
         patch: opts.patch,
@@ -311,7 +314,7 @@ export function createUserDomain(deps: UserDeps) {
      * @returns `null`.
      * @throws `CASCADE_TOO_LARGE` when cleanup exceeds a safe transaction bound.
      */
-    remove: async (ctx: ComponentCtx, opts: { id: string }) => {
+    remove: async (ctx: ComponentCtx, opts: { id: GenericId<"User"> }) => {
       await ctx.runMutation(config.component.user.remove, { id: opts.id });
       invalidateCtxCache(ctx);
       return null;

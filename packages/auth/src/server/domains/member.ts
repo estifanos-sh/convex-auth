@@ -1,4 +1,4 @@
-import { ConvexError } from "convex/values";
+import { ConvexError, type GenericId } from "convex/values";
 
 import { ErrorCode } from "../../shared/codes";
 import type { ComponentCtx, ComponentReadCtx } from "../component/context";
@@ -16,20 +16,11 @@ type Paginated<T> = {
   pageStatus?: "SplitRecommended" | "SplitRequired" | null;
 };
 
-type MemberDocLike = {
-  _id: string;
-  _creationTime: number;
-  groupId: string;
-  userId: string;
-  role?: string;
-  roleIds?: string[];
-  status?: string;
-  extend?: Record<string, unknown>;
-} | null;
+type MemberDocLike = Doc<"GroupMember"> | null;
 
 /** Options accepted by `member.list`. */
 type MemberListOpts = {
-  where?: { groupId?: string; userId?: string; status?: string };
+  where?: { groupId?: GenericId<"Group">; userId?: GenericId<"User">; status?: string };
   paginationOpts: { numItems: number; cursor: string | null };
   orderBy?: "_creationTime" | "status";
   order?: "asc" | "desc";
@@ -61,29 +52,29 @@ export function createMemberDomain(deps: MemberDeps) {
   function memberInspect(
     ctx: ComponentReadCtx,
     opts: {
-      userId: string;
-      groupId: string;
+      userId: GenericId<"User">;
+      groupId: GenericId<"Group">;
     },
   ): Promise<InspectResult>;
   function memberInspect(
     ctx: ComponentReadCtx,
-    opts: { userId: string; groupIds: readonly string[] },
+    opts: { userId: GenericId<"User">; groupIds: readonly GenericId<"Group">[] },
   ): Promise<Array<InspectResult>>;
   async function memberInspect(
     ctx: ComponentReadCtx,
     opts:
       | {
-          userId: string;
-          groupId: string;
+          userId: GenericId<"User">;
+          groupId: GenericId<"Group">;
         }
-      | { userId: string; groupIds: readonly string[] },
+      | { userId: GenericId<"User">; groupIds: readonly GenericId<"Group">[] },
   ): Promise<InspectResult | Array<InspectResult>> {
     const oauthCaller = await resolveOAuthCaller(ctx);
     if ("groupIds" in opts) {
       const { userId, groupIds } = opts;
       if (groupIds.length === 0) return [];
       const unique = Array.from(new Set(groupIds));
-      const toFetch: string[] = [];
+      const toFetch: GenericId<"Group">[] = [];
       for (const groupId of unique) {
         if (!ctxCacheHas(ctx, `member-inspect:${userId}:${groupId}:n`)) {
           toFetch.push(groupId);
@@ -192,8 +183,8 @@ export function createMemberDomain(deps: MemberDeps) {
       ctx: ComponentCtx,
       opts: {
         data: {
-          groupId: string;
-          userId: string;
+          groupId: GenericId<"Group">;
+          userId: GenericId<"User">;
           roleIds?: string[];
           status?: string;
           extend?: Record<string, unknown>;
@@ -205,7 +196,7 @@ export function createMemberDomain(deps: MemberDeps) {
       const memberId = (await ctx.runMutation(config.component.group.member.create, {
         ...data,
         roleIds,
-      })) as string;
+      })) as GenericId<"GroupMember">;
       invalidateCtxCache(ctx, `member-inspect:${data.userId}:${data.groupId}`);
       return memberId;
     },
@@ -256,7 +247,7 @@ export function createMemberDomain(deps: MemberDeps) {
      * await auth.member.remove(ctx, { id: memberId });
      * ```
      */
-    remove: async (ctx: ComponentCtx, opts: { id: string }) => {
+    remove: async (ctx: ComponentCtx, opts: { id: GenericId<"GroupMember"> }) => {
       await ctx.runMutation(config.component.group.member.remove, { id: opts.id });
       invalidateCtxCache(ctx, "member");
       invalidateCtxCache(ctx, "member-inspect");
@@ -283,7 +274,10 @@ export function createMemberDomain(deps: MemberDeps) {
      * });
      * ```
      */
-    update: async (ctx: ComponentCtx, opts: { id: string; patch: Record<string, unknown> }) => {
+    update: async (
+      ctx: ComponentCtx,
+      opts: { id: GenericId<"GroupMember">; patch: Record<string, unknown> },
+    ) => {
       const nextData = { ...opts.patch };
       if ("roleIds" in nextData) {
         nextData.roleIds = normalizeRoleIds(
@@ -336,7 +330,7 @@ export function createMemberDomain(deps: MemberDeps) {
      */
     resolve: async (
       ctx: ComponentReadCtx,
-      opts: { userId: string; groupId: string; maxDepth?: number },
+      opts: { userId: GenericId<"User">; groupId: GenericId<"Group">; maxDepth?: number },
     ): Promise<ResolveResult> => {
       const maxDepth = Math.max(0, Math.floor(opts.maxDepth ?? 32));
       const result = (await ctx.runQuery(config.component.group.member.resolve, {
@@ -355,8 +349,8 @@ export function createMemberDomain(deps: MemberDeps) {
     assert: async (
       ctx: ComponentReadCtx,
       opts: {
-        userId: string;
-        groupId: string;
+        userId: GenericId<"User">;
+        groupId: GenericId<"Group">;
         roleIds?: string[];
         grants?: string[];
       },

@@ -5,7 +5,7 @@ import https from "node:https";
 import { api } from "@convex/_generated/api";
 import type { AuthEventKind } from "@estifanos-sh/convex-auth/server";
 import { ConvexHttpClient } from "convex/browser";
-import type { Value } from "convex/values";
+import type { GenericId, Value } from "convex/values";
 import { inject } from "vite-plus/test";
 
 declare module "vite-plus/test" {
@@ -347,10 +347,10 @@ export async function groupCreateRpc(
   convexClient: ConvexHttpClient,
   userToken: string,
   args: { name: string },
-): Promise<{ groupId: string }> {
+): Promise<{ groupId: GenericId<"Group"> }> {
   convexClient.setAuth(userToken);
   return (await convexClient.mutation((api as any).groups.create, args)) as {
-    groupId: string;
+    groupId: GenericId<"Group">;
   };
 }
 
@@ -358,14 +358,17 @@ export async function groupConnectionCreateRpc(
   convexClient: ConvexHttpClient,
   userToken: string,
   args: {
-    groupId: string;
+    groupId: GenericId<"Group">;
     name?: string;
     slug?: string;
     protocol: "oidc" | "saml";
     status?: "draft" | "active" | "disabled";
     domain?: string;
   },
-): Promise<{ connectionId: string; groupId: string }> {
+): Promise<{
+  connectionId: GenericId<"GroupConnection">;
+  groupId: GenericId<"Group">;
+}> {
   return await groupRpc(
     convexClient,
     userToken,
@@ -379,7 +382,7 @@ export async function groupOidcConfigureRpc(
   convexClient: ConvexHttpClient,
   userToken: string,
   args: {
-    connectionId: string;
+    connectionId: GenericId<"GroupConnection">;
     discovery: {
       issuer?: string;
       discoveryUrl?: string;
@@ -426,7 +429,7 @@ export async function groupSamlConfigureRpc(
   convexClient: ConvexHttpClient,
   userToken: string,
   args: {
-    connectionId: string;
+    connectionId: GenericId<"GroupConnection">;
     metadata: {
       xml?: string;
       url?: string;
@@ -485,7 +488,7 @@ export async function groupConnectionScimConfigureRpc(
   convexClient: ConvexHttpClient,
   userToken: string,
   args: {
-    connectionId: string;
+    connectionId: GenericId<"GroupConnection">;
     status?: "draft" | "active" | "disabled";
     security?: {
       maxRequestSize?: number;
@@ -520,7 +523,7 @@ export async function groupWebhookEndpointCreateRpc(
   convexClient: ConvexHttpClient,
   userToken: string,
   args: {
-    connectionId: string;
+    connectionId: GenericId<"GroupConnection">;
     url: string;
     secret: string;
     subscriptions: AuthEventKind[];
@@ -539,7 +542,7 @@ export async function groupWebhookDeliveryListRpc(
   convexClient: ConvexHttpClient,
   userToken: string,
   args: {
-    connectionId: string;
+    connectionId: GenericId<"GroupConnection">;
     paginationOpts?: { numItems: number; cursor: string | null };
   },
 ): Promise<{
@@ -559,7 +562,7 @@ export async function groupWebhookDeliveryListRpc(
 export async function groupWebhookEndpointListRpc(
   convexClient: ConvexHttpClient,
   userToken: string,
-  connectionId: string,
+  connectionId: GenericId<"GroupConnection">,
 ): Promise<GroupRpcResult[]> {
   return await groupRpc(
     convexClient,
@@ -574,7 +577,7 @@ export async function groupAuditListRpc(
   convexClient: ConvexHttpClient,
   userToken: string,
   args: {
-    connectionId: string;
+    connectionId: GenericId<"GroupConnection">;
     paginationOpts?: { numItems: number; cursor: string | null };
   },
 ): Promise<{

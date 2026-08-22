@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import * as p from "@clack/prompts";
 import type { DeviceCodeResult } from "@estifanos-sh/convex-auth/client";
 import { ConvexHttpClient } from "convex/browser";
+import type { FunctionArgs } from "convex/server";
 import { config as loadEnvFile } from "dotenv";
 import figlet from "figlet";
 import ansiShadow from "figlet/importable-fonts/ANSI Shadow.js";
@@ -259,7 +260,9 @@ async function doProjectsList() {
     message: "Group ID",
     placeholder: "paste group ID here",
   });
-  const selectedGroupId = unwrapPrompt(groupId);
+  const selectedGroupId = unwrapPrompt(groupId) as FunctionArgs<
+    typeof api.projects.list
+  >["groupId"];
   const result = await client.query(api.projects.list, { groupId: selectedGroupId });
   console.log(JSON.stringify(result, null, 2));
 }
@@ -278,7 +281,7 @@ async function doProjectsCreate() {
     },
   );
   const result = await client.mutation(api.projects.create, {
-    groupId: group.groupId,
+    groupId: group.groupId as FunctionArgs<typeof api.projects.create>["groupId"],
     name: group.name,
     identifier: group.identifier,
     ...(group.description ? { description: group.description } : {}),

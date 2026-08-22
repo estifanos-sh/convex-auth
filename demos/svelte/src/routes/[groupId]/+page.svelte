@@ -4,6 +4,7 @@
 	import { page } from "$app/state";
 	import { api } from "$convex/_generated/api.js";
 	import type { FunctionReturnType } from "convex/server";
+	import type { GenericId } from "convex/values";
 	import { getContext } from "svelte";
 	import type { AppContext } from "$lib/app";
 	import AppLoading from "$lib/components/AppLoading.svelte";
@@ -26,7 +27,7 @@
 	type Workspace = NonNullable<DashboardData["selectedGroup"]>;
 	type User = NonNullable<DashboardData["user"]>;
 
-	const groupId = $derived(page.params.groupId!);
+	const groupId = $derived(page.params.groupId! as GenericId<"Group">);
 	let activeTab = $state<"issues" | "settings">("issues");
 	let selectedProjectSlug = $state<string | null>(null);
 

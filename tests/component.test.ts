@@ -2,7 +2,7 @@ import { components } from "@convex/_generated/api";
 import { auth } from "@convex/auth";
 import { roles } from "@convex/roles";
 import schema from "@convex/schema";
-import { ConvexError } from "convex/values";
+import { ConvexError, type GenericId } from "convex/values";
 import { convexTest as baseConvexTest } from "convex-test";
 import { expect, test, vi } from "vite-plus/test";
 
@@ -711,25 +711,27 @@ test("sign-in limiter reservations are atomic and fully-refilled buckets are pru
 test("auth.member.get returns membership, roleIds, and grants", async () => {
   const t = convexTest(schema);
 
-  const userId = await t.run(async (ctx) => {
+  const userId = (await t.run(async (ctx) => {
     return await ctx.runMutation(components.auth.user.create, {
       data: { email: "member-inspect@example.com" },
     });
-  });
+  })) as GenericId<"User">;
 
-  const orgId = await t.run(async (ctx) => {
+  const orgId = (await t.run(async (ctx) => {
     return await ctx.runMutation(components.auth.group.create, {
       name: "Acme Org",
       slug: "acme-org",
       type: "organization",
     });
-  });
+  })) as GenericId<"Group">;
 
   await t.run(async (ctx) => {
-    return await ctx.runMutation(components.auth.group.member.create, {
-      userId,
-      groupId: orgId,
-      roleIds: [roles.orgAdmin.id],
+    return await auth.member.create(ctx, {
+      data: {
+        userId,
+        groupId: orgId,
+        roleIds: [roles.orgAdmin.id],
+      },
     });
   });
 
@@ -877,19 +879,19 @@ test("event taxonomy: append+list round-trips every kind and preserves its categ
 test("auth.member.assert throws ConvexError on invalid role ids", async () => {
   const t = convexTest(schema);
 
-  const userId = await t.run(async (ctx) => {
+  const userId = (await t.run(async (ctx) => {
     return await ctx.runMutation(components.auth.user.create, {
       data: { email: "invalid-role@example.com" },
     });
-  });
+  })) as GenericId<"User">;
 
-  const groupId = await t.run(async (ctx) => {
+  const groupId = (await t.run(async (ctx) => {
     return await ctx.runMutation(components.auth.group.create, {
       name: "Role Test Org",
       slug: "role-test-org",
       type: "organization",
     });
-  });
+  })) as GenericId<"Group">;
 
   await expect(
     t.run(async (ctx) => {

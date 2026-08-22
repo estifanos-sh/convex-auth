@@ -2,14 +2,14 @@ import { definePermissions } from "@estifanos-sh/convex-auth/permissions";
 import { client } from "@estifanos-sh/convex-auth/browser";
 import { useAuth as useReactAuth } from "@estifanos-sh/convex-auth/react";
 import { useConvexAuth as useSvelteAuth } from "@estifanos-sh/convex-auth/svelte";
-import type { ClientOptions } from "@estifanos-sh/convex-auth/client";
+import { ErrorCode as ClientErrorCode, type ClientOptions } from "@estifanos-sh/convex-auth/client";
 import { credentials } from "@estifanos-sh/convex-auth/providers";
 import { webauthn } from "@estifanos-sh/convex-auth/providers/webauthn";
 // @ts-expect-error createAuth was hard-cut from the vNext public server API.
 import { createAuth } from "@estifanos-sh/convex-auth/server";
 import { authEnv, authEvents, defineAuth, type AuthEnv } from "@estifanos-sh/convex-auth/server";
 import { type ApiFromModules, defineApp, type FunctionArgs, type HttpRouter } from "convex/server";
-import { v, type GenericId } from "convex/values";
+import { v, type GenericId, type Infer } from "convex/values";
 
 import { api } from "../../../convex/_generated/api";
 import { auth } from "../../../convex/auth";
@@ -21,10 +21,10 @@ declare const memberRequireCtx: Parameters<typeof auth.member.assert>[0];
 declare const userUpdateCtx: Parameters<typeof auth.user.update>[0];
 declare const memberUpdateCtx: Parameters<typeof auth.member.update>[0];
 declare const keyCtx: Parameters<typeof auth.key.verify>[0];
-declare const userId: string;
-declare const groupId: string;
-declare const memberId: string;
-declare const keyId: string;
+declare const userId: GenericId<"User">;
+declare const groupId: GenericId<"Group">;
+declare const memberId: GenericId<"GroupMember">;
+declare const keyId: GenericId<"ApiKey">;
 declare const secret: string;
 declare const authEnvironment: AuthEnv;
 
@@ -40,7 +40,32 @@ void authEnvironment.AUTH_GITHUB_ID;
 declare const authComponent: Parameters<typeof defineAuth>[0];
 declare const authUserId: GenericId<"User">;
 declare const authGroupId: GenericId<"Group">;
+declare const authConnectionId: GenericId<"GroupConnection">;
+declare const authWebhookEndpointId: GenericId<"GroupWebhookEndpoint">;
+declare const authReadCtx: Parameters<typeof auth.connection.get>[0];
 declare const convex: ClientOptions["convex"];
+
+const authUserIdValidator = auth.v.id("User");
+type AuthUserIdFromValidator = Infer<typeof authUserIdValidator>;
+type _AuthIdValidatorKeepsTheComponentTable = Assert<
+  Equal<AuthUserIdFromValidator, GenericId<"User">>
+>;
+const validatedAuthUserId: AuthUserIdFromValidator = authUserId;
+void validatedAuthUserId;
+// @ts-expect-error The public ID validator rejects a different component table.
+const wrongAuthUserId: AuthUserIdFromValidator = authGroupId;
+void wrongAuthUserId;
+
+const connectionById = auth.connection.get(authReadCtx, { id: authConnectionId });
+type ConnectionById = Awaited<typeof connectionById>;
+type _ConnectionKeepsExactIds = Assert<
+  Equal<NonNullable<ConnectionById>["groupId"], GenericId<"Group">>
+>;
+void auth.connection.webhook.endpoint.get(authReadCtx, { id: authWebhookEndpointId });
+// @ts-expect-error A Group ID cannot select a GroupConnection.
+void auth.connection.get(authReadCtx, { id: authGroupId });
+// @ts-expect-error A User ID cannot select a webhook endpoint.
+void auth.connection.webhook.endpoint.get(authReadCtx, { id: authUserId });
 
 const generatedClient = client({ convex, api: api.auth });
 
@@ -150,6 +175,62 @@ void accessClient.signIn("access", {
   // @ts-expect-error React bindings retain custom provider fields.
   pin: 1234,
 });
+
+const extendedAuth = defineAuth(authComponent, {
+  providers: [accessProvider],
+  extend: {
+    User: v.object({ plan: v.literal("pro") }),
+    Group: v.object({ billingAccount: v.string() }),
+    GroupMember: v.object({ title: v.string() }),
+  },
+});
+const extendedUser = extendedAuth.user.get(readCtx, { id: authUserId });
+const extendedGroup = extendedAuth.group.get(readCtx, { id: authGroupId });
+const extendedMember = extendedAuth.member.get(readCtx, {
+  userId: authUserId,
+  groupId: authGroupId,
+});
+// @ts-expect-error public user lookups only accept auth User IDs.
+void extendedAuth.user.get(readCtx, { id: authGroupId });
+// @ts-expect-error membership user and group positions remain table-specific.
+void extendedAuth.member.get(readCtx, { userId: authGroupId, groupId: authGroupId });
+// @ts-expect-error API-key operations only accept auth ApiKey IDs.
+void extendedAuth.key.get(readCtx, { id: authUserId });
+type ExtendedUser = NonNullable<Awaited<typeof extendedUser>>;
+type ExtendedGroup = NonNullable<Awaited<typeof extendedGroup>>;
+type ExtendedMember = NonNullable<Awaited<typeof extendedMember>["membership"]>;
+type _UserExtensionFlowsThroughReads = Assert<
+  Equal<ExtendedUser["extend"], { plan: "pro" } | undefined>
+>;
+type _GroupExtensionFlowsThroughReads = Assert<
+  Equal<ExtendedGroup["extend"], { billingAccount: string } | undefined>
+>;
+type _MemberExtensionFlowsThroughReads = Assert<
+  Equal<ExtendedMember["extend"], { title: string } | undefined>
+>;
+type _AuthUserIdIsComponentSpecific = Assert<Equal<ExtendedUser["_id"], GenericId<"User">>>;
+type _AuthGroupIdIsComponentSpecific = Assert<Equal<ExtendedGroup["_id"], GenericId<"Group">>>;
+type _AuthMemberIdIsComponentSpecific = Assert<
+  Equal<ExtendedMember["_id"], GenericId<"GroupMember">>
+>;
+void defineAuth(authComponent, {
+  providers: [],
+  connection: {
+    hooks: {
+      afterProvision: async ({ userId }) => {
+        userId satisfies GenericId<"User">;
+      },
+    },
+  },
+});
+const typedClientFailure: Awaited<ReturnType<typeof accessClient.signIn>> = {
+  kind: "failed",
+  code: ClientErrorCode.INVALID_CREDENTIALS,
+};
+void typedClientFailure;
+void extendedUser;
+void extendedGroup;
+void extendedMember;
 // @ts-expect-error Client typing retains the configured provider union.
 void accessClient.signIn("password", {
   flow: "signIn",

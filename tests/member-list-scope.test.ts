@@ -2,6 +2,7 @@ import { api } from "@convex/_generated/api";
 import { auth as backendAuth } from "@convex/auth";
 import { roles } from "@convex/roles";
 import schema from "@convex/schema";
+import type { GenericId } from "convex/values";
 import { decodeJwt } from "jose";
 import { afterEach, expect, test, vi } from "vite-plus/test";
 
@@ -39,8 +40,8 @@ async function setupAdminMember(t: ReturnType<typeof convexTest>) {
 
 async function grantsFor(
   runner: Pick<ReturnType<typeof convexTest>, "run">,
-  userId: string,
-  groupId: string,
+  userId: GenericId<"User">,
+  groupId: GenericId<"Group">,
 ): Promise<string[] | null> {
   return await runner.run(async (ctx) => {
     const result = await backendAuth.member.get(ctx as any, { userId, groupId });
