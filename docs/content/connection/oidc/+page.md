@@ -153,12 +153,20 @@ const route = await auth.connection.signIn(ctx, {
 route.signInPath;
 ```
 
-## Provider mode note
+## Endpoint roles
 
-The library currently publishes issuer and JWKS metadata for provider-mode
-discovery. Full provider endpoints such as `/oauth/authorize`, `/oauth/token`,
-and `/userinfo` are still future work and should not be treated as generally
-available yet.
+The `authorization_endpoint`, `token_endpoint`, and optional
+`userinfo_endpoint` in the discovery document belong to the external OIDC
+identity provider configured for this connection. Convex Auth redirects to and
+calls those endpoints as that provider's client; it does not expose them as
+connection-management routes.
+
+When the separate `defineAuth({ oauth: { ... } })` configuration is enabled,
+Convex Auth also acts as the application's OAuth authorization server. Its wire
+endpoints are `{prefix}/oauth2/authorize`, `{prefix}/oauth2/token`, and
+`{prefix}/oauth2/register`, discovered through the application's well-known
+metadata. That OAuth-server feature is independent of an enterprise OIDC
+connection.
 
 ## Validation
 

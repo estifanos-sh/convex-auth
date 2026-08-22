@@ -14,8 +14,10 @@ test("rate limit on password", async () => {
   const t = convexTest(schema);
 
   await t.action(api.auth.signIn, {
-    provider: "password",
-    params: { email: TEST_EMAIL, password: TEST_PASSWORD, flow: "signUp" },
+    request: {
+      provider: "password",
+      params: { email: TEST_EMAIL, password: TEST_PASSWORD, flow: "signUp" },
+    },
   });
 
   const SECOND_MS = 1000;
@@ -26,11 +28,13 @@ test("rate limit on password", async () => {
     await expect(
       async () =>
         await t.action(api.auth.signIn, {
-          provider: "password",
-          params: {
-            email: TEST_EMAIL,
-            password: "nobueno",
-            flow: "signIn",
+          request: {
+            provider: "password",
+            params: {
+              email: TEST_EMAIL,
+              password: "nobueno",
+              flow: "signIn",
+            },
           },
         }),
     ).rejects.toThrow(/ACCOUNT_NOT_FOUND|Invalid credentials|RATE_LIMITED/);
@@ -39,11 +43,13 @@ test("rate limit on password", async () => {
   await expect(
     async () =>
       await t.action(api.auth.signIn, {
-        provider: "password",
-        params: {
-          email: TEST_EMAIL,
-          password: TEST_PASSWORD,
-          flow: "signIn",
+        request: {
+          provider: "password",
+          params: {
+            email: TEST_EMAIL,
+            password: TEST_PASSWORD,
+            flow: "signIn",
+          },
         },
       }),
   ).rejects.toThrow(/ACCOUNT_NOT_FOUND|Invalid credentials|RATE_LIMITED/);
@@ -52,11 +58,13 @@ test("rate limit on password", async () => {
 
   const tokens = expectSignInSession(
     await t.action(api.auth.signIn, {
-      provider: "password",
-      params: {
-        email: TEST_EMAIL,
-        password: TEST_PASSWORD,
-        flow: "signIn",
+      request: {
+        provider: "password",
+        params: {
+          email: TEST_EMAIL,
+          password: TEST_PASSWORD,
+          flow: "signIn",
+        },
       },
     }),
   );
@@ -71,25 +79,25 @@ test("unknown credentials attempts consume the same opaque bucket after signup",
   for (let i = 0; i < 10; i++) {
     await expect(
       t.action(api.auth.signIn, {
-        provider: "password",
-        params: {
-          email: email.toUpperCase(),
-          password: "incorrect-password",
-          flow: "signIn",
+        request: {
+          provider: "password",
+          params: {
+            email: email.toUpperCase(),
+            password: "incorrect-password",
+            flow: "signIn",
+          },
         },
       }),
     ).rejects.toThrow(/ACCOUNT_NOT_FOUND|Invalid credentials|RATE_LIMITED/);
   }
 
   await t.action(api.auth.signIn, {
-    provider: "password",
-    params: { email, password: TEST_PASSWORD, flow: "signUp" },
+    request: { provider: "password", params: { email, password: TEST_PASSWORD, flow: "signUp" } },
   });
 
   await expect(
     t.action(api.auth.signIn, {
-      provider: "password",
-      params: { email, password: TEST_PASSWORD, flow: "signIn" },
+      request: { provider: "password", params: { email, password: TEST_PASSWORD, flow: "signIn" } },
     }),
   ).rejects.toThrow(/RATE_LIMITED/);
 });

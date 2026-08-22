@@ -524,11 +524,12 @@ test("password recovery consumes one reset code and stages no session before rot
     sessions: await ctx.runQuery(components.auth.session.list, { userId }),
     continuation: await ctx.runQuery(components.auth.token.continuation.get, {
       id: accepted[0]!.continuationId,
+      now: Date.now(),
     }),
   }));
   expect(stored.account?.secret).toBe("old-secret");
   expect(stored.sessions).toEqual([]);
-  expect(stored.continuation?.userId).toBe(userId);
+  expect(stored.continuation?.subject).toEqual({ kind: "user", userId });
 
   const replay = await recover("recovery-code-one");
   expect(replay.status).toBe("rejected");
@@ -545,11 +546,15 @@ test("auth verifier lookups ignore expired verifiers", async () => {
   });
 
   const byId = await t.run(async (ctx) => {
-    return await ctx.runQuery(components.auth.token.pkce.get, { id: verifierId });
+    return await ctx.runQuery(components.auth.token.pkce.get, {
+      selector: { id: verifierId },
+      now: Date.now(),
+    });
   });
   const bySignature = await t.run(async (ctx) => {
     return await ctx.runQuery(components.auth.token.pkce.get, {
-      signature: "expired-signature",
+      selector: { signature: "expired-signature" },
+      now: Date.now(),
     });
   });
 
@@ -628,7 +633,8 @@ test("pruneExpired skips never-expire verifiers and prunes expired ones", async 
 
   const survivor = await t.run(async (ctx) => {
     return await ctx.runQuery(components.auth.token.pkce.get, {
-      signature: "never-expire-verifier",
+      selector: { signature: "never-expire-verifier" },
+      now: Date.now(),
     });
   });
   expect(survivor).not.toBeNull();
@@ -673,7 +679,7 @@ test("pruneExpired deletes expired provider continuations", async () => {
   );
   expect(result.authContinuations).toBe(1);
   const continuation = await t.run((ctx) =>
-    ctx.runQuery(components.auth.token.continuation.get, { id: continuationId }),
+    ctx.runQuery(components.auth.token.continuation.get, { id: continuationId, now: Date.now() }),
   );
   expect(continuation).toBeNull();
 });
@@ -835,10 +841,53 @@ test("event.append orders different kinds in one private auth-events stream", as
   }
 
   const events = await t.run(
-    async (ctx) => await ctx.runQuery(privateAuthForTest(components.auth).event.orderedEvents, {}),
+    async (ctx) =>
+      await ctx.runQuery(privateAuthForTest(components.auth).event.orderedEvents, {
+        now: Date.now(),
+      }),
   );
   expect(events.map(({ kind }) => kind)).toEqual(["user.created", "session.signed_in"]);
   expect(events[0]!.commitTs <= events[1]!.commitTs).toBe(true);
+});
+
+test("pruneExpired retires and deletes expired auth-event stream buckets", async () => {
+  const t = convexTest(schema);
+  const now = Date.now();
+  const userId = await t.run((ctx) =>
+    ctx.runMutation(components.auth.user.create, {
+      data: { email: "event-stream-retention@example.com" },
+    }),
+  );
+  await t.run((ctx) =>
+    ctx.runMutation(components.auth.event.append, {
+      event: {
+        eventId: "event-retention:user",
+        kind: "user.created",
+        occurredAt: now,
+        actor: { type: "system" },
+        subject: { type: "user", id: userId },
+        targets: [{ kind: "user", id: userId }],
+        outcome: "success",
+      },
+    }),
+  );
+  const before = await t.run((ctx) =>
+    ctx.runQuery(privateAuthForTest(components.auth).event.orderedEvents, { now }),
+  );
+  expect(before).toHaveLength(1);
+
+  const result = await t.run((ctx) =>
+    ctx.runMutation(pruneExpiredForTest(components.auth), {
+      batchSize: 10,
+      now: now + 91 * 24 * 60 * 60 * 1000 + 1,
+    }),
+  );
+
+  expect(result.authEventStreams).toBe(1);
+  const after = await t.run((ctx) =>
+    ctx.runQuery(privateAuthForTest(components.auth).event.orderedEvents, { now }),
+  );
+  expect(after).toEqual([]);
 });
 
 test("event taxonomy: component validators are derived from the shared kind table with no drift", () => {

@@ -9,20 +9,11 @@
 import { getOneFrom } from "convex-helpers/server/relationships";
 import { v } from "convex/values";
 
-import type { Id } from "../_generated/dataModel";
-import type { QueryCtx } from "../_generated/server";
-import { mutation, query } from "../functions";
-import { vAuthVerifierDoc } from "../model";
+import { mutation, query } from "../_generated/server";
+import { vAuthVerifierDoc } from "../documents";
+import schema from "../schema";
 
 const DEFAULT_VERIFIER_TTL_MS = 1000 * 60 * 15;
-
-async function getUnexpiredVerifier(ctx: QueryCtx, verifierId: string) {
-  const verifier = await ctx.db.get("AuthVerifier", verifierId as Id<"AuthVerifier">);
-  if (verifier?.expirationTime !== undefined && verifier.expirationTime < Date.now()) {
-    return null;
-  }
-  return verifier;
-}
 
 /**
  * Read a verifier by `id` or `signature`, returning `null` once expired.
@@ -30,20 +21,26 @@ async function getUnexpiredVerifier(ctx: QueryCtx, verifierId: string) {
  */
 export const get = query({
   args: {
-    id: v.optional(v.id("AuthVerifier")),
-    signature: v.optional(v.string()),
+    selector: v.union(
+      v.object({ id: schema.id("AuthVerifier") }),
+      v.object({ signature: v.string() }),
+    ),
+    now: v.number(),
   },
   returns: v.union(vAuthVerifierDoc, v.null()),
-  handler: async (ctx, args) => {
-    if (args.signature !== undefined) {
-      const verifier = await getOneFrom(ctx.db, "AuthVerifier", "signature", args.signature);
-      if (verifier?.expirationTime !== undefined && verifier.expirationTime < Date.now()) {
+  handler: async (ctx, { selector, now }) => {
+    if ("signature" in selector) {
+      const verifier = await getOneFrom(ctx.db, "AuthVerifier", "signature", selector.signature);
+      if (verifier?.expirationTime !== undefined && verifier.expirationTime < now) {
         return null;
       }
       return verifier;
     }
-    if (args.id === undefined) return null;
-    return await getUnexpiredVerifier(ctx, args.id);
+    const verifier = await ctx.db.get("AuthVerifier", selector.id);
+    if (verifier?.expirationTime !== undefined && verifier.expirationTime < now) {
+      return null;
+    }
+    return verifier;
   },
 });
 
@@ -67,18 +64,18 @@ export const get = query({
  */
 export const consume = mutation({
   args: {
-    id: v.optional(v.id("AuthVerifier")),
-    signature: v.optional(v.string()),
+    selector: v.union(
+      v.object({ id: schema.id("AuthVerifier") }),
+      v.object({ signature: v.string() }),
+    ),
     expectedSignature: v.optional(v.string()),
   },
   returns: v.union(vAuthVerifierDoc, v.null()),
-  handler: async (ctx, { id, signature, expectedSignature }) => {
+  handler: async (ctx, { selector, expectedSignature }) => {
     const verifier =
-      signature !== undefined
-        ? await getOneFrom(ctx.db, "AuthVerifier", "signature", signature)
-        : id !== undefined
-          ? await ctx.db.get("AuthVerifier", id)
-          : null;
+      "signature" in selector
+        ? await getOneFrom(ctx.db, "AuthVerifier", "signature", selector.signature)
+        : await ctx.db.get("AuthVerifier", selector.id);
     if (verifier === null) return null;
     if (verifier.expirationTime !== undefined && verifier.expirationTime < Date.now()) {
       await ctx.db.delete("AuthVerifier", verifier._id);

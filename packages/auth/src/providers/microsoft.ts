@@ -14,10 +14,9 @@
  * @module
  */
 
-import { MicrosoftEntraId } from "arctic";
 import { createRemoteJWKSet, decodeProtectedHeader, jwtVerify } from "jose";
 
-import { createArcticOAuthClient, createOAuthProvider } from "../server/oauth/factory";
+import { createOAuthClient, createOAuthProvider } from "../server/oauth/factory";
 import { defaultOAuthRedirectUri } from "./redirect";
 
 const DEFAULT_SCOPES = ["openid", "profile", "email"];
@@ -62,19 +61,25 @@ export interface MicrosoftConfig {
  */
 export function microsoft(config: MicrosoftConfig) {
   const scopes = config.scopes ?? DEFAULT_SCOPES;
-  const createProvider = (redirectUri?: string) =>
-    new MicrosoftEntraId(
-      config.tenant,
-      config.clientId,
-      config.clientSecret ?? null,
-      config.redirectUri ?? defaultOAuthRedirectUri("microsoft", redirectUri),
-    );
   const issuer = `https://login.microsoftonline.com/${config.tenant}/v2.0`;
+  const oauthEndpoint = `https://login.microsoftonline.com/${config.tenant}/oauth2/v2.0`;
   const jwks = createRemoteJWKSet(new URL(`${issuer}/discovery/v2.0/keys`));
 
   return createOAuthProvider({
     id: "microsoft",
-    provider: createArcticOAuthClient(createProvider, { pkce: "required" }),
+    provider: createOAuthClient({
+      clientId: config.clientId,
+      clientSecret: config.clientSecret,
+      redirectUri: (redirectUri) =>
+        config.redirectUri ?? defaultOAuthRedirectUri("microsoft", redirectUri),
+      authorizationUrl: `${oauthEndpoint}/authorize`,
+      tokenUrl: `${oauthEndpoint}/token`,
+      pkce: "required",
+      tokenAuth: config.clientSecret ? "basic" : "body",
+      tokenHeaders: config.clientSecret
+        ? undefined
+        : (redirectUri) => ({ Origin: new URL(redirectUri).origin }),
+    }),
     scopes,
     nonce: true,
     accountLinking: config.accountLinking,

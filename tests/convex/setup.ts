@@ -41,7 +41,7 @@ type PrivateAuthTestApi = {
     orderedEvents: FunctionReference<
       "query",
       "internal",
-      Record<string, never>,
+      { now: number },
       Array<{ kind: string; commitTs: bigint }>
     >;
   };
@@ -49,7 +49,7 @@ type PrivateAuthTestApi = {
     pruneExpired: FunctionReference<
       "mutation",
       "internal",
-      { batchSize: number },
+      { batchSize: number; now?: number },
       Record<string, number>
     >;
   };
@@ -66,8 +66,12 @@ export const privateAuthForTest = (auth: unknown): PrivateAuthTestApi => auth as
  */
 export const pruneExpiredForTest = (
   auth: unknown,
-): FunctionReference<"mutation", "internal", { batchSize: number }, Record<string, number>> =>
-  privateAuthForTest(auth).maintenance.pruneExpired;
+): FunctionReference<
+  "mutation",
+  "internal",
+  { batchSize: number; now?: number },
+  Record<string, number>
+> => privateAuthForTest(auth).maintenance.pruneExpired;
 
 if (!process.env.APP_URL) {
   process.env.APP_URL = "http://localhost:5173";

@@ -36,7 +36,6 @@
     "@convex-dev/resend": "latest",
     "@convex-dev/static-hosting": "^0.2.1",
     "@estifanos-sh/convex-auth": "workspace:*",
-    "arctic": "latest",
     "convex": "catalog:",
     "convex-helpers": "latest"
   },

@@ -13,9 +13,9 @@ import { ErrorCode } from "../../shared/codes";
 
 import type { Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
-import { mutation, query } from "../functions";
+import { mutation, query } from "../_generated/server";
 import { recordSignInLimit, resetSignInLimit } from "../limits";
-import { vTotpFactorDoc, vUserDoc } from "../model";
+import { vTotpFactorDoc, vUserDoc } from "../documents";
 import { createSessionRows, vSessionReplacement } from "../session";
 
 const TOTP_LIST_BATCH = 32;
@@ -187,6 +187,7 @@ export const completeVerification = mutation({
       user: vUserDoc,
       factorId: v.id("TotpFactor"),
       sessionId: v.id("Session"),
+      sessionExpirationTime: v.number(),
       refreshTokenId: v.id("RefreshToken"),
       replacedSessionId: v.optional(v.id("Session")),
     }),
@@ -215,6 +216,7 @@ export const completeVerification = mutation({
       user: created.user,
       factorId: resolved.factor._id,
       sessionId: created.sessionId,
+      sessionExpirationTime: created.sessionExpirationTime,
       refreshTokenId: created.refreshTokenId,
       ...(created.replacedSessionId === undefined
         ? {}

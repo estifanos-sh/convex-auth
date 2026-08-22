@@ -29,11 +29,13 @@ test("device verify preserves the approver session and mints a distinct device s
 
   const approverTokens = expectSignInSession(
     await t.action(api.auth.signIn, {
-      provider: "password",
-      params: {
-        email: "device-verify-race@example.com",
-        password: TEST_PASSWORD,
-        flow: "signUp",
+      request: {
+        provider: "password",
+        params: {
+          email: "device-verify-race@example.com",
+          password: TEST_PASSWORD,
+          flow: "signUp",
+        },
       },
     }),
   );
@@ -44,8 +46,7 @@ test("device verify preserves the approver session and mints a distinct device s
 
   // The device (unauthenticated) starts the flow...
   const created = await t.action(api.auth.signIn, {
-    provider: "device",
-    params: { flow: "create" },
+    request: { provider: "device", params: { flow: "create" } },
   });
   const { deviceCode, userCode } =
     created.kind === "deviceCode" ? created.deviceCode : { deviceCode: "", userCode: "" };
@@ -53,8 +54,7 @@ test("device verify preserves the approver session and mints a distinct device s
 
   // ...and the signed-in user approves it.
   const verified = await asUser.action(api.auth.signIn, {
-    provider: "device",
-    params: { flow: "verify", userCode },
+    request: { provider: "device", params: { flow: "verify", userCode } },
   });
   expect(verified.kind).toBe("signedIn");
 
@@ -74,8 +74,7 @@ test("device verify preserves the approver session and mints a distinct device s
 
   // The device can still complete poll and receive its own tokens.
   const polled = await t.action(api.auth.signIn, {
-    provider: "device",
-    params: { flow: "poll", deviceCode },
+    request: { provider: "device", params: { flow: "poll", deviceCode } },
   });
   expect(expectSignInSession(polled)).not.toBeNull();
 });

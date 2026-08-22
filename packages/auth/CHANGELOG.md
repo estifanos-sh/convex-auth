@@ -1,9 +1,19 @@
 # Changelog
 
-## Unreleased
+## 0.0.4
 
 ### Breaking
 
+- The low-level generated `api.auth.signIn` action now accepts a required
+  `{ request: ... }` discriminated union. Provider IDs and credential params
+  live together inside `request`; refresh uses `{ request: { refreshToken } }`.
+  The browser, Expo, React, and Svelte clients keep the ergonomic
+  `auth.signIn(provider, params)` method and wrap this transport automatically.
+- Direct clients require `{ api: api.auth }`; proxy clients require
+  `{ proxyPath }`. The two modes are mutually exclusive at the type level.
+- Public user updates are limited to profile and configured extension fields.
+  Email identity changes continue through `auth.user.email.*` rather than a
+  generic patch.
 - `auth.provider.signIn` now takes one object argument after `ctx`:
   `{ provider, accountId?, params? }`.
 - Password reset completion is the required `recover` flow with
@@ -13,9 +23,34 @@
   environment names and pass those values to provider and `defineAuth`
   configuration. Phone providers no longer discover
   `AUTH_<PROVIDER_ID>_KEY`; capture delivery credentials in `send` instead.
+- Library-internal API result types, component handles, raw document types, and
+  raw document validators are no longer exported from the server entry point.
+  Applications rely on the inferred `defineAuth` result, generated `api.auth`,
+  handler-local `ctx.auth`, and the configured `auth.v` validators instead.
+- User and session epochs are required component data. The compatibility reads
+  for pre-epoch users and sessions were removed after existing deployments
+  migrated, so the component no longer carries a second legacy session model.
 
 ### New
 
+- Custom credential validators now survive Convex codegen. Passing generated
+  `api.auth` directly to `client` preserves literal provider IDs, validated
+  params, exact action results, and configured factor capabilities without a
+  generic, handwritten client interface, or assertion.
+- `ctx.auth.credentials.verify` and `ctx.auth.credentials.provision` bind a
+  credentials proof to `passkeys.signIn()` or `passkeys.rotate()` without an
+  intermediate session. The successful WebAuthn assertion or registration is
+  the only operation that issues the final session.
+- `auth.account.list(ctx, { userIds, provider? })` performs a safe, redacted,
+  bounded batch read for as many as 100 users in one component call. Account,
+  session, invite, user, group, and membership facade IDs retain their component
+  table brands.
+- `createAuthTest(t, components.auth)` creates typed users, groups,
+  memberships, sessions, and `t.withIdentity` claims backed by real component
+  records.
+- Configured `User`, `Group`, `GroupMember`, and `GroupInvite` extension
+  validators now type both facade writes and reads. Omitted validators infer
+  `unknown`, never `any`.
 - Password recovery can require passkey rotation with
   `password({ reset, afterReset: passkeys.rotate() })`. OTP verification creates
   a short-lived, provider-bound continuation without issuing a session. The
@@ -24,6 +59,30 @@
   complete the WebAuthn ceremony.
 - `auth.provider.continue(ctx, { userId, operation })` composes typed provider
   operations without caller-authored mode or purpose strings.
+- The setup wizard declares Convex's system-provided `CONVEX_SITE_URL` in
+  `convex.config.ts`, so generated `env` types validate the issuer wiring
+  without a process-environment assertion.
+- Convex 1.45 is now the minimum supported peer. Component validators derive
+  documents and IDs from the schema with `schema.doc()` and `schema.id()`, and
+  the Stream PR 1 package preview backs bounded auth-event retention.
+
+### Fixed
+
+- Protected handlers resolve the user, durable session, active group,
+  membership, role, and grants through one component snapshot. Callers reuse
+  `ctx.auth` instead of repeating user and active-group reads.
+- Session access tokens are capped by the durable session's absolute expiry.
+  Refresh, device, TOTP, password, and WebAuthn paths cannot extend a JWT past
+  the session row that authorizes it.
+- `auth.user.remove` preflights one globally bounded cascade before its first
+  write, removes every user-owned credential and session row atomically, and
+  clears attribution on shared OAuth clients, invites, and webhook endpoints.
+- Batch selectors and SCIM provisioning reject more than 100 items before
+  database work. Component pagination uses the schema-aware paginator rather
+  than unbounded collection or built-in component pagination.
+- Component queries no longer read wall-clock time. Epoch-millisecond deadlines
+  remain in mutations and actions, while redundant creation timestamps use
+  Convex's `_creationTime`.
 
 ## 0.0.1
 

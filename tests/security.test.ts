@@ -523,7 +523,7 @@ test("proxy refresh keeps valid access token when refresh cookie is missing", as
     },
     body: JSON.stringify({
       action: "auth:signIn",
-      args: { refreshToken: true },
+      args: { request: { refreshToken: true } },
     }),
   });
 
@@ -565,7 +565,7 @@ test("proxy refresh returns null when missing refresh cookie and access token is
     },
     body: JSON.stringify({
       action: "auth:signIn",
-      args: { refreshToken: true },
+      args: { request: { refreshToken: true } },
     }),
   });
 
@@ -598,8 +598,10 @@ test("proxy signIn errors keep existing cookies for non-refresh requests", async
     body: JSON.stringify({
       action: "auth:signIn",
       args: {
-        provider: "password",
-        params: { email: "sarah@gmail.com", password: "wrong", flow: "signIn" },
+        request: {
+          provider: "password",
+          params: { email: "sarah@gmail.com", password: "wrong", flow: "signIn" },
+        },
       },
     }),
   });
@@ -621,7 +623,14 @@ test("proxy signIn hydrates auth from refresh cookie for device verification", a
   const actionSpy = vi
     .spyOn(ConvexHttpClient.prototype, "action")
     .mockImplementation(async function (this: ConvexHttpClient, ...[_reference, args]: any[]) {
-      if (typeof args === "object" && args !== null && "refreshToken" in args) {
+      if (
+        typeof args === "object" &&
+        args !== null &&
+        "request" in args &&
+        typeof args.request === "object" &&
+        args.request !== null &&
+        "refreshToken" in args.request
+      ) {
         return {
           kind: "signedIn",
           session: {
@@ -633,8 +642,10 @@ test("proxy signIn hydrates auth from refresh cookie for device verification", a
 
       expect(Object.getOwnPropertyDescriptor(this, "auth")?.value).toBe("fresh-jwt-token");
       expect(args).toMatchObject({
-        provider: "device",
-        params: { flow: "verify", userCode: "ABCD-EFGH" },
+        request: {
+          provider: "device",
+          params: { flow: "verify", userCode: "ABCD-EFGH" },
+        },
       });
       return { kind: "signedIn", session: null };
     });
@@ -663,8 +674,10 @@ test("proxy signIn hydrates auth from refresh cookie for device verification", a
     body: JSON.stringify({
       action: "auth:signIn",
       args: {
-        provider: "device",
-        params: { flow: "verify", userCode: "ABCD-EFGH" },
+        request: {
+          provider: "device",
+          params: { flow: "verify", userCode: "ABCD-EFGH" },
+        },
       },
     }),
   });

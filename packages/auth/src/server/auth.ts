@@ -6,7 +6,7 @@
 
 import type { HttpRouter, RegisteredAction } from "convex/server";
 import { ConvexError } from "convex/values";
-import type { GenericId, GenericValidator, Infer, Value } from "convex/values";
+import type { GenericId, GenericValidator, Infer } from "convex/values";
 
 import { ErrorCode } from "../shared/codes";
 import type { AuthTokens, SignInFlowResult } from "../shared/results";
@@ -18,11 +18,9 @@ import type {
   AuthContextConfig,
   AuthContextFactory,
   AuthContextResolver,
-  InferAuth,
   OptionalAuthContext,
   OptionalAuthContextFactory,
   OptionalAuthContextResolver,
-  UserDoc,
 } from "./facade";
 import { Auth as AuthFactory } from "./runtime";
 import { createAuthValidators } from "./validators";
@@ -37,7 +35,7 @@ import type {
   RoleId,
 } from "./types";
 
-export type { AuthConfig, AuthContext, AuthContextConfig, InferAuth, OptionalAuthContext, UserDoc };
+export type { AuthConfig, AuthContext, AuthContextConfig, OptionalAuthContext };
 export type { AuthExtendValidators, AuthValidators };
 
 /**
@@ -49,6 +47,11 @@ type PageWithItem<TPage, Item> = Omit<TPage, "page"> & { page: Item[] };
 type AuthUser<TExtend extends AuthExtendValidators> = Infer<AuthValidators<TExtend>["user"]>;
 type AuthGroup<TExtend extends AuthExtendValidators> = Infer<AuthValidators<TExtend>["group"]>;
 type AuthMember<TExtend extends AuthExtendValidators> = Infer<AuthValidators<TExtend>["member"]>;
+type AuthInvite<TExtend extends AuthExtendValidators> = Infer<AuthValidators<TExtend>["invite"]>;
+type ExtendInput<
+  TExtend extends AuthExtendValidators,
+  TTable extends keyof AuthExtendValidators,
+> = TExtend[TTable] extends GenericValidator ? Infer<TExtend[TTable]> : unknown;
 
 type MemberAccessResult<
   TPermissions extends PermissionsConfig | undefined,
@@ -87,7 +90,7 @@ function projectPublicApi<T>(value: unknown): T {
 
 type UserApiWithExtend<TExtend extends AuthExtendValidators> = Omit<
   RuntimeAuthApi["user"],
-  "get" | "list" | "viewer"
+  "get" | "list" | "update" | "viewer"
 > & {
   get: {
     (
@@ -107,12 +110,33 @@ type UserApiWithExtend<TExtend extends AuthExtendValidators> = Omit<
   viewer: (
     ctx: Parameters<RuntimeAuthApi["user"]["viewer"]>[0],
   ) => Promise<AuthUser<TExtend> | null>;
+  update: (
+    ctx: Parameters<RuntimeAuthApi["user"]["update"]>[0],
+    args: {
+      id: GenericId<"User">;
+      patch: {
+        name?: string;
+        firstName?: string;
+        lastName?: string;
+        image?: string;
+        extend?: ExtendInput<TExtend, "User">;
+      };
+    },
+  ) => Promise<null>;
 };
 
 type GroupApiWithExtend<TExtend extends AuthExtendValidators> = Omit<
   RuntimeAuthApi["group"],
-  "get" | "list" | "ancestors"
+  "create" | "get" | "list" | "update" | "ancestors"
 > & {
+  create: (
+    ctx: Parameters<RuntimeAuthApi["group"]["create"]>[0],
+    args: {
+      data: Omit<Parameters<RuntimeAuthApi["group"]["create"]>[1]["data"], "extend"> & {
+        extend?: ExtendInput<TExtend, "Group">;
+      };
+    },
+  ) => ReturnType<RuntimeAuthApi["group"]["create"]>;
   get: {
     (
       ctx: Parameters<RuntimeAuthApi["group"]["list"]>[0],
@@ -137,6 +161,48 @@ type GroupApiWithExtend<TExtend extends AuthExtendValidators> = Omit<
       ancestors: AuthGroup<TExtend>[];
     }
   >;
+  update: (
+    ctx: Parameters<RuntimeAuthApi["group"]["update"]>[0],
+    args: {
+      id: GenericId<"Group">;
+      patch: {
+        name?: string;
+        slug?: string;
+        type?: string;
+        parentGroupId?: GenericId<"Group">;
+        extend?: ExtendInput<TExtend, "Group">;
+      };
+    },
+  ) => Promise<null>;
+};
+
+type InviteApiWithExtend<TExtend extends AuthExtendValidators> = Omit<
+  RuntimeAuthApi["invite"],
+  "create" | "get" | "list" | "token"
+> & {
+  create: (
+    ctx: Parameters<RuntimeAuthApi["invite"]["create"]>[0],
+    args: {
+      data: Omit<Parameters<RuntimeAuthApi["invite"]["create"]>[1]["data"], "extend"> & {
+        extend?: ExtendInput<TExtend, "GroupInvite">;
+      };
+    },
+  ) => ReturnType<RuntimeAuthApi["invite"]["create"]>;
+  get: (
+    ctx: Parameters<RuntimeAuthApi["invite"]["get"]>[0],
+    args: { id: GenericId<"GroupInvite"> },
+  ) => Promise<AuthInvite<TExtend> | null>;
+  list: (
+    ...args: Parameters<RuntimeAuthApi["invite"]["list"]>
+  ) => Promise<
+    PageWithItem<Awaited<ReturnType<RuntimeAuthApi["invite"]["list"]>>, AuthInvite<TExtend>>
+  >;
+  token: Omit<RuntimeAuthApi["invite"]["token"], "get"> & {
+    get: (
+      ctx: Parameters<RuntimeAuthApi["invite"]["token"]["get"]>[0],
+      args: { token: string },
+    ) => Promise<AuthInvite<TExtend> | null>;
+  };
 };
 
 type MemberApiWithPermissions<
@@ -154,7 +220,7 @@ type MemberApiWithPermissions<
         userId: GenericId<"User">;
         roleIds?: RoleId<TPermissions>[];
         status?: string;
-        extend?: Record<string, Value>;
+        extend?: ExtendInput<TExtend, "GroupMember">;
       };
     },
   ) => Promise<GenericId<"GroupMember">>;
@@ -167,7 +233,11 @@ type MemberApiWithPermissions<
     ctx: Parameters<ReturnType<typeof AuthFactory>["auth"]["member"]["update"]>[0],
     args: {
       id: GenericId<"GroupMember">;
-      patch: Record<string, Value> & { roleIds?: RoleId<TPermissions>[] };
+      patch: {
+        roleIds?: RoleId<TPermissions>[];
+        status?: string;
+        extend?: ExtendInput<TExtend, "GroupMember">;
+      };
     },
   ) => Promise<null>;
   get: {
@@ -221,7 +291,7 @@ type RequestApiWithPermissions<TPermissions extends PermissionsConfig | undefine
   mcp: <T extends Record<string, GenericValidator>>(
     http: HttpRouter,
     tools: { [K in keyof T]: McpToolDef<T[K], Grant<TPermissions>> },
-    opts?: { name?: string; version?: string },
+    opts?: { name?: string; version?: string; mcpPath?: string },
   ) => void;
 };
 
@@ -237,7 +307,7 @@ type RequestApiWithPermissions<TPermissions extends PermissionsConfig | undefine
  * @typeParam TPermissions - The permissions config, used to narrow
  *   role IDs and grant strings on the `member` API.
  */
-export type AuthApiBase<
+type AuthApiBase<
   TPermissions extends PermissionsConfig | undefined = undefined,
   TExtend extends AuthExtendValidators = {},
 > = {
@@ -306,7 +376,7 @@ export type AuthApiBase<
     active: ReturnType<typeof AuthFactory>["auth"]["active"];
   };
   member: MemberApiWithPermissions<TPermissions, TExtend>;
-  invite: ReturnType<typeof AuthFactory>["auth"]["invite"];
+  invite: InviteApiWithExtend<TExtend>;
   key: ReturnType<typeof AuthFactory>["auth"]["key"];
   provider: ReturnType<typeof AuthFactory>["auth"]["provider"];
   oauth: PublicOAuthApi;
@@ -483,13 +553,28 @@ type PublicWebhookEndpointApi = Omit<
 type PublicGroupConnectionApi = GroupConnectionApiWithExactIds & {
   signIn: (
     ctx: Parameters<InternalConnectionApi["oidc"]["signIn"]>[0],
-    data: {
-      connectionId?: string;
-      email?: string;
-      domain?: string;
-      redirectTo?: string;
-      loginHint?: string;
-    },
+    data:
+      | {
+          connectionId: string;
+          email?: never;
+          domain?: never;
+          redirectTo?: string;
+          loginHint?: string;
+        }
+      | {
+          connectionId?: never;
+          email: string;
+          domain?: never;
+          redirectTo?: string;
+          loginHint?: string;
+        }
+      | {
+          connectionId?: never;
+          email?: never;
+          domain: string;
+          redirectTo?: string;
+          loginHint?: string;
+        },
   ) => Promise<PublicConnectionSignIn>;
   metadata: InternalConnectionApi["saml"]["metadata"];
   domain: {
@@ -570,7 +655,7 @@ type PublicGroupConnectionApi = GroupConnectionApiWithExactIds & {
  * @typeParam TPermissions - The permissions config, forwarded to
  *   {@link AuthApiBase} for typed role IDs and grant strings.
  */
-export type AuthApi<
+type AuthApi<
   TPermissions extends PermissionsConfig | undefined = undefined,
   TExtend extends AuthExtendValidators = {},
 > = AuthApiBase<TPermissions, TExtend>;
@@ -585,7 +670,7 @@ export type AuthApi<
  * @typeParam P - The tuple of provider configs passed to `defineAuth`.
  * @typeParam TPermissions - Optional permissions config for typed roles/grants.
  */
-export type ConvexAuthResult<
+type ConvexAuthResult<
   P extends readonly AuthProviderConfig[],
   TPermissions extends PermissionsConfig | undefined = undefined,
   TExtend extends AuthExtendValidators = {},
@@ -630,8 +715,8 @@ type ConfigExtend<Config extends DefineAuthRest> = Config extends {
  * @param config - Auth configuration including `providers` and optional
  *   `permissions`. All fields from {@link AuthConfig} are accepted
  *   except `component` (passed as the first argument).
- * @returns A {@link ConvexAuthResult} — the full auth API surface
- *   ({@link AuthApiBase}) plus the `connection` group-admin facade.
+ * @returns The configured auth API, including the `connection` group-admin
+ *   facade.
  *
  * @example
  * ```ts
@@ -867,7 +952,7 @@ export function defineAuth<
       }
     >(groupApi),
     member: memberApi,
-    invite: authResult.auth.invite,
+    invite: projectPublicApi<InviteApiWithExtend<ConfigExtend<Rest>>>(authResult.auth.invite),
     key: authResult.auth.key,
     provider: authResult.auth.provider,
     oauth: oauthApi,

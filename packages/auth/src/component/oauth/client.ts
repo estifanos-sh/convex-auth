@@ -12,8 +12,9 @@ import { paginator } from "convex-helpers/server/pagination";
 import { ErrorCode } from "../../shared/codes";
 
 import { internal } from "../_generated/api";
-import { internalMutation, mutation, query } from "../functions";
-import { vOAuthClientDoc, vPaginated, vTokenEndpointAuthMethod } from "../model";
+import { vOAuthClientDoc } from "../documents";
+import { internalMutation, mutation, query } from "../_generated/server";
+import { vPaginated, vTokenEndpointAuthMethod } from "../model";
 import schema from "../schema";
 
 /**

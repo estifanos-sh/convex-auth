@@ -1858,7 +1858,20 @@ export function createGroupConnectionDomain<TDeps extends DomainDeps>(deps: TDep
           paginationOpts: { numItems: number; cursor: string | null };
         },
       ) => {
-        return await ctx.runQuery(config.component.connection.audit.list, data);
+        const { paginationOpts } = data;
+        const scope =
+          data.connectionId !== undefined
+            ? { connectionId: data.connectionId }
+            : data.groupId !== undefined
+              ? { groupId: data.groupId }
+              : null;
+        if (scope === null) {
+          throw convexError(ErrorCode.INVALID_PARAMETERS, "Connection or group scope required.");
+        }
+        return await ctx.runQuery(config.component.connection.audit.list, {
+          scope,
+          paginationOpts,
+        });
       },
     },
     webhook,

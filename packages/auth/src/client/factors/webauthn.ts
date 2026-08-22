@@ -15,14 +15,14 @@ import type {
   WebAuthnRegisterOptions,
   WebAuthnSignInOptions,
   WebAuthnRotationResult,
+  WebAuthnContinuationSignInResult,
   SignInActionResult,
   SignInResult,
 } from "../core/types";
 import type { AuthParameters } from "../../shared/results";
 
 type WebAuthnSignInRequest = {
-  provider: "webauthn";
-  params: AuthParameters;
+  request: { provider: "webauthn"; params: AuthParameters };
   verifier?: string;
   continuation?: string;
 };
@@ -65,7 +65,7 @@ export function createWebAuthnClientCore(
     verifier?: string,
     continuation?: string,
   ): Promise<SignInActionResult> => {
-    const args: WebAuthnSignInRequest = { provider: "webauthn", params };
+    const args: WebAuthnSignInRequest = { request: { provider: "webauthn", params } };
     if (verifier !== undefined) args.verifier = verifier;
     if (continuation !== undefined) args.continuation = continuation;
     if (proxy) {
@@ -115,6 +115,15 @@ export function createWebAuthnClientCore(
     return await handleSignedInResult(phase2, "rotate");
   };
 
+  const completeSignIn = async (
+    result: WebAuthnContinuationSignInResult,
+    opts?: WebAuthnSignInOptions,
+  ) => {
+    const phase2Params = await ceremony.signIn(result.options, opts);
+    const phase2 = await requestSignIn(phase2Params, result.verifier, result.continuation);
+    return await handleSignedInResult(phase2, "signIn");
+  };
+
   return {
     isSupported: () => ceremony.isSupported(),
     isAutofillSupported: () => ceremony.isAutofillSupported(),
@@ -134,6 +143,7 @@ export function createWebAuthnClientCore(
     },
 
     completeRegistration,
+    completeSignIn,
 
     signIn: async (opts?: WebAuthnSignInOptions): Promise<SignInResult> => {
       const phase1 = await requestSignIn({ flow: "signIn", email: opts?.email });

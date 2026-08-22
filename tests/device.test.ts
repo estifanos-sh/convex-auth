@@ -151,16 +151,17 @@ test("device flow: create, verify, poll signs the device in", async () => {
 
   const signInTokens = expectSignInSession(
     await t.action(api.auth.signIn, {
-      provider: "password",
-      params: { email: TEST_EMAIL, password: TEST_PASSWORD, flow: "signUp" },
+      request: {
+        provider: "password",
+        params: { email: TEST_EMAIL, password: TEST_PASSWORD, flow: "signUp" },
+      },
     }),
   );
   const claims = decodeJwt(signInTokens!.token);
   const asUser = t.withIdentity({ subject: claims.sub, sid: claims.sid as never });
 
   const created = await t.action(api.auth.signIn, {
-    provider: "device",
-    params: { flow: "create" },
+    request: { provider: "device", params: { flow: "create" } },
   });
   expect(created.kind).toBe("deviceCode");
   const { deviceCode, userCode } =
@@ -168,14 +169,12 @@ test("device flow: create, verify, poll signs the device in", async () => {
   expect(deviceCode).not.toEqual("");
 
   const verified = await asUser.action(api.auth.signIn, {
-    provider: "device",
-    params: { flow: "verify", userCode },
+    request: { provider: "device", params: { flow: "verify", userCode } },
   });
   expect(verified.kind).toBe("signedIn");
 
   const polled = await t.action(api.auth.signIn, {
-    provider: "device",
-    params: { flow: "poll", deviceCode },
+    request: { provider: "device", params: { flow: "poll", deviceCode } },
   });
   const pollTokens = expectSignInSession(polled);
   expect(pollTokens).not.toBeNull();
@@ -184,8 +183,7 @@ test("device flow: create, verify, poll signs the device in", async () => {
   // Polling again after consumption yields no second session (idempotent).
   await expect(
     t.action(api.auth.signIn, {
-      provider: "device",
-      params: { flow: "poll", deviceCode },
+      request: { provider: "device", params: { flow: "poll", deviceCode } },
     }),
   ).rejects.toThrow();
 });

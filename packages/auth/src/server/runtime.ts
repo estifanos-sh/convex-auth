@@ -14,7 +14,7 @@ import type { GenericValidator } from "convex/values";
 import type { AuthTokens, SignInFlowResult } from "../shared/results";
 import { ErrorCode } from "../shared/codes";
 import { createCoreDomains } from "./core";
-import { GetProviderOrThrowFunc } from "./crypto";
+import { GetProviderOrThrowFunc, hash as hashCredentialSecret } from "./crypto";
 import { requireAuthKey, requireEnv } from "./env";
 import { createAuthEventDomain, emitAuthEvent } from "./events";
 import {
@@ -53,18 +53,26 @@ import { extractBearerToken } from "./utils/bearer";
 import { encryptSecret } from "./secret";
 import { createGroupService } from "./connection/group/service";
 import { createFactorUnlinkHelpers } from "./services/factors";
-import { mutateContinuationCreate, queryContinuation } from "./component/factor/db";
+import {
+  mutateContinuationCreate,
+  mutateCredentialEnrollmentCreate,
+  queryContinuation,
+} from "./component/factor/db";
 import { resolveServerServices } from "./services/resolve";
 import { signInImpl } from "./signin/flow";
 import { createGroupConnectionDomain } from "./connection/domain";
 import { addGroupHttpRuntime } from "./connection/http";
 import { normalizeGroupConnectionPolicy } from "./connection/policy";
 import type {
+  AuthProviderMaterializedConfig,
   AuthProviderContinueArgs,
+  ConvexCredentialsConfig,
   ConvexAuthConfig,
   FunctionReferenceFromExport,
   ConnectionProviderConfig,
+  WebAuthnRotateOperation,
 } from "./types";
+import type { AuthProfile } from "./payloads";
 import { MutationCtx } from "./types";
 import { appUrlFromEnv, authUrlFromEnv } from "./url";
 
@@ -164,23 +172,33 @@ export type SignInActionResult = SignInFlowResult<AuthTokens | null>;
 export type SignOutAction = FunctionReferenceFromExport<ReturnType<typeof Auth>["signOut"]>;
 
 /**
- * The transport envelope for the public sign-in action.
+ * Materialize the public sign-in validator from the configured providers.
  *
- * Convex requires every exported function's argument validator to be an
- * object (or `v.any()`), so a provider-discriminated top-level union cannot be
- * exported. The configured provider union remains the public TypeScript
- * contract through {@link AuthSignInAction}; the handler below validates the
- * selected provider's params before starting a sign-in flow.
+ * A Convex function must receive one object validator, so its sibling fields
+ * cannot form a discriminated union. Putting the provider and its params in
+ * `request` preserves that relationship for Convex codegen and keeps a
+ * credentials validator as the single runtime source of truth.
+ *
+ * @internal
  */
-/** @internal */
-export const vSignInActionArgs = v.object({
-  provider: v.optional(v.string()),
-  params: v.optional(v.any()),
-  verifier: v.optional(v.string()),
-  continuation: v.optional(v.string()),
-  refreshToken: v.optional(v.string()),
-  calledBy: v.optional(v.string()),
-});
+export function vSignInActionArgs(providers: readonly AuthProviderMaterializedConfig[]) {
+  const defaultRequest = v.object({ params: v.optional(vPayloadRecord) });
+  const refreshRequest = v.object({ refreshToken: v.string() });
+  const configuredRequests = providers.map((provider) =>
+    v.object({
+      provider: v.literal(provider.id),
+      params: provider.type === "credentials" ? provider.params : v.optional(vPayloadRecord),
+    }),
+  );
+  const request = v.union(defaultRequest, refreshRequest, ...configuredRequests);
+
+  return v.object({
+    request,
+    verifier: v.optional(v.string()),
+    continuation: v.optional(v.string()),
+    calledBy: v.optional(v.string()),
+  });
+}
 
 /**
  * Configure the Convex Auth library. Returns an object with
@@ -188,7 +206,7 @@ export const vSignInActionArgs = v.object({
  * from `convex/auth.ts` to make them callable:
  *
  * ```ts filename="convex/auth.ts"
- * import { defineAuth } from "@estifanos-sh/convex-auth/component";
+ * import { defineAuth } from "@estifanos-sh/convex-auth/server";
  * import { components } from "./_generated/api";
  *
  * export const auth = defineAuth(components.auth, {
@@ -227,6 +245,7 @@ export function Auth(config_: ConvexAuthConfig<any>) {
   const group = createGroupService({ config, sha256 });
   const authRequireEnv = (name: string) =>
     name === "CONVEX_SITE_URL" ? authSiteUrl() : requireEnv(name);
+  const signInArgs = vSignInActionArgs(config.providers);
 
   type AuthRuntimeBase = ReturnType<typeof createCoreDomains> & {
     event: ReturnType<typeof createAuthEventDomain>;
@@ -245,7 +264,7 @@ export function Auth(config_: ConvexAuthConfig<any>) {
       enriched,
       operation.provider,
       {
-        params: { flow: "register" },
+        params: { flow: operation.operation === "rotate" ? "register" : "signIn" },
         continuation,
       },
       {
@@ -280,6 +299,40 @@ export function Auth(config_: ConvexAuthConfig<any>) {
     ctx: GenericActionCtx<DataModel>,
     args: RecoveryContinuationRequest,
   ) => await beginProviderContinuation(ctx, args.operation, args.continuationId);
+
+  const stageCredentialEnrollment = async <DataModel extends GenericDataModel>(
+    ctx: GenericActionCtx<DataModel>,
+    args: {
+      verifier: ConvexCredentialsConfig;
+      account: { id: string; secret?: string };
+      profile: AuthProfile;
+      shouldLinkViaEmail: boolean;
+      shouldLinkViaPhone: boolean;
+      operation: WebAuthnRotateOperation;
+    },
+  ) => {
+    const verifier = getProviderOrThrow(args.verifier.id) as ConvexCredentialsConfig;
+    const expirationTime =
+      Date.now() + (args.operation.provider.options.challengeExpirationMs ?? 300_000);
+    const secret =
+      args.account.secret === undefined
+        ? undefined
+        : await hashCredentialSecret(verifier, args.account.secret);
+    const continuation = await mutateCredentialEnrollmentCreate(
+      bridgeRuntimeType<Parameters<typeof signInImpl>[0]>(enrichCtx(ctx)),
+      {
+        provider: verifier.id,
+        providerAccountId: args.account.id,
+        ...(secret === undefined ? {} : { secret }),
+        profile: args.profile,
+        shouldLinkViaEmail: args.shouldLinkViaEmail,
+        shouldLinkViaPhone: args.shouldLinkViaPhone,
+        targetProvider: args.operation.provider.id,
+        expirationTime,
+      },
+    );
+    return await beginProviderContinuation(ctx, args.operation, continuation);
+  };
 
   const authBase: AuthRuntimeBase = {
     ...createCoreDomains({
@@ -322,6 +375,7 @@ export function Auth(config_: ConvexAuthConfig<any>) {
         return result as Exclude<typeof result, { kind: "signedIn" }>;
       },
       continueWithProvider,
+      stageCredentialEnrollment,
     }),
     event: createAuthEventDomain(config),
     /**
@@ -648,6 +702,7 @@ export function Auth(config_: ConvexAuthConfig<any>) {
       totp: totpHelpers,
       session: auth.session,
       member: auth.member,
+      credentials: auth.credentials,
       provider: {
         ...auth.provider,
         continueRecovery: async (
@@ -666,32 +721,35 @@ export function Auth(config_: ConvexAuthConfig<any>) {
      * Also used for refreshing the session.
      */
     signIn: actionGeneric({
-      args: vSignInActionArgs,
-      handler: async (ctx, args): Promise<SignInActionResult> => {
+      args: signInArgs,
+      handler: async (ctx, actionArgs): Promise<SignInActionResult> => {
+        const { request, ...envelope } = actionArgs;
+        const providerId = "provider" in request ? request.provider : undefined;
+        const args = { ...envelope, ...request } as Parameters<typeof signInImpl>[2];
         if (args.calledBy !== undefined) {
           log("INFO", `\`auth:signIn\` called by ${args.calledBy}`);
         }
         let provider = null;
-        if (args.provider !== undefined && args.continuation !== undefined) {
+        if (typeof providerId === "string" && args.continuation !== undefined) {
           const continuation = await queryContinuation(
             bridgeRuntimeType<Parameters<typeof signInImpl>[0]>(enrichCtx(ctx)),
             args.continuation,
           );
-          if (continuation === null || continuation.provider !== args.provider) {
+          if (continuation === null || continuation.provider !== providerId) {
             throw new ConvexError({
               code: ErrorCode.CONTINUATION_INVALID,
               message: "The provider continuation is invalid or expired.",
             });
           }
-          provider = getProviderOrThrow(args.provider, true);
+          provider = getProviderOrThrow(providerId, true);
           if (provider.type !== "webauthn") {
             throw new ConvexError({
               code: ErrorCode.CONTINUATION_INVALID,
               message: "The provider continuation does not support this provider.",
             });
           }
-        } else if (args.provider !== undefined) {
-          provider = getProviderOrThrow(args.provider);
+        } else if (typeof providerId === "string") {
+          provider = getProviderOrThrow(providerId);
         }
         if (provider?.type === "credentials") {
           if (!validate(provider.params, args.params)) {

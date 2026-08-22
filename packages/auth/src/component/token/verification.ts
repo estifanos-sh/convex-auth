@@ -9,9 +9,9 @@
 import { getOneFrom } from "convex-helpers/server/relationships";
 import { v } from "convex/values";
 
-import { mutation, query } from "../functions";
+import { mutation, query } from "../_generated/server";
 import { recordSignInLimit, resetSignInLimit } from "../limits";
-import { vAccountDoc, vUserDoc, vVerificationCodeDoc } from "../model";
+import { vAccountDoc, vUserDoc, vVerificationCodeDoc } from "../documents";
 import { createSessionRows, type SessionRows, vSessionReplacement } from "../session";
 
 type VerifiedSession = Omit<SessionRows, "epoch"> & { status: "signedIn" };
@@ -95,6 +95,7 @@ export const completeVerification = mutation({
       status: v.literal("signedIn"),
       user: vUserDoc,
       sessionId: v.id("Session"),
+      sessionExpirationTime: v.number(),
       refreshTokenId: v.optional(v.id("RefreshToken")),
       replacedSessionId: v.optional(v.id("Session")),
     }),
@@ -124,6 +125,7 @@ export const completeVerification = mutation({
       status: "signedIn" as const,
       user: created.user,
       sessionId: created.sessionId,
+      sessionExpirationTime: created.sessionExpirationTime,
     };
     if (created.refreshTokenId !== undefined) result.refreshTokenId = created.refreshTokenId;
     if (created.replacedSessionId !== undefined) {

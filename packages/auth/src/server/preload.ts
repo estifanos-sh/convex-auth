@@ -57,9 +57,13 @@ type ProxyActionBody = {
 };
 
 type ProxySignInArgs = {
-  refreshToken?: string;
   verifier?: string;
-  params?: SignInParams;
+  continuation?: string;
+  calledBy?: string;
+  request: {
+    params?: SignInParams;
+    refreshToken?: string | true;
+  };
 };
 
 /**
@@ -603,9 +607,11 @@ export function server(options: ServerOptions) {
       ): Promise<{ client: ConvexHttpClient; cookies: AuthCookies }> => {
         const client = createClient();
         const requestParams =
-          typeof args.params === "object" && args.params !== null ? args.params : undefined;
+          typeof args.request.params === "object" && args.request.params !== null
+            ? args.request.params
+            : undefined;
         const shouldAttachCurrentIdentity =
-          args.refreshToken === undefined && requestParams?.code === undefined;
+          args.request.refreshToken === undefined && requestParams?.code === undefined;
 
         if (!shouldAttachCurrentIdentity) {
           return { client, cookies: currentCookies };
@@ -632,7 +638,7 @@ export function server(options: ServerOptions) {
         let refreshedTokens: AuthTokens | null = null;
         try {
           const result = await runSignIn(createClient(), {
-            refreshToken: currentCookies.refreshToken,
+            request: { refreshToken: currentCookies.refreshToken },
           });
           refreshedTokens = extractSignedInTokens(result, "proxy sign-in auth hydration");
         } catch {
@@ -767,9 +773,14 @@ export function server(options: ServerOptions) {
       }
 
       const action = body.action;
-      const args: ProxySignInArgs = isConvexObject(body.args) ? { ...body.args } : {};
-      if (args.refreshToken === null) {
-        args.refreshToken = undefined;
+      const args: ProxySignInArgs = isConvexObject(body.args)
+        ? {
+            ...body.args,
+            request: isConvexObject(body.args.request) ? { ...body.args.request } : {},
+          }
+        : { request: {} };
+      if (args.request.refreshToken === null) {
+        args.request.refreshToken = undefined;
       }
       const actionDispatch =
         action === "auth:signIn"
@@ -786,7 +797,7 @@ export function server(options: ServerOptions) {
 
       if (actionDispatch.action === "signInStart") {
         let refreshResponse: Response | null = null;
-        if (args.refreshToken === undefined) {
+        if (args.request.refreshToken === undefined) {
           refreshResponse = null;
         } else if (currentCookies.refreshToken === null) {
           const currentToken = currentCookies.token;
@@ -805,7 +816,7 @@ export function server(options: ServerOptions) {
             refreshResponse = jsonResponse({ tokens: null });
           }
         } else {
-          args.refreshToken = currentCookies.refreshToken ?? undefined;
+          args.request.refreshToken = currentCookies.refreshToken ?? undefined;
           refreshResponse = null;
         }
         if (refreshResponse !== null) {
@@ -843,7 +854,7 @@ export function server(options: ServerOptions) {
           if (currentCookies.refreshToken !== null) {
             try {
               const refreshed = await runSignIn(createClient(), {
-                refreshToken: currentCookies.refreshToken,
+                request: { refreshToken: currentCookies.refreshToken },
               });
               const refreshedTokens = extractSignedInTokens(refreshed, "sign-out fallback refresh");
               if (refreshedTokens !== null) {
@@ -919,7 +930,7 @@ export function server(options: ServerOptions) {
       ): Promise<AuthTokens | null | undefined> => {
         try {
           const result = (await createClient().action(signInActionRef, {
-            refreshToken,
+            request: { refreshToken },
           })) as SignInActionResult;
           const tokens = extractSignedInTokens(result, "token refresh");
           logVerbose(`Refreshed tokens, null=${tokens === null}`);
@@ -994,7 +1005,7 @@ export function server(options: ServerOptions) {
         const redirectUrl = new URL(requestUrl.toString());
         try {
           const result = (await createClient().action(signInActionRef, {
-            params: { code },
+            request: { params: { code } },
             verifier: currentCookies.verifier ?? undefined,
           })) as SignInActionResult;
           const tokens = extractSignedInTokens(result, "code exchange");

@@ -16,7 +16,8 @@ import {
   registerCorsPreflight,
   withCors,
 } from "./cors";
-import type { AuthContext, OptionalAuthContext, UserDoc } from "./auth";
+import type { AuthContext, OptionalAuthContext } from "./auth";
+import type { UserDoc } from "./context";
 import type { ComponentCtx, ComponentReadCtx as HttpQueryCtx } from "./component/context";
 import {
   createUnauthenticatedAuthContext,

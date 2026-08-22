@@ -13,9 +13,7 @@
  * @module
  */
 
-import { GitHub as ArcticGitHub } from "arctic";
-
-import { createArcticOAuthClient, createOAuthProvider } from "../server/oauth/factory";
+import { createOAuthClient, createOAuthProvider } from "../server/oauth/factory";
 import { defaultOAuthRedirectUri } from "./redirect";
 
 const DEFAULT_SCOPES = ["user:email"];
@@ -71,15 +69,17 @@ export interface GitHubConfig {
  */
 export function github(config: GitHubConfig) {
   const scopes = config.scopes ?? DEFAULT_SCOPES;
-  const createProvider = (redirectUri?: string) =>
-    new ArcticGitHub(
-      config.clientId,
-      config.clientSecret,
-      config.redirectUri ?? defaultOAuthRedirectUri("github", redirectUri),
-    );
   return createOAuthProvider({
     id: "github",
-    provider: createArcticOAuthClient(createProvider, { pkce: "never" }),
+    provider: createOAuthClient({
+      clientId: config.clientId,
+      clientSecret: config.clientSecret,
+      redirectUri: (redirectUri) =>
+        config.redirectUri ?? defaultOAuthRedirectUri("github", redirectUri),
+      authorizationUrl: "https://github.com/login/oauth/authorize",
+      tokenUrl: "https://github.com/login/oauth/access_token",
+      pkce: "never",
+    }),
     scopes,
     accountLinking: config.accountLinking,
     updateProfileOnLogin: config.updateProfileOnLogin,

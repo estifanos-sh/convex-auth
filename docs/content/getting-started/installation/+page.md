@@ -27,10 +27,10 @@ npx convex-auth --app-url "http://localhost:5173"
 ```
 
 The generated files are the normal integration surface. Keep provider secrets
-and `defineAuth` in `convex/auth.ts`. Import the lightweight auth context from
-`convex/auth/core.ts` in ordinary queries and mutations. Mount the generated
-HTTP routes, and leave `convex/auth.config.ts` in place so native Convex identity
-resolution trusts Convex Auth.
+and `defineAuth` in `convex/auth.ts`, then import that same `auth` value in
+ordinary queries and mutations. Mount the generated HTTP routes, and leave
+`convex/auth.config.ts` in place so native Convex identity resolution trusts
+Convex Auth.
 
 ## Configure one provider
 
@@ -85,22 +85,16 @@ provider ceremonies, including a recovery passkey rotation.
 
 ## Protect application functions
 
-Create the lightweight context once and use it to define the builders for
-authenticated application functions.
-
-```ts
-// convex/auth/core.ts
-import { createAuthContext } from "@estifanos-sh/convex-auth/core";
-import { components } from "../_generated/api";
-
-export const auth = createAuthContext(components.auth);
-```
+Use the configured `auth` value to define authenticated application function
+builders. `auth.ctx()` resolves the session, user, active membership, group,
+role, and grants as one current component snapshot; handlers should reuse that
+snapshot instead of immediately fetching the same auth state again.
 
 ```ts
 // convex/functions.ts
 import { customMutation, customQuery } from "convex-helpers/server/customFunctions";
 import { mutation, query } from "./_generated/server";
-import { auth } from "./auth/core";
+import { auth } from "./auth";
 
 export const authQuery = customQuery(query, auth.ctx());
 export const authMutation = customMutation(mutation, auth.ctx());

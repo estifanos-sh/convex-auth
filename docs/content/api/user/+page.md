@@ -91,6 +91,15 @@ const user = await auth.user.get(ctx, { id: userId });
 await auth.user.remove(ctx, { id: userId });
 ```
 
+Removal plans the complete auth-owned cascade before its first write. It
+deletes the user's sessions, refresh tokens, accounts, verification and
+recovery state, factors, device codes, SCIM identity, and OAuth grants in one
+transaction. Shared OAuth clients and historical invite or webhook records are
+preserved with their creator attribution cleared. The operation rejects more
+than 100 dependent rows with `CASCADE_TOO_LARGE` instead of partially deleting
+the identity; remove unusually large child collections in bounded operations
+before retrying.
+
 ### Change active group
 
 `ctx.auth.groupId`, `ctx.auth.role`, and `ctx.auth.grants` are the active

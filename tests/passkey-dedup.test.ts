@@ -352,8 +352,14 @@ test("passkey option transactions create the challenge and load ceremony context
 
   const verifiers = await t.run(async (ctx) =>
     Promise.all([
-      ctx.runQuery(components.auth.token.pkce.get, { id: registration.verifierId }),
-      ctx.runQuery(components.auth.token.pkce.get, { id: signIn.verifierId }),
+      ctx.runQuery(components.auth.token.pkce.get, {
+        selector: { id: registration.verifierId },
+        now: Date.now(),
+      }),
+      ctx.runQuery(components.auth.token.pkce.get, {
+        selector: { id: signIn.verifierId },
+        now: Date.now(),
+      }),
     ]),
   );
   expect(verifiers.map((verifier: { signature?: string } | null) => verifier?.signature)).toEqual([
@@ -491,6 +497,7 @@ test("passkey rotation commits a staged password reset and revokes prior auth at
     }),
     continuation: await ctx.runQuery(components.auth.token.continuation.get, {
       id: state.continuationId,
+      now: Date.now(),
     }),
   }));
   expect(stored.account?.secret).toBe("new-secret");

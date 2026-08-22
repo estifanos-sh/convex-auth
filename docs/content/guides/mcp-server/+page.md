@@ -26,22 +26,24 @@ Add an `oauth` block and a non-empty `permissions.grants` set (MCP tool scopes
 are drawn from these grants):
 
 ```ts
-export const { auth } = defineAuth(components.auth, {
+import { definePermissions } from "@estifanos-sh/convex-auth/permissions";
+
+const permissions = definePermissions({
+  grants: ["projects.read", "issues.create", "members.read"],
+  roles: {},
+});
+
+export const auth = defineAuth(components.auth, {
   providers: [
     /* ... */
   ],
-  permissions: {
-    grants: ["projects.read", "issues.create", "members.read"],
-    roles: {
-      /* ... */
-    },
-  },
+  permissions,
   oauth: {
     pages: {
       // Where the AS sends an unauthenticated browser to sign in.
       login: "/login",
       // Your consent page — shown the requested scopes; it approves the request.
-      consent: "/oauth/authorize",
+      consent: "/oauth/consent",
     },
   },
 });
@@ -232,19 +234,23 @@ emits an `oauth.refresh.reuse_detected` audit event.
 
 ## Discovery & wire endpoints
 
-Clients discover everything from `GET /.well-known/oauth-authorization-server`
-(and `/.well-known/openid-configuration`):
+Clients discover the authorization server at
+`GET {prefix}/.well-known/oauth-authorization-server` or the RFC 8414
+compatibility route `GET /.well-known/oauth-authorization-server{prefix}`.
+The root `GET /.well-known/oauth-authorization-server` route is also served
+for zero-configuration clients. OpenID metadata is available from
+`GET {prefix}/.well-known/openid-configuration`.
 
-| Endpoint                                       | Purpose                                |
-| ---------------------------------------------- | -------------------------------------- |
-| `GET {prefix}/oauth2/authorize`                | Authorization-code flow (PKCE `S256`)  |
-| `POST {prefix}/oauth2/token`                   | Code exchange + refresh rotation       |
-| `POST {prefix}/oauth2/register`                | Dynamic client registration (RFC 7591) |
-| `GET/PUT/DELETE {prefix}/oauth2/register/{id}` | Client management (RFC 7592)           |
-| `GET /.well-known/oauth-authorization-server`  | AS metadata                            |
-| `GET /.well-known/jwks.json`                   | Signing keys                           |
-| `POST /mcp`                                    | MCP JSON-RPC (per `auth.request.mcp`)  |
-| `GET /.well-known/oauth-protected-resource`    | MCP resource metadata (RFC 9728)       |
+| Endpoint                                              | Purpose                                |
+| ----------------------------------------------------- | -------------------------------------- |
+| `GET {prefix}/oauth2/authorize`                       | Authorization-code flow (PKCE `S256`)  |
+| `POST {prefix}/oauth2/token`                          | Code exchange + refresh rotation       |
+| `POST {prefix}/oauth2/register`                       | Dynamic client registration (RFC 7591) |
+| `GET/PUT/DELETE {prefix}/oauth2/register/{id}`        | Client management (RFC 7592)           |
+| `GET {prefix}/.well-known/oauth-authorization-server` | AS metadata                            |
+| `GET {prefix}/.well-known/jwks.json`                  | Signing keys                           |
+| `POST /mcp`                                           | MCP JSON-RPC (per `auth.request.mcp`)  |
+| `GET /.well-known/oauth-protected-resource`           | MCP resource metadata (RFC 9728)       |
 
 The advertised `token_endpoint_auth_methods_supported` is
 `["client_secret_post", "client_secret_basic", "none"]`, `grant_types_supported`

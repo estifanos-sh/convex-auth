@@ -15,9 +15,9 @@
  * @module
  */
 
-import { Apple as ArcticApple } from "arctic";
+import { importPKCS8, SignJWT } from "jose";
 
-import { createArcticOAuthClient, createOAuthProvider } from "../server/oauth/factory";
+import { createOAuthClient, createOAuthProvider } from "../server/oauth/factory";
 import { defaultOAuthRedirectUri } from "./redirect";
 
 const DEFAULT_SCOPES = ["name", "email"];
@@ -67,17 +67,28 @@ export function apple(config: AppleConfig) {
       ? config.privateKey
       : new TextDecoder().decode(config.privateKey);
   const scopes = config.scopes ?? DEFAULT_SCOPES;
-  const createProvider = (redirectUri?: string) =>
-    new ArcticApple(
-      config.clientId,
-      config.teamId,
-      config.keyId,
-      new TextEncoder().encode(privateKey),
-      config.redirectUri ?? defaultOAuthRedirectUri("apple", redirectUri),
-    );
   return createOAuthProvider({
     id: "apple",
-    provider: createArcticOAuthClient(createProvider, { pkce: "never" }),
+    provider: createOAuthClient({
+      clientId: config.clientId,
+      redirectUri: (redirectUri) =>
+        config.redirectUri ?? defaultOAuthRedirectUri("apple", redirectUri),
+      authorizationUrl: "https://appleid.apple.com/auth/authorize",
+      tokenUrl: "https://appleid.apple.com/auth/token",
+      pkce: "never",
+      tokenAuth: "body",
+      tokenParams: async () => ({
+        client_secret: await new SignJWT({
+          iss: config.teamId,
+          aud: "https://appleid.apple.com",
+          sub: config.clientId,
+        })
+          .setProtectedHeader({ alg: "ES256", kid: config.keyId, typ: "JWT" })
+          .setIssuedAt()
+          .setExpirationTime("5m")
+          .sign(await importPKCS8(privateKey, "ES256")),
+      }),
+    }),
     scopes,
     accountLinking: config.accountLinking,
     updateProfileOnLogin: config.updateProfileOnLogin,

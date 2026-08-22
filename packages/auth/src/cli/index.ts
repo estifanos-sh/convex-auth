@@ -1,12 +1,5 @@
 import { execFileSync } from "node:child_process";
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  unlinkSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import process from "node:process";
@@ -290,7 +283,6 @@ async function runSetup(options: CliOptions) {
   await configureConvexConfig(config);
   await initializeAuth(config);
   await initializeHttp(config);
-  await initializeAuthCore(config);
   await initializeAuthConfig(config);
 
   if (options.variables !== undefined) {
@@ -792,42 +784,6 @@ export default auth.http();
     }
   } else {
     const newPath = config.usesTypeScript ? `${httpPath}.ts` : `${httpPath}.js`;
-    writeFileSync(newPath, source);
-    p.log.success(`Created ${newPath}`);
-  }
-}
-
-async function initializeAuthCore(config: ProjectConfig) {
-  logStep(config, "Initialize auth/core file");
-  const sourceTemplate = `\
-import { createAuthContext } from "@estifanos-sh/convex-auth/core";
-import { components } from "../_generated/api";
-
-export const auth = createAuthContext(components.auth);
-`;
-  const source = templateToSource(sourceTemplate);
-  const authDir = path.join(config.convexFolderPath, "auth");
-  const corePath = path.join(authDir, "core");
-  const existingPath = existingNonEmptySourcePath(corePath);
-  if (existingPath !== null) {
-    const existing = readFileSync(existingPath, "utf8");
-    if (doesAlreadyMatchTemplate(existing, sourceTemplate)) {
-      p.log.success(`${existingPath} is already set up.`);
-    } else {
-      p.log.info(`You already have ${existingPath}. Make sure it uses createAuthContext:`);
-      p.log.message(indent(`\n${source}\n`));
-      const ready = await p.confirm({ message: "Ready to continue?" });
-      handleCancel(ready);
-      if (!ready) {
-        p.cancel("Setup cancelled.");
-        process.exit(1);
-      }
-    }
-  } else {
-    if (!existsSync(authDir)) {
-      mkdirSync(authDir, { recursive: true });
-    }
-    const newPath = config.usesTypeScript ? `${corePath}.ts` : `${corePath}.js`;
     writeFileSync(newPath, source);
     p.log.success(`Created ${newPath}`);
   }

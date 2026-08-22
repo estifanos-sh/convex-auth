@@ -12,14 +12,14 @@ import { ErrorCode } from "../shared/codes";
 import { EVENT_KIND_CATEGORY } from "../shared/event/kinds";
 import type { Doc } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
+import { vAuthEventProjectionDoc } from "./documents";
 import { appendAuthEvent, readOrderedAuthEvents } from "./eventstream";
-import { internalQuery, mutation, query } from "./functions";
+import { internalQuery, mutation, query } from "./_generated/server";
 import {
   vAuthEvent,
   vAuthEventData,
   vAuthEventInput,
   vAuthEventKind,
-  vAuthEventProjectionDoc,
   vAuthEventTarget,
   vAuthEventWhere,
   vPaginated,
@@ -33,11 +33,11 @@ type AuthEventWhere = Infer<typeof vAuthEventWhere>;
 
 const MAX_EVENT_TARGETS = 64;
 
-/** Read the private auth event stream in commit order for component tests. */
+/** Read the current private auth event stream bucket in commit order for component tests. */
 export const orderedEvents = internalQuery({
-  args: {},
+  args: { now: v.number() },
   returns: v.array(v.object({ kind: vAuthEventKind, commitTs: v.int64() })),
-  handler: readOrderedAuthEvents,
+  handler: async (ctx, { now }) => await readOrderedAuthEvents(ctx, now),
 });
 
 function targetKey(target: AuthEventTarget): string {
@@ -264,7 +264,7 @@ function projectionQuery(ctx: any, where: AuthEventWhere) {
 
 /** Read a single event projection by id, redacted to its public shape. */
 export const get = query({
-  args: { id: v.id("AuthEventProjection") },
+  args: { id: schema.id("AuthEventProjection") },
   returns: v.union(vAuthEventProjectionDoc, v.null()),
   handler: async (ctx, { id }) => {
     const doc = await ctx.db.get("AuthEventProjection", id);

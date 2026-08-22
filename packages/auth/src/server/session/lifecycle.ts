@@ -42,6 +42,8 @@ export const sessionExpirationTime = (config: ConvexAuthConfig, now = Date.now()
 export type SessionIssuance = {
   userId: GenericId<"User">;
   sessionId: GenericId<"Session">;
+  /** Absolute durable-session expiry in milliseconds since Unix epoch. */
+  sessionExpirationTime: number;
   identity: SessionTokenIdentityClaims;
   /**
    * Encoded refresh token (`${refreshTokenId}|${sessionId}`), or `null` when
@@ -73,24 +75,24 @@ export type AuthSessionReplacement = {
 export function buildSessionIdentity(
   userId: GenericId<"User">,
   sessionId: GenericId<"Session">,
-  user: Doc<"User"> | null,
+  user: Doc<"User">,
 ): SessionTokenIdentityClaims {
   return {
     subject: userId,
     sessionId,
-    sessionEpoch: user?.sessionEpoch ?? 0,
-    ...(typeof user?.name === "string" ? { name: user.name } : null),
-    ...(typeof user?.email === "string" ? { email: user.email } : null),
-    ...(user?.emailVerificationTime !== undefined
+    sessionEpoch: user.sessionEpoch,
+    ...(typeof user.name === "string" ? { name: user.name } : null),
+    ...(typeof user.email === "string" ? { email: user.email } : null),
+    ...(user.emailVerificationTime !== undefined
       ? { emailVerified: true }
-      : user?.email !== undefined
+      : user.email !== undefined
         ? { emailVerified: false }
         : null),
-    ...(typeof user?.image === "string" ? { picture: user.image } : null),
-    ...(typeof user?.phone === "string" ? { phoneNumber: user.phone } : null),
-    ...(user?.phoneVerificationTime !== undefined
+    ...(typeof user.image === "string" ? { picture: user.image } : null),
+    ...(typeof user.phone === "string" ? { phoneNumber: user.phone } : null),
+    ...(user.phoneVerificationTime !== undefined
       ? { phoneNumberVerified: true }
-      : user?.phone !== undefined
+      : user.phone !== undefined
         ? { phoneNumberVerified: false }
         : null),
   };
@@ -120,7 +122,13 @@ export async function finalizeSessionIssuance(
           tokens: null,
         };
       }
-      const token = await generateToken({ identity: issuance.identity }, config);
+      const token = await generateToken(
+        {
+          identity: issuance.identity,
+          sessionExpirationTime: issuance.sessionExpirationTime,
+        },
+        config,
+      );
       log(
         LOG_LEVELS.DEBUG,
         `Generated token ${maybeRedact(token)} and refresh token ${maybeRedact(issuance.refreshToken)} for session ${maybeRedact(issuance.sessionId)}`,
@@ -180,6 +188,7 @@ export async function issueSession(
   return {
     userId,
     sessionId,
+    sessionExpirationTime: issued.sessionExpirationTime,
     identity: buildSessionIdentity(userId, sessionId, issued.user),
     refreshToken:
       args.generateTokens && refreshTokenId !== undefined

@@ -194,7 +194,7 @@ export default defineConfig({
         test: {
           name: "node",
           include: ["**/node.test.ts", "**/*.node.test.ts"],
-          exclude: ["connection/**/node.test.ts", "benchmarks/**/node.test.ts"],
+          exclude: ["connection/**/node.test.ts"],
           environment: "node",
           setupFiles: ["./vitest/setup.ts"],
           server: { deps: { inline: ["convex-test"] } },
@@ -209,7 +209,7 @@ export default defineConfig({
         },
         test: {
           name: "interop",
-          include: ["connection/**/node.test.ts", "benchmarks/**/node.test.ts"],
+          include: ["connection/**/node.test.ts"],
           environment: "node",
           globalSetup: ["./infra/docker/setup/node.ts"],
           setupFiles: ["./vitest/setup.ts"],

@@ -31,9 +31,11 @@ The CLI defaults to `setup` when no command is given.
 npx convex-auth [options]
 ```
 
-The wizard runs 8 steps: configure `APP_URL`, generate signing and encryption
-keys, modify `tsconfig.json`, create `convex.config`, create `auth.ts`, create
-`http.ts`, create `auth/core.ts`, and create `auth.config.ts`.
+The wizard configures `APP_URL`, generates signing and encryption keys, updates
+`tsconfig.json`, and creates `convex.config.ts`, `auth.ts`, `http.ts`, and
+`auth.config.ts`. `auth.ts` is the only application auth module: it configures
+providers, exports the client actions, and supplies the server facade used by
+protected functions.
 
 The CLI expects typed deployment identifiers such as `dev:my-deployment`,
 `prod:my-deployment`, or `preview:my-deployment` for Convex Cloud. Use `--url`
@@ -69,7 +71,7 @@ import { roles } from "../roles";
 // call the flat auth.connection.* facade.
 export const createConnection = authMutation({
   args: {
-    groupId: v.string(),
+    groupId: auth.v.id("Group"),
     protocol: v.union(v.literal("oidc"), v.literal("saml")),
     name: v.optional(v.string()),
   },
@@ -84,12 +86,13 @@ export const createConnection = authMutation({
 });
 
 export const setScim = authMutation({
-  args: { connectionId: v.string() },
+  args: { connectionId: auth.v.id("GroupConnection") },
   handler: async (ctx, args) => {
-    const { groupId } = await auth.connection.get(ctx, { id: args.connectionId });
+    const connection = await auth.connection.get(ctx, { id: args.connectionId });
+    if (connection === null) throw new Error("Connection not found.");
     await auth.member.assert(ctx, {
       userId: ctx.auth.userId,
-      groupId,
+      groupId: connection.groupId,
       roleIds: [roles.orgAdmin.id],
     });
     return auth.connection.scim.upsert(ctx, args);
@@ -106,11 +109,11 @@ npx convex-auth --app-url "https://app.example.com"
 Then call the exported functions with normal Convex hooks:
 
 ```ts
-import { useAction } from "convex/react";
+import { useMutation } from "convex/react";
 import { api } from "../convex/_generated/api";
 
-const createConnection = useAction(api.auth.group.createConnection);
-const setScim = useAction(api.auth.group.setScim);
+const createConnection = useMutation(api.auth.group.createConnection);
+const setScim = useMutation(api.auth.group.setScim);
 ```
 
 Pass a concrete `groupId` when calling `createConnection(...)`.

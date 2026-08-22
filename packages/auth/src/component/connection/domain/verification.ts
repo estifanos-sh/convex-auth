@@ -7,8 +7,8 @@
 
 import { v } from "convex/values";
 
-import { mutation, query } from "../../functions";
-import { vGroupConnectionDomainVerificationDoc } from "../../model";
+import { mutation, query } from "../../_generated/server";
+import { vGroupConnectionDomainVerificationDoc } from "../../documents";
 
 /** Read a domain's verification record by `domainId`, or `null` if none. */
 export const get = query({

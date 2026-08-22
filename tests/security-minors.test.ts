@@ -82,8 +82,7 @@ test("passkey signIn returns deterministic decoy allowCredentials for an unknown
   const t = convexTest(schema);
 
   const firstResult = await t.action(api.auth.signIn, {
-    provider: "webauthn",
-    params: { flow: "signIn", email: "ghost@example.com" },
+    request: { provider: "webauthn", params: { flow: "signIn", email: "ghost@example.com" } },
   });
   const first = allowCredentialIds(firstResult);
   expect(first).toBeDefined();
@@ -95,8 +94,7 @@ test("passkey signIn returns deterministic decoy allowCredentials for an unknown
 
   const second = allowCredentialIds(
     await t.action(api.auth.signIn, {
-      provider: "webauthn",
-      params: { flow: "signIn", email: "ghost@example.com" },
+      request: { provider: "webauthn", params: { flow: "signIn", email: "ghost@example.com" } },
     }),
   );
   expect(second).toEqual(first);
@@ -104,8 +102,10 @@ test("passkey signIn returns deterministic decoy allowCredentials for an unknown
   // A different unknown email → different decoys.
   const other = allowCredentialIds(
     await t.action(api.auth.signIn, {
-      provider: "webauthn",
-      params: { flow: "signIn", email: "someone-else@example.com" },
+      request: {
+        provider: "webauthn",
+        params: { flow: "signIn", email: "someone-else@example.com" },
+      },
     }),
   );
   expect(other).not.toEqual(first);
@@ -114,8 +114,7 @@ test("passkey signIn returns deterministic decoy allowCredentials for an unknown
 test("WebAuthn signIn without an email starts a discoverable-credential ceremony", async () => {
   const t = convexTest(schema);
   const result = await t.action(api.auth.signIn, {
-    provider: "webauthn",
-    params: { flow: "signIn" },
+    request: { provider: "webauthn", params: { flow: "signIn" } },
   });
   expect(result.kind).toBe("webauthnOptions");
   if (result.kind !== "webauthnOptions") throw new Error("expected webauthnOptions");
@@ -141,8 +140,10 @@ test("passkey signIn returns the real credential for a known email (not a decoy)
   });
 
   const result = await t.action(api.auth.signIn, {
-    provider: "webauthn",
-    params: { flow: "signIn", email: "known-passkey@example.com" },
+    request: {
+      provider: "webauthn",
+      params: { flow: "signIn", email: "known-passkey@example.com" },
+    },
   });
   const descriptors = allowCredentials(result);
   expect(descriptors).toHaveLength(32);
@@ -197,8 +198,10 @@ test("WebAuthn email signIn routes roaming credentials without constraining pass
 
   const descriptors = allowCredentials(
     await t.action(api.auth.signIn, {
-      provider: "webauthn",
-      params: { flow: "signIn", email: "mixed-passkeys@example.com" },
+      request: {
+        provider: "webauthn",
+        params: { flow: "signIn", email: "mixed-passkeys@example.com" },
+      },
     }),
   );
   expect(descriptors).toHaveLength(32);
@@ -235,8 +238,10 @@ test("WebAuthn email signIn prefers the native security-key ceremony for roaming
   );
 
   const result = await t.action(api.auth.signIn, {
-    provider: "webauthn",
-    params: { flow: "signIn", email: "security-key@example.com" },
+    request: {
+      provider: "webauthn",
+      params: { flow: "signIn", email: "security-key@example.com" },
+    },
   });
   expect(authenticationHints(result)).toEqual(["security-key"]);
   expect(
@@ -268,8 +273,10 @@ test("WebAuthn email signIn omits ambiguous mixed transport hints", async () => 
   );
 
   const result = await t.action(api.auth.signIn, {
-    provider: "webauthn",
-    params: { flow: "signIn", email: "ambiguous-passkey@example.com" },
+    request: {
+      provider: "webauthn",
+      params: { flow: "signIn", email: "ambiguous-passkey@example.com" },
+    },
   });
   const descriptors = allowCredentials(result);
   expect(descriptors?.find(({ id }) => id === credentialId)?.transports).toBeUndefined();
@@ -295,14 +302,18 @@ test("WebAuthn email signIn normalizes email before lookup and decoy derivation"
 
   const normalized = allowCredentialIds(
     await t.action(api.auth.signIn, {
-      provider: "webauthn",
-      params: { flow: "signIn", email: "normalized@example.com" },
+      request: {
+        provider: "webauthn",
+        params: { flow: "signIn", email: "normalized@example.com" },
+      },
     }),
   );
   const nonCanonical = allowCredentialIds(
     await t.action(api.auth.signIn, {
-      provider: "webauthn",
-      params: { flow: "signIn", email: "  NORMALIZED@EXAMPLE.COM " },
+      request: {
+        provider: "webauthn",
+        params: { flow: "signIn", email: "  NORMALIZED@EXAMPLE.COM " },
+      },
     }),
   );
   expect(nonCanonical).toEqual(normalized);
@@ -313,8 +324,10 @@ test("WebAuthn email signIn rejects unbounded email input", async () => {
   const t = convexTest(schema);
   await expect(
     t.action(api.auth.signIn, {
-      provider: "webauthn",
-      params: { flow: "signIn", email: `${"a".repeat(255)}@example.com` },
+      request: {
+        provider: "webauthn",
+        params: { flow: "signIn", email: `${"a".repeat(255)}@example.com` },
+      },
     }),
   ).rejects.toMatchObject({
     data: { code: "INVALID_PARAMETERS" },
@@ -326,8 +339,7 @@ test("WebAuthn decoys cannot be predicted from the former public SHA-256 inputs"
   const email = "public-hash@example.com";
   const ids = allowCredentialIds(
     await t.action(api.auth.signIn, {
-      provider: "webauthn",
-      params: { flow: "signIn", email },
+      request: { provider: "webauthn", params: { flow: "signIn", email } },
     }),
   );
   const oldSeed = `convex-auth:passkey-decoy:localhost:${email}`;
@@ -348,12 +360,14 @@ test("WebAuthn challenge expiration follows challengeExpirationMs at the server 
   const t = convexTest(schema);
   const before = Date.now();
   const result = await t.action(api.auth.signIn, {
-    provider: "webauthn",
-    params: { flow: "signIn" },
+    request: { provider: "webauthn", params: { flow: "signIn" } },
   });
   if (result.kind !== "webauthnOptions") throw new Error("expected webauthnOptions");
   const verifier = await t.run((ctx) =>
-    ctx.runQuery(components.auth.token.pkce.get, { id: result.verifier as never }),
+    ctx.runQuery(components.auth.token.pkce.get, {
+      selector: { id: result.verifier as never },
+      now: Date.now(),
+    }),
   );
   expect(verifier?.expirationTime).toBeGreaterThanOrEqual(before + 299_000);
   expect(verifier?.expirationTime).toBeLessThanOrEqual(Date.now() + 301_000);
@@ -367,8 +381,10 @@ test("device poll is rate-limited after repeated misses on the same code", async
   for (let i = 0; i < 15; i++) {
     lastError = await t
       .action(api.auth.signIn, {
-        provider: "device",
-        params: { flow: "poll", deviceCode: "definitely-not-a-real-device-code" },
+        request: {
+          provider: "device",
+          params: { flow: "poll", deviceCode: "definitely-not-a-real-device-code" },
+        },
       })
       .then(() => null)
       .catch((e) => e);
@@ -383,8 +399,10 @@ test("device verify binds the polled session to the authorizing user", async () 
 
   const signInTokens = expectSignInSession(
     await t.action(api.auth.signIn, {
-      provider: "password",
-      params: { email: TEST_EMAIL, password: TEST_PASSWORD, flow: "signUp" },
+      request: {
+        provider: "password",
+        params: { email: TEST_EMAIL, password: TEST_PASSWORD, flow: "signUp" },
+      },
     }),
   );
   const claims = decodeJwt(signInTokens!.token);
@@ -392,23 +410,20 @@ test("device verify binds the polled session to the authorizing user", async () 
   const asUser = t.withIdentity({ subject: claims.sub, sid: claims.sid as never });
 
   const created = await t.action(api.auth.signIn, {
-    provider: "device",
-    params: { flow: "create" },
+    request: { provider: "device", params: { flow: "create" } },
   });
   const { deviceCode, userCode } =
     created.kind === "deviceCode" ? created.deviceCode : { deviceCode: "", userCode: "" };
   expect(deviceCode).not.toEqual("");
 
   const verified = await asUser.action(api.auth.signIn, {
-    provider: "device",
-    params: { flow: "verify", userCode },
+    request: { provider: "device", params: { flow: "verify", userCode } },
   });
   expect(verified.kind).toBe("signedIn");
 
   const pollTokens = expectSignInSession(
     await t.action(api.auth.signIn, {
-      provider: "device",
-      params: { flow: "poll", deviceCode },
+      request: { provider: "device", params: { flow: "poll", deviceCode } },
     }),
   );
   const pollClaims = decodeJwt(pollTokens!.token);

@@ -820,7 +820,9 @@ export function client<Api extends AuthApiRefs = AuthApiRefs>(
       () =>
         requireHttpClient().action(
           requireApiRefs().signIn,
-          "code" in args ? { params: { code: args.code }, verifier: args.verifier } : args,
+          "code" in args
+            ? { request: { params: { code: args.code } }, verifier: args.verifier }
+            : { request: args },
         ) as Promise<SignInActionResult>,
       isTransientNetworkError,
     );
@@ -965,7 +967,9 @@ export function client<Api extends AuthApiRefs = AuthApiRefs>(
         if (!webauthnAdapter) {
           throw new Error("This client does not support WebAuthn continuations.");
         }
-        return await webauthnAdapter.completeRegistration(result);
+        return result.operation === "rotate"
+          ? await webauthnAdapter.completeRegistration(result)
+          : await webauthnAdapter.completeSignIn(result);
       }
 
       if (result.kind === "signedIn") {
@@ -1006,7 +1010,7 @@ export function client<Api extends AuthApiRefs = AuthApiRefs>(
       if (proxy) {
         const result = (await proxyFetch({
           action: "auth:signIn",
-          args: { provider, params },
+          args: { request: provider === undefined ? { params } : { provider, params } },
         })) as SignInActionResult;
         return await handleSignInActionResult(result, {
           shouldStore: false,
@@ -1017,8 +1021,7 @@ export function client<Api extends AuthApiRefs = AuthApiRefs>(
       const verifier = (await storageGet(VERIFIER_STORAGE_KEY)) ?? undefined;
       try {
         const result = (await convex.action(requireApiRefs().signIn, {
-          provider,
-          params,
+          request: provider === undefined ? { params } : { provider, params },
           verifier,
         })) as SignInActionResult;
         if (params.code !== undefined) {
@@ -1137,7 +1140,7 @@ export function client<Api extends AuthApiRefs = AuthApiRefs>(
             () =>
               proxyFetch({
                 action: "auth:signIn",
-                args: { refreshToken: true },
+                args: { request: { refreshToken: true } },
               }) as Promise<SignInActionResult>,
             isRetriableProxyRefreshError,
           );

@@ -77,8 +77,7 @@ async function generateTotpCode(base32Secret: string, period: number, digits: nu
 async function signedInUser(t: ReturnType<typeof convexTest>, email = TEST_EMAIL) {
   const tokens = expectSignInSession(
     await t.action(api.auth.signIn, {
-      provider: "password",
-      params: { email, password: TEST_PASSWORD, flow: "signUp" },
+      request: { provider: "password", params: { email, password: TEST_PASSWORD, flow: "signUp" } },
     }),
   );
   const claims = decodeJwt(tokens!.token);
@@ -90,8 +89,7 @@ test("totp setup stores the secret encrypted, not in plaintext", async () => {
   const asUser = await signedInUser(t, "totp-enc@example.com");
 
   const setup = await asUser.action(api.auth.signIn, {
-    provider: "totp",
-    params: { flow: "setup" },
+    request: { provider: "totp", params: { flow: "setup" } },
   });
   expect(setup.kind).toBe("totpSetup");
   if (setup.kind !== "totpSetup") throw new Error("expected totpSetup");
@@ -110,7 +108,10 @@ test("totp setup stores the secret encrypted, not in plaintext", async () => {
   // The challenge verifier must NOT carry the raw secret any more — the stored
   // signature is JSON with purpose/userId/totpId but no `secret` field.
   const verifierDoc = await t.run((ctx) =>
-    ctx.runQuery(components.auth.token.pkce.get, { id: setup.verifier }),
+    ctx.runQuery(components.auth.token.pkce.get, {
+      selector: { id: setup.verifier },
+      now: Date.now(),
+    }),
   );
   expect(verifierDoc).not.toBeNull();
   expect(verifierDoc!.signature).toBeDefined();
@@ -122,8 +123,7 @@ test("totp enrollment verifies against the encrypted secret", async () => {
   const asUser = await signedInUser(t, "totp-verify@example.com");
 
   const setup = await asUser.action(api.auth.signIn, {
-    provider: "totp",
-    params: { flow: "setup" },
+    request: { provider: "totp", params: { flow: "setup" } },
   });
   if (setup.kind !== "totpSetup") throw new Error("expected totpSetup");
   const { secret, totpId } = setup.totpSetup;
@@ -132,8 +132,7 @@ test("totp enrollment verifies against the encrypted secret", async () => {
   const code = await generateTotpCode(secret, 30, 6);
 
   const verified = await asUser.action(api.auth.signIn, {
-    provider: "totp",
-    params: { flow: "verify", code, totpId },
+    request: { provider: "totp", params: { flow: "verify", code, totpId } },
     verifier,
   });
   expect(verified.kind).toBe("signedIn");
@@ -157,16 +156,14 @@ test("totp enrollment rejects an invalid code", async () => {
   const asUser = await signedInUser(t, "totp-bad@example.com");
 
   const setup = await asUser.action(api.auth.signIn, {
-    provider: "totp",
-    params: { flow: "setup" },
+    request: { provider: "totp", params: { flow: "setup" } },
   });
   if (setup.kind !== "totpSetup") throw new Error("expected totpSetup");
   const { totpId } = setup.totpSetup;
 
   await expect(
     asUser.action(api.auth.signIn, {
-      provider: "totp",
-      params: { flow: "verify", code: "000000", totpId },
+      request: { provider: "totp", params: { flow: "verify", code: "000000", totpId } },
       verifier: setup.verifier,
     }),
   ).rejects.toThrow();

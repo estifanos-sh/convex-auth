@@ -39,19 +39,28 @@ export type { PlatformAuthClient as AuthClient, ClientOptions } from "../client/
 export function client<Api extends AuthApiRefs = AuthApiRefs>(
   options: ClientOptions<Api>,
 ): PlatformAuthClient<Api> {
-  const proxyMode = options.proxyPath !== undefined;
-  const url = proxyMode ? undefined : (options.url ?? resolveUrl(options.convex));
+  const runtime = mergeBrowserRuntime(options.runtime);
+  const adapterFactories = {
+    ...options.adapterFactories,
+    webauthn: options.adapterFactories?.webauthn ?? ((deps) => createWebAuthnClient(deps)),
+  };
 
-  return createClient({
+  if (options.proxyPath !== undefined) {
+    return createClient<Api>({
+      ...options,
+      storage: options.storage ?? null,
+      runtime,
+      adapterFactories,
+    }) as unknown as PlatformAuthClient<Api>;
+  }
+
+  const url = options.url ?? resolveUrl(options.convex);
+  return createClient<Api>({
     ...options,
-    storage: options.storage === undefined && proxyMode ? null : options.storage,
-    runtime: mergeBrowserRuntime(options.runtime),
-    adapterFactories: {
-      ...options.adapterFactories,
-      webauthn: options.adapterFactories?.webauthn ?? ((deps) => createWebAuthnClient(deps)),
-    },
-    httpClient: proxyMode ? null : (options.httpClient ?? (url ? new ConvexHttpClient(url) : null)),
-  }) as PlatformAuthClient<Api>;
+    runtime,
+    adapterFactories,
+    httpClient: options.httpClient ?? new ConvexHttpClient(url),
+  }) as unknown as PlatformAuthClient<Api>;
 }
 
 function mergeBrowserRuntime(

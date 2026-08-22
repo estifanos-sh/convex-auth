@@ -7,8 +7,9 @@
 
 import { v } from "convex/values";
 
-import { mutation, query } from "../functions";
-import { vGroupConnectionSecretDoc, vGroupConnectionSecretKind } from "../model";
+import { mutation, query } from "../_generated/server";
+import { vGroupConnectionSecretDoc } from "../documents";
+import { vGroupConnectionSecretKind } from "../model";
 
 /** Read a connection's secret by `(connectionId, kind)`, or `null` if none. */
 export const get = query({

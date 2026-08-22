@@ -3,6 +3,7 @@ import type { DataModel } from "@convex/_generated/dataModel";
 import { auth as backendAuth } from "@convex/auth";
 import schema from "@convex/schema";
 import { client } from "@estifanos-sh/convex-auth/client";
+import type { FunctionArgs } from "convex/server";
 import { decodeJwt } from "jose";
 import { afterEach, expect, test, vi } from "vite-plus/test";
 
@@ -17,11 +18,13 @@ test("token invite acceptance allows matching unverified email", async () => {
   const inviteEmail = "invited@example.com";
 
   const signUpResult = await t.action(api.auth.signIn, {
-    provider: "password",
-    params: {
-      email: inviteEmail,
-      password: "44448888",
-      flow: "signUp",
+    request: {
+      provider: "password",
+      params: {
+        email: inviteEmail,
+        password: "44448888",
+        flow: "signUp",
+      },
     },
   });
   expect(signUpResult.kind).toBe("signedIn");
@@ -59,11 +62,13 @@ test("token invite acceptance still rejects mismatched email", async () => {
   const t = convexTest(schema);
 
   const signUpResult = await t.action(api.auth.signIn, {
-    provider: "password",
-    params: {
-      email: "different@example.com",
-      password: "44448888",
-      flow: "signUp",
+    request: {
+      provider: "password",
+      params: {
+        email: "different@example.com",
+        password: "44448888",
+        flow: "signUp",
+      },
     },
   });
   expect(signUpResult.kind).toBe("signedIn");
@@ -106,7 +111,7 @@ test("proxy sign up can immediately accept invite", async () => {
         fetch: vi.fn(
           async (payload: {
             action?: string;
-            args?: { refreshToken?: string; params?: { inviteToken?: string } };
+            args?: Partial<FunctionArgs<typeof api.auth.signIn>>;
           }) => {
             if (payload.action !== "auth:signIn") {
               return new Response(JSON.stringify({ error: "Unsupported action" }), {
@@ -115,14 +120,23 @@ test("proxy sign up can immediately accept invite", async () => {
               });
             }
 
-            if (payload.args?.refreshToken !== undefined) {
+            if (payload.args?.request !== undefined && "refreshToken" in payload.args.request) {
               return new Response(JSON.stringify({ kind: "signedIn", session: null }), {
                 status: 200,
                 headers: { "Content-Type": "application/json" },
               });
             }
 
-            const result = await t.action(api.auth.signIn, payload.args ?? {});
+            if (payload.args?.request === undefined) {
+              return new Response(JSON.stringify({ error: "Missing sign-in request" }), {
+                status: 400,
+                headers: { "Content-Type": "application/json" },
+              });
+            }
+
+            const result = await t.action(api.auth.signIn, {
+              request: payload.args.request,
+            });
             return new Response(JSON.stringify(result), {
               status: 200,
               headers: { "Content-Type": "application/json" },

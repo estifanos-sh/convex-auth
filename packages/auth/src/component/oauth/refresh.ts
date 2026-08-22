@@ -22,8 +22,8 @@ import { v } from "convex/values";
 import { internal } from "../_generated/api";
 import type { Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
-import { internalMutation, mutation, query } from "../functions";
-import { vOAuthRefreshTokenDoc } from "../model";
+import { internalMutation, mutation, query } from "../_generated/server";
+import { vOAuthRefreshTokenDoc } from "../documents";
 
 /** Token rows deleted per `purgeRevokedGrant` transaction before it reschedules. */
 const PURGE_MAX = 1000;

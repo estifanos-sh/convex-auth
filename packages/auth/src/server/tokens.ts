@@ -197,20 +197,24 @@ export async function verifyOAuthToken(
 /**
  * Sign a session access token (EdDSA) carrying the identity claims, audienced to Convex.
  *
- * Expiry is `config.jwt.durationMs` from now, defaulting to one hour.
+ * Expiry is the earlier of `config.jwt.durationMs` from now (defaulting to one
+ * hour) and the durable session's absolute expiration.
  *
  * @internal
  */
 export async function generateToken(
   args: {
     identity: SessionTokenIdentityClaims;
+    /** Absolute durable-session expiry in milliseconds since Unix epoch. */
+    sessionExpirationTime: number;
   },
   config: ConvexAuthConfig,
 ): Promise<AccessToken> {
   const privateKey = await withSpan("convex-auth.tokens.import-key", { alg: JWT_ALG }, () =>
     getPrivateKey(),
   );
-  const expirationTime = new Date(Date.now() + (config.jwt?.durationMs ?? DEFAULT_JWT_DURATION_MS));
+  const jwtExpirationTime = Date.now() + (config.jwt?.durationMs ?? DEFAULT_JWT_DURATION_MS);
+  const expirationTime = new Date(Math.min(jwtExpirationTime, args.sessionExpirationTime));
   const claims = {
     sub: args.identity.subject,
     sid: args.identity.sessionId,

@@ -20,11 +20,10 @@ export function createDeviceClient(deps: FactorDeps): DeviceClient {
       proxy
         ? await proxyFetch({
             action: "auth:signIn",
-            args: { provider: "device", params },
+            args: { request: { provider: "device", params } },
           })
         : await convex.action(requireApiRefs().signIn, {
-            provider: "device",
-            params,
+            request: { provider: "device", params },
           })
     ) as SignInActionResult;
   };

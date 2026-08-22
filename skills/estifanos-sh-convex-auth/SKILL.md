@@ -7,6 +7,11 @@ description: Route work involving @estifanos-sh/convex-auth to the correct curre
 
 Route `@estifanos-sh/convex-auth` work to an outcome-focused procedure. Keep the
 installed package and project code—not model memory—as the source of truth.
+Use one `defineAuth(components.auth, config)` definition, one app-owned browser
+client, and the server facade at application boundaries. The component owns
+identity, credential, session, and passkey machinery; application tables should
+reference auth IDs rather than recreate those records or a custom WebAuthn or
+session flow.
 
 ## Route the task
 
@@ -48,8 +53,8 @@ rewrite an app to an unreleased API.
 `@estifanos-sh/convex-auth` and `@convex-dev/auth` are different packages with
 different setup, provider, client, and CLI surfaces. Never:
 
-- import `convexAuth` or provider helpers from `@convex-dev/auth` for a Robelest
-  integration;
+- import `convexAuth` or provider helpers from `@convex-dev/auth` for an
+  estifanos.sh Convex Auth integration;
 - run the `@convex-dev/auth` wizard as a substitute;
 - replace one package with the other without an explicit migration request;
 - assume official Convex Auth examples describe this package.

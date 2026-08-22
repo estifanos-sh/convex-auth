@@ -10,50 +10,57 @@ description: Safe account management for the current user.
 
 # auth.account
 
-`auth.account` is the current user's account-management surface. It never
-returns password hashes or other credential secrets.
+`auth.account` exposes linked sign-in capabilities without exposing credential
+material. It is the application-facing boundary for answering questions such as
+“does this user have a password account?” or letting the current user unlink an
+account. Password hashes, PIN hashes, provider account identifiers, secrets, and
+provider extension data never leave the component through this namespace.
 
-| Method   | Signature       | Returns            | Description                                                            |
-| -------- | --------------- | ------------------ | ---------------------------------------------------------------------- |
-| `list`   | `(ctx)`         | `AccountSummary[]` | Lists the current user's linked provider accounts.                     |
-| `remove` | `(ctx, { id })` | `{ id }`           | Removes an owned account while preserving at least one sign-in method. |
-
-```ts
-const accounts = await auth.account.list(ctx);
-
-await auth.account.remove(ctx, {
-  id: accounts[0].id,
-});
-```
-
-Each summary contains `id`, `provider`, `createdAt`, `emailVerified`, and
-`phoneVerified`. It does not expose the provider account identifier, credential
-secret, or provider extension data. WebAuthn's internal backing account is not
-listed or removable here; use [`auth.factor`](/api/factor) so the credential and
-its backing identity are removed atomically.
-
-Account creation, credential lookup, credential updates, and linking are owned
-by provider ceremonies. Custom credentials providers can return a verified
-identity for the runtime to provision:
+Call `list(ctx)` to read the current user's linked accounts. Each
+`AccountSummary` contains a branded `id`, a branded `userId`, `provider`,
+`createdAt`, `emailVerified`, and `phoneVerified`. Pass a `provider` when the UI
+only needs one capability.
 
 ```ts
-import { v } from "convex/values";
+const accounts = await auth.account.list(ctx, { provider: "password" });
 
-credentials({
-  id: "invite",
-  params: v.object({ token: v.string() }),
-  authorize: async (params) => {
-    const invite = await verifyInvite(params.token);
-    if (!invite) return null;
-
-    return {
-      provision: {
-        account: { id: invite.email },
-        profile: { email: invite.email, name: invite.name },
-      },
-    };
-  },
-});
+const hasPassword = accounts.length > 0;
 ```
 
-Use [`auth.factor`](/api/factor) to manage passkeys and TOTP enrollments.
+Directory queries can request a bounded batch of as many as 100 users in one
+component call. Duplicate IDs are ignored, and the optional provider filter is
+applied inside the component. This avoids an N+1 component query while keeping
+the result deliberately redacted.
+
+```ts
+ctx.auth.assert("members.read");
+
+const passwordAccounts = await auth.account.list(ctx, {
+  userIds: members.map((member) => member.userId),
+  provider: "password",
+});
+
+const passwordUsers = new Set(passwordAccounts.map((account) => account.userId));
+```
+
+An explicit `userIds` batch is an administrative read, so Convex Auth cannot
+infer whether the viewer may inspect that application-defined directory. The
+calling query must check its grant, membership, or ownership rule before
+passing those IDs. Authentication alone is not directory authorization.
+
+`remove(ctx, { id })` unlinks one of the current user's accounts and returns the
+same branded account ID. It refuses to remove an account the user does not own
+and preserves at least one sign-in method.
+
+```ts
+const [account] = await auth.account.list(ctx, { provider: "github" });
+if (account) {
+  await auth.account.remove(ctx, { id: account.id });
+}
+```
+
+WebAuthn's backing account is intentionally absent from `list` and cannot be
+removed here. Manage passkeys through [`auth.factor`](/api/factor), which keeps
+the credential and its backing identity atomic. Account creation, credential
+verification, credential updates, and linking belong to provider ceremonies;
+application code should not create a parallel account or credential table.

@@ -10,30 +10,19 @@ description: Invite management — create, accept, and revoke group invitations.
 
 # auth.invite
 
-The `auth.invite` namespace manages invitations to groups. Invites have a status
-lifecycle: `pending` -> `accepted` or `revoked`.
+The `auth.invite` namespace owns the full group-invitation lifecycle. A newly
+created invite is `pending`; accepting it records the recipient and can create
+the membership, while revoking it prevents later acceptance. Invite IDs,
+accepted-user IDs, group IDs, and membership IDs retain their Convex table
+brands throughout the facade, so callers do not need to turn strings into IDs
+with assertions.
 
-Token acceptance is a separate current-user flow: `token.accept` derives the
-accepting user from the authenticated context rather than trusting an input ID.
-
-## Methods
-
-| Method         | Signature                                                                | Returns                                                                     | Description                                                                                                          |
-| -------------- | ------------------------------------------------------------------------ | --------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `create`       | `(ctx, { data: { groupId?, email?, roleIds?, expiresTime?, extend? } })` | `{ id, token }`                                                             | Creates a pending invite. Throws `ConvexError` with code `INVALID_ROLE_IDS` on failure.                              |
-| `get`          | `(ctx, { id })`                                                          | `Doc<"GroupInvite">`                                                        | Reads an invite document by ID.                                                                                      |
-| `list`         | `(ctx, { where?, paginationOpts, orderBy?, order? })`                    | `PaginationResult<Doc<"GroupInvite">>` — `{ page, isDone, continueCursor }` | Lists invites, optionally filtered by group and/or status. Convex-native shape; pass through to `usePaginatedQuery`. |
-| `accept`       | `(ctx, { id, acceptedByUserId? })`                                       | `{ id, acceptedByUserId }`                                                  | Accepts a pending invite and records acceptance metadata.                                                            |
-| `revoke`       | `(ctx, { id })`                                                          | `null`                                                                      | Revokes a pending invite so it can no longer be accepted.                                                            |
-| `token.get`    | `(ctx, { token })`                                                       | `Doc<"GroupInvite"> \| null`                                                | Resolves an invite token.                                                                                            |
-| `token.accept` | `(ctx, { token })`                                                       | Acceptance result                                                           | Accepts for the current authenticated user and creates the membership when applicable.                               |
-
-## Examples
-
-### Create and accept an invite
+Create returns a one-time raw token for the delivery link. Convex Auth stores
+its hash, not a second application-owned invite record. The recipient should use
+`token.accept`, which derives the accepting user from the authenticated context
+instead of trusting a browser-supplied user ID.
 
 ```ts
-// Admin creates an invite
 const { id, token } = await auth.invite.create(ctx, {
   data: {
     groupId: orgId,
@@ -42,24 +31,13 @@ const { id, token } = await auth.invite.create(ctx, {
   },
 });
 
-// Later, when Alice signs in and accepts:
 await auth.invite.token.accept(ctx, { token });
 ```
 
-### Create an invite with expiration
-
-```ts
-const { id } = await auth.invite.create(ctx, {
-  data: {
-    groupId: orgId,
-    email: "bob@example.com",
-    roleIds: ["viewer"],
-    expiresTime: Date.now() + 7 * 24 * 60 * 60 * 1000, // 7 days
-  },
-});
-```
-
-### List pending invites for a group
+Use `get(ctx, { id })` for one invite and `list` for a filtered, paginated
+administrative view. `list` returns Convex's native pagination object, so the
+result can pass directly through a public query using
+`auth.v.list(auth.v.invite)`.
 
 ```ts
 const pending = await auth.invite.list(ctx, {
@@ -68,8 +46,44 @@ const pending = await auth.invite.list(ctx, {
 });
 ```
 
-### Revoke an invite
+`accept(ctx, { id, acceptedByUserId? })` is the lower-level administrative
+transition and does not create a membership. `revoke(ctx, { id })` invalidates a
+pending invite. Prefer token acceptance for the normal recipient flow.
 
 ```ts
 await auth.invite.revoke(ctx, { id });
 ```
+
+## Typed invite extensions
+
+Invite metadata that genuinely belongs to authentication can be declared once
+on `GroupInvite`. The configured shape is carried by `create` inputs, facade
+reads, and `auth.v.invite` return validation.
+
+```ts
+export const auth = defineAuth(components.auth, {
+  providers,
+  extend: {
+    GroupInvite: v.object({
+      campaign: v.optional(v.string()),
+    }),
+  },
+});
+
+const { id } = await auth.invite.create(ctx, {
+  data: {
+    groupId,
+    email: "alice@example.com",
+    extend: { campaign: "fall-launch" },
+  },
+});
+
+const invite = await auth.invite.get(ctx, { id });
+const campaign = invite?.extend?.campaign; // string | undefined
+```
+
+When `GroupInvite` is not configured, `extend` is `unknown` rather than `any`.
+Narrow it before use or add a validator to make it part of the application
+contract. Product workflow state that does not affect invitation or membership
+semantics belongs in an application table keyed by the branded invite or user
+ID, not in a parallel invitation system.

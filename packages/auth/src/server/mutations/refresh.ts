@@ -119,6 +119,7 @@ export async function refreshSessionImpl(
         return {
           userId: exchanged.userId as GenericId<"User">,
           sessionId: exchanged.sessionId as GenericId<"Session">,
+          sessionExpirationTime: exchanged.sessionExpirationTime,
           identity: buildSessionIdentity(
             exchanged.userId as GenericId<"User">,
             exchanged.sessionId as GenericId<"Session">,

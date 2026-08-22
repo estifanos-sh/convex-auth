@@ -11,20 +11,13 @@ import "./identity/convex";
 
 export { defineAuth } from "./auth";
 export type {
-  AuthApi,
-  AuthApiBase,
   AuthContext,
   AuthContextConfig,
   AuthConfig,
   AuthExtendValidators,
-  AuthValidators,
-  ConvexAuthResult,
-  InferAuth,
   OptionalAuthContext,
-  UserDoc,
 } from "./auth";
-export { createAuthValidators } from "./validators";
-export type { AuthComponentApi } from "./component/api";
+export { vAuthId } from "./validators";
 export { authEvents } from "./events";
 export type {
   AuthEvent,
@@ -33,16 +26,6 @@ export type {
   AuthEventTarget,
   AuthEventWhere,
 } from "./events";
-export type { Group, Membership, Viewer } from "./validators";
-export type { Doc, GenericDoc, AuthDataModel } from "./types";
-export {
-  vGroupDoc,
-  vGroupInviteDoc,
-  vGroupMemberDoc,
-  vPaginated,
-  vUserDoc,
-  vUserEmailDoc,
-} from "../component/model";
 export type { HttpAuthContext, HttpAuthContextConfig, OptionalHttpAuthContext } from "./http";
 export {
   corsHeaders,

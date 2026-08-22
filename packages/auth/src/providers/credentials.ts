@@ -55,7 +55,7 @@ export type CredentialsAuthorizeResult =
       issuance?: SessionIssuance;
     }
   | {
-      /** Provision or retrieve the provider account before issuing a session. */
+      /** Stage a verified identity for atomic account + passkey enrollment. */
       provision: CredentialsProvisioning;
       /** TOTP step-up hint for the resulting user. */
       hasTotp?: boolean;

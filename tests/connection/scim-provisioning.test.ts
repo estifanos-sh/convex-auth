@@ -24,6 +24,7 @@ import { components } from "@convex/_generated/api";
 import schema from "@convex/schema";
 import { ErrorCode } from "@estifanos-sh/convex-auth/shared/codes";
 import { notifyScimAfterProvision } from "@estifanos-sh/convex-auth/server/connection/http";
+import type { FunctionReference } from "convex/server";
 import { ConvexError } from "convex/values";
 import { expect, test, vi } from "vite-plus/test";
 
@@ -35,11 +36,34 @@ import { convexTest } from "../convex/setup";
  * doc, narrowed via this shape.
  */
 type MemberDoc = { _id: string; status?: string; userId: string } | null;
+type ScimMembershipProgress = { continueCursor: string; isDone: boolean };
+type ScimGroupUpdateArgs = {
+  connectionId: string;
+  cursor?: string;
+  groupId: string;
+  memberIds: string[];
+  name?: string;
+  raw?: unknown;
+  roleIds: string[];
+};
+type ScimGroupRevokeArgs = { connectionId: string; cursor?: string; groupId: string };
 
 const provisionScimUser = components.auth.connection.scim.identity.provision;
 const provisionScimGroup = components.auth.connection.scim.identity.provisionGroup;
-const updateScimGroup = components.auth.connection.scim.identity.updateGroup;
-const revokeScimGroup = components.auth.connection.scim.identity.revokeGroup;
+const updateScimGroup = components.auth.connection.scim.identity
+  .updateGroup as unknown as FunctionReference<
+  "mutation",
+  "internal",
+  ScimGroupUpdateArgs,
+  ScimMembershipProgress
+>;
+const revokeScimGroup = components.auth.connection.scim.identity
+  .revokeGroup as unknown as FunctionReference<
+  "mutation",
+  "internal",
+  ScimGroupRevokeArgs,
+  ScimMembershipProgress
+>;
 
 /** Seed a group + an active SCIM-capable connection, mirroring replay.test.ts. */
 async function seedConnection(t: ReturnType<typeof convexTest>) {
@@ -527,6 +551,82 @@ test("SCIM group lifecycle is atomic across identity, group, and memberships", a
   expect(afterRevoke.group).toBeNull();
   expect(afterRevoke.identity).toBeNull();
   expect(afterRevoke.members.page).toHaveLength(0);
+});
+
+test("SCIM group membership replacement and deletion resume from bounded cursors", async () => {
+  const t = convexTest(schema);
+  const { connectionId } = await seedConnection(t);
+  const provisioned = await t.run((ctx) =>
+    ctx.runMutation(provisionScimGroup, {
+      connectionId,
+      externalId: "bounded-members",
+      name: "Bounded Members",
+      memberIds: [],
+      roleIds: [],
+    }),
+  );
+
+  await t.run(async (ctx) => {
+    for (let index = 0; index <= 100; index += 1) {
+      const userId = await ctx.runMutation(components.auth.user.create, {
+        data: { email: `bounded-${index}@example.com` },
+      });
+      await ctx.runMutation(components.auth.group.member.create, {
+        groupId: provisioned.groupId,
+        userId,
+        status: "active",
+      });
+    }
+  });
+
+  const replaceFirst = await t.run((ctx) =>
+    ctx.runMutation(updateScimGroup, {
+      connectionId,
+      groupId: provisioned.groupId,
+      memberIds: [],
+      roleIds: [],
+    }),
+  );
+  expect(replaceFirst.isDone).toBe(false);
+  const replaceLast = await t.run((ctx) =>
+    ctx.runMutation(updateScimGroup, {
+      connectionId,
+      groupId: provisioned.groupId,
+      memberIds: [],
+      roleIds: [],
+      cursor: replaceFirst.continueCursor,
+    }),
+  );
+  expect(replaceLast.isDone).toBe(true);
+
+  await t.run(async (ctx) => {
+    for (let index = 0; index <= 100; index += 1) {
+      const userId = await ctx.runMutation(components.auth.user.create, {
+        data: { email: `delete-bounded-${index}@example.com` },
+      });
+      await ctx.runMutation(components.auth.group.member.create, {
+        groupId: provisioned.groupId,
+        userId,
+        status: "active",
+      });
+    }
+  });
+
+  const revokeFirst = await t.run((ctx) =>
+    ctx.runMutation(revokeScimGroup, { connectionId, groupId: provisioned.groupId }),
+  );
+  expect(revokeFirst.isDone).toBe(false);
+  const revokeLast = await t.run((ctx) =>
+    ctx.runMutation(revokeScimGroup, {
+      connectionId,
+      groupId: provisioned.groupId,
+      cursor: revokeFirst.continueCursor,
+    }),
+  );
+  expect(revokeLast.isDone).toBe(true);
+  expect(
+    await t.run((ctx) => ctx.runQuery(components.auth.group.get, { id: provisioned.groupId })),
+  ).toBeNull();
 });
 
 test("member.create rejects a duplicate membership for the same user", async () => {

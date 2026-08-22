@@ -78,6 +78,7 @@ export async function isSignInRateLimited(
   const { ok } = await ctx.runQuery(config.component.limits.signInCheck, {
     identifier,
     maxAttemptsPerHour: maxSignInAttempts(config),
+    now: Date.now(),
   });
   return !ok;
 }

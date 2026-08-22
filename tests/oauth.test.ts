@@ -13,9 +13,7 @@ import { convexTest } from "./convex/setup";
 test("sign up with oauth starts redirect flow", async () => {
   const t = convexTest(schema);
 
-  const result = await t.action(api.auth.signIn, {
-    provider: "google",
-  });
+  const result = await t.action(api.auth.signIn, { request: { provider: "google" } });
 
   expect(result.kind).toBe("redirect");
   if (result.kind !== "redirect") {
@@ -31,8 +29,8 @@ test("sign up with oauth starts redirect flow", async () => {
 test("sign in with oauth issues a fresh verifier", async () => {
   const t = convexTest(schema);
 
-  const first = await t.action(api.auth.signIn, { provider: "google" });
-  const second = await t.action(api.auth.signIn, { provider: "google" });
+  const first = await t.action(api.auth.signIn, { request: { provider: "google" } });
+  const second = await t.action(api.auth.signIn, { request: { provider: "google" } });
 
   expect(first.kind).toBe("redirect");
   expect(second.kind).toBe("redirect");
@@ -49,9 +47,11 @@ test("redirectTo with oauth preserves auth redirect semantics", async () => {
   const t = convexTest(schema);
 
   const result = await t.action(api.auth.signIn, {
-    provider: "google",
-    params: {
-      redirectTo: "/dashboard",
+    request: {
+      provider: "google",
+      params: {
+        redirectTo: "/dashboard",
+      },
     },
   });
 

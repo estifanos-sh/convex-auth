@@ -18,6 +18,7 @@ import {
   vGroupConnectionSecretKind,
   vGroupConnectionStatus,
   vInviteStatus,
+  vPayloadRecord,
   vScimResourceType,
   vScimStatus,
   vTokenEndpointAuthMethod,
@@ -33,7 +34,7 @@ import { authEventStream } from "./eventstream";
  * verification codes, PKCE verifiers, rate limits) and hierarchical group
  * management (groups, members, invites).
  */
-export default defineSchema({
+const schema = defineSchema({
   ...authEventStream.tables({
     events: (table) => table.index("event_id", ["eventId"]),
   }),
@@ -54,7 +55,7 @@ export default defineSchema({
     isAnonymous: v.optional(v.boolean()),
     lastActiveGroup: v.optional(v.id("Group")),
     /** Incremented to invalidate every session token issued before this value. */
-    sessionEpoch: v.optional(v.number()),
+    sessionEpoch: v.number(),
     extend: v.optional(v.any()),
   })
     .index("email", ["email"])
@@ -101,8 +102,8 @@ export default defineSchema({
   Session: defineTable({
     userId: v.id("User"),
     expirationTime: v.number(),
-    /** User session epoch at issuance. Missing legacy values are epoch zero. */
-    epoch: v.optional(v.number()),
+    /** User session epoch at issuance. */
+    epoch: v.number(),
   })
     .index("user_id", ["userId"])
     .index("user_id_epoch_expiration_time", ["userId", "epoch", "expirationTime"])
@@ -171,27 +172,51 @@ export default defineSchema({
     expirationTime: v.optional(v.number()),
   })
     .index("signature", ["signature"])
+    .index("session_id", ["sessionId"])
+    .index("continuation_id", ["continuationId"])
     .index("expiration_time", ["expirationTime"]),
 
   AuthContinuation: defineTable({
-    userId: v.id("User"),
+    subject: v.union(
+      v.object({ kind: v.literal("user"), userId: v.id("User") }),
+      v.object({
+        kind: v.literal("enrollment"),
+        enrollmentId: v.id("CredentialEnrollment"),
+      }),
+    ),
     provider: v.string(),
-    operation: v.literal("rotate"),
+    operation: v.union(v.literal("rotate"), v.literal("signIn")),
     expirationTime: v.number(),
   })
     .index("expiration_time", ["expirationTime"])
     .index("user_id_provider_operation_expiration_time", [
-      "userId",
+      "subject.userId",
       "provider",
       "operation",
       "expirationTime",
     ]),
 
+  /**
+   * Hashed credentials and verified profile data staged for one passkey
+   * enrollment. No user or account is materialized until WebAuthn succeeds.
+   */
+  CredentialEnrollment: defineTable({
+    provider: v.string(),
+    providerAccountId: v.string(),
+    secret: v.optional(v.string()),
+    profile: vPayloadRecord,
+    shouldLinkViaEmail: v.boolean(),
+    shouldLinkViaPhone: v.boolean(),
+    expirationTime: v.number(),
+  }),
+
   PasswordReset: defineTable({
     continuationId: v.id("AuthContinuation"),
     accountId: v.id("Account"),
     secret: v.string(),
-  }).index("continuation_id", ["continuationId"]),
+  })
+    .index("continuation_id", ["continuationId"])
+    .index("account_id", ["accountId"]),
 
   /** Token-bucket state for guessable-secret authentication attempts. */
   SignInLimit: defineTable({
@@ -293,6 +318,8 @@ export default defineSchema({
     lastPolledAt: v.optional(v.number()),
   })
     .index("device_code_hash", ["deviceCodeHash"])
+    .index("user_id", ["userId"])
+    .index("session_id", ["sessionId"])
     .index("user_code_status", ["userCode", "status"])
     .index("expires_at", ["expiresAt"]),
 
@@ -413,6 +440,7 @@ export default defineSchema({
     .index("email_status", ["email", "status"])
     .index("email_group_id_status", ["email", "groupId", "status"])
     .index("invited_by_user_id_status", ["invitedByUserId", "status"])
+    .index("accepted_by_user_id", ["acceptedByUserId"])
     .index("group_id", ["groupId"])
     .index("group_id_status", ["groupId", "status"])
     .index("group_id_email_status", ["groupId", "email", "status"])
@@ -462,12 +490,12 @@ export default defineSchema({
    * A row is created when the SP generates a SAML sign-in request and accepted
    * (single-use) at the ACS handler. Because the ID is looked up server-side and
    * marked `acceptedAt`, a captured SAMLResponse/RelayState pair cannot be
-   * replayed — the second accept fails. Rows are pruned by `expiresAt`.
+   * replayed — the second accept fails. Convex's `_creationTime` is the
+   * creation timestamp; rows are pruned by their explicit `expiresAt` deadline.
    */
   SamlLoginRequest: defineTable({
     connectionId: v.id("GroupConnection"),
     requestId: v.string(),
-    createdAt: v.number(),
     expiresAt: v.number(),
     acceptedAt: v.optional(v.number()),
   })
@@ -621,6 +649,7 @@ export default defineSchema({
   })
     .index("group_connection_id", ["connectionId"])
     .index("group_id", ["groupId"])
+    .index("created_by_user_id", ["createdByUserId"])
     .index("status", ["status"]),
 
   /**
@@ -743,6 +772,7 @@ export default defineSchema({
     expiresAt: v.number(),
     revokedAt: v.optional(v.number()),
   })
+    .index("user_id", ["userId"])
     .index("expires_at", ["expiresAt"])
     .index("revoked_at", ["revokedAt"]),
 
@@ -759,3 +789,5 @@ export default defineSchema({
     .index("grant_id_parent_token_id_first_used", ["grantId", "parentTokenId", "firstUsedTime"])
     .index("expires_at", ["expiresAt"]),
 });
+
+export default schema;

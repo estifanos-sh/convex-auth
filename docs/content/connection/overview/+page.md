@@ -10,33 +10,27 @@ description: Group Connection Single Sign-On — OIDC, SAML 2.0, and SCIM 2.0 pr
 
 # SSO Overview
 
-Group SSO is gated behind the `connection()` provider. The `auth.connection.*` namespace
-is **only available** when `SSO` is included in your providers list:
+Add the `connection()` provider to the one `defineAuth` configuration to enable
+group-connection sign-in routes and the typed `auth.connection.*` server
+facade. `connection()` is the provider name; there is no `SSO` provider or
+browser-facing connection API.
 
 ```ts
 import { defineAuth } from "@estifanos-sh/convex-auth/server";
 import { connection } from "@estifanos-sh/convex-auth/providers";
 import { components } from "./_generated/api";
 
-const auth = defineAuth(components.auth, {
-  providers: [
-    connection({
-      redirectURI: "/auth/connection/callback",
-    }),
-  ],
+export const auth = defineAuth(components.auth, {
+  providers: [connection()],
 });
 ```
 
-If `SSO` is not in your providers, accessing `auth.connection` will be a
-TypeScript error — the namespace does not exist on the type.
+The facade is available to trusted Convex code. If the product needs a
+client-callable administration screen, expose the few authorized operations it
+needs from the app; see the [Group SSO RPC guide](/connection/rpc/).
 
-The `auth.connection.*` namespace is the canonical server-side group SSO facade.
-If your app wants a client-callable group SSO management API, expose it
-explicitly from your Convex app. See the [Group SSO RPC guide](/connection/rpc/).
-
-`auth.connection.*` is the server-side facade namespace for Convex code.
-`api.auth.group.*` exists only after the application exposes its own group SSO
-wrappers, and the frontend auth client itself needs only `api.auth.signIn` and
+`api.auth.group.*` exists only after the application exposes its own wrappers.
+The frontend auth client itself needs only `api.auth.signIn` and
 `api.auth.signOut`.
 
 For the common case, create a single app-owned file such as
@@ -48,13 +42,13 @@ forwards to the `auth.connection.*` facade:
 ```ts
 // convex/auth/group.ts
 import { v } from "convex/values";
-import { query } from "./_generated/server";
+import { query } from "../_generated/server";
 import { auth } from "../auth";
 import { authMutation } from "../functions";
 
 export const createConnection = authMutation({
   args: {
-    groupId: v.string(),
+    groupId: auth.v.id("Group"),
     protocol: v.union(v.literal("oidc"), v.literal("saml")),
     name: v.optional(v.string()),
   },
@@ -65,20 +59,6 @@ export const createConnection = authMutation({
       grants: ["connection.create"],
     });
     return auth.connection.create(ctx, args);
-  },
-});
-
-export const setOidc = authMutation({
-  args: { connectionId: v.string(), discovery: v.any(), client: v.any() },
-  handler: async (ctx, args) => {
-    const connection = await auth.connection.get(ctx, { id: args.connectionId });
-    if (connection === null) throw new Error("Connection not found.");
-    await auth.member.assert(ctx, {
-      userId: ctx.auth.userId,
-      groupId: connection.groupId,
-      grants: ["connection.protocol.manage"],
-    });
-    return auth.connection.oidc.upsert(ctx, args);
   },
 });
 
@@ -96,7 +76,6 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "../convex/_generated/api";
 
 const createConnection = useMutation(api.auth.group.createConnection);
-const setOidc = useMutation(api.auth.group.setOidc);
 const signIn = useQuery(api.auth.group.signIn, {
   domain: "acme.com",
   redirectTo: "/dashboard",
@@ -141,8 +120,6 @@ Convex database. There is no app-level configuration file needed. Each tenant
 If you expose app-owned group SSO functions, create the group first and then
 call `createConnection({ groupId, ... })` with your app's authorization check.
 
-This means you can:
-
 Because a connection is tenant-owned runtime state, a new customer can be
 onboarded without redeploying the application. Different groups can use
 different identity providers at the same time, and a product can let each
@@ -151,17 +128,13 @@ app RPC.
 
 ## Current policy scope
 
-Today `auth.connection.policy` covers:
-
 The policy covers OIDC and SAML account linking, user creation, profile
 authority, directory-managed identity lifecycle, just-in-time user and membership creation,
 mapping external groups and roles into membership `roleIds`, and SCIM
 deprovisioning. These choices belong together because they all decide how an
 external identity changes the local auth model.
 
-Protocol-specific transport and validation settings stay in:
-
-Configure the protocol through
+Configure protocol transport and validation through
 [`auth.connection.oidc`](/connection/oidc/),
 [`auth.connection.saml`](/connection/saml/), or
 [`auth.connection.scim`](/connection/scim/).

@@ -10,8 +10,9 @@
 
 import { v } from "convex/values";
 
-import { mutation, query } from "../functions";
-import { vDeviceCodeDoc, vDeviceStatus } from "../model";
+import { mutation, query } from "../_generated/server";
+import { vDeviceCodeDoc } from "../documents";
+import { vDeviceStatus } from "../model";
 import { createSessionRows } from "../session";
 
 /**

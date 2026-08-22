@@ -13,9 +13,7 @@
  * @module
  */
 
-import { Google as ArcticGoogle } from "arctic";
-
-import { createArcticOAuthClient, createOAuthProvider } from "../server/oauth/factory";
+import { createOAuthClient, createOAuthProvider } from "../server/oauth/factory";
 import { defaultOAuthRedirectUri } from "./redirect";
 
 const DEFAULT_SCOPES = ["openid", "profile", "email"];
@@ -58,15 +56,17 @@ export interface GoogleConfig {
  */
 export function google(config: GoogleConfig) {
   const scopes = config.scopes ?? DEFAULT_SCOPES;
-  const createProvider = (redirectUri?: string) =>
-    new ArcticGoogle(
-      config.clientId,
-      config.clientSecret,
-      config.redirectUri ?? defaultOAuthRedirectUri("google", redirectUri),
-    );
   return createOAuthProvider({
     id: "google",
-    provider: createArcticOAuthClient(createProvider, { pkce: "required" }),
+    provider: createOAuthClient({
+      clientId: config.clientId,
+      clientSecret: config.clientSecret,
+      redirectUri: (redirectUri) =>
+        config.redirectUri ?? defaultOAuthRedirectUri("google", redirectUri),
+      authorizationUrl: "https://accounts.google.com/o/oauth2/v2/auth",
+      tokenUrl: "https://oauth2.googleapis.com/token",
+      pkce: "required",
+    }),
     scopes,
     accountLinking: config.accountLinking,
     updateProfileOnLogin: config.updateProfileOnLogin,

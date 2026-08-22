@@ -14,14 +14,16 @@ import { v, type Infer } from "convex/values";
 import { paginator } from "convex-helpers/server/pagination";
 
 import { api, components, internal } from "../../_generated/api";
-import { internalAction, internalMutation, internalQuery, mutation, query } from "../../functions";
-import { unsafeFetchUrlReason } from "../../../shared/fetch/guard";
+import { vGroupWebhookDeliveryDoc } from "../../documents";
 import {
-  vAuthEventKind,
-  vGroupWebhookDeliveryDoc,
-  vGroupWebhookDeliveryPublicDoc,
-  vPaginated,
-} from "../../model";
+  internalAction,
+  internalMutation,
+  internalQuery,
+  mutation,
+  query,
+} from "../../_generated/server";
+import { unsafeFetchUrlReason } from "../../../shared/fetch/guard";
+import { vAuthEventKind, vGroupWebhookDeliveryPublicDoc, vPaginated } from "../../model";
 import schema from "../../schema";
 import { appendDeliveryEvent } from "./events";
 

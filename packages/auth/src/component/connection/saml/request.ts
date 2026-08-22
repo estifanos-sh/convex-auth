@@ -12,14 +12,13 @@
 
 import { v } from "convex/values";
 
-import { mutation } from "../../functions";
+import { mutation } from "../../_generated/server";
 
 /** Persist a pending SAML AuthnRequest ID so the ACS handler can accept it once. */
 export const create = mutation({
   args: {
     connectionId: v.id("GroupConnection"),
     requestId: v.string(),
-    createdAt: v.number(),
     expiresAt: v.number(),
   },
   returns: v.id("SamlLoginRequest"),

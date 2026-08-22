@@ -44,11 +44,9 @@ import type {
 } from "../server/types";
 import { credentials, type CredentialsConfig } from "./credentials";
 
-/** Configuration for the {@link password} provider. */
-export interface PasswordConfig<
-  DataModel extends GenericDataModel,
-  Id extends string = "password",
-> {
+type PasswordEmailProviderFactory = () => EmailConfig<any>;
+
+type PasswordConfigBase<DataModel extends GenericDataModel, Id extends string = "password"> = {
   /**
    * Uniquely identifies the provider, allowing multiple password providers.
    */
@@ -79,27 +77,37 @@ export interface PasswordConfig<
    */
   crypto?: CredentialsConfig["crypto"];
   /**
-   * Email provider for the `reset` flow. Issues OTPs accepted by `recover`.
-   */
-  reset?: EmailConfig<any> | PasswordEmailProviderFactory;
-  /**
-   * Continue reset recovery with a typed provider operation before a session
-   * is issued. The password is committed only when that operation succeeds.
-   */
-  afterReset?: WebAuthnRotateOperation;
-  /**
    * Email provider for post-signup email confirmation. Issues OTPs that the
    * `verify` flow accepts.
    */
   verify?: EmailConfig<any> | PasswordEmailProviderFactory;
-}
+};
+
+/**
+ * Configuration for the {@link password} provider.
+ *
+ * An `afterReset` passkey operation requires a reset email provider, so an
+ * invalid recovery flow cannot be configured.
+ */
+export type PasswordConfig<DataModel extends GenericDataModel, Id extends string = "password"> =
+  | (PasswordConfigBase<DataModel, Id> & {
+      reset?: undefined;
+      afterReset?: never;
+    })
+  | (PasswordConfigBase<DataModel, Id> & {
+      /** Email provider for the `reset` flow. Issues OTPs accepted by `recover`. */
+      reset: EmailConfig<any> | PasswordEmailProviderFactory;
+      /**
+       * Continue reset recovery with a typed provider operation before a session
+       * is issued. The password is committed only when that operation succeeds.
+       */
+      afterReset?: WebAuthnRotateOperation;
+    });
 
 const PASSWORD_FLOWS = ["signUp", "signIn", "reset", "recover", "verify", "change"] as const;
 type PasswordFlow = (typeof PASSWORD_FLOWS)[number];
 
 type PasswordFlowDispatch = { tag: PasswordFlow } | { tag: "invalid"; flow: unknown };
-
-type PasswordEmailProviderFactory = () => EmailConfig<any>;
 
 type PasswordAuthorizeResult<DataModel extends GenericDataModel> = Awaited<
   ReturnType<CredentialsConfig<typeof vPasswordParams, DataModel>["authorize"]>

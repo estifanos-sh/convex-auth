@@ -15,11 +15,13 @@ test("sign in with email signs out existing user with different email", async ()
 
   const tokens = expectSignInSession(
     await t.action(api.auth.signIn, {
-      provider: "password",
-      params: {
-        email: TEST_EMAIL,
-        password: TEST_PASSWORD,
-        flow: "signUp",
+      request: {
+        provider: "password",
+        params: {
+          email: TEST_EMAIL,
+          password: TEST_PASSWORD,
+          flow: "signUp",
+        },
       },
     }),
   );
@@ -34,10 +36,7 @@ test("sign in with email signs out existing user with different email", async ()
   expect(getUserIdFromToken(newTokens!.token)).not.toEqual(getUserIdFromToken(tokens!.token));
 
   const refreshedOldSession = expectSignInSession(
-    await t.action(api.auth.signIn, {
-      refreshToken: tokens!.refreshToken,
-      params: {},
-    }),
+    await t.action(api.auth.signIn, { request: { refreshToken: tokens!.refreshToken } }),
   );
   expect(refreshedOldSession).toBeNull();
 });
@@ -47,11 +46,13 @@ test("unverified password accounts are not auto-linked to email sign-in", async 
 
   const tokens = expectSignInSession(
     await t.action(api.auth.signIn, {
-      provider: "password",
-      params: {
-        email: "linkme@gmail.com",
-        password: TEST_PASSWORD,
-        flow: "signUp",
+      request: {
+        provider: "password",
+        params: {
+          email: "linkme@gmail.com",
+          password: TEST_PASSWORD,
+          flow: "signUp",
+        },
       },
     }),
   );

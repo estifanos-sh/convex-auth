@@ -17,15 +17,13 @@ test("reset verification returns a passkey rotation without issuing a session", 
   const email = "reset-flow@example.com";
 
   const signUpResult = await t.action(api.auth.signIn, {
-    provider: "password",
-    params: { email, password: TEST_PASSWORD, flow: "signUp" },
+    request: { provider: "password", params: { email, password: TEST_PASSWORD, flow: "signUp" } },
   });
   expectSignInSession(signUpResult);
 
   const resetCapture = stubResendCapture();
   const resetStart = await t.action(api.auth.signIn, {
-    provider: "password",
-    params: { email, flow: "reset" },
+    request: { provider: "password", params: { email, flow: "reset" } },
   });
   resetCapture.restore();
 
@@ -41,12 +39,14 @@ test("reset verification returns a passkey rotation without issuing a session", 
     }),
   );
   const continuation = await t.action(api.auth.signIn, {
-    provider: "password",
-    params: {
-      email,
-      code: resetCapture.code(),
-      newPassword: NEW_PASSWORD,
-      flow: "recover",
+    request: {
+      provider: "password",
+      params: {
+        email,
+        code: resetCapture.code(),
+        newPassword: NEW_PASSWORD,
+        flow: "recover",
+      },
     },
   });
   expect(continuation.kind).toBe("webauthnOptions");
@@ -71,12 +71,14 @@ test("reset verification returns a passkey rotation without issuing a session", 
 
   await expect(
     t.action(api.auth.signIn, {
-      provider: "password",
-      params: {
-        email,
-        code: resetCapture.code(),
-        newPassword: NEW_PASSWORD,
-        flow: "recover",
+      request: {
+        provider: "password",
+        params: {
+          email,
+          code: resetCapture.code(),
+          newPassword: NEW_PASSWORD,
+          flow: "recover",
+        },
       },
     }),
   ).rejects.toThrow("Invalid code");
@@ -88,8 +90,10 @@ test("verify without newPassword completes post-signup email confirmation", asyn
 
   const capture = stubResendCapture();
   const signUpResult = await t.action(api.auth.signIn, {
-    provider: "password-verified",
-    params: { email, password: TEST_PASSWORD, flow: "signUp" },
+    request: {
+      provider: "password-verified",
+      params: { email, password: TEST_PASSWORD, flow: "signUp" },
+    },
   });
   capture.restore();
   expect(signUpResult.kind).toBe("started");
@@ -97,8 +101,10 @@ test("verify without newPassword completes post-signup email confirmation", asyn
 
   const tokens = expectSignInSession(
     await t.action(api.auth.signIn, {
-      provider: "password-verified",
-      params: { email, code: capture.code(), flow: "verify" },
+      request: {
+        provider: "password-verified",
+        params: { email, code: capture.code(), flow: "verify" },
+      },
     }),
   );
   expect(tokens).not.toBeNull();
@@ -109,8 +115,10 @@ test("verify without newPassword completes post-signup email confirmation", asyn
 
   const reSignIn = expectSignInSession(
     await t.action(api.auth.signIn, {
-      provider: "password-verified",
-      params: { email, password: TEST_PASSWORD, flow: "signIn" },
+      request: {
+        provider: "password-verified",
+        params: { email, password: TEST_PASSWORD, flow: "signIn" },
+      },
     }),
   );
   expect(reSignIn).not.toBeNull();
@@ -121,8 +129,10 @@ test("reset flow does not reveal whether an email is registered", async () => {
 
   const capture = stubResendCapture();
   const result = await t.action(api.auth.signIn, {
-    provider: "password",
-    params: { email: "no-such-reset-user@example.com", flow: "reset" },
+    request: {
+      provider: "password",
+      params: { email: "no-such-reset-user@example.com", flow: "reset" },
+    },
   });
   capture.restore();
 
@@ -135,8 +145,10 @@ test("verify resend flow does not reveal whether an email is registered", async 
 
   const capture = stubResendCapture();
   const result = await t.action(api.auth.signIn, {
-    provider: "password-verified",
-    params: { email: "no-such-verify-user@example.com", flow: "verify" },
+    request: {
+      provider: "password-verified",
+      params: { email: "no-such-verify-user@example.com", flow: "verify" },
+    },
   });
   capture.restore();
 

@@ -3,7 +3,7 @@ import { ConvexError, v, type GenericId } from "convex/values";
 
 import { query } from "../_generated/server";
 import { auth } from "../auth";
-import { auth as authCore } from "../auth/core";
+import { auth as authCore } from "../auth";
 import { vAuthGroupConnectionId, vAuthGroupId, vAuthGroupWebhookEndpointId } from "./ids";
 import { ErrorCode } from "../errors";
 import { authAction, authMutation, authQuery } from "../functions";
@@ -586,11 +586,15 @@ export const listAudit = authQuery({
       });
     }
     await requireGroupAdmin(ctx, groupId);
-    return auth.connection.audit.list(ctx, {
-      groupId: args.groupId,
-      connectionId: args.connectionId,
-      paginationOpts: args.paginationOpts,
-    });
+    return args.connectionId !== undefined
+      ? auth.connection.audit.list(ctx, {
+          connectionId: args.connectionId,
+          paginationOpts: args.paginationOpts,
+        })
+      : auth.connection.audit.list(ctx, {
+          groupId,
+          paginationOpts: args.paginationOpts,
+        });
   },
 });
 
@@ -702,15 +706,17 @@ export const validateScim = authQuery({
 
 export const signIn = query({
   args: {
-    connectionId: v.optional(vAuthGroupConnectionId),
-    email: v.optional(v.string()),
-    domain: v.optional(v.string()),
+    selector: v.union(
+      v.object({ connectionId: vAuthGroupConnectionId }),
+      v.object({ email: v.string() }),
+      v.object({ domain: v.string() }),
+    ),
     redirectTo: v.optional(v.string()),
     loginHint: v.optional(v.string()),
   },
   returns: auth.v.connection.signIn,
-  handler: async (ctx, args) => {
-    return auth.connection.signIn(ctx, args);
+  handler: async (ctx, { selector, redirectTo, loginHint }) => {
+    return auth.connection.signIn(ctx, { ...selector, redirectTo, loginHint });
   },
 });
 
@@ -729,15 +735,14 @@ export const metadata = query({
 
 export const signInLookup = query({
   args: {
-    email: v.optional(v.string()),
-    domain: v.optional(v.string()),
+    selector: v.union(v.object({ email: v.string() }), v.object({ domain: v.string() })),
     redirectTo: v.optional(v.string()),
     loginHint: v.optional(v.string()),
   },
   returns: v.union(auth.v.connection.signIn, v.null()),
-  handler: async (ctx, args) => {
+  handler: async (ctx, { selector, redirectTo, loginHint }) => {
     try {
-      return await auth.connection.signIn(ctx, args);
+      return await auth.connection.signIn(ctx, { ...selector, redirectTo, loginHint });
     } catch (error) {
       if (
         error instanceof ConvexError &&

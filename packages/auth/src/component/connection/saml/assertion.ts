@@ -12,7 +12,7 @@
 
 import { v } from "convex/values";
 
-import { mutation } from "../../functions";
+import { mutation } from "../../_generated/server";
 
 /**
  * Atomically accept a SAML assertion ID for a connection. Returns `true` on

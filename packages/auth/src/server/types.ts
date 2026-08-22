@@ -14,13 +14,14 @@ import {
 import type { GenericValidator, Infer } from "convex/values";
 import { GenericId, Value } from "convex/values";
 
-import { vApiKeyDoc, vUserDoc } from "../component/model";
+import { vApiKeyDoc, vUserDoc } from "../component/documents";
 import schema from "../component/schema";
 import type { EmailParams, OAuthParams, PhoneParams, ProviderParams } from "../shared/params";
 import type { AuthComponentApi } from "./component/api";
 import type { CredentialsConfig } from "../providers/credentials";
 import type { AuthEventHandlerMap, OidcClaims, SamlClaims, ScimRawAttributes } from "./events";
 import type { AuthTokens, SignInFlowResult } from "../shared/results";
+import type { AuthProfile } from "./payloads";
 
 /**
  * A value that is either `T` or a `PromiseLike<T>`.
@@ -713,6 +714,21 @@ export interface WebAuthnProviderConfig {
    * ```
    */
   rotate(): WebAuthnRotateOperation;
+  /**
+   * Create a typed operation that requires one of a user's existing passkeys
+   * during a provider continuation.
+   *
+   * @returns An operation accepted by `auth.credentials.verify()`.
+   * @example
+   * ```ts
+   * return await ctx.auth.credentials.verify(ctx, {
+   *   verifier: pinProvider,
+   *   account: { id: email, secret: pin },
+   *   operation: passkeys.signIn(),
+   * });
+   * ```
+   */
+  signIn(): WebAuthnSignInOperation;
   options: {
     /** Relying Party display name. Defaults to APP_URL hostname. */
     rpName?: string;
@@ -748,6 +764,15 @@ export type WebAuthnRotateOperation = Readonly<{
   provider: WebAuthnProviderConfig;
   operation: "rotate";
 }>;
+
+/** A typed WebAuthn operation that verifies an existing passkey before session issuance. */
+export type WebAuthnSignInOperation = Readonly<{
+  provider: WebAuthnProviderConfig;
+  operation: "signIn";
+}>;
+
+/** A typed operation accepted by provider continuations. */
+export type WebAuthnContinuationOperation = WebAuthnRotateOperation | WebAuthnSignInOperation;
 
 /**
  * Configuration for the TOTP two-factor authentication provider.
@@ -913,12 +938,34 @@ type AuthProviderSignInResult =
 /** Arguments for `auth.provider.continue()`. */
 export type AuthProviderContinueArgs = {
   userId: GenericId<"User">;
-  operation: WebAuthnRotateOperation;
+  operation: WebAuthnContinuationOperation;
 };
 
 /** @internal A recovery transaction already created this verified continuation. */
 type AuthProviderRecoveryContinueArgs = AuthProviderContinueArgs & {
   continuationId: GenericId<"AuthContinuation">;
+};
+
+type AuthCredentialsVerifyArgs = {
+  /** Credentials provider that verifies the submitted secret and owns rate limiting. */
+  verifier: ConvexCredentialsConfig;
+  /** Provider-owned account identifier and plaintext credential to verify. */
+  account: { id: string; secret: string };
+  /** Target ceremony, bound to the verified account user. */
+  operation: WebAuthnSignInOperation;
+};
+
+type AuthCredentialsProvisionArgs = {
+  /** Credentials provider that hashes the supplied secret before staging. */
+  verifier: ConvexCredentialsConfig;
+  /** Stable provider-owned account identifier and plaintext credential. */
+  account: { id: string; secret?: string };
+  /** User profile to create, or to use when safely linking an existing user. */
+  profile: AuthProfile;
+  /** Verified profile fields that may safely select an existing user. */
+  match?: Array<"email" | "phone">;
+  /** Target ceremony, bound to the staged identity. */
+  operation: WebAuthnRotateOperation;
 };
 
 /** Arguments for `auth.member.get()`. */
@@ -1071,6 +1118,22 @@ type AuthServerHelpers = {
     continueRecovery: (
       ctx: GenericActionCtx<GenericDataModel>,
       args: AuthProviderRecoveryContinueArgs,
+    ) => Promise<AuthProviderDeferredSignInResult>;
+  };
+  /**
+   * Sessionless credentials handoffs. Verification binds an existing user;
+   * provisioning stages only hashed credentials and profile proof. The bound
+   * WebAuthn operation atomically creates the user/account and is the sole
+   * operation that can issue the session.
+   */
+  credentials: {
+    verify: (
+      ctx: GenericActionCtx<GenericDataModel>,
+      args: AuthCredentialsVerifyArgs,
+    ) => Promise<AuthProviderDeferredSignInResult>;
+    provision: (
+      ctx: GenericActionCtx<GenericDataModel>,
+      args: AuthCredentialsProvisionArgs,
     ) => Promise<AuthProviderDeferredSignInResult>;
   };
 };
@@ -1284,32 +1347,39 @@ type ProviderSignInEntry<P> = P extends unknown
           ? {
               provider: Provider["id"];
               params?: Exclude<Params, undefined>;
-              verifier?: string;
-              continuation?: string;
-              calledBy?: string;
             }
           : {
               provider: Provider["id"];
               params: Params;
-              verifier?: string;
-              continuation?: string;
-              calledBy?: string;
             }
       : never
     : never
   : never;
 
-/** Provider-derived arguments exported by the configured `signIn` action. */
-export type AuthSignInArgs<P extends readonly AuthProviderConfig[]> =
+/** Provider-derived request exported by the configured `signIn` action. */
+export type AuthSignInRequest<P extends readonly AuthProviderConfig[]> =
   | ProviderSignInEntry<P[number]>
   | {
       provider?: undefined;
       params?: ProviderParams;
-      verifier?: string;
-      continuation?: string;
-      refreshToken?: string;
-      calledBy?: string;
+    }
+  | {
+      refreshToken: string;
     };
+
+/**
+ * Arguments exported by the configured `signIn` action.
+ *
+ * `request` deliberately carries the provider-discriminated union. Convex
+ * functions require an object argument validator, and sibling `provider` /
+ * `params` fields cannot retain their relationship through code generation.
+ */
+export type AuthSignInArgs<P extends readonly AuthProviderConfig[]> = {
+  request: AuthSignInRequest<P>;
+  verifier?: string;
+  continuation?: string;
+  calledBy?: string;
+};
 
 /** Configured public sign-in action whose arguments survive Convex codegen. */
 export type AuthSignInAction<P extends readonly AuthProviderConfig[]> = RegisteredAction<
@@ -1505,11 +1575,10 @@ export type SessionTokenIdentityClaims = {
  * Cross-component user document shape inferred from the component validator.
  *
  * Used by internal typed wrappers (`queryUserById`, etc.) so server code stays
- * aligned with the component runtime contract. Not intended for consumer use —
- * consumers should use `UserDoc` (exported from
- * `@estifanos-sh/convex-auth/component`).
+ * aligned with the component runtime contract. It is not part of the public
+ * application surface; applications should infer user values from
+ * `auth.v.user` when they need a named local type.
  *
- * @internal
  */
 export type CrossComponentUserDoc = Infer<typeof vUserDoc>;
 

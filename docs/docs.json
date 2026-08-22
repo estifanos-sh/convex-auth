@@ -35,6 +35,7 @@
         { "title": "Authorization", "slug": "/guides/authorization" },
         { "title": "One identity, every client", "slug": "/guides/multi-access" },
         { "title": "Device flow", "slug": "/guides/device-flow" },
+        { "title": "Testing", "slug": "/guides/testing" },
         { "title": "Production", "slug": "/guides/production" }
       ]
     },

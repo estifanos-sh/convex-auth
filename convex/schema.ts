@@ -52,6 +52,7 @@ export default defineSchema({
     position: v.number(),
   })
     .index("by_projectId", ["projectId"])
+    .index("by_projectId_and_position", ["projectId", "position"])
     .index("by_projectId_and_status", ["projectId", "status"])
     .index("by_groupId", ["groupId"])
     .index("by_assigneeUserId", ["assigneeUserId"]),

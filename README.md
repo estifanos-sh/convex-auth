@@ -27,7 +27,7 @@ that returns a facade namespaced by domain:
 ```ts
 import { defineAuth } from "@estifanos-sh/convex-auth/server";
 import { definePermissions } from "@estifanos-sh/convex-auth/permissions";
-import { password, google } from "@estifanos-sh/convex-auth/providers";
+import { connection, google, password } from "@estifanos-sh/convex-auth/providers";
 import { components } from "./_generated/api";
 
 export const permissions = definePermissions({
@@ -36,7 +36,7 @@ export const permissions = definePermissions({
 });
 
 export const auth = defineAuth(components.auth, {
-  providers: [password(), google()],
+  providers: [password(), google(), connection()],
   permissions,
 });
 
@@ -56,6 +56,26 @@ Configuration is passed once to `defineAuth`; related operations live under
 [`packages/auth/LEXICON.md`](./packages/auth/LEXICON.md) for the full naming and
 shape contract.
 
+`auth.connection.*` is a server facade enabled by `connection()`, not a
+browser API. An application exposes only the authorized connection operations
+its administration UI needs through its own Convex functions. The component
+continues to own users, credentials, sessions, passkeys, and protocol state;
+application tables should store auth IDs as references rather than mirror those
+records or implement another session or WebAuthn lifecycle.
+
+The generated actions are also the client type contract:
+
+```ts
+import { client } from "@estifanos-sh/convex-auth/browser";
+import { api } from "../convex/_generated/api";
+
+export const authClient = client({ convex, api: api.auth });
+```
+
+Provider IDs, custom credential parameters, action results, and enabled factor
+helpers flow through `api.auth`. Applications do not need `InferClientApi`, a
+handwritten client interface, or an assertion.
+
 ## Package exports
 
 | Import path                                              | Use                                                                                                                         |
@@ -69,7 +89,6 @@ shape contract.
 | `@estifanos-sh/convex-auth/svelte`                       | Svelte 5 bindings: `useConvexAuth(client)` reactive state                                                                   |
 | `@estifanos-sh/convex-auth/expo`                         | React Native / Expo client                                                                                                  |
 | `@estifanos-sh/convex-auth/browser`                      | Low-level browser primitives (navigation, WebAuthn, web locks)                                                              |
-| `@estifanos-sh/convex-auth/core`                         | `createAuthContext` and low-level building blocks for custom integrations                                                   |
 
 ## Documentation
 
@@ -100,7 +119,7 @@ documentation index.
 ## Contributing
 
 ```bash
-pnpm install
+vp install
 vp run check
 vp test --run --project convex
 ```

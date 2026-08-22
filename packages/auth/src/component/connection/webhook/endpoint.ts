@@ -7,8 +7,9 @@
 
 import { v } from "convex/values";
 
-import { mutation, query } from "../../functions";
-import { vAuthEventKind, vGroupWebhookEndpointDoc, vWebhookEndpointStatus } from "../../model";
+import { vGroupWebhookEndpointDoc } from "../../documents";
+import { mutation, query } from "../../_generated/server";
+import { vAuthEventKind, vWebhookEndpointStatus } from "../../model";
 
 const WEBHOOK_ENDPOINT_LIST_BATCH = 128;
 

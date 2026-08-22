@@ -20,8 +20,9 @@ import {
   vDeviceCodeDoc,
   vPasskeyDoc,
   vTotpFactorDoc,
-} from "../../../component/model";
+} from "../../../component/documents";
 import type { AuthComponentApi } from "../api";
+import type { AuthProfile } from "../../payloads";
 import type {
   AuthDataModel,
   CrossComponentUserDoc,
@@ -59,7 +60,8 @@ export async function queryVerifierById(
   verifierId: string,
 ): Promise<VerifierDoc | null> {
   return (await ctx.runQuery(ctx.auth.config.component.token.pkce.get, {
-    id: verifierId,
+    selector: { id: verifierId },
+    now: Date.now(),
   })) as VerifierDoc | null;
 }
 
@@ -87,7 +89,7 @@ export async function consumeVerifierById(
   verifierId: string,
   expectedSignature?: string,
 ): Promise<VerifierDoc | null> {
-  const args = { id: verifierId };
+  const args = { selector: { id: verifierId } };
   if (expectedSignature !== undefined) Object.assign(args, { expectedSignature });
   return (await ctx.runMutation(
     ctx.auth.config.component.token.pkce.consume,
@@ -101,7 +103,7 @@ export async function mutateContinuationCreate(
   args: {
     userId: string;
     provider: string;
-    operation: "rotate";
+    operation: "rotate" | "signIn";
     expirationTime: number;
   },
 ): Promise<string> {
@@ -144,7 +146,25 @@ export async function queryContinuation(
 ): Promise<ContinuationDoc | null> {
   return (await ctx.runQuery(ctx.auth.config.component.token.continuation.get, {
     id,
+    now: Date.now(),
   })) as ContinuationDoc | null;
+}
+
+/** Stage hashed credentials data for one passkey enrollment continuation. */
+export async function mutateCredentialEnrollmentCreate(
+  ctx: ComponentCallCtx,
+  args: {
+    provider: string;
+    providerAccountId: string;
+    secret?: string;
+    profile: AuthProfile;
+    shouldLinkViaEmail: boolean;
+    shouldLinkViaPhone: boolean;
+    targetProvider: string;
+    expirationTime: number;
+  },
+): Promise<string> {
+  return (await ctx.runMutation(ctx.auth.config.component.token.enrollment.create, args)) as string;
 }
 
 /** Fetch a TOTP factor by ID across the component boundary. */
@@ -254,7 +274,7 @@ export async function mutatePasskeyBeginRotation(
   | { status: "rejected" }
   | {
       status: "accepted";
-      userId: string;
+      userHandle: string;
       verifierId: string;
       user: Pick<CrossComponentUserDoc, "email" | "name">;
       credentials: Array<{ id: string; transports?: string[] }>;
@@ -264,7 +284,7 @@ export async function mutatePasskeyBeginRotation(
     | { status: "rejected" }
     | {
         status: "accepted";
-        userId: string;
+        userHandle: string;
         verifierId: string;
         user: Pick<CrossComponentUserDoc, "email" | "name">;
         credentials: Array<{ id: string; transports?: string[] }>;
@@ -276,6 +296,7 @@ export async function mutatePasskeyBeginSignIn(
   ctx: ComponentCallCtx,
   args: {
     sessionId?: string;
+    continuation?: { id: string; provider: string };
     signature: string;
     expirationTime: number;
     verifiedEmail?: string;
@@ -298,12 +319,16 @@ export async function mutatePasskeyBeginAssertion(
     expectedChallenge: string;
     credentialId: string;
   },
-): Promise<{ verifierAccepted: boolean; passkey: PasskeyDoc | null }> {
+): Promise<{
+  verifierAccepted: boolean;
+  passkey: PasskeyDoc | null;
+  continuationId?: string;
+}> {
   return (await ctx.runMutation(ctx.auth.config.component.factor.passkey.beginAssertion, {
     verifierId: args.verifierId,
     expectedChallenge: args.expectedChallenge,
     credentialId: args.credentialId,
-  })) as { verifierAccepted: boolean; passkey: PasskeyDoc | null };
+  })) as { verifierAccepted: boolean; passkey: PasskeyDoc | null; continuationId?: string };
 }
 
 /** Store a verified registration and create its session in one component transaction. */
@@ -329,6 +354,7 @@ export async function mutatePasskeyCompleteRegistration(
   passkeyId: string;
   user: CrossComponentUserDoc;
   sessionId: string;
+  sessionExpirationTime: number;
   refreshTokenId: string;
   replacedSessionId?: string;
 }> {
@@ -339,6 +365,7 @@ export async function mutatePasskeyCompleteRegistration(
     passkeyId: string;
     user: CrossComponentUserDoc;
     sessionId: string;
+    sessionExpirationTime: number;
     refreshTokenId: string;
     replacedSessionId?: string;
   };
@@ -371,6 +398,7 @@ export async function mutatePasskeyCompleteRotation(
       passkeyId: string;
       user: CrossComponentUserDoc;
       sessionId: string;
+      sessionExpirationTime: number;
       refreshTokenId: string;
       removedPasskeyIds: string[];
       revokedSessions: number;
@@ -387,6 +415,7 @@ export async function mutatePasskeyCompleteRotation(
         passkeyId: string;
         user: CrossComponentUserDoc;
         sessionId: string;
+        sessionExpirationTime: number;
         refreshTokenId: string;
         removedPasskeyIds: string[];
         revokedSessions: number;
@@ -422,6 +451,7 @@ export async function mutatePasskeyCompleteAssertion(
     lastUsedAt: number;
     backedUp: boolean;
     replaceSession?: { sessionId: string; authenticatedUserId: string };
+    continuation?: { id: string; provider: string };
     sessionExpirationTime: number;
     refreshTokenExpirationTime: number;
   },
@@ -431,6 +461,7 @@ export async function mutatePasskeyCompleteAssertion(
       status: "accepted";
       user: CrossComponentUserDoc;
       sessionId: string;
+      sessionExpirationTime: number;
       refreshTokenId: string;
       replacedSessionId?: string;
     }
@@ -444,6 +475,7 @@ export async function mutatePasskeyCompleteAssertion(
         status: "accepted";
         user: CrossComponentUserDoc;
         sessionId: string;
+        sessionExpirationTime: number;
         refreshTokenId: string;
         replacedSessionId?: string;
       };

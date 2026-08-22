@@ -36,7 +36,7 @@ import { authMutation } from "../functions";
 
 export const createConnection = authMutation({
   args: {
-    groupId: v.string(),
+    groupId: auth.v.id("Group"),
     protocol: v.union(v.literal("oidc"), v.literal("saml")),
     name: v.optional(v.string()),
   },
@@ -64,7 +64,7 @@ from the client and assume it belongs to the connection.
 ```ts
 export const updateConnection = authMutation({
   args: {
-    id: v.string(),
+    id: auth.v.id("GroupConnection"),
     patch: v.object({ name: v.optional(v.string()) }),
   },
   handler: async (ctx, args) => {

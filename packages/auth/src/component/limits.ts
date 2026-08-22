@@ -7,13 +7,14 @@
 import { v } from "convex/values";
 
 import type { MutationCtx, QueryCtx } from "./_generated/server";
-import { mutation, query } from "./functions";
+import { mutation, query } from "./_generated/server";
 
 const HOUR_MS = 60 * 60 * 1000;
 
 const args = {
   identifier: v.string(),
   maxAttemptsPerHour: v.number(),
+  now: v.number(),
 };
 
 const returns = v.object({
@@ -47,12 +48,12 @@ function bucketStatus(
 /** Read token-bucket headroom without another component call. @internal */
 export async function checkSignInLimit(
   ctx: LimitCtx,
-  input: { identifier: string; maxAttemptsPerHour: number },
+  input: { identifier: string; maxAttemptsPerHour: number; now: number },
 ) {
   const status = bucketStatus(
     await readBucket(ctx, input.identifier),
     input.maxAttemptsPerHour,
-    Date.now(),
+    input.now,
   );
   return { ok: status.tokens >= 1, retryAfter: status.retryAfter };
 }
@@ -96,7 +97,10 @@ export const signInCheck = query({
 
 /** Consume one sign-in token for `identifier`; `ok: false` when throttled. */
 export const signInRecord = mutation({
-  args,
+  args: {
+    identifier: v.string(),
+    maxAttemptsPerHour: v.number(),
+  },
   returns,
   handler: recordSignInLimit,
 });

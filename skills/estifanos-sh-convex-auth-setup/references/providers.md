@@ -50,9 +50,9 @@ case.
 ## Passkeys and WebAuthn
 
 ```ts
-import { passkey } from "@estifanos-sh/convex-auth/providers";
+import { webauthn } from "@estifanos-sh/convex-auth/providers";
 
-passkey();
+const passkeys = webauthn();
 ```
 
 Use the installed package type and current WebAuthn docs for registration
@@ -70,6 +70,29 @@ Test with the intended browser, origin, and authenticator. A password-manager
 prompt does not prove the server accepted an untrusted credential; complete the
 ceremony and inspect the stored trust result.
 
+## Credential continuations
+
+When a PIN or application-specific proof must be followed by a passkey, keep
+the entire handoff in Convex Auth. `ctx.auth.credentials.verify` checks an
+existing credentials account before `passkeys.signIn()`, while
+`ctx.auth.credentials.provision` creates or safely links an account before
+`passkeys.rotate()`. Both return provider-owned continuation options and delay
+session issuance until WebAuthn succeeds.
+
+```ts
+return await ctx.auth.credentials.verify(ctx, {
+  verifier: pinProvider,
+  account: { id: email, secret: pin },
+  operation: passkeys.signIn(),
+});
+```
+
+Do not call generated `components.auth.*` functions from a credentials
+callback, issue a temporary session, or create application tables for auth
+challenges, recovery, passkeys, or credential hashes. Application code may
+verify its own domain proof, such as an invitation, then hand the verified
+identity to `credentials.provision`.
+
 ## Other built-in providers
 
 - `totp({ issuer })`: require an enrollment and recovery design.
@@ -78,8 +101,9 @@ ceremony and inspect the stored trust result.
 - `phone({ send })`: rate-limit both delivery and verification.
 - `device({ verificationUri })`: verify the user-code approval and polling
   interval behavior.
-- `connection()`: expose app-owned, authorized wrappers for group SSO
-  administration; never publish the server facade directly.
+- `connection()`: enables group-connection runtime routes and the trusted
+  `auth.connection.*` facade. Expose only app-owned, authorized wrappers for
+  administration; never publish that facade directly.
 
 Add only the provider requested by the product. A longer provider array is not
 better authentication.

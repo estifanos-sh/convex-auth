@@ -59,7 +59,7 @@ include:
 - one canonical `defineAuth(components.auth, config)` definition;
 - app HTTP routes from `auth.http()`;
 - a Convex JWT trust entry in `auth.config.*`;
-- a lightweight query/mutation context from `createAuthContext` when used.
+- protected query/mutation builders derived from the configured `auth.ctx()`.
 
 ## 4. Configure only requested providers
 

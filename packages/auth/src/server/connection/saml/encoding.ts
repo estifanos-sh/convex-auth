@@ -108,15 +108,10 @@ export function normalizeCerString(certString: string | Uint8Array): string {
     .replace(/\t/g, "");
 }
 
-/**
- * Return the private key as-is, rejecting passphrase-protected keys this runtime
- * cannot decrypt. The third argument is accepted for call-site compatibility and
- * does not affect the result.
- */
+/** Return an unencrypted private key in its original representation. */
 export function readPrivateKey(
   keyString: string | Uint8Array,
   passphrase: string | undefined,
-  _isOutputString?: boolean,
 ): string | Uint8Array {
   if (!isString(passphrase)) {
     return keyString;

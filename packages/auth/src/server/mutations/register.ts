@@ -1,5 +1,5 @@
 import type { GenericActionCtx, GenericDataModel } from "convex/server";
-import { ConvexError, Infer, v } from "convex/values";
+import { ConvexError, type Infer, v } from "convex/values";
 
 import type { Hashed } from "../../shared/brand";
 import { ErrorCode } from "../../shared/codes";
@@ -10,8 +10,7 @@ import { LOG_LEVELS, log, maybeRedact } from "../log";
 import type { AuthProfile } from "../payloads";
 import { vPayloadRecord } from "../payloads";
 import { getAuthSessionId } from "../session/lifecycle";
-import { Doc, MutationCtx } from "../types";
-import { ConvexCredentialsConfig } from "../types";
+import type { ConvexCredentialsConfig, Doc, MutationCtx } from "../types";
 import { upsertUserAndAccount } from "../user/account";
 import { AUTH_STORE_REF } from "./store/refs";
 
@@ -24,6 +23,76 @@ export const vCreateAccountFromCredentialsArgs = v.object({
 });
 
 type ReturnType = { account: Doc<"Account">; user: Doc<"User"> };
+
+type HashedCredentialsArgs = Omit<Infer<typeof vCreateAccountFromCredentialsArgs>, "account"> & {
+  account: { id: string; secret?: string };
+};
+
+async function materializeCredentialsAccount(
+  ctx: MutationCtx,
+  args: HashedCredentialsArgs,
+  provider: ConvexCredentialsConfig,
+  config: Provider.Config,
+): Promise<ReturnType> {
+  const db = authDb(ctx, config);
+  const result = await upsertUserAndAccount(
+    ctx,
+    await getAuthSessionId(ctx),
+    { providerAccountId: args.account.id, secret: args.account.secret },
+    {
+      type: "credentials",
+      provider,
+      profile: args.profile as AuthProfile,
+      shouldLinkViaEmail: args.shouldLinkViaEmail,
+      shouldLinkViaPhone: args.shouldLinkViaPhone,
+    },
+    config,
+  );
+  const [createdAccount, createdUser] = await Promise.all([
+    db.accounts.get({ id: result.accountId }) as Promise<Doc<"Account"> | null>,
+    db.users.get({ id: result.userId }) as Promise<Doc<"User"> | null>,
+  ]);
+  if (createdAccount === null) {
+    throw new ConvexError<AuthErrorData>({
+      code: ErrorCode.ACCOUNT_NOT_FOUND,
+      message: "Created account was not found.",
+    });
+  }
+  if (createdUser === null) {
+    throw new ConvexError<AuthErrorData>({
+      code: ErrorCode.USER_UPDATE_FAILED,
+      message: "Created user was not found.",
+    });
+  }
+  return { account: createdAccount, user: createdUser };
+}
+
+/**
+ * Materialize credentials whose optional secret was hashed before any staged
+ * enrollment state was persisted. Existing accounts are rejected so a race
+ * cannot silently retarget a continuation to another user.
+ *
+ * @internal
+ */
+export async function createAccountFromHashedCredentialsImpl(
+  ctx: MutationCtx,
+  args: HashedCredentialsArgs,
+  getProviderOrThrow: Provider.GetProviderOrThrowFunc,
+  config: Provider.Config,
+): Promise<ReturnType> {
+  const provider = getProviderOrThrow(args.provider) as ConvexCredentialsConfig;
+  const existing = await authDb(ctx, config).accounts.get({
+    provider: provider.id,
+    providerAccountId: args.account.id,
+  });
+  if (existing !== null) {
+    throw new ConvexError<AuthErrorData>({
+      code: ErrorCode.ACCOUNT_ALREADY_LINKED,
+      message: "This credentials account was linked while enrollment was in progress.",
+    });
+  }
+  return await materializeCredentialsAccount(ctx, args, provider, config);
+}
 
 export async function createAccountFromCredentialsImpl(
   ctx: MutationCtx,
@@ -54,43 +123,18 @@ export async function createAccountFromCredentialsImpl(
     const secret =
       accountSecret === undefined ? undefined : await Provider.hash(provider, accountSecret);
 
-    const result = await upsertUserAndAccount(
+    return await materializeCredentialsAccount(
       ctx,
-      await getAuthSessionId(ctx),
-      { providerAccountId: account.id, secret },
       {
-        type: "credentials",
-        provider,
+        provider: providerId,
+        account: { id: account.id, ...(secret === undefined ? {} : { secret }) },
         profile: typedProfile,
         shouldLinkViaEmail,
         shouldLinkViaPhone,
       },
+      provider,
       config,
     );
-
-    const { userId, accountId } = result as {
-      userId: string;
-      accountId: string;
-    };
-    const [createdAccount, createdUser] = await Promise.all([
-      db.accounts.get({ id: accountId }) as Promise<Doc<"Account"> | null>,
-      db.users.get({ id: userId }) as Promise<Doc<"User"> | null>,
-    ]);
-
-    if (createdAccount === null) {
-      throw new ConvexError<AuthErrorData>({
-        code: ErrorCode.ACCOUNT_NOT_FOUND,
-        message: "Created account was not found.",
-      });
-    }
-    if (createdUser === null) {
-      throw new ConvexError<AuthErrorData>({
-        code: ErrorCode.USER_UPDATE_FAILED,
-        message: "Created user was not found.",
-      });
-    }
-
-    return { account: createdAccount, user: createdUser };
   } else {
     if (account.secret !== undefined) {
       const accountSecret = account.secret;

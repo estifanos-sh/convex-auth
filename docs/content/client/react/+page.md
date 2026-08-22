@@ -48,6 +48,31 @@ actions exported by `convex/auth.ts`. Pass it directly so `authClient` retains
 configured provider IDs, validated sign-in parameters, and enabled factor
 helpers without a manual generic or API-reference type.
 
+This is direct mode, so `api` is required. Proxy mode instead requires
+`proxyPath` and deliberately rejects `api`; the two transports cannot be mixed
+into a partly configured client. TypeScript reports the mistake at the client
+factory rather than allowing a later runtime failure.
+
+For a custom credentials provider, its validator is the source of the browser
+method signature. There is no app-side interface to keep in sync:
+
+```ts
+const result = await authClient.signIn("access", {
+  operation: "signIn",
+  email,
+  pin,
+});
+
+if (result.kind === "failed") {
+  showAuthError(result.code);
+}
+```
+
+Unknown providers, missing required parameters, and invalid field types fail in
+the editor. The same validator rejects malformed values at the Convex action
+boundary. Configured WebAuthn, TOTP, and device capabilities are present on the
+client; capabilities that are not configured are absent rather than optional.
+
 ## Gate components
 
 Pass `authClient` to each gate. `<SignedIn>` accepts a render prop that receives

@@ -11,12 +11,66 @@ import { createAuth } from "@estifanos-sh/convex-auth/server";
 import { authEnv } from "@estifanos-sh/convex-auth/server";
 // @ts-expect-error Applications own their environment type; AuthEnv was removed.
 import type { AuthEnv } from "@estifanos-sh/convex-auth/server";
-import { authEvents, defineAuth } from "@estifanos-sh/convex-auth/server";
-import { type ApiFromModules, type FunctionArgs, type HttpRouter } from "convex/server";
+// @ts-expect-error Context inference stays local to auth.ctx() and handler composition.
+import type { InferAuth } from "@estifanos-sh/convex-auth/server";
+// @ts-expect-error The configured defineAuth result is inferred, not named by applications.
+import type { AuthApi } from "@estifanos-sh/convex-auth/server";
+// @ts-expect-error The base runtime shape is library-internal.
+import type { AuthApiBase } from "@estifanos-sh/convex-auth/server";
+// @ts-expect-error The defineAuth result implementation type is library-internal.
+import type { ConvexAuthResult } from "@estifanos-sh/convex-auth/server";
+// @ts-expect-error Generated component handles are passed directly to defineAuth.
+import type { AuthComponentApi } from "@estifanos-sh/convex-auth/server";
+// @ts-expect-error Use validators from the configured auth.v surface.
+import { createAuthValidators } from "@estifanos-sh/convex-auth/server";
+// @ts-expect-error Use Infer<typeof auth.v.user> when a named user type is necessary.
+import type { Viewer } from "@estifanos-sh/convex-auth/server";
+// @ts-expect-error Use Infer<typeof auth.v.user> so configured extension fields stay exact.
+import type { UserDoc } from "@estifanos-sh/convex-auth/server";
+// @ts-expect-error Use Infer<typeof auth.v.group> when a named group type is necessary.
+import type { Group } from "@estifanos-sh/convex-auth/server";
+// @ts-expect-error Use Infer<typeof auth.v.member> when a named membership type is necessary.
+import type { Membership } from "@estifanos-sh/convex-auth/server";
+// @ts-expect-error Component document types are not the application contract.
+import type { Doc } from "@estifanos-sh/convex-auth/server";
+// @ts-expect-error Generic component documents are library machinery.
+import type { GenericDoc } from "@estifanos-sh/convex-auth/server";
+// @ts-expect-error The component data model is library machinery.
+import type { AuthDataModel } from "@estifanos-sh/convex-auth/server";
+// @ts-expect-error Raw component validators are replaced by configured auth.v validators.
+import { vUserDoc } from "@estifanos-sh/convex-auth/server";
+// @ts-expect-error The component entrypoint does not expose context inference helpers.
+import type { InferAuth as ComponentInferAuth } from "@estifanos-sh/convex-auth/component";
+// @ts-expect-error The standalone core setup surface was removed; configure once with defineAuth.
+import { createAuthContext } from "@estifanos-sh/convex-auth/core";
+import { authEvents, defineAuth, vAuthId } from "@estifanos-sh/convex-auth/server";
+import {
+  type ApiFromModules,
+  type FunctionArgs,
+  type FunctionReturnType,
+  type HttpRouter,
+} from "convex/server";
 import { v, type GenericId, type Infer } from "convex/values";
 
 import { api } from "../../../convex/_generated/api";
 import { auth } from "../../../convex/auth";
+
+type _RemovedInferAuth = InferAuth;
+type _RemovedAuthApi = AuthApi;
+type _RemovedAuthApiBase = AuthApiBase;
+type _RemovedConvexAuthResult = ConvexAuthResult;
+type _RemovedAuthComponentApi = AuthComponentApi;
+type _RemovedViewer = Viewer;
+type _RemovedUserDoc = UserDoc;
+type _RemovedGroup = Group;
+type _RemovedMembership = Membership;
+type _RemovedDoc = Doc;
+type _RemovedGenericDoc = GenericDoc;
+type _RemovedAuthDataModel = AuthDataModel;
+type _RemovedComponentInferAuth = ComponentInferAuth;
+void createAuthContext;
+void createAuthValidators;
+void vUserDoc;
 
 declare const readCtx: Parameters<typeof auth.user.get>[0];
 declare const eventCtx: Parameters<typeof auth.event.list>[0];
@@ -39,9 +93,16 @@ declare const authReadCtx: Parameters<typeof auth.connection.get>[0];
 declare const convex: ClientOptions["convex"];
 
 const authUserIdValidator = auth.v.id("User");
+const standaloneAuthUserIdValidator = vAuthId("User");
+// @ts-expect-error Standalone IDs are limited to real Convex Auth component tables.
+vAuthId("InventedTable");
 type AuthUserIdFromValidator = Infer<typeof authUserIdValidator>;
+type StandaloneAuthUserIdFromValidator = Infer<typeof standaloneAuthUserIdValidator>;
 type _AuthIdValidatorKeepsTheComponentTable = Assert<
   Equal<AuthUserIdFromValidator, GenericId<"User">>
+>;
+type _StandaloneAuthIdValidatorKeepsTheComponentTable = Assert<
+  Equal<StandaloneAuthUserIdFromValidator, GenericId<"User">>
 >;
 const validatedAuthUserId: AuthUserIdFromValidator = authUserId;
 void validatedAuthUserId;
@@ -55,12 +116,25 @@ type _ConnectionKeepsExactIds = Assert<
   Equal<NonNullable<ConnectionById>["groupId"], GenericId<"Group">>
 >;
 void auth.connection.webhook.endpoint.get(authReadCtx, { id: authWebhookEndpointId });
+void auth.connection.signIn(authReadCtx, { connectionId: authConnectionId });
+void auth.connection.signIn(authReadCtx, { email: "person@example.com" });
+void auth.connection.signIn(authReadCtx, { domain: "example.com" });
+// @ts-expect-error Exactly one group connection selector is required.
+void auth.connection.signIn(authReadCtx, {});
+// @ts-expect-error Group connection selectors cannot be combined.
+void auth.connection.signIn(authReadCtx, { connectionId: authConnectionId, domain: "example.com" });
 // @ts-expect-error A Group ID cannot select a GroupConnection.
 void auth.connection.get(authReadCtx, { id: authGroupId });
 // @ts-expect-error A User ID cannot select a webhook endpoint.
 void auth.connection.webhook.endpoint.get(authReadCtx, { id: authUserId });
 
 const generatedClient = client({ convex, api: api.auth });
+const proxyClient = client({ convex, proxyPath: "/api/auth" });
+void proxyClient;
+// @ts-expect-error Direct mode requires the application's generated auth references.
+client({ convex });
+// @ts-expect-error Direct and proxy transports cannot be configured together.
+client({ convex, api: api.auth, proxyPath: "/api/auth" });
 
 void generatedClient.webauthn.register({ name: "Security key" });
 void generatedClient.webauthn.signIn();
@@ -95,21 +169,33 @@ const documentationRecovery = defineAuth(authComponent, {
   ],
 });
 void documentationRecovery;
+// @ts-expect-error A reset continuation requires its reset email provider.
+password({ afterReset: documentationPasskeys.rotate() });
 
 type Assert<T extends true> = T;
+type IsAny<T> = 0 extends 1 & T ? true : false;
 type Equal<Left, Right> =
   (<Value>() => Value extends Left ? 1 : 2) extends <Value>() => Value extends Right ? 1 : 2
     ? true
     : false;
 type ProviderFromArgs<Args> = Args extends unknown
-  ? "provider" extends keyof Args
-    ? Exclude<Args[keyof Args & "provider"], undefined>
-    : never
+  ? "request" extends keyof Args
+    ? Args[keyof Args & "request"] extends infer Request
+      ? Request extends { provider?: unknown }
+        ? Exclude<Request["provider"], undefined>
+        : never
+      : never
+    : "provider" extends keyof Args
+      ? Exclude<Args[keyof Args & "provider"], undefined>
+      : never
   : never;
 type GeneratedProvider = ProviderFromArgs<FunctionArgs<typeof api.auth.signIn>>;
 type _GeneratedProvidersAreExact = Assert<string extends GeneratedProvider ? false : true>;
+type _GeneratedSignInResultIsNotAny = Assert<
+  IsAny<FunctionReturnType<typeof api.auth.signIn>> extends false ? true : false
+>;
 type GeneratedPasswordArgs = Extract<
-  FunctionArgs<typeof api.auth.signIn>,
+  NonNullable<FunctionArgs<typeof api.auth.signIn>["request"]>,
   { provider: "password" }
 >;
 const generatedPasswordArgs: GeneratedPasswordArgs = {
@@ -171,6 +257,9 @@ type _AccessProviderIsExact = Assert<string extends AccessProvider ? false : tru
 declare const accessApi: AccessApi;
 const accessClient = client({ convex, api: accessApi });
 void accessClient.signIn("access", { email: "person@example.com", pin: "1234" });
+type _AccessClientOmitsWebAuthn = Assert<
+  "webauthn" extends keyof typeof accessClient ? false : true
+>;
 // @ts-expect-error required validator parameters cannot be omitted.
 void accessClient.signIn("access");
 // @ts-expect-error validator-derived fields retain their exact types.
@@ -202,6 +291,24 @@ const extendedGroup = extendedAuth.group.get(readCtx, { id: authGroupId });
 const extendedMember = extendedAuth.member.get(readCtx, {
   userId: authUserId,
   groupId: authGroupId,
+});
+declare const extendedUserWriteCtx: Parameters<typeof extendedAuth.user.update>[0];
+declare const extendedGroupWriteCtx: Parameters<typeof extendedAuth.group.create>[0];
+declare const extendedMemberWriteCtx: Parameters<typeof extendedAuth.member.create>[0];
+void extendedAuth.user.update(extendedUserWriteCtx, {
+  id: authUserId,
+  patch: { extend: { plan: "pro" } },
+});
+void extendedAuth.group.create(extendedGroupWriteCtx, {
+  data: { name: "Typed group", extend: { billingAccount: "acct_123" } },
+});
+void extendedAuth.member.create(extendedMemberWriteCtx, {
+  data: { userId: authUserId, groupId: authGroupId, extend: { title: "Operator" } },
+});
+void extendedAuth.user.update(extendedUserWriteCtx, {
+  id: authUserId,
+  // @ts-expect-error User extension writes use the configured validator shape.
+  patch: { extend: { plan: "free" } },
 });
 // @ts-expect-error public user lookups only accept auth User IDs.
 void extendedAuth.user.get(readCtx, { id: authGroupId });
@@ -436,14 +543,34 @@ void authEvents.target.user(authGroupId);
 declare const httpRouter: HttpRouter;
 
 // An MCP tool's `scope` is the permission grant union — a declared grant compiles.
-auth.request.mcp(httpRouter, {
-  read_projects: {
-    description: "List projects.",
-    scope: "projects.read",
-    args: v.object({}),
-    handler: async () => ({}),
+auth.request.mcp(
+  httpRouter,
+  {
+    read_projects: {
+      description: "List projects.",
+      scope: "projects.read",
+      args: v.object({}),
+      handler: async () => ({}),
+    },
   },
-});
+  { mcpPath: "/tools", name: "Projects", version: "1.0.0" },
+);
+
+auth.request.mcp(
+  httpRouter,
+  {
+    invalid_path: {
+      description: "x",
+      scope: "projects.read",
+      args: v.object({}),
+      handler: async () => ({}),
+    },
+  },
+  {
+    // @ts-expect-error MCP paths are strings.
+    mcpPath: 42,
+  },
+);
 
 auth.request.mcp(httpRouter, {
   bad: {

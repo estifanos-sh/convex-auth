@@ -1,7 +1,5 @@
-import { createAuthValidators } from "@estifanos-sh/convex-auth/server";
+import { vAuthId } from "@estifanos-sh/convex-auth/server";
 import type { GenericId } from "convex/values";
-
-const { id } = createAuthValidators();
 
 export type AuthUserId = GenericId<"User">;
 export type AuthGroupId = GenericId<"Group">;
@@ -13,12 +11,12 @@ export type AuthGroupWebhookEndpointId = GenericId<"GroupWebhookEndpoint">;
 export type AuthGroupWebhookDeliveryId = GenericId<"GroupWebhookDelivery">;
 export type AuthGroupConnectionScimConfigId = GenericId<"GroupConnectionScimConfig">;
 
-export const vAuthUserId = id("User");
-export const vAuthGroupId = id("Group");
-export const vAuthGroupMemberId = id("GroupMember");
-export const vAuthGroupInviteId = id("GroupInvite");
-export const vAuthApiKeyId = id("ApiKey");
-export const vAuthGroupConnectionId = id("GroupConnection");
-export const vAuthGroupWebhookEndpointId = id("GroupWebhookEndpoint");
-export const vAuthGroupWebhookDeliveryId = id("GroupWebhookDelivery");
-export const vAuthGroupConnectionScimConfigId = id("GroupConnectionScimConfig");
+export const vAuthUserId = vAuthId("User");
+export const vAuthGroupId = vAuthId("Group");
+export const vAuthGroupMemberId = vAuthId("GroupMember");
+export const vAuthGroupInviteId = vAuthId("GroupInvite");
+export const vAuthApiKeyId = vAuthId("ApiKey");
+export const vAuthGroupConnectionId = vAuthId("GroupConnection");
+export const vAuthGroupWebhookEndpointId = vAuthId("GroupWebhookEndpoint");
+export const vAuthGroupWebhookDeliveryId = vAuthId("GroupWebhookDelivery");
+export const vAuthGroupConnectionScimConfigId = vAuthId("GroupConnectionScimConfig");

@@ -67,7 +67,8 @@ Other domain verbs: `exchange` (token→token, e.g. refresh rotation / OAuth
 code→token), `accept` (consume a one-time token — invites, OAuth codes),
 `revoke` (soft-delete / invalidate, incl. signing out a user's sessions),
 `assert` (assert the caller holds grants, throws), `dispatch` (webhook
-delivery), `provision` (atomically materialize an externally managed identity),
+delivery), `provision` (stage and then atomically materialize an externally
+managed identity),
 `resolve` (explicitly traverse relationships), `reset` (clear a stored
 preference so its documented fallback applies),
 `rotate` (replace security credentials and revoke their predecessors as one

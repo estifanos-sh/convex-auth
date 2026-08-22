@@ -32,11 +32,13 @@ test("session refresh", async () => {
   const t = convexTest(schema);
   const initialTokens = expectSignInSession(
     await t.action(api.auth.signIn, {
-      provider: "password",
-      params: {
-        email: TEST_EMAIL,
-        password: TEST_PASSWORD,
-        flow: "signUp",
+      request: {
+        provider: "password",
+        params: {
+          email: TEST_EMAIL,
+          password: TEST_PASSWORD,
+          flow: "signUp",
+        },
       },
     }),
   );
@@ -46,13 +48,40 @@ test("session refresh", async () => {
   vi.advanceTimersByTime(TWO_HOURS_MS);
 
   const tokens = expectSignInSession(
-    await t.action(api.auth.signIn, {
-      refreshToken,
-      params: {},
-    }),
+    await t.action(api.auth.signIn, { request: { refreshToken } }),
   );
 
   expect(tokens).not.toBeNull();
+});
+
+test("refresh just before session expiry cannot extend the access token", async () => {
+  vi.useFakeTimers();
+  const totalDurationMs = 10_000;
+  setEnv("SESSION_TOTAL_DURATION_MS", `${totalDurationMs}`);
+  const t = convexTest(schema);
+  const initialTokens = expectSignInSession(
+    await t.action(api.auth.signIn, {
+      request: {
+        provider: "password",
+        params: {
+          email: TEST_EMAIL,
+          password: TEST_PASSWORD,
+          flow: "signUp",
+        },
+      },
+    }),
+  );
+  const initialExpiration = decodeJwt(initialTokens!.token).exp;
+
+  vi.advanceTimersByTime(totalDurationMs - 1_000);
+  const refreshedTokens = expectSignInSession(
+    await t.action(api.auth.signIn, {
+      request: { refreshToken: initialTokens!.refreshToken },
+    }),
+  );
+
+  expect(refreshedTokens).not.toBeNull();
+  expect(decodeJwt(refreshedTokens!.token).exp).toBe(initialExpiration);
 });
 
 test("refreshed access token gets a unique jti", async () => {
@@ -60,21 +89,20 @@ test("refreshed access token gets a unique jti", async () => {
 
   const initialTokens = expectSignInSession(
     await t.action(api.auth.signIn, {
-      provider: "password",
-      params: {
-        email: TEST_EMAIL,
-        password: TEST_PASSWORD,
-        flow: "signUp",
+      request: {
+        provider: "password",
+        params: {
+          email: TEST_EMAIL,
+          password: TEST_PASSWORD,
+          flow: "signUp",
+        },
       },
     }),
   );
   const { refreshToken } = initialTokens!;
 
   const refreshedTokens = expectSignInSession(
-    await t.action(api.auth.signIn, {
-      refreshToken,
-      params: {},
-    }),
+    await t.action(api.auth.signIn, { request: { refreshToken } }),
   );
 
   const firstJti = decodeJwt(initialTokens!.token).jti;
@@ -96,11 +124,13 @@ test("refresh token expiration", async () => {
   const t = convexTest(schema);
   const initialTokens = expectSignInSession(
     await t.action(api.auth.signIn, {
-      provider: "password",
-      params: {
-        email: TEST_EMAIL,
-        password: TEST_PASSWORD,
-        flow: "signUp",
+      request: {
+        provider: "password",
+        params: {
+          email: TEST_EMAIL,
+          password: TEST_PASSWORD,
+          flow: "signUp",
+        },
       },
     }),
   );
@@ -109,10 +139,7 @@ test("refresh token expiration", async () => {
   vi.advanceTimersByTime(2 * ONE_DAY_MS);
 
   const tokens = expectSignInSession(
-    await t.action(api.auth.signIn, {
-      refreshToken,
-      params: {},
-    }),
+    await t.action(api.auth.signIn, { request: { refreshToken } }),
   );
 
   expect(tokens).toBeNull();
@@ -120,10 +147,7 @@ test("refresh token expiration", async () => {
 
 async function exchangeToken(t: TestConvex<typeof schema>, refreshToken: string) {
   const newTokens = expectSignInSession(
-    await t.action(api.auth.signIn, {
-      refreshToken,
-      params: {},
-    }),
+    await t.action(api.auth.signIn, { request: { refreshToken } }),
   );
   return newTokens?.refreshToken ?? null;
 }
@@ -133,11 +157,13 @@ test("refresh token reuse detection", async () => {
   const t = convexTest(schema);
   const initialTokens = expectSignInSession(
     await t.action(api.auth.signIn, {
-      provider: "password",
-      params: {
-        email: TEST_EMAIL,
-        password: TEST_PASSWORD,
-        flow: "signUp",
+      request: {
+        provider: "password",
+        params: {
+          email: TEST_EMAIL,
+          password: TEST_PASSWORD,
+          flow: "signUp",
+        },
       },
     }),
   );
@@ -173,11 +199,13 @@ test("refresh token reuse with racing requests", async () => {
   const t = convexTest(schema);
   const initialTokens = expectSignInSession(
     await t.action(api.auth.signIn, {
-      provider: "password",
-      params: {
-        email: TEST_EMAIL,
-        password: TEST_PASSWORD,
-        flow: "signUp",
+      request: {
+        provider: "password",
+        params: {
+          email: TEST_EMAIL,
+          password: TEST_PASSWORD,
+          flow: "signUp",
+        },
       },
     }),
   );
@@ -204,11 +232,13 @@ test("refresh token theft revokes the entire session", async () => {
   const t = convexTest(schema);
   const initialTokens = expectSignInSession(
     await t.action(api.auth.signIn, {
-      provider: "password",
-      params: {
-        email: TEST_EMAIL,
-        password: TEST_PASSWORD,
-        flow: "signUp",
+      request: {
+        provider: "password",
+        params: {
+          email: TEST_EMAIL,
+          password: TEST_PASSWORD,
+          flow: "signUp",
+        },
       },
     }),
   );
@@ -259,11 +289,13 @@ test("session expiration", async () => {
   const t = convexTest(schema);
   const initialTokens = expectSignInSession(
     await t.action(api.auth.signIn, {
-      provider: "password",
-      params: {
-        email: TEST_EMAIL,
-        password: TEST_PASSWORD,
-        flow: "signUp",
+      request: {
+        provider: "password",
+        params: {
+          email: TEST_EMAIL,
+          password: TEST_PASSWORD,
+          flow: "signUp",
+        },
       },
     }),
   );
@@ -272,10 +304,7 @@ test("session expiration", async () => {
   vi.advanceTimersByTime(2 * ONE_DAY_MS);
 
   const refreshedTokens = expectSignInSession(
-    await t.action(api.auth.signIn, {
-      refreshToken,
-      params: {},
-    }),
+    await t.action(api.auth.signIn, { request: { refreshToken } }),
   );
 
   expect(refreshedTokens).toBeNull();
@@ -287,8 +316,10 @@ test("password sign-in on an authenticated context replaces the old session", as
 
   const firstTokens = expectSignInSession(
     await t.action(api.auth.signIn, {
-      provider: "password",
-      params: { email: TEST_EMAIL, password: TEST_PASSWORD, flow: "signUp" },
+      request: {
+        provider: "password",
+        params: { email: TEST_EMAIL, password: TEST_PASSWORD, flow: "signUp" },
+      },
     }),
   );
   const claims = decodeJwt(firstTokens!.token);
@@ -298,8 +329,10 @@ test("password sign-in on an authenticated context replaces the old session", as
   // the previous session's refresh token must stop working.
   const secondTokens = expectSignInSession(
     await asUser.action(api.auth.signIn, {
-      provider: "password",
-      params: { email: TEST_EMAIL, password: TEST_PASSWORD, flow: "signIn" },
+      request: {
+        provider: "password",
+        params: { email: TEST_EMAIL, password: TEST_PASSWORD, flow: "signIn" },
+      },
     }),
   );
   expect(secondTokens).not.toBeNull();

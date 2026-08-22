@@ -27,6 +27,7 @@ import {
   type IdValidatorFn,
   inviteFields,
   memberFields,
+  TABLES,
   userFields,
   vGroupConnectionPolicy,
   vGroupConnectionProtocol,
@@ -44,11 +45,39 @@ import {
 const vIdString: IdValidatorFn = <T extends string>(_table: T) =>
   v.string() as unknown as VId<GenericId<T>, "required">;
 
+type AuthTable = (typeof TABLES)[keyof typeof TABLES];
+
+/**
+ * Validate a Convex Auth component document ID in application-owned schemas
+ * and function arguments.
+ *
+ * Component IDs cross the component boundary as strings at runtime while this
+ * validator preserves their exact auth table brand in TypeScript. Prefer
+ * `auth.v.id(table)` when the configured auth value is already available; use
+ * this standalone form in schema modules where importing that value would
+ * introduce a generated-API cycle.
+ *
+ * @param table - Convex Auth component table whose ID is stored or accepted.
+ * @returns A string validator typed as the selected component table ID.
+ *
+ * @example
+ * ```ts
+ * import { vAuthId } from "@estifanos-sh/convex-auth/server";
+ *
+ * export default defineSchema({
+ *   documents: defineTable({ ownerId: vAuthId("User") }),
+ * });
+ * ```
+ */
+export function vAuthId<T extends AuthTable>(table: T): VId<GenericId<T>, "required"> {
+  return vIdString(table);
+}
+
 /**
  * Validators a consumer may supply for the `extend` field of each table.
  *
  * Passed as `defineAuth({ extend })`. Every entry is optional; a missing
- * entry falls back to `v.any()`, preserving the untyped default.
+ * entry accepts every Convex value at runtime and infers as `unknown`.
  */
 export type AuthExtendValidators = {
   /** Shape of `User.extend`. */
@@ -57,10 +86,17 @@ export type AuthExtendValidators = {
   Group?: Validator<any, any, any>;
   /** Shape of `GroupMember.extend`. */
   GroupMember?: Validator<any, any, any>;
+  /** Shape of `GroupInvite.extend`. */
+  GroupInvite?: Validator<any, any, any>;
 };
 
+/** `v.any()` at runtime, with an intentionally safe public inferred type. */
+type DefaultExtendValidator = Validator<unknown, "required", string>;
+
 type ExtendFor<TExtend extends AuthExtendValidators, K extends keyof AuthExtendValidators> =
-  TExtend[K] extends Validator<any, any, any> ? TExtend[K] : ReturnType<typeof v.any>;
+  TExtend[K] extends Validator<any, any, any> ? TExtend[K] : DefaultExtendValidator;
+
+const vUnknownExtend = v.any() as DefaultExtendValidator;
 
 const docWithExtend = <
   Fields extends Record<string, Validator<any, any, any>>,
@@ -77,7 +113,7 @@ const docWithExtend = <
 const userFieldsX = userFields(vIdString);
 const groupFieldsX = groupFields(vIdString);
 const memberFieldsX = memberFields(vIdString);
-const inviteDocX = v.object(inviteFields(vIdString));
+const inviteFieldsX = inviteFields(vIdString);
 const emailDocX = v.object(emailFields(vIdString));
 
 const vNullableString = v.union(v.string(), v.null());
@@ -370,7 +406,7 @@ const connectionValidators = {
  *
  * @typeParam TExtend - The consumer's per-table `extend` validators.
  * @param extend - The `extend` map from `defineAuth` config. Defaults to
- *   an empty object (all `extend` fields stay `v.any()`).
+ *   an empty object (all `extend` fields infer as `unknown`).
  * @returns The `auth.v` namespace: `user`, `group`, `member`, `invite`,
  *   `viewer`, `viewerWithGroups`, and the `list` page-wrapper helper.
  *
@@ -387,17 +423,20 @@ export function createAuthValidators<TExtend extends AuthExtendValidators>(
 ) {
   const user = docWithExtend<typeof userFieldsX, ExtendFor<TExtend, "User">>(
     userFieldsX,
-    (extend.User ?? v.any()) as ExtendFor<TExtend, "User">,
+    (extend.User ?? vUnknownExtend) as ExtendFor<TExtend, "User">,
   );
   const group = docWithExtend<typeof groupFieldsX, ExtendFor<TExtend, "Group">>(
     groupFieldsX,
-    (extend.Group ?? v.any()) as ExtendFor<TExtend, "Group">,
+    (extend.Group ?? vUnknownExtend) as ExtendFor<TExtend, "Group">,
   );
   const member = docWithExtend<typeof memberFieldsX, ExtendFor<TExtend, "GroupMember">>(
     memberFieldsX,
-    (extend.GroupMember ?? v.any()) as ExtendFor<TExtend, "GroupMember">,
+    (extend.GroupMember ?? vUnknownExtend) as ExtendFor<TExtend, "GroupMember">,
   );
-  const invite = inviteDocX;
+  const invite = docWithExtend<typeof inviteFieldsX, ExtendFor<TExtend, "GroupInvite">>(
+    inviteFieldsX,
+    (extend.GroupInvite ?? vUnknownExtend) as ExtendFor<TExtend, "GroupInvite">,
+  );
   const email = emailDocX;
   const viewer = v.union(user, v.null());
 
@@ -407,7 +446,7 @@ export function createAuthValidators<TExtend extends AuthExtendValidators>(
      * application crosses a component boundary, while preserving the exact
      * component table identity in TypeScript.
      */
-    id: vIdString,
+    id: vAuthId,
     /** Single User document validator (extend-aware). */
     user,
     /** Single Group document validator (extend-aware). */

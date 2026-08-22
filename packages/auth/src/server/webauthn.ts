@@ -88,6 +88,7 @@ import {
 } from "./types";
 import { appUrlFromEnv } from "./url";
 import { setActiveSpanAttributes } from "./utils/span";
+import { callCompleteCredentialEnrollment } from "./mutations/calls";
 
 type EnrichedActionCtx = GenericActionCtxWithAuthConfig<AuthDataModel>;
 
@@ -109,9 +110,11 @@ type PasskeyRegistrationData = Omit<
   "replaceSession"
 >;
 
+type PasskeyRegistrationBase = Omit<PasskeyRegistrationData, "userId">;
+
 type PasskeySessionCompletion = Pick<
   Awaited<ReturnType<typeof mutatePasskeyCompleteRegistration>>,
-  "user" | "sessionId" | "refreshTokenId" | "replacedSessionId"
+  "user" | "sessionId" | "sessionExpirationTime" | "refreshTokenId" | "replacedSessionId"
 >;
 
 /**
@@ -569,7 +572,6 @@ function copyArrayBuffer(bytes: Uint8Array): ArrayBuffer {
 }
 
 function registrationData(
-  userId: string,
   credentialId: string,
   publicKey: Uint8Array,
   algorithm: number,
@@ -578,9 +580,8 @@ function registrationData(
   params: PasskeyParams,
   attestation: WebAuthnAttestationEvidence | undefined,
   ctx: EnrichedActionCtx,
-): PasskeyRegistrationData {
+): PasskeyRegistrationBase {
   return {
-    userId,
     credentialId,
     publicKey: copyArrayBuffer(publicKey),
     algorithm,
@@ -638,6 +639,7 @@ async function finalizePasskeySession(
   const session = await finalizeSessionIssuance(ctx.auth.config, {
     userId,
     sessionId,
+    sessionExpirationTime: completed.sessionExpirationTime,
     identity: buildSessionIdentity(userId, sessionId, completed.user),
     refreshToken: encodeRefreshToken(
       completed.refreshTokenId as GenericId<"RefreshToken">,
@@ -983,7 +985,8 @@ export async function handleWebAuthn(
       throw convexError(ErrorCode.CONTINUATION_INVALID, "Invalid or expired continuation.");
     }
     let continuationId: string | undefined;
-    let userId: string;
+    let enrollmentId: string | undefined;
+    let userId: string | undefined;
     if (challenge.continuationId !== undefined) {
       const continuation = await queryContinuation(ctx, challenge.continuationId);
       if (
@@ -994,7 +997,11 @@ export async function handleWebAuthn(
         throw convexError(ErrorCode.CONTINUATION_INVALID, "Invalid or expired continuation.");
       }
       continuationId = continuation._id;
-      userId = continuation.userId;
+      if (continuation.subject.kind === "user") {
+        userId = continuation.subject.userId;
+      } else {
+        enrollmentId = continuation.subject.enrollmentId;
+      }
     } else {
       userId = await requireAuthenticatedUserId(ctx);
     }
@@ -1075,10 +1082,13 @@ export async function handleWebAuthn(
 
     let completed:
       | Awaited<ReturnType<typeof mutatePasskeyCompleteRegistration>>
-      | Exclude<Awaited<ReturnType<typeof mutatePasskeyCompleteRotation>>, { status: "rejected" }>;
+      | Exclude<Awaited<ReturnType<typeof mutatePasskeyCompleteRotation>>, { status: "rejected" }>
+      | Exclude<
+          Awaited<ReturnType<typeof callCompleteCredentialEnrollment>>,
+          { status: "rejected" }
+        >;
     try {
       const data = registrationData(
-        userId,
         credentialId,
         publicKeyBytes,
         algorithm,
@@ -1089,13 +1099,35 @@ export async function handleWebAuthn(
         ctx,
       );
       if (continuationId === undefined) {
+        if (userId === undefined) {
+          throw convexError(
+            ErrorCode.PASSKEY_AUTH_REQUIRED,
+            "Passkey registration requires a user.",
+          );
+        }
         completed = await mutatePasskeyCompleteRegistration(ctx, {
           ...data,
+          userId,
           replaceSession: await getAuthSessionReplacement(ctx),
         });
+      } else if (enrollmentId !== undefined) {
+        const enrollment = await callCompleteCredentialEnrollment(ctx, {
+          ...data,
+          continuationId,
+          provider: provider.id,
+          now: Date.now(),
+        });
+        if (enrollment.status === "rejected") {
+          throw convexError(ErrorCode.CONTINUATION_INVALID, "Invalid or expired continuation.");
+        }
+        completed = enrollment;
       } else {
+        if (userId === undefined) {
+          throw convexError(ErrorCode.CONTINUATION_INVALID, "Invalid or expired continuation.");
+        }
         const rotation = await mutatePasskeyCompleteRotation(ctx, {
           ...data,
+          userId,
           continuationId,
           provider: provider.id,
         });
@@ -1104,14 +1136,15 @@ export async function handleWebAuthn(
         }
         completed = rotation;
       }
+      const completedUserId = completed.user._id as GenericId<"User">;
       const passkeyId = completed.passkeyId as GenericId<"Passkey">;
       if ("removedPasskeyIds" in completed) {
         for (const removedPasskeyId of completed.removedPasskeyIds) {
           await queueAuthEvent(ctx, ctx.auth.config, {
             kind: "passkey.removed",
-            actor: { type: "user", id: userId },
+            actor: { type: "user", id: completedUserId },
             subject: { type: "passkey", id: removedPasskeyId },
-            targets: [{ kind: "user", id: userId }],
+            targets: [{ kind: "user", id: completedUserId }],
             outcome: "success",
             data: { passkeyId: removedPasskeyId },
           });
@@ -1119,18 +1152,18 @@ export async function handleWebAuthn(
       }
       await queueAuthEvent(ctx, ctx.auth.config, {
         kind: "passkey.added",
-        actor: { type: "user", id: userId },
+        actor: { type: "user", id: completedUserId },
         subject: { type: "passkey", id: passkeyId },
-        targets: [{ kind: "user", id: userId }],
+        targets: [{ kind: "user", id: completedUserId }],
         outcome: "success",
         data: { passkeyId, credentialId },
       });
       if ("passwordChanged" in completed && completed.passwordChanged) {
         await queueAuthEvent(ctx, ctx.auth.config, {
           kind: "password.changed",
-          actor: { type: "user", id: userId },
-          subject: { type: "user", id: userId },
-          targets: [{ kind: "user", id: userId }],
+          actor: { type: "user", id: completedUserId },
+          subject: { type: "user", id: completedUserId },
+          targets: [{ kind: "user", id: completedUserId }],
           outcome: "success",
           data: { flow: "reset" },
         });
@@ -1181,6 +1214,9 @@ export async function handleWebAuthn(
         ErrorCode.PASSKEY_INVALID_CHALLENGE,
         "Invalid or expired passkey challenge.",
       );
+    }
+    if (assertion.continuationId !== args.continuation) {
+      throw convexError(ErrorCode.CONTINUATION_INVALID, "Invalid or expired continuation.");
     }
 
     const authenticatorDataBytes = decodeBase64urlIgnorePadding(
@@ -1238,6 +1274,14 @@ export async function handleWebAuthn(
         replaceSession,
         sessionExpirationTime: sessionExpirationTime(ctx.auth.config),
         refreshTokenExpirationTime: refreshTokenExpirationTime(ctx.auth.config),
+        ...(assertion.continuationId === undefined
+          ? {}
+          : {
+              continuation: {
+                id: assertion.continuationId,
+                provider: provider.id,
+              },
+            }),
       });
     } catch (error) {
       throw asConvexError(error, ErrorCode.INTERNAL_ERROR, "Failed to finalize passkey sign-in.");
@@ -1261,12 +1305,12 @@ export async function handleWebAuthn(
       const challengeHash = encodeBase64urlNoPadding(new Uint8Array(sha256(challenge)));
 
       let registration;
-      let userId: string;
+      let userHandle: string;
       try {
         if (args.continuation === undefined) {
-          userId = await requireAuthenticatedUserId(ctx);
+          userHandle = await requireAuthenticatedUserId(ctx);
           registration = await mutatePasskeyBeginRegistration(ctx, {
-            userId,
+            userId: userHandle,
             sessionId: (await getAuthSessionId(ctx)) ?? undefined,
             signature: challengeHash,
             expirationTime: Date.now() + rp.challengeExpirationMs,
@@ -1281,7 +1325,7 @@ export async function handleWebAuthn(
           if (rotation.status === "rejected") {
             throw convexError(ErrorCode.CONTINUATION_INVALID, "Invalid or expired continuation.");
           }
-          userId = rotation.userId;
+          userHandle = rotation.userHandle;
           registration = rotation;
         }
       } catch (err) {
@@ -1303,13 +1347,13 @@ export async function handleWebAuthn(
         transports: credential.transports,
       }));
 
-      const userHandle = encodeBase64urlNoPadding(new TextEncoder().encode(userId));
+      const encodedUserHandle = encodeBase64urlNoPadding(new TextEncoder().encode(userHandle));
 
       return {
         kind: "webauthnOptions" as const,
         options: {
           rp: { name: rp.rpName, id: rp.rpId },
-          user: { id: userHandle, name: userName, displayName: userDisplayName },
+          user: { id: encodedUserHandle, name: userName, displayName: userDisplayName },
           challenge: encodeBase64urlNoPadding(challenge),
           pubKeyCredParams: rp.registration.algorithms.map((alg) => ({
             type: "public-key" as const,
@@ -1351,6 +1395,14 @@ export async function handleWebAuthn(
           sessionId,
           signature: challengeHash,
           expirationTime: Date.now() + rp.challengeExpirationMs,
+          ...(args.continuation === undefined
+            ? {}
+            : {
+                continuation: {
+                  id: args.continuation,
+                  provider: provider.id,
+                },
+              }),
           ...(email === undefined ? {} : { verifiedEmail: email }),
         });
       } catch (err) {
@@ -1387,6 +1439,9 @@ export async function handleWebAuthn(
           ...(allowCredentials === undefined ? {} : { allowCredentials }),
         },
         verifier: signIn.verifierId,
+        ...(args.continuation === undefined
+          ? {}
+          : { continuation: args.continuation, operation: "signIn" as const }),
       };
     },
 

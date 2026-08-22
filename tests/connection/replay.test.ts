@@ -31,7 +31,6 @@ test("SAML pending request accept is single-use (replay rejected the second time
     await ctx.runMutation(components.auth.connection.saml.request.create, {
       connectionId,
       requestId: "_authn_request_1",
-      createdAt: now,
       expiresAt: now + 60_000,
     });
   });
@@ -70,7 +69,6 @@ test("SAML pending request accept rejects unknown and expired requests", async (
     await ctx.runMutation(components.auth.connection.saml.request.create, {
       connectionId,
       requestId: "_expired",
-      createdAt: now - 120_000,
       expiresAt: now - 60_000,
     });
   });
@@ -104,7 +102,6 @@ test("SAML pending request accept rejects a mismatched connectionId (cross-conne
     await ctx.runMutation(components.auth.connection.saml.request.create, {
       connectionId,
       requestId: "_authn_request_xc",
-      createdAt: now,
       expiresAt: now + 60_000,
     });
   });
@@ -163,7 +160,6 @@ test("expired SAML replay rows are pruned by maintenance.pruneExpired", async ()
     await ctx.runMutation(components.auth.connection.saml.request.create, {
       connectionId,
       requestId: "_prune_req",
-      createdAt: now - 3_600_000,
       expiresAt: now - 3_000_000,
     });
     await ctx.runMutation(components.auth.connection.saml.assertion.accept, {

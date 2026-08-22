@@ -15,8 +15,6 @@
       "@estifanos-sh/convex-auth/client": ["./dist/client/index.d.ts"],
       "@estifanos-sh/convex-auth/react": ["./dist/react/index.d.ts"],
       "@estifanos-sh/convex-auth/svelte": ["./dist/svelte/index.d.ts"],
-      "@estifanos-sh/convex-auth/component": ["./dist/component/index.d.ts"],
-      "@estifanos-sh/convex-auth/core": ["./dist/core/index.d.ts"],
       "@estifanos-sh/convex-auth/convex.config": ["./dist/component/convex.config.d.ts"],
       "@estifanos-sh/convex-auth/expo": ["./dist/expo/index.d.ts"],
       "@estifanos-sh/convex-auth/server": ["./dist/server/index.d.ts"],

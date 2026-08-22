@@ -65,6 +65,13 @@ export type SignInWebAuthnOptionsResult =
       verifier: string;
       continuation: string;
       operation: "rotate";
+    }
+  | {
+      kind: "webauthnOptions";
+      options: AuthParameters;
+      verifier: string;
+      continuation: string;
+      operation: "signIn";
     };
 
 /** Sign-in result requesting a TOTP code to complete two-factor sign-in. */

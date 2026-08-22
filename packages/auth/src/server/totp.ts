@@ -338,6 +338,7 @@ export const handleTotp = async (
           user: CrossComponentUserDoc;
           factorId: string;
           sessionId: string;
+          sessionExpirationTime: number;
           refreshTokenId: string;
           replacedSessionId?: string;
         };
@@ -383,6 +384,7 @@ export const handleTotp = async (
     const session = await finalizeSessionIssuance(ctx.auth.config, {
       userId,
       sessionId,
+      sessionExpirationTime: completed.sessionExpirationTime,
       identity: buildSessionIdentity(userId, sessionId, completed.user),
       refreshToken: encodeRefreshToken(
         completed.refreshTokenId as GenericId<"RefreshToken">,

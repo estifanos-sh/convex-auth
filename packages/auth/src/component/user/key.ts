@@ -12,9 +12,10 @@ import { ConvexError, v } from "convex/values";
 import { stream } from "convex-helpers/server/stream";
 import { ErrorCode } from "../../shared/codes";
 
-import { mutation, query } from "../functions";
+import { mutation, query } from "../_generated/server";
 import schema from "../schema";
-import { vApiKeyDoc, vApiKeyRateLimit, vApiKeyScope, vPaginated } from "../model";
+import { vApiKeyDoc } from "../documents";
+import { vApiKeyRateLimit, vApiKeyScope, vPaginated } from "../model";
 
 type ApiKeyRateLimit = { maxRequests: number; windowMs: number };
 type ApiKeyUsePatch = {
