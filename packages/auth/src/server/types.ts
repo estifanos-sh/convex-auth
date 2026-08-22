@@ -916,9 +916,9 @@ export type AuthProviderContinueArgs = {
   operation: WebAuthnRotateOperation;
 };
 
-type AuthProviderPasswordResetContinueArgs = AuthProviderContinueArgs & {
-  accountId: GenericId<"Account">;
-  secret: string;
+/** @internal A recovery transaction already created this verified continuation. */
+type AuthProviderRecoveryContinueArgs = AuthProviderContinueArgs & {
+  continuationId: GenericId<"AuthContinuation">;
 };
 
 /** Arguments for `auth.member.get()`. */
@@ -1068,9 +1068,9 @@ type AuthServerHelpers = {
       args: AuthProviderContinueArgs,
     ) => Promise<AuthProviderDeferredSignInResult>;
     /** @internal */
-    continuePasswordReset: (
+    continueRecovery: (
       ctx: GenericActionCtx<GenericDataModel>,
-      args: AuthProviderPasswordResetContinueArgs,
+      args: AuthProviderRecoveryContinueArgs,
     ) => Promise<AuthProviderDeferredSignInResult>;
   };
 };

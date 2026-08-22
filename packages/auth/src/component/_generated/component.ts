@@ -4165,18 +4165,25 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         string,
         Name
       >;
-      createPasswordReset: FunctionReference<
+      recover: FunctionReference<
         "mutation",
         "internal",
         {
           accountId: string;
+          code: string;
           expirationTime: number;
+          identifier?: string;
+          maxAttemptsPerHour: number;
+          now: number;
           operation: "rotate";
+          passwordProvider: string;
           provider: string;
+          resetProvider: string;
           secret: string;
-          userId: string;
+          verifier?: string;
         },
-        string,
+        | { status: "limited" | "rejected" }
+        | { continuationId: string; status: "accepted"; userId: string },
         Name
       >;
       get: FunctionReference<

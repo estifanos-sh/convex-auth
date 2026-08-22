@@ -111,22 +111,30 @@ export async function mutateContinuationCreate(
   )) as string;
 }
 
-/** Create a password-reset continuation. */
-export async function mutatePasswordResetContinuationCreate(
+/** Verify one password-reset code and stage its passkey rotation. */
+export async function mutatePasswordRecovery(
   ctx: ComponentCallCtx,
   args: {
-    userId: string;
-    provider: string;
-    operation: "rotate";
-    expirationTime: number;
     accountId: string;
+    code: string;
+    identifier?: string;
+    maxAttemptsPerHour: number;
+    now: number;
+    passwordProvider: string;
+    provider: string;
+    resetProvider: string;
     secret: string;
+    verifier?: string;
+    expirationTime: number;
+    operation: "rotate";
   },
-): Promise<string> {
-  return (await ctx.runMutation(
-    ctx.auth.config.component.token.continuation.createPasswordReset,
-    args,
-  )) as string;
+): Promise<
+  | { status: "rejected" | "limited" }
+  | { status: "accepted"; continuationId: string; userId: string }
+> {
+  return (await ctx.runMutation(ctx.auth.config.component.token.continuation.recover, args)) as
+    | { status: "rejected" | "limited" }
+    | { status: "accepted"; continuationId: string; userId: string };
 }
 
 /** Read an unexpired provider continuation. */

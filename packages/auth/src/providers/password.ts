@@ -24,13 +24,14 @@
 import { scryptAsync } from "@noble/hashes/scrypt.js";
 import { bytesToHex } from "@noble/hashes/utils.js";
 import { DocumentByName, GenericDataModel, WithoutSystemFields } from "convex/server";
-import { ConvexError, v } from "convex/values";
+import { ConvexError, GenericId, v } from "convex/values";
 
 import { emitAuthEvent } from "../server/events";
 import { getAuthenticatedUserIdOrNull } from "../server/identity/claims";
-import type { SignInParams } from "../server/payloads";
 import { callCredentialsSignIn } from "../server/mutations/calls";
-import { callVerifyCodeAndSignIn } from "../server/mutations/verify";
+import { maxSignInAttempts } from "../server/limits";
+import { sha256 } from "../server/random";
+import { mutatePasswordRecovery } from "../server/component/factor/db";
 import type { Hashed } from "../shared/brand";
 import { ErrorCode } from "../shared/codes";
 import type { PasswordParams } from "../shared/params";
@@ -302,6 +303,11 @@ export function password<
         },
 
         recover: async () => {
+          const code = requireStringParam(
+            "code" in params ? params.code : undefined,
+            "code",
+            "recover",
+          );
           const newPassword = requireStringParam(
             "newPassword" in params ? params.newPassword : undefined,
             "newPassword",
@@ -312,41 +318,50 @@ export function password<
           }
           validatePasswordRequirements(newPassword);
           if (afterReset !== undefined) {
-            const verificationParams: SignInParams = {};
-            if (typeof params.email === "string") {
-              verificationParams.email = params.email;
-            }
-            if ("code" in params && typeof params.code === "string") {
-              verificationParams.code = params.code;
-            }
-            const verified = await callVerifyCodeAndSignIn(ctx, {
-              params: verificationParams,
-              provider: resetProvider.id,
-              createSession: false,
-              generateTokens: false,
-              allowExtraProviders: true,
-            });
-            if (verified === null) {
-              throw new ConvexError({
-                code: ErrorCode.INVALID_CREDENTIALS,
-                message: "Invalid code",
-              });
-            }
             const account = await ctx.auth.account.get(ctx, {
               provider,
               account: { id: email },
             });
-            if (account === null || account.user._id !== verified.userId) {
+            if (account === null) {
               throw new ConvexError({
                 code: ErrorCode.INVALID_CREDENTIALS,
                 message: "Invalid code",
               });
             }
-            return await ctx.auth.provider.continuePasswordReset(ctx, {
-              userId: verified.userId,
-              operation: afterReset,
+            if (resetProvider.authorize !== undefined) {
+              await resetProvider.authorize(params, account.account);
+            }
+            const recovery = await mutatePasswordRecovery(ctx, {
               accountId: account.account._id,
+              code: (await sha256(code)) as Hashed<"VerificationCode">,
+              identifier: email,
+              maxAttemptsPerHour: maxSignInAttempts(ctx.auth.config),
+              now: Date.now(),
+              passwordProvider: provider,
+              provider: afterReset.provider.id,
+              resetProvider: resetProvider.id,
               secret: await crypto.hashSecret(newPassword),
+              verifier: undefined,
+              expirationTime:
+                Date.now() + (afterReset.provider.options.challengeExpirationMs ?? 300_000),
+              operation: afterReset.operation,
+            });
+            if (recovery.status === "limited") {
+              throw new ConvexError({
+                code: ErrorCode.RATE_LIMITED,
+                message: "Too many failed recovery attempts. Please try again later.",
+              });
+            }
+            if (recovery.status !== "accepted") {
+              throw new ConvexError({
+                code: ErrorCode.INVALID_CREDENTIALS,
+                message: "Invalid code",
+              });
+            }
+            return await ctx.auth.provider.continueRecovery(ctx, {
+              userId: recovery.userId as GenericDoc<DataModel, "User">["_id"],
+              continuationId: recovery.continuationId as GenericId<"AuthContinuation">,
+              operation: afterReset,
             });
           }
           const result = await ctx.auth.provider.signIn(ctx, {
