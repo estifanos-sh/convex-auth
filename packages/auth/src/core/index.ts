@@ -95,9 +95,7 @@ export function createAuthContext(
   });
 
   const authLike: AuthLike = {
-    user: domains.user,
-    active: domains.active,
-    session: domains.session,
+    context: domains.context,
   };
 
   return {

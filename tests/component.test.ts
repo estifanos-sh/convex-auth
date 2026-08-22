@@ -3,9 +3,11 @@ import { auth } from "@convex/auth";
 import { roles } from "@convex/roles";
 import schema from "@convex/schema";
 import { ConvexError } from "convex/values";
+import { convexTest as baseConvexTest } from "convex-test";
 import { expect, test, vi } from "vite-plus/test";
 
 import { vAuthEventCategory, vAuthEventKind } from "../packages/auth/src/component/model";
+import { register as registerAuthComponent } from "../packages/auth/src/test";
 import {
   AUTH_EVENT_KINDS,
   EVENT_CATEGORIES,
@@ -39,6 +41,42 @@ test("auth component registers and serves public core functions", async () => {
 
   expect(user).not.toBeNull();
   expect(user?.email).toBe("component-user@example.com");
+});
+
+test("context.get resolves user, session, membership, and group in one snapshot", async () => {
+  const t = baseConvexTest(schema as never, import.meta.glob("../convex/**/*.*s") as never);
+  registerAuthComponent(t as never);
+
+  const { userId, sessionId, groupId } = await t.run(async (ctx) => {
+    const userId = await ctx.runMutation(components.auth.user.create, {
+      data: { email: "context-snapshot@example.com" },
+    });
+    const session = await ctx.runMutation(components.auth.session.create, {
+      userId,
+      sessionExpirationTime: Date.now() + 60_000,
+    });
+    const groupId = await ctx.runMutation(components.auth.group.create, {
+      name: "Context Snapshot",
+      slug: "context-snapshot",
+      type: "organization",
+    });
+    await ctx.runMutation(components.auth.group.member.create, {
+      groupId,
+      userId,
+      roleIds: [roles.orgAdmin.id],
+    });
+    return { userId, sessionId: session.sessionId, groupId };
+  });
+
+  const snapshot = await t.run((ctx) =>
+    ctx.runQuery(components.auth.context.get, { userId, sessionId }),
+  );
+
+  expect(snapshot.user?._id).toBe(userId);
+  expect(snapshot.session?._id).toBe(sessionId);
+  expect(snapshot.active?.membership.userId).toBe(userId);
+  expect(snapshot.active?.groupId).toBe(groupId);
+  expect(snapshot.active?.group?._id).toBe(groupId);
 });
 
 test("connection.list combines every supplied filter and supports name ordering", async () => {

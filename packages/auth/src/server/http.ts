@@ -18,7 +18,12 @@ import {
 } from "./cors";
 import type { AuthContext, OptionalAuthContext, UserDoc } from "./auth";
 import type { ComponentCtx, ComponentReadCtx as HttpQueryCtx } from "./component/context";
-import { createUnauthenticatedAuthContext, getAuthContext, getAuthContextForUser } from "./context";
+import {
+  createUnauthenticatedAuthContext,
+  getAuthContext,
+  getAuthContextForUser,
+  type AuthLike,
+} from "./context";
 import { logError } from "./log";
 import { verifyOAuthToken } from "./tokens";
 import type { CorsConfig, HttpKeyContext } from "./types";
@@ -32,26 +37,7 @@ type HttpIdentityCtx = {
 };
 type HttpContextCtx = HttpIdentityCtx & HttpQueryCtx;
 
-type HttpContextAuthLike = {
-  user: {
-    get: (ctx: HttpQueryCtx, args: { id: string }) => Promise<UserDoc | null>;
-  };
-  active: {
-    get: (
-      ctx: HttpQueryCtx,
-      args: { userId: string },
-    ) => Promise<{
-      groupId: string;
-      roleIds: string[];
-      grants: string[];
-    } | null>;
-  };
-  session: {
-    get: (
-      ctx: HttpQueryCtx,
-      args: { id: string },
-    ) => Promise<import("./types").Doc<"Session"> | null>;
-  };
+type HttpContextAuthLike = AuthLike & {
   key: {
     verify: (
       ctx: ComponentCtx,

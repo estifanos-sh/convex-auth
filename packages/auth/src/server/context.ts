@@ -23,6 +23,18 @@ type AuthIdentityCtx = {
 
 type AuthContextReadCtx = AuthIdentityCtx & AuthQueryCtx;
 
+type AuthContextSnapshot = {
+  user: Doc<"User"> | null;
+  session: Doc<"Session"> | null;
+  active: {
+    groupId: string;
+    group: Doc<"Group"> | null;
+    membership: Doc<"GroupMember">;
+    roleIds: string[];
+    grants: string[];
+  } | null;
+};
+
 /**
  * Current request auth context injected into `ctx.auth` by `auth.ctx()`. This
  * is the authenticated auth shape returned by {@link defineAuth().context}.
@@ -121,21 +133,11 @@ export type OptionalAuthContext = {
  * @internal
  */
 export type AuthLike = {
-  user: {
-    get: (ctx: AuthContextReadCtx, args: { id: string }) => Promise<UserDoc | null>;
-  };
-  active: {
+  context: {
     get: (
       ctx: AuthContextReadCtx,
-      args: { userId: string },
-    ) => Promise<{
-      groupId: string;
-      roleIds: string[];
-      grants: string[];
-    } | null>;
-  };
-  session: {
-    get: (ctx: AuthContextReadCtx, args: { id: string }) => Promise<Doc<"Session"> | null>;
+      args: { userId: string; sessionId?: string },
+    ) => Promise<AuthContextSnapshot>;
   };
 };
 
@@ -224,13 +226,31 @@ function makeAssert(groupId: string | null, grants: readonly string[]): AuthCont
  *
  * @internal
  */
-async function resolveActiveMembership(
-  auth: AuthLike,
-  ctx: AuthContextReadCtx,
+function authContextFromSnapshot(
   userId: string,
-): Promise<{ groupId: string | null; roleIds: string[]; grants: string[] }> {
-  const active = await auth.active.get(ctx, { userId });
-  return active ?? { groupId: null, roleIds: [], grants: [] };
+  snapshot: AuthContextSnapshot,
+  oauthScopes?: readonly string[],
+): AuthContext {
+  const { user, active } = snapshot;
+  if (user === null) {
+    throw new ConvexError({
+      code: ErrorCode.NOT_SIGNED_IN,
+      message: "The authenticated user no longer exists.",
+    });
+  }
+  const groupId = active?.groupId ?? null;
+  const role = active?.roleIds[0] ?? null;
+  const grants = active?.grants ?? [];
+  const effectiveGrants =
+    oauthScopes === undefined ? grants : grants.filter((grant) => oauthScopes.includes(grant));
+  return {
+    userId: userId as AuthContext["userId"],
+    user,
+    groupId,
+    role,
+    grants: effectiveGrants,
+    assert: makeAssert(groupId, effectiveGrants),
+  };
 }
 
 /**
@@ -248,31 +268,9 @@ export async function getAuthContextForUser(
   ctx: AuthContextReadCtx,
   userId: string,
   oauthScopes?: readonly string[],
-  knownUser?: UserDoc | null,
 ): Promise<AuthContext> {
-  const [user, resolved] = await Promise.all([
-    knownUser === undefined ? auth.user.get(ctx, { id: userId }) : knownUser,
-    resolveActiveMembership(auth, ctx, userId),
-  ]);
-  if (user === null) {
-    throw new ConvexError({
-      code: ErrorCode.NOT_SIGNED_IN,
-      message: "The authenticated user no longer exists.",
-    });
-  }
-  const groupId = resolved.groupId;
-  const role = groupId === null ? null : (resolved.roleIds[0] ?? null);
-  const grants = groupId === null ? [] : resolved.grants;
-  const effectiveGrants =
-    oauthScopes === undefined ? grants : grants.filter((grant) => oauthScopes.includes(grant));
-  return {
-    userId: userId as AuthContext["userId"],
-    user,
-    groupId,
-    role,
-    grants: effectiveGrants,
-    assert: makeAssert(groupId, effectiveGrants),
-  };
+  const snapshot = await auth.context.get(ctx, { userId });
+  return authContextFromSnapshot(userId, snapshot, oauthScopes);
 }
 
 /** @internal */
@@ -296,10 +294,8 @@ export async function getAuthContext(
   } catch {
     return null;
   }
-  const [session, user] = await Promise.all([
-    auth.session.get(ctx, { id: sessionId }),
-    auth.user.get(ctx, { id: userId }),
-  ]);
+  const snapshot = await auth.context.get(ctx, { userId, sessionId });
+  const { session, user } = snapshot;
   if (
     session === null ||
     user === null ||
@@ -310,7 +306,7 @@ export async function getAuthContext(
   ) {
     return null;
   }
-  return await getAuthContextForUser(auth, ctx, userId, undefined, user);
+  return authContextFromSnapshot(userId, snapshot);
 }
 
 /** @internal */

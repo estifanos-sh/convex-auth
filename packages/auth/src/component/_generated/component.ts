@@ -9,6 +9,7 @@
  */
 
 import type { FunctionReference } from "convex/server";
+import type { Doc } from "./dataModel";
 
 /**
  * A utility for referencing a Convex component's exposed API.
@@ -1521,6 +1522,23 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         >;
       };
     };
+  };
+  context: {
+    get: FunctionReference<
+      "query",
+      "internal",
+      { sessionId?: string; userId: string },
+      {
+        active: {
+          group: Doc<"Group"> | null;
+          groupId: string;
+          membership: Doc<"GroupMember">;
+        } | null;
+        session: Doc<"Session"> | null;
+        user: Doc<"User"> | null;
+      },
+      Name
+    >;
   };
   event: {
     append: FunctionReference<

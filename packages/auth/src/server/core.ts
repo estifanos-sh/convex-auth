@@ -11,6 +11,7 @@ import type { OAuthRuntimeDomain } from "./oauth/domain";
 import { getSessionUserId } from "./context";
 import { invalidateCtxCache } from "./cache/context";
 import { createSessionDomain } from "./domains/session";
+import { createContextDomain } from "./domains/context";
 import { createKeyDomain } from "./domains/key";
 import { createInviteDomain } from "./domains/invite";
 import { createMemberDomain } from "./domains/member";
@@ -143,6 +144,7 @@ export function createCoreDomains(deps: CoreDeps) {
   };
 
   const session = createSessionDomain({ config, callInvalidateSessions });
+  const context = createContextDomain({ config, resolveGrantedPermissions });
   const key = createKeyDomain({ config });
   const user = createUserDomain({ config });
   const groupDomain = createGroupDomain({ config });
@@ -351,6 +353,7 @@ export function createCoreDomains(deps: CoreDeps) {
 
   return {
     user,
+    context,
     session,
     account,
     accountManagement,
