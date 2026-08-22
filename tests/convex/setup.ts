@@ -46,6 +46,12 @@ type PrivateAuthTestApi = {
     >;
   };
   maintenance: {
+    backfillEpochs: FunctionReference<
+      "mutation",
+      "internal",
+      { batchSize?: number; cursor?: string; table?: "User" | "Session" },
+      { isDone: boolean; migrated: number; scanned: number; table: "User" | "Session" }
+    >;
     pruneExpired: FunctionReference<
       "mutation",
       "internal",
@@ -57,6 +63,10 @@ type PrivateAuthTestApi = {
 
 /** Access component-private functions from white-box tests. */
 export const privateAuthForTest = (auth: unknown): PrivateAuthTestApi => auth as PrivateAuthTestApi;
+
+/** Access the component-owned legacy epoch backfill from white-box tests. */
+export const backfillEpochsForTest = (auth: unknown) =>
+  privateAuthForTest(auth).maintenance.backfillEpochs;
 
 /**
  * A typed handle for the auth component's `maintenance.pruneExpired`, which is an internal

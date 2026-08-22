@@ -9,12 +9,12 @@ on:
   workflow_dispatch:
     inputs:
       ref:
-        description: Reviewed main-reachable stable release ref
+        description: Reviewed main-reachable release ref
         required: true
         default: main
         type: string
       tag:
-        description: Matching stable v<version> release tag
+        description: Matching v<version> release tag
         required: true
         type: string
 
@@ -45,7 +45,7 @@ jobs:
           registry-url: https://registry.npmjs.org
           package-manager-cache: false
 
-      - name: Validate stable release version
+      - name: Validate release version
         id: release
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
@@ -69,13 +69,13 @@ jobs:
             echo
             echo "| Package | Version | Dist-tag |"
             echo "| --- | --- | --- |"
-            echo "| \`${{ steps.release.outputs.package }}\` | \`${{ steps.release.outputs.version }}\` | \`latest\` |"
+            echo "| \`${{ steps.release.outputs.package }}\` | \`${{ steps.release.outputs.version }}\` | \`${{ steps.release.outputs.dist_tag }}\` |"
             echo
-            echo "Merging this labeled PR will dispatch the stable release workflow."
+            echo "Merging this labeled PR will dispatch the reviewed release workflow."
           } >> "$GITHUB_STEP_SUMMARY"
 
-  dispatch-stable-release:
-    name: Dispatch stable release
+  dispatch-release:
+    name: Dispatch release
     if: >-
       github.event_name == 'pull_request_target' &&
       github.event.pull_request.merged == true &&
@@ -90,7 +90,7 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.merge_commit_sha }}
 
-      - name: Dispatch reviewed stable release
+      - name: Dispatch reviewed release
         env:
           GH_TOKEN: ${{ github.token }}
           SHA: ${{ github.event.pull_request.merge_commit_sha }}
@@ -183,7 +183,8 @@ jobs:
         working-directory: packages/auth
         env:
           NPM_CONFIG_PROVENANCE: "true"
-        run: npm publish --ignore-scripts --access public --tag latest
+          NPM_DIST_TAG: ${{ steps.release.outputs.dist_tag }}
+        run: npm publish --ignore-scripts --access public --tag "$NPM_DIST_TAG"
 
       - name: Verify npm release channel
         run: node scripts/release/policy.ts verify
@@ -192,7 +193,7 @@ jobs:
         uses: softprops/action-gh-release@v3
         with:
           generate_release_notes: true
-          prerelease: false
-          make_latest: true
+          prerelease: ${{ steps.release.outputs.prerelease == 'true' }}
+          make_latest: ${{ steps.release.outputs.prerelease != 'true' }}
           tag_name: ${{ steps.release.outputs.tag }}
           name: ${{ steps.release.outputs.package }} ${{ steps.release.outputs.version }}
