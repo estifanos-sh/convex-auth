@@ -115,8 +115,8 @@ test("password sign up requires email", async () => {
         password: TEST_PASSWORD,
         flow: "signUp",
       },
-    });
-  }).rejects.toThrow("Missing `email` param");
+    } as never);
+  }).rejects.toThrow(/Invalid parameters for credentials provider password/);
 });
 
 test("change password requires authentication", async () => {
@@ -351,6 +351,6 @@ test("invalid flow name surfaces a clear error", async () => {
     await t.action(api.auth.signIn, {
       provider: "password",
       params: { email: TEST_EMAIL, password: TEST_PASSWORD, flow: "bogus" },
-    });
-  }).rejects.toThrow(/Missing or invalid `flow`|signUp.*signIn.*reset.*recover.*verify.*change/);
+    } as never);
+  }).rejects.toThrow(/Invalid parameters for credentials provider password/);
 });

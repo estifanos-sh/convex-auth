@@ -6,115 +6,77 @@
 
 "use client";
 
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useSyncExternalStore,
-  type ReactElement,
-  type ReactNode,
-} from "react";
+import { useCallback, useSyncExternalStore, type ReactElement, type ReactNode } from "react";
 
-import type { AuthApiRefs, AuthClient } from "../browser/index";
-import type { AuthState, SignInOverloads } from "../client/core/types";
+import type { AuthState, AuthSubscriber } from "../client/core/types";
 
-type AnyAuthClient = AuthClient<AuthApiRefs<boolean, boolean, boolean>>;
+/** The lifecycle methods React needs to observe auth state. */
+type AuthClient = {
+  subscribe: (handler: AuthSubscriber) => () => void;
+  getSnapshot: () => AuthState;
+};
 
-type ConvexAuthProviderProps = {
-  auth: AnyAuthClient;
+type AuthStateBoundaryProps<Client extends AuthClient> = {
+  client: Client;
   children: ReactNode;
 };
 
-type SignedInProps = {
+type SignedInProps<Client extends AuthClient> = AuthStateBoundaryProps<Client> & {
   children: ReactNode | ((token: string) => ReactNode);
 };
 
-type AuthStateBoundaryProps = { children: ReactNode };
-
-type AuthActions = {
-  signIn: SignInOverloads;
-  signOut: () => Promise<void>;
-};
-
-const AuthClientContext = createContext<AnyAuthClient | null>(null);
-
-/** Provide an app-owned auth client to descendants. */
-export function ConvexAuthProvider({ auth, children }: ConvexAuthProviderProps): ReactElement {
-  return <AuthClientContext.Provider value={auth}>{children}</AuthClientContext.Provider>;
-}
-
-const NO_PROVIDER_MESSAGE =
-  "No auth client found. Wrap the component tree in <ConvexAuthProvider auth={...}> " +
-  "before using the auth hooks.";
-
 /**
- * Read the app-owned auth client from context, throwing a clear error when no
- * {@link ConvexAuthProvider} is above. Failing fast on a missing provider — the
- * same contract as Svelte's `useConvexAuth()` — is far easier to debug than a
- * silent, perpetual `loading` state, and lets the hooks return non-nullable
- * values so callers never have to guard against an absent client.
+ * Subscribe to an inferred auth client.
+ *
+ * @param client - The client returned by `client({ api: api.auth, ... })`.
+ * @returns The current auth state.
  */
-function useAuthClientOrThrow(): AnyAuthClient {
-  const client = useContext(AuthClientContext);
-  if (client === null) {
-    throw new Error(NO_PROVIDER_MESSAGE);
-  }
-  return client;
-}
-
-/** Read the current auth state. Throws if no {@link ConvexAuthProvider} is above. */
-export function useAuth(): AuthState {
-  const client = useAuthClientOrThrow();
-  // Memoize so `useSyncExternalStore` does not tear down and re-create the
-  // subscription on every render — it only re-subscribes when `client` changes.
+export function useAuth<const Client extends AuthClient>(client: Client): AuthState {
   const subscribe = useCallback(
     (onStoreChange: () => void) => client.subscribe(onStoreChange),
     [client],
   );
-  // Server snapshot honors the SSR token seed carried by `client.getSnapshot()`
-  // (via the `token` option) instead of always reporting `loading`, so a
-  // server-seeded signed-in/out state hydrates without a loading flash.
   const getSnapshot = useCallback(() => client.getSnapshot(), [client]);
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 }
 
-/** Render children only when signed in; supports a render prop receiving the JWT. */
-export function SignedIn({ children }: SignedInProps): ReactElement | null {
-  const state = useAuth();
+/**
+ * Render children only while the client is signed in.
+ *
+ * @param props - The auth client and content to render.
+ * @returns The signed-in content, or nothing while signed out or loading.
+ */
+export function SignedIn<const Client extends AuthClient>({
+  client,
+  children,
+}: SignedInProps<Client>): ReactElement | null {
+  const state = useAuth(client);
   if (state.status !== "signedIn") return null;
   return <>{typeof children === "function" ? children(state.token) : children}</>;
 }
 
-/** Render children only when signed out. */
-export function SignedOut({ children }: AuthStateBoundaryProps): ReactElement | null {
-  const state = useAuth();
-  return state.status === "signedOut" ? <>{children}</> : null;
+/**
+ * Render children only while the client is signed out.
+ *
+ * @param props - The auth client and content to render.
+ * @returns The signed-out content, or nothing while signed in or loading.
+ */
+export function SignedOut<const Client extends AuthClient>({
+  client,
+  children,
+}: AuthStateBoundaryProps<Client>): ReactElement | null {
+  return useAuth(client).status === "signedOut" ? <>{children}</> : null;
 }
 
 /**
- * Render children only while auth is still resolving or Convex is confirming a
- * stored token.
+ * Render children while the client is restoring its session.
+ *
+ * @param props - The auth client and content to render.
+ * @returns The loading content, or nothing once auth resolves.
  */
-export function AuthLoading({ children }: AuthStateBoundaryProps): ReactElement | null {
-  const state = useAuth();
-  return state.status === "loading" ? <>{children}</> : null;
-}
-
-/**
- * The auth actions (`signIn`, `signOut`), always callable. Throws if no
- * {@link ConvexAuthProvider} is above — matching Svelte's non-nullable
- * `signIn`/`signOut`, so callers never have to null-check the actions.
- */
-export function useAuthActions(): AuthActions {
-  const client = useAuthClientOrThrow();
-  return { signIn: client.signIn, signOut: client.signOut };
-}
-
-/**
- * The underlying imperative client, for factor flows (`client.totp.*`,
- * `client.webauthn.*`, `client.device.*`) and low-level methods (`completeOAuth`,
- * `param`, `initialize`). Throws if no {@link ConvexAuthProvider} is above.
- */
-export function useConvexAuthClient(): AnyAuthClient {
-  return useAuthClientOrThrow();
+export function AuthLoading<const Client extends AuthClient>({
+  client,
+  children,
+}: AuthStateBoundaryProps<Client>): ReactElement | null {
+  return useAuth(client).status === "loading" ? <>{children}</> : null;
 }

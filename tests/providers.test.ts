@@ -32,6 +32,7 @@ import {
 import { microsoft } from "@estifanos-sh/convex-auth/providers/microsoft";
 import { password } from "@estifanos-sh/convex-auth/providers/password";
 import * as providers from "@estifanos-sh/convex-auth/providers/index";
+import { v } from "convex/values";
 import { expect, test } from "vite-plus/test";
 
 // Importing the convex setup for its side effect: it seeds CONVEX_SITE_URL /
@@ -240,14 +241,18 @@ test("OAuth providers derive redirectUri from CONVEX_SITE_URL when omitted", () 
 
 test("credentials() defaults id to 'credentials' and stamps type", () => {
   const authorize = async () => null;
-  const provider = credentials({ authorize });
+  const provider = credentials({ params: v.object({}), authorize });
   expect(provider.id).toBe("credentials");
   expect(provider.type).toBe("credentials");
   expect(provider.authorize).toBe(authorize);
 });
 
 test("credentials() preserves a custom id", () => {
-  const provider = credentials({ id: "my-creds", authorize: async () => null });
+  const provider = credentials({
+    id: "my-creds",
+    params: v.object({}),
+    authorize: async () => null,
+  });
   expect(provider.id).toBe("my-creds");
 });
 
@@ -309,7 +314,7 @@ test("password() registers a typed passkey rotation after reset", () => {
 
 test("password() lets a caller override the crypto helpers", () => {
   const crypto = {
-    hashSecret: async () => "custom-hash" as never,
+    hashSecret: async () => "custom-hash",
     verifySecret: async () => true,
   };
   const provider = password({ crypto });

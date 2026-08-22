@@ -72,7 +72,8 @@ shape contract.
 | `@estifanos-sh/convex-auth/permissions`                  | `definePermissions` and the grant/role types                                                                                |
 | `@estifanos-sh/convex-auth/providers` (+ `/providers/*`) | Auth providers: `password`, `google`, `github`, `apple`, `microsoft`, `webauthn`, `totp`, `anonymous`, `email`, `device`, … |
 | `@estifanos-sh/convex-auth/client`                       | Framework-agnostic browser client factory (`client()` — sign-in/out, token store)                                           |
-| `@estifanos-sh/convex-auth/react`                        | React bindings: `ConvexAuthProvider`, `useAuth`, `useConvexAuthClient`                                                      |
+| `@estifanos-sh/convex-auth/react`                        | React bindings: `useAuth(client)` and gates receiving the app-owned client                                                  |
+| `@estifanos-sh/convex-auth/svelte`                       | Svelte 5 bindings: `useConvexAuth(client)` reactive state                                                                   |
 | `@estifanos-sh/convex-auth/expo`                         | React Native / Expo client                                                                                                  |
 | `@estifanos-sh/convex-auth/browser`                      | Low-level browser primitives (navigation, WebAuthn, web locks)                                                              |
 | `@estifanos-sh/convex-auth/core`                         | `createAuthContext` and low-level building blocks for custom integrations                                                   |

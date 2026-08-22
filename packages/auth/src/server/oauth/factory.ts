@@ -29,8 +29,8 @@ type ArcticOAuthProviderFactory = (
  *
  * @internal
  */
-export interface OAuthProviderConfig {
-  readonly id: string;
+export interface OAuthProviderConfig<Id extends string = string> {
+  readonly id: Id;
   readonly provider: OAuthRuntimeClient;
   readonly scopes: string[];
   readonly profile?: (tokens: OAuthTokens) => Promise<OAuthProfile>;
@@ -118,7 +118,9 @@ export function createArcticOAuthClient(
  *
  * @internal
  */
-export function createOAuthProvider(config: OAuthProviderConfig): OAuthMaterializedConfig {
+export function createOAuthProvider<const Id extends string>(
+  config: OAuthProviderConfig<Id>,
+): OAuthMaterializedConfig<Id> {
   if (
     !config.provider ||
     typeof config.provider.createAuthorizationURL !== "function" ||

@@ -33,7 +33,7 @@ export function subjectToUserId(subject: unknown) {
  */
 export async function signInViaMagicLink(
   t: TestConvexForDataModel<any>,
-  provider: string,
+  provider: "email",
   email: string,
 ) {
   let code = "";

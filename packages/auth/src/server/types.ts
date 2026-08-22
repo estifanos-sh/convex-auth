@@ -11,11 +11,12 @@ import {
   RegisteredQuery,
   TableNamesInDataModel,
 } from "convex/server";
-import type { Infer } from "convex/values";
+import type { GenericValidator, Infer } from "convex/values";
 import { GenericId, Value } from "convex/values";
 
 import { vApiKeyDoc, vUserDoc } from "../component/model";
 import schema from "../component/schema";
+import type { EmailParams, OAuthParams, PhoneParams, ProviderParams } from "../shared/params";
 import type { AuthComponentApi } from "./component/api";
 import type { CredentialsConfig } from "../providers/credentials";
 import type { AuthEventHandlerMap, OidcClaims, SamlClaims, ScimRawAttributes } from "./events";
@@ -319,12 +320,12 @@ export type ConvexAuthConfig<TExtend = {}> = {
  */
 export type AuthProviderConfig =
   | OAuthMaterializedConfig
-  | ConvexCredentialsConfig
-  | (() => ConvexCredentialsConfig)
-  | EmailConfig
-  | (() => EmailConfig)
-  | PhoneConfig
-  | (() => PhoneConfig)
+  | ConvexCredentialsConfig<GenericDataModel, GenericValidator, string>
+  | (() => ConvexCredentialsConfig<GenericDataModel, GenericValidator, string>)
+  | EmailConfig<any, string>
+  | (() => EmailConfig<any, string>)
+  | PhoneConfig<any, string>
+  | (() => PhoneConfig<any, string>)
   | WebAuthnProviderConfig
   | (() => WebAuthnProviderConfig)
   | TotpProviderConfig
@@ -338,7 +339,7 @@ export type AuthProviderConfig =
  * No options — connection configuration is entirely per-tenant runtime state.
  */
 export interface ConnectionProviderConfig {
-  id: string;
+  id: "connection";
   type: "connection";
   /**
    * Optional shared callback URI for all OIDC group connections.
@@ -486,9 +487,12 @@ export interface GroupConnectionPolicyPatch {
  *
  * @typeParam DataModel - The Convex data model for typed action contexts.
  */
-export interface EmailConfig<DataModel extends GenericDataModel = GenericDataModel> {
+export interface EmailConfig<
+  DataModel extends GenericDataModel = GenericDataModel,
+  Id extends string = string,
+> {
   /** Provider identifier (e.g. `"email"`, `"resend"`). */
-  id: string;
+  id: Id;
   /** Discriminant for provider type routing. */
   type: "email";
   /** Display name for this provider. */
@@ -565,8 +569,11 @@ export type EmailUserConfig<DataModel extends GenericDataModel = GenericDataMode
  *
  * @typeParam DataModel - The Convex data model for typed action contexts.
  */
-export interface PhoneConfig<DataModel extends GenericDataModel = GenericDataModel> {
-  id: string;
+export interface PhoneConfig<
+  DataModel extends GenericDataModel = GenericDataModel,
+  Id extends string = string,
+> {
+  id: Id;
   type: "phone";
   /**
    * Token expiration in seconds.
@@ -638,11 +645,14 @@ export type PhoneUserConfig<DataModel extends GenericDataModel = GenericDataMode
  *
  * @typeParam DataModel - The Convex data model used by the auth context.
  */
-export type ConvexCredentialsConfig<DataModel extends GenericDataModel = GenericDataModel> =
-  CredentialsConfig<DataModel> & {
-    type: "credentials";
-    id: string;
-  };
+export type ConvexCredentialsConfig<
+  DataModel extends GenericDataModel = GenericDataModel,
+  ParamsValidator extends GenericValidator = GenericValidator,
+  Id extends string = string,
+> = CredentialsConfig<ParamsValidator, DataModel, Id> & {
+  type: "credentials";
+  id: Id;
+};
 
 /** Persisted proof that a WebAuthn credential passed a trusted attestation policy. */
 export interface WebAuthnAttestationEvidence {
@@ -694,7 +704,7 @@ export interface WebAuthnAttestationPolicy {
  * Normalized configuration for the WebAuthn provider.
  */
 export interface WebAuthnProviderConfig {
-  id: string;
+  id: "webauthn";
   type: "webauthn";
   /**
    * Create a typed operation that replaces a user's passkeys during a provider
@@ -749,7 +759,7 @@ export type WebAuthnRotateOperation = Readonly<{
  * Configuration for the TOTP two-factor authentication provider.
  */
 export interface TotpProviderConfig {
-  id: string;
+  id: "totp";
   type: "totp";
   options: {
     /** Issuer name shown in authenticator apps (e.g. "My App"). */
@@ -1153,12 +1163,12 @@ export interface OIDCClaimMapping extends Pick<
 /**
  * Materialized OAuth provider config.
  */
-export interface OAuthMaterializedConfig {
+export interface OAuthMaterializedConfig<Id extends string = string> {
   /**
    * Provider identifier (e.g. `"google"`, `"github"`).
    * @readonly
    */
-  readonly id: string;
+  readonly id: Id;
   /**
    * Discriminant for provider type routing.
    * @readonly
@@ -1208,7 +1218,7 @@ export interface OAuthMaterializedConfig {
  * by displaying a short code that the user enters on a secondary device.
  */
 export interface DeviceProviderConfig {
-  id: string;
+  id: "device";
   type: "device";
   /** User code character set. Default: `"BCDFGHJKLMNPQRSTVWXZ"` (base-20, no vowels). */
   charset: string;
@@ -1232,22 +1242,87 @@ export interface DeviceProviderConfig {
  */
 export type AuthProviderMaterializedConfig =
   | OAuthMaterializedConfig
-  | EmailConfig
-  | PhoneConfig
-  | ConvexCredentialsConfig
+  | EmailConfig<any, string>
+  | PhoneConfig<any, string>
+  | ConvexCredentialsConfig<GenericDataModel, GenericValidator, string>
   | WebAuthnProviderConfig
   | TotpProviderConfig
   | DeviceProviderConfig
   | ConnectionProviderConfig;
 
-export type HasWebAuthnProvider<P extends AuthProviderConfig[]> =
+export type HasWebAuthnProvider<P extends readonly AuthProviderConfig[]> =
   Extract<P[number], { type: "webauthn" }> extends never ? false : true;
 
-export type HasTotpProvider<P extends AuthProviderConfig[]> =
+export type HasTotpProvider<P extends readonly AuthProviderConfig[]> =
   Extract<P[number], { type: "totp" }> extends never ? false : true;
 
-export type HasDeviceProvider<P extends AuthProviderConfig[]> =
+export type HasDeviceProvider<P extends readonly AuthProviderConfig[]> =
   Extract<P[number], { type: "device" }> extends never ? false : true;
+
+type MaterializedProvider<P> = P extends () => infer Provider ? Provider : P;
+
+/** Parameters accepted by one configured provider at the public sign-in boundary. */
+export type ProviderSignInParams<P> =
+  MaterializedProvider<P> extends infer Provider
+    ? Provider extends { type: "credentials"; params: infer Params extends GenericValidator }
+      ? Infer<Params>
+      : Provider extends EmailConfig<any, any>
+        ? EmailParams
+        : Provider extends PhoneConfig<any, any>
+          ? PhoneParams
+          : Provider extends OAuthMaterializedConfig
+            ? OAuthParams | undefined
+            : Provider extends ConnectionProviderConfig
+              ? ProviderParams | undefined
+              : Provider extends DeviceProviderConfig
+                ? ProviderParams | undefined
+                : Provider extends WebAuthnProviderConfig | TotpProviderConfig
+                  ? ProviderParams | undefined
+                  : never
+    : never;
+
+type ProviderSignInEntry<P> = P extends unknown
+  ? MaterializedProvider<P> extends infer Provider extends { id: string }
+    ? ProviderSignInParams<Provider> extends infer Params
+      ? [Params] extends [never]
+        ? { provider: Provider["id"]; params: never }
+        : undefined extends Params
+          ? {
+              provider: Provider["id"];
+              params?: Exclude<Params, undefined>;
+              verifier?: string;
+              continuation?: string;
+              calledBy?: string;
+            }
+          : {
+              provider: Provider["id"];
+              params: Params;
+              verifier?: string;
+              continuation?: string;
+              calledBy?: string;
+            }
+      : never
+    : never
+  : never;
+
+/** Provider-derived arguments exported by the configured `signIn` action. */
+export type AuthSignInArgs<P extends readonly AuthProviderConfig[]> =
+  | ProviderSignInEntry<P[number]>
+  | {
+      provider?: undefined;
+      params?: ProviderParams;
+      verifier?: string;
+      continuation?: string;
+      refreshToken?: string;
+      calledBy?: string;
+    };
+
+/** Configured public sign-in action whose arguments survive Convex codegen. */
+export type AuthSignInAction<P extends readonly AuthProviderConfig[]> = RegisteredAction<
+  "public",
+  AuthSignInArgs<P>,
+  Promise<SignInFlowResult<AuthTokens | null>>
+>;
 
 /**
  * A single scope entry stored per API key.

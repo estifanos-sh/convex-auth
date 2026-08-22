@@ -263,7 +263,7 @@ test("password provider routes unverified sign-in through verify provider withou
     email: "user@example.com",
     password: "supersecret",
     flow: "signIn",
-  };
+  } as const;
 
   expect(await provider.authorize(params, ctx)).toEqual(verifyResult);
   expect(callCredentialsSignIn).toHaveBeenCalledWith(

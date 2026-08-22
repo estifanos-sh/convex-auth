@@ -1,7 +1,15 @@
-import type { FunctionReference } from "convex/server";
+import type { FunctionArgs, FunctionReference } from "convex/server";
 import type { ConvexError, Value } from "convex/values";
 
 import type { AccessToken } from "../../shared/brand";
+import type {
+  AnonymousParams,
+  CodeParams,
+  ConnectionParams,
+  EmailParams,
+  OAuthParams,
+  PasswordParams,
+} from "../../shared/params";
 import type {
   AuthParameters,
   AuthTokens,
@@ -210,19 +218,25 @@ export type AuthSubscriber = (state: AuthState) => void;
  * @typeParam HasTotp - Whether the TOTP provider is configured.
  * @typeParam HasDevice - Whether the device provider is configured.
  */
-export type AuthApiRefs<
-  HasWebAuthn extends boolean = boolean,
-  HasTotp extends boolean = boolean,
-  HasDevice extends boolean = boolean,
-> = {
-  signIn: FunctionReference<"action", "public", Record<string, Value>, unknown>;
+type DefaultSignInReference = FunctionReference<
+  "action",
+  "public",
+  {
+    provider?: string;
+    params?: AuthParameters;
+    verifier?: string;
+    continuation?: string;
+    refreshToken?: string;
+    calledBy?: string;
+  },
+  unknown
+>;
+
+type AnySignInReference = FunctionReference<"action", "public", any, any>;
+
+export type AuthApiRefs<SignIn extends AnySignInReference = DefaultSignInReference> = {
+  signIn: SignIn;
   signOut: FunctionReference<"action", "public", Record<string, Value>, unknown>;
-  /** @internal Set automatically by `defineAuth` — do not set manually. */
-  _capabilities?: {
-    webauthn: HasWebAuthn;
-    totp: HasTotp;
-    device: HasDevice;
-  };
 };
 
 /**
@@ -494,10 +508,24 @@ export interface DeviceClient {
  *
  * @typeParam Api - An AuthApiRefs type to extract capability flags from.
  */
-type InferCaps<Api extends AuthApiRefs<boolean, boolean, boolean>> =
-  Api extends AuthApiRefs<infer P, infer T, infer D>
-    ? { webauthn: P; totp: T; device: D }
-    : { webauthn: boolean; totp: boolean; device: boolean };
+type ProviderIds<Api extends AuthApiRefs> = [Api["signIn"]] extends [never]
+  ? string
+  : FunctionArgs<Api["signIn"]> extends infer Args
+    ? Args extends unknown
+      ? "provider" extends keyof Args
+        ? Exclude<Args[keyof Args & "provider"], undefined>
+        : never
+      : never
+    : never;
+
+type HasProvider<Api extends AuthApiRefs, Id extends string> =
+  string extends ProviderIds<Api> ? boolean : Id extends ProviderIds<Api> ? true : false;
+
+type InferCaps<Api extends AuthApiRefs> = {
+  webauthn: HasProvider<Api, "webauthn">;
+  totp: HasProvider<Api, "totp">;
+  device: HasProvider<Api, "device">;
+};
 
 /**
  * Include a capability when configured, omit it when disabled, and keep it
@@ -539,38 +567,26 @@ export interface PendingInvite {
  * `reset`, `recover`, `verify`, `change`. Selecting a `flow` literal narrows the
  * accepted params automatically.
  */
-export type PasswordParams =
-  | { flow: "signUp"; email: string; password: string; redirectTo?: string }
-  | { flow: "signIn"; email: string; password: string; redirectTo?: string }
-  | { flow: "reset"; email: string; redirectTo?: string }
-  | { flow: "recover"; email: string; code: string; newPassword: string; redirectTo?: string }
-  | { flow: "verify"; email: string; code: string; redirectTo?: string }
-  | {
-      flow: "change";
-      email: string;
-      currentPassword: string;
-      newPassword: string;
-      redirectTo?: string;
-    };
+export type { PasswordParams } from "../../shared/params";
 
 /** Params for the email (magic link) provider's initiation step. */
-export type EmailInitiateParams = { email: string; redirectTo?: string };
+export type EmailInitiateParams = EmailParams;
 
 /**
  * Params for completing a code-based flow (no provider). Used to finalise
  * email magic-link sign-ins and other provider-owned code flows when the
  * verification call is made without re-specifying the originating provider.
  */
-export type CodeCompletionParams = { code: string; redirectTo?: string };
+export type CodeCompletionParams = CodeParams;
 
 /** Params for the `connection` provider — requires a connection ID. */
-export type ConnectionParams = { connectionId: string; redirectTo?: string };
+export type { ConnectionParams } from "../../shared/params";
 
 /** Params for the anonymous provider. Empty / `redirectTo` only. */
-export type AnonymousParams = { redirectTo?: string };
+export type { AnonymousParams } from "../../shared/params";
 
 /** Default params shape for OAuth-style providers (google, github, etc.). */
-export type OAuthSignInParams = { redirectTo?: string };
+export type OAuthSignInParams = OAuthParams;
 
 /**
  * Resolves the `params` argument shape from the `provider` literal.
@@ -579,7 +595,7 @@ export type OAuthSignInParams = { redirectTo?: string };
  * Any other string falls back to OAuth-style params, since custom OAuth
  * providers can be registered under arbitrary IDs.
  */
-export type ParamsForProvider<P> = P extends "password"
+type DefaultParamsForProvider<P> = P extends "password"
   ? PasswordParams
   : P extends "email"
     ? EmailInitiateParams
@@ -593,14 +609,41 @@ export type ParamsForProvider<P> = P extends "password"
             ? CodeCompletionParams
             : OAuthSignInParams | undefined;
 
+type ConfiguredProviderArgs<Api extends AuthApiRefs, P> =
+  FunctionArgs<Api["signIn"]> extends infer Args
+    ? Args extends { provider: P }
+      ? Args
+      : never
+    : never;
+
+/** Resolve a provider's exact params from the generated auth action reference. */
+export type ParamsForProvider<Api extends AuthApiRefs, P> =
+  string extends ProviderIds<Api>
+    ? DefaultParamsForProvider<P>
+    : P extends "webauthn" | "totp" | "device"
+      ? never
+      : P extends "connection"
+        ? ConnectionParams
+        : [P] extends [undefined]
+          ? CodeCompletionParams
+          : ConfiguredProviderArgs<Api, P> extends infer Args
+            ? [Args] extends [never]
+              ? never
+              : Args extends { params: infer Params }
+                ? Params
+                : Args extends { params?: infer Params }
+                  ? Params | undefined
+                  : undefined
+            : never;
+
 /**
  * Tuple-rest helper that flips `params` between required and optional based
  * on whether `undefined` is in its resolved type.
  */
-export type SignInArgs<P> =
-  undefined extends ParamsForProvider<P>
-    ? [params?: ParamsForProvider<P>]
-    : [params: ParamsForProvider<P>];
+export type SignInArgs<Api extends AuthApiRefs, P> =
+  undefined extends ParamsForProvider<Api, P>
+    ? [params?: ParamsForProvider<Api, P>]
+    : [params: ParamsForProvider<Api, P>];
 
 /**
  * Public signature for `auth.signIn`. The provider literal discriminates the
@@ -614,9 +657,11 @@ export type SignInArgs<P> =
  * auth.signIn("anonymous"); // params optional
  * ```
  */
-export type SignInOverloads = <const P extends string | undefined>(
+export type SignInOverloads<Api extends AuthApiRefs = AuthApiRefs> = <
+  const P extends ProviderIds<Api> | undefined,
+>(
   provider: P,
-  ...args: SignInArgs<P>
+  ...args: SignInArgs<Api, P>
 ) => Promise<SignInResult>;
 
 /**
@@ -629,7 +674,7 @@ export type SignInOverloads = <const P extends string | undefined>(
 export type SignInImpl = (provider?: string, params?: AuthParameters) => Promise<SignInResult>;
 
 /** Base auth client — always present. */
-interface AuthClientBase {
+interface AuthClientBase<Api extends AuthApiRefs> {
   /** Restore initial auth state for the current runtime. */
   initialize: () => Promise<void>;
   /** SSR-safe query-param reader. */
@@ -642,7 +687,7 @@ interface AuthClientBase {
   /** Complete an OAuth callback using a URL or authorization code. */
   completeOAuth: (input: URL | string | { code: string }) => Promise<OAuthCompletionResult>;
   /** Start a sign-in flow for a provider. */
-  signIn: SignInOverloads;
+  signIn: SignInOverloads<Api>;
   /** Sign out and clear local auth state. */
   signOut: () => Promise<void>;
   /** Subscribe to auth state changes; returns an unsubscribe. */
@@ -662,10 +707,9 @@ interface AuthClientBase {
  *
  * @typeParam Api - An AuthApiRefs type that determines which factor helpers are included.
  */
-export type AuthClient<Api extends AuthApiRefs<boolean, boolean, boolean> = AuthApiRefs> =
-  AuthClientBase &
-    CapabilityClient<InferCaps<Api>["totp"], "totp", TotpClient> &
-    CapabilityClient<InferCaps<Api>["device"], "device", DeviceClient>;
+export type AuthClient<Api extends AuthApiRefs = AuthApiRefs> = AuthClientBase<Api> &
+  CapabilityClient<InferCaps<Api>["totp"], "totp", TotpClient> &
+  CapabilityClient<InferCaps<Api>["device"], "device", DeviceClient>;
 
 /**
  * Browser auth client return type.
@@ -675,15 +719,15 @@ export type AuthClient<Api extends AuthApiRefs<boolean, boolean, boolean> = Auth
  *
  * @typeParam Api - An AuthApiRefs type that determines which factor helpers are included.
  */
-export type PlatformAuthClient<Api extends AuthApiRefs<boolean, boolean, boolean> = AuthApiRefs> =
-  AuthClient<Api> & CapabilityClient<InferCaps<Api>["webauthn"], "webauthn", WebAuthnClient>;
+export type PlatformAuthClient<Api extends AuthApiRefs = AuthApiRefs> = AuthClient<Api> &
+  CapabilityClient<InferCaps<Api>["webauthn"], "webauthn", WebAuthnClient>;
 
 /**
  * Options for {@link client}.
  *
  * @typeParam Api - An AuthApiRefs type.
  */
-export type ClientOptions<Api extends AuthApiRefs<boolean, boolean, boolean> = AuthApiRefs> = {
+export type ClientOptions<Api extends AuthApiRefs = AuthApiRefs> = {
   /** Any Convex client implementation used to run auth actions. */
   convex: ConvexTransport;
   /** Platform runtime implementation used by the client core. */

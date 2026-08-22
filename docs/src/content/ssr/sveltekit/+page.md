@@ -89,7 +89,7 @@ and `location`, then bridge it into Svelte context:
   import { setupConvex } from "convex-svelte";
   import { onDestroy, untrack } from "svelte";
   import { client as createAuthClient } from "@estifanos-sh/convex-auth/browser";
-  import { setupConvexAuth } from "@estifanos-sh/convex-auth/svelte";
+  import { useConvexAuth } from "@estifanos-sh/convex-auth/svelte";
 
   let { data, children } = $props();
 
@@ -102,17 +102,16 @@ and `location`, then bridge it into Svelte context:
     token: untrack(() => data.auth.token) ?? null,
     location: () => page.url, // SSR-safe URL reading
   });
-  const auth = setupConvexAuth(authClient);
+  const auth = useConvexAuth(authClient);
   onDestroy(() => authClient.destroy());
 </script>
 ```
 
-`setupConvexAuth` shares the reactive auth via context. A non-empty `token`
-renders `auth.signedIn` / `auth.token` on the first paint; `null` renders
-signed out without a loading flash. Call `useConvexAuth()` in any child to read
-the same state or gate with `<SignedIn>` / `<SignedOut>`. For SSR-safe URL
-parameters and invite handling use `auth.client.param()` and
-`auth.client.invite`. See [SSR Overview](/ssr/overview/) for the full client
+The hook shares reactive auth for this client. A non-empty `token` renders
+`auth.signedIn` / `auth.token` on the first paint; `null` renders signed out
+without a loading flash. Pass the same `authClient` to `useConvexAuth` in any
+child. For SSR-safe URL parameters and invite handling use `authClient.param()`
+and `authClient.invite`. See [SSR Overview](/ssr/overview/) for the full client
 API.
 
 ## Live SSR queries

@@ -45,6 +45,10 @@ export const auth = client({
 });
 ```
 
+Pass the generated `api.auth` object directly. It carries the configured
+provider IDs and validated sign-in parameter shapes into the Expo client, so no
+manual client type is necessary.
+
 Do not use `@estifanos-sh/convex-auth/browser` in native Expo code. The Expo
 entrypoint falls back to the browser client automatically when running on web.
 

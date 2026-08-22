@@ -8,6 +8,7 @@ import {
 } from "convex/server";
 import type { RouteSpec } from "convex/server";
 import { ConvexError, v } from "convex/values";
+import { validate } from "convex-helpers/validators";
 import type { GenericValidator } from "convex/values";
 
 import type { AuthTokens, SignInFlowResult } from "../shared/results";
@@ -165,6 +166,25 @@ export type SignInActionResult = SignInFlowResult<AuthTokens | null>;
  * @internal
  */
 export type SignOutAction = FunctionReferenceFromExport<ReturnType<typeof Auth>["signOut"]>;
+
+/**
+ * The transport envelope for the public sign-in action.
+ *
+ * Convex requires every exported function's argument validator to be an
+ * object (or `v.any()`), so a provider-discriminated top-level union cannot be
+ * exported. The configured provider union remains the public TypeScript
+ * contract through {@link AuthSignInAction}; the handler below validates the
+ * selected provider's params before starting a sign-in flow.
+ */
+/** @internal */
+export const vSignInActionArgs = v.object({
+  provider: v.optional(v.string()),
+  params: v.optional(v.any()),
+  verifier: v.optional(v.string()),
+  continuation: v.optional(v.string()),
+  refreshToken: v.optional(v.string()),
+  calledBy: v.optional(v.string()),
+});
 
 /**
  * Configure the Convex Auth library. Returns an object with
@@ -646,14 +666,7 @@ export function Auth(config_: ConvexAuthConfig<any>) {
      * Also used for refreshing the session.
      */
     signIn: actionGeneric({
-      args: {
-        provider: v.optional(v.string()),
-        params: v.optional(vPayloadRecord),
-        verifier: v.optional(v.string()),
-        continuation: v.optional(v.string()),
-        refreshToken: v.optional(v.string()),
-        calledBy: v.optional(v.string()),
-      },
+      args: vSignInActionArgs,
       handler: async (ctx, args): Promise<SignInActionResult> => {
         if (args.calledBy !== undefined) {
           log("INFO", `\`auth:signIn\` called by ${args.calledBy}`);
@@ -679,6 +692,19 @@ export function Auth(config_: ConvexAuthConfig<any>) {
           }
         } else if (args.provider !== undefined) {
           provider = getProviderOrThrow(args.provider);
+        }
+        if (provider?.type === "credentials") {
+          if (!validate(provider.params, args.params)) {
+            throw new ConvexError({
+              code: ErrorCode.INVALID_PARAMETERS,
+              message: `Invalid parameters for credentials provider ${provider.id}.`,
+            });
+          }
+        } else if (!validate(v.optional(vPayloadRecord), args.params)) {
+          throw new ConvexError({
+            code: ErrorCode.INVALID_PARAMETERS,
+            message: "Sign-in parameters must contain only supported payload values.",
+          });
         }
         const authSiteUrl =
           provider?.type === "oauth" || provider?.type === "connection"

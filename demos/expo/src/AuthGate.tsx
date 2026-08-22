@@ -1,4 +1,5 @@
 import { api } from "$convex/_generated/api";
+import type { SignInResult } from "@estifanos-sh/convex-auth/client";
 import { useQuery } from "convex/react";
 import * as Haptics from "expo-haptics";
 import { Image } from "expo-image";
@@ -10,8 +11,6 @@ import { useDemoAuth } from "./auth";
 import { useAppClient } from "./client";
 import { colors, spacing, fontSize, radius, shadows } from "./theme";
 
-type AuthParameters = Record<string, string | number | boolean | undefined>;
-
 function useAuthForm() {
   const { auth, signIn } = useDemoAuth();
   const client = useAppClient();
@@ -21,16 +20,14 @@ function useAuthForm() {
   const [mode, setMode] = React.useState<"signIn" | "signUp">("signIn");
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
-  const passkeyClient = (
-    auth as { webauthn?: { isSupported(): boolean; signIn(): Promise<{ kind: string }> } }
-  ).webauthn;
+  const passkeyClient = auth.webauthn;
 
   const submit = React.useCallback(
-    async (provider: string, params?: AuthParameters) => {
-      setIsSubmitting(provider);
+    async (label: string, operation: () => Promise<SignInResult>) => {
+      setIsSubmitting(label);
       setError(null);
       try {
-        const result = await signIn(provider, params);
+        const result = await operation();
         if (result.kind !== "signedIn" && result.kind !== "redirect") {
           setError("Authentication did not complete.");
         }
@@ -40,7 +37,7 @@ function useAuthForm() {
         setIsSubmitting(null);
       }
     },
-    [signIn],
+    [],
   );
 
   const handleEmailContinue = React.useCallback(async () => {
@@ -82,8 +79,10 @@ function useAuthForm() {
       setError("Enter your password.");
       return;
     }
-    await submit("password", { flow: mode, email: email.trim().toLowerCase(), password });
-  }, [email, mode, password, submit]);
+    await submit("password", () =>
+      signIn("password", { flow: mode, email: email.trim().toLowerCase(), password }),
+    );
+  }, [email, mode, password, signIn, submit]);
 
   return {
     isSubmitting,
@@ -95,12 +94,11 @@ function useAuthForm() {
     setEmail,
     password,
     setPassword,
-    passkeySupported: passkeyClient?.isSupported() ?? false,
-    handleSignIn: (provider: string) => submit(provider),
+    passkeySupported: passkeyClient.isSupported(),
+    handleSignIn: (provider: "google" | "anonymous") => submit(provider, () => signIn(provider)),
     handleEmailContinue,
     handlePasswordSubmit,
     handlePasskey: React.useCallback(async () => {
-      if (!passkeyClient) return;
       setIsSubmitting("passkey");
       setError(null);
       try {

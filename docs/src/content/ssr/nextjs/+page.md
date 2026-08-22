@@ -113,7 +113,6 @@ export default async function RootLayout({
 import { useEffect, useMemo } from "react";
 import { ConvexProvider, ConvexReactClient } from "convex/react";
 import { client as createAuthClient } from "@estifanos-sh/convex-auth/browser";
-import { ConvexAuthProvider } from "@estifanos-sh/convex-auth/react";
 
 export function AuthProvider({
   token,
@@ -122,7 +121,7 @@ export function AuthProvider({
   token: string | null;
   children: React.ReactNode;
 }) {
-  const { convex, auth } = useMemo(() => {
+  const { convex, authClient } = useMemo(() => {
     const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL!;
     const convexClient = new ConvexReactClient(convexUrl);
     const authClient = createAuthClient({
@@ -130,19 +129,16 @@ export function AuthProvider({
       proxyPath: "/api/auth",
       token,
     });
-    return { convex: convexClient, auth: authClient };
+    return { convex: convexClient, authClient };
   }, [token]);
 
-  useEffect(() => () => auth.destroy(), [auth]);
+  useEffect(() => () => authClient.destroy(), [authClient]);
 
-  return (
-    <ConvexProvider client={convex}>
-      <ConvexAuthProvider auth={auth}>{children}</ConvexAuthProvider>
-    </ConvexProvider>
-  );
+  return <ConvexProvider client={convex}>{children}</ConvexProvider>;
 }
 ```
 
 The `token` option seeds the synchronous boot: a non-empty token renders signed
-in on hydration, and `null` renders signed out without a loading flash. See
-[SSR overview](/ssr/overview).
+in on hydration, and `null` renders signed out without a loading flash. Pass
+this app-owned `authClient` to `useAuth`, `SignedIn`, `SignedOut`, and
+`AuthLoading` in client components. See [SSR overview](/ssr/overview).

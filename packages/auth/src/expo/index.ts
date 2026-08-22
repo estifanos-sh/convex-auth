@@ -20,11 +20,11 @@ import { ConvexHttpClient } from "convex/browser";
 import {
   client as createClient,
   resolveUrl,
-  type AuthApiRefs,
   type ClientOptions,
   type ClientRuntime,
   type PlatformAuthClient,
 } from "../client/index";
+import type { AuthApiRefs } from "../client/core/types";
 import { client as createBrowserClient } from "../browser/index";
 import { createExpoWebAuthnClient } from "./webauthn";
 
@@ -38,7 +38,7 @@ import { createExpoWebAuthnClient } from "./webauthn";
  *   available on the returned client.
  */
 export interface ExpoClientOptions<
-  Api extends AuthApiRefs<boolean, boolean, boolean> = AuthApiRefs,
+  Api extends AuthApiRefs = AuthApiRefs,
 > extends ClientOptions<Api> {
   /**
    * Expo auth-session options. `redirectUri` overrides the auto-derived
@@ -50,7 +50,7 @@ export interface ExpoClientOptions<
   };
 }
 
-export type { AuthApiRefs, PlatformAuthClient as AuthClient } from "../client/index";
+export type { PlatformAuthClient as AuthClient } from "../client/index";
 
 const secureStoreStorage = {
   async getItem(key: string): Promise<string | null> {
@@ -94,7 +94,7 @@ const secureStoreStorage = {
  *   available on the returned client.
  * @returns An Expo auth client with the configured auth helpers.
  */
-export function client<Api extends AuthApiRefs<boolean, boolean, boolean> = AuthApiRefs>(
+export function client<Api extends AuthApiRefs = AuthApiRefs>(
   options: ExpoClientOptions<Api>,
 ): PlatformAuthClient<Api> {
   if (isWebRuntime()) {

@@ -63,6 +63,10 @@ await auth.device.poll({ code: deviceCode });
 // User is now signed in
 ```
 
+The generated `api.auth` reference is also what tells the client that the
+device provider is enabled. Pass it directly rather than supplying a separate
+client or API-reference type.
+
 ## Verification page
 
 Build a page at your `verificationUri` where authenticated users enter the code:

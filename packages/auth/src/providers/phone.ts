@@ -4,14 +4,16 @@
  * @module
  */
 
+import type { GenericDataModel } from "convex/server";
+
 import type { PhoneConfig } from "../server/types";
 
 /** Configuration for the {@link phone} provider. */
-export interface PhoneProviderConfig {
+export interface PhoneProviderConfig<Id extends string = "phone"> {
   /** SMS or phone delivery callback for verification tokens. */
   send: PhoneConfig["sendVerificationRequest"];
   /** Stable provider identifier used in `signIn("<id>")`. */
-  id?: string;
+  id?: Id;
   /** Verification token lifetime in seconds. */
   maxAge?: number;
 }
@@ -33,9 +35,11 @@ export interface PhoneProviderConfig {
  * })
  * ```
  */
-export function phone(config: PhoneProviderConfig): PhoneConfig {
+export function phone<const Id extends string = "phone">(
+  config: PhoneProviderConfig<Id>,
+): PhoneConfig<GenericDataModel, Id> {
   return {
-    id: config.id ?? "phone",
+    id: (config.id ?? "phone") as Id,
     type: "phone",
     maxAge: config.maxAge ?? 60 * 20,
     authorize: async (params, account) => {

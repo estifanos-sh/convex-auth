@@ -21,7 +21,7 @@
  */
 
 import { client } from "@estifanos-sh/convex-auth/client";
-import type { AuthApiRefs, AuthState, Storage } from "@estifanos-sh/convex-auth/client";
+import type { AuthClient, AuthState, Storage } from "@estifanos-sh/convex-auth/client";
 // ConvexTransport and SignInActionResult are internal to the client core (they
 // are not part of the public `/client` type surface), so the tests import them
 // from the core type module directly rather than widening the package exports.
@@ -32,6 +32,8 @@ import type {
 import type { AuthTokens } from "@estifanos-sh/convex-auth/shared/results";
 import { ErrorCode } from "@estifanos-sh/convex-auth/client/errors";
 import { createWebAuthnClientCore } from "@estifanos-sh/convex-auth/client/factors/webauthn";
+import type { FunctionReference } from "convex/server";
+import type { Value } from "convex/values";
 import { expect, test } from "vite-plus/test";
 
 /** Build a branded {@link AuthTokens} pair for a mocked `signedIn` result. */
@@ -93,17 +95,36 @@ function mockConvex(
   };
 }
 
-// `_capabilities` drives the conditional client type: declaring totp/device
-// enabled surfaces `auth.totp` / `auth.device` on the returned client (the
-// factory always builds them at runtime; this just tells the type checker).
-const API_REFS: AuthApiRefs<false, true, true> = {
+type TestParams = Record<string, Value | undefined>;
+type TestAuthApi<SignIn extends FunctionReference<"action", "public", any, any>> = {
+  signIn: SignIn;
+  signOut: FunctionReference<"action", "public", Record<string, Value>, unknown>;
+};
+type TestSignInReference = FunctionReference<
+  "action",
+  "public",
+  | {
+      provider: "password";
+      params: {
+        flow: "signIn";
+        email: string;
+        password: string;
+      };
+    }
+  | { provider: "totp"; params?: TestParams }
+  | { provider: "device"; params?: TestParams },
+  unknown
+>;
+
+const API_REFS: TestAuthApi<TestSignInReference> = {
   signIn: "auth:signIn" as never,
   signOut: "auth:signOut" as never,
-  _capabilities: { webauthn: false, totp: true, device: true },
 };
 
 /** Collect every state a subscriber sees, in order. */
-function record(auth: ReturnType<typeof client>) {
+function record<Api extends TestAuthApi<FunctionReference<"action", "public", any, any>>>(
+  auth: AuthClient<Api>,
+) {
   const states: AuthState[] = [];
   const unsubscribe = auth.subscribe((s) => states.push(s));
   return { states, unsubscribe };
@@ -208,10 +229,24 @@ test("password recovery automatically completes the returned passkey rotation", 
     },
     { autoConfirm: true },
   );
-  const api: AuthApiRefs<true, false, false> = {
+  type WebAuthnSignInReference = FunctionReference<
+    "action",
+    "public",
+    | {
+        provider: "password";
+        params: {
+          flow: "recover";
+          email: string;
+          code: string;
+          newPassword: string;
+        };
+      }
+    | { provider: "webauthn"; params?: TestParams },
+    unknown
+  >;
+  const api: TestAuthApi<WebAuthnSignInReference> = {
     signIn: "auth:signIn" as never,
     signOut: "auth:signOut" as never,
-    _capabilities: { webauthn: true, totp: false, device: false },
   };
   const auth = client({
     convex,

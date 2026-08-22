@@ -4,14 +4,12 @@
   import { page } from "$app/state";
   import { goto } from "$app/navigation";
   import { base } from "$app/paths";
-  import { useConvexAuth } from "@estifanos-sh/convex-auth/svelte";
   import { api } from "$convex/_generated/api.js";
   import type { AppContext } from "$lib/app";
   import AppLoading from "$lib/components/AppLoading.svelte";
 
   let { children } = $props();
   const app = getContext<AppContext>("app");
-  const auth = useConvexAuth();
   const groupId = $derived(page.params.groupId!);
 
   const dashboard = useQuery(api.groups.get, () => (app.isAuthenticated ? { groupId } : "skip"));
@@ -21,8 +19,8 @@
   );
 
   $effect(() => {
-    if (auth.loading) return;
-    if (!auth.signedIn) {
+    if (app.isLoading) return;
+    if (!app.isAuthenticated) {
       void goto(`${base}/`);
       return;
     }

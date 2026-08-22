@@ -119,10 +119,11 @@ provides the private group SSO administration facade.
 
 The returned `auth.v` validators describe public read results for Convex
 `returns:` validation. The exported `Doc`, `Viewer`, `Group`, and `Membership`
-types carry configured extension fields, while `InferClientApi<typeof auth>`
-gives the browser client only the provider capabilities enabled by this auth
-definition. See [Typed Returns](/reference/typed-returns) for the validator and
-type relationship.
+types carry configured extension fields. The exported `signIn` and `signOut`
+actions become the generated `api.auth` client contract; passing that object to
+the browser, Expo, or framework client carries provider IDs, validated sign-in
+parameters, and enabled factor helpers automatically. See [Typed
+Returns](/reference/typed-returns) for the validator and type relationship.
 
 ## Per-provider OAuth options
 

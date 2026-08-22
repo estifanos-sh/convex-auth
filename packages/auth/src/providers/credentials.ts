@@ -3,8 +3,10 @@
  *
  * ```ts
  * import { credentials } from "@estifanos-sh/convex-auth/providers";
+ * import { v } from "convex/values";
  *
  * credentials({
+ *   params: v.object({ email: v.string(), password: v.string() }),
  *   authorize: async (credentials, ctx) => {
  *     // Your custom logic here...
  *   },
@@ -14,10 +16,10 @@
  * @module
  */
 
-import { GenericDataModel } from "convex/server";
-import { GenericId, Value } from "convex/values";
+import type { GenericDataModel } from "convex/server";
+import type { GenericId, GenericValidator, Infer } from "convex/values";
 
-import type { Hashed } from "../shared/brand";
+import type { ProviderParams } from "../shared/params";
 import type { SignInFlowResult } from "../shared/results";
 import type { SessionIssuance } from "../server/session/lifecycle";
 import type { AuthProfile } from "../server/payloads";
@@ -61,27 +63,49 @@ export type CredentialsAuthorizeResult =
   | Exclude<SignInFlowResult<null>, { kind: "signedIn" }>
   | null;
 
+type CredentialsParams<ParamsValidator extends GenericValidator> =
+  Exclude<Infer<ParamsValidator>, undefined> extends infer Params extends ProviderParams
+    ? Params
+    : never;
+
+type CredentialsAuthorizeParams<ParamsValidator extends GenericValidator> =
+  CredentialsParams<ParamsValidator> extends never ? never : Infer<ParamsValidator>;
+
 /** Configuration for the {@link credentials} provider. */
-export interface CredentialsConfig<DataModel extends GenericDataModel = GenericDataModel> {
-  /** Stable provider identifier used in `signIn("<id>")`. */
-  id?: string;
-  /**
-   * Validate the submitted credentials and return the authenticated user or
-   * verified identity to provision.
-   * Return `null` to reject the sign-in attempt.
-   */
-  authorize: (
-    credentials: Partial<Record<string, Value | undefined>>,
-    ctx: GenericActionCtxWithAuthConfig<DataModel>,
-  ) => Promise<CredentialsAuthorizeResult>;
-  /** Optional hashing helpers for password-style credential verification. */
-  crypto?: {
-    hashSecret: (secret: string) => Promise<Hashed<"Password">>;
-    verifySecret: (secret: string, hash: Hashed<"Password">) => Promise<boolean>;
-  };
-  /** Additional providers to register alongside this credentials provider. */
-  extraProviders?: (AuthProviderConfig | undefined)[];
-}
+export type CredentialsConfig<
+  ParamsValidator extends GenericValidator = GenericValidator,
+  DataModel extends GenericDataModel = GenericDataModel,
+  Id extends string = string,
+> =
+  CredentialsParams<ParamsValidator> extends never
+    ? never
+    : {
+        /** Stable provider identifier used in `signIn("<id>")`. */
+        id?: Id;
+        /**
+         * Convex validator for the parameters accepted by this provider.
+         *
+         * The validator is the single source of truth for the callback parameter
+         * type, the generated `api.auth.signIn` reference, and runtime validation.
+         */
+        params: ParamsValidator;
+        /**
+         * Validate the submitted credentials and return the authenticated user or
+         * verified identity to provision.
+         * Return `null` to reject the sign-in attempt.
+         */
+        authorize: (
+          credentials: CredentialsAuthorizeParams<ParamsValidator>,
+          ctx: GenericActionCtxWithAuthConfig<DataModel>,
+        ) => Promise<CredentialsAuthorizeResult>;
+        /** Optional hashing helpers for password-style credential verification. */
+        crypto?: {
+          hashSecret: (secret: string) => Promise<string>;
+          verifySecret: (secret: string, hash: string) => Promise<boolean>;
+        };
+        /** Additional providers to register alongside this credentials provider. */
+        extraProviders?: (AuthProviderConfig | undefined)[];
+      };
 
 /**
  * Create a credentials provider for custom sign-in logic.
@@ -93,8 +117,10 @@ export interface CredentialsConfig<DataModel extends GenericDataModel = GenericD
  * @example
  * ```ts
  * import { credentials } from "@estifanos-sh/convex-auth/providers";
+ * import { v } from "convex/values";
  *
  * credentials({
+ *   params: v.object({ email: v.string(), password: v.string() }),
  *   authorize: async (params, ctx) => {
  *     const user = await lookupUser(params.email, params.password, ctx);
  *     return user ? { userId: user._id } : null;
@@ -102,12 +128,16 @@ export interface CredentialsConfig<DataModel extends GenericDataModel = GenericD
  * })
  * ```
  */
-export function credentials<DataModel extends GenericDataModel = GenericDataModel>(
-  config: CredentialsConfig<DataModel>,
-): ConvexCredentialsConfig<DataModel> {
+export function credentials<
+  const ParamsValidator extends GenericValidator = GenericValidator,
+  DataModel extends GenericDataModel = GenericDataModel,
+  const Id extends string = "credentials",
+>(
+  config: CredentialsConfig<ParamsValidator, DataModel, Id>,
+): ConvexCredentialsConfig<DataModel, ParamsValidator, Id> {
   return {
     ...config,
     id: config.id ?? "credentials",
     type: "credentials",
-  } as ConvexCredentialsConfig<DataModel>;
+  } as ConvexCredentialsConfig<DataModel, ParamsValidator, Id>;
 }

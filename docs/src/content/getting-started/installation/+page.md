@@ -61,6 +61,10 @@ export const { signIn, signOut, store } = auth;
 `signIn` and `signOut` are the client-facing actions. `store` is exported for
 the auth runtime; frontend code should not call it. Pass `api.auth` to the
 client SDK and let the client complete provider redirects and continuations.
+`api.auth` is generated from these exported actions: it is the type source for
+the configured provider IDs and their validated parameter objects. Passing it
+directly to the client preserves that information without a manual client type
+or API-reference annotation.
 
 ## Protect application functions
 
