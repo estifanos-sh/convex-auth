@@ -29,7 +29,7 @@ jobs:
       github.event_name == 'pull_request' &&
       github.event.pull_request.draft == false &&
       contains(github.event.pull_request.labels.*.name, 'npm package')
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     permissions:
       contents: read
 
@@ -80,7 +80,7 @@ jobs:
       github.event_name == 'pull_request_target' &&
       github.event.pull_request.merged == true &&
       contains(github.event.pull_request.labels.*.name, 'npm package')
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     permissions:
       actions: write
       contents: read
@@ -103,7 +103,7 @@ jobs:
   publish:
     name: Publish npm package
     if: github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     environment: npm
     permissions:
       contents: write
