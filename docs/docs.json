@@ -4,7 +4,7 @@
   "title": "Convex Auth",
   "description": "The unofficial Convex authentication solution.",
   "repository": "estifanos-sh/convex-auth",
-  "installCommand": "pnpm add @estifanos-sh/convex-auth",
+  "installCommand": "npm install @estifanos-sh/convex-auth",
   "startSlug": "/getting-started/overview",
   "llmsDescription": "Authentication and authorization for Convex applications using @estifanos-sh/convex-auth.",
   "sidebar": [
