@@ -10,14 +10,89 @@
  * @module
  */
 
+import { paginator } from "convex-helpers/server/pagination";
 import { v } from "convex/values";
 
 import { internal } from "./_generated/api";
 import { authEventStream } from "./eventstream";
 import { internalMutation } from "./_generated/server";
+import schema from "./schema";
 
 const DEFAULT_BATCH_SIZE = 200;
 const MAX_BATCH_SIZE = 1000;
+
+const vEpochTable = v.union(v.literal("User"), v.literal("Session"));
+
+/**
+ * Backfill revocation epochs introduced after the first auth releases.
+ *
+ * This is deliberately component-owned because a mounting app cannot access
+ * component tables directly. It scans with stable pagination, writes at most
+ * `batchSize` rows per transaction, and schedules its own continuation. Run
+ * it with `npx convex run --component auth maintenance:backfillEpochs '{}'`.
+ *
+ * Missing session epochs always become zero rather than inheriting the
+ * current user epoch. That preserves revocation: a legacy session must never
+ * be revived after its user's epoch has advanced.
+ */
+export const backfillEpochs = internalMutation({
+  args: {
+    table: v.optional(vEpochTable),
+    cursor: v.optional(v.string()),
+    batchSize: v.optional(v.number()),
+  },
+  returns: v.object({
+    table: vEpochTable,
+    scanned: v.number(),
+    migrated: v.number(),
+    isDone: v.boolean(),
+  }),
+  handler: async (ctx, args) => {
+    const table = args.table ?? "User";
+    const batchSize = Math.min(Math.max(args.batchSize ?? DEFAULT_BATCH_SIZE, 1), MAX_BATCH_SIZE);
+    const paginationOpts = { numItems: batchSize, cursor: args.cursor ?? null };
+
+    if (table === "User") {
+      const page = await paginator(ctx.db, schema)
+        .query("User")
+        .order("asc")
+        .paginate(paginationOpts);
+      let migrated = 0;
+      for (const user of page.page) {
+        if (user.sessionEpoch === undefined) {
+          await ctx.db.patch("User", user._id, { sessionEpoch: 0 });
+          migrated += 1;
+        }
+      }
+      await ctx.scheduler.runAfter(0, internal.maintenance.backfillEpochs, {
+        table: page.isDone ? "Session" : "User",
+        cursor: page.isDone ? undefined : page.continueCursor,
+        batchSize,
+      });
+      return { table, scanned: page.page.length, migrated, isDone: false };
+    }
+
+    const page = await paginator(ctx.db, schema)
+      .query("Session")
+      .order("asc")
+      .paginate(paginationOpts);
+    let migrated = 0;
+    for (const session of page.page) {
+      if (session.epoch === undefined) {
+        await ctx.db.patch("Session", session._id, { epoch: 0 });
+        migrated += 1;
+      }
+    }
+    if (!page.isDone) {
+      await ctx.scheduler.runAfter(0, internal.maintenance.backfillEpochs, {
+        table: "Session",
+        cursor: page.continueCursor,
+        batchSize,
+      });
+    }
+    return { table, scanned: page.page.length, migrated, isDone: page.isDone };
+  },
+});
 
 /** Terminal webhook deliveries are pruned once they are older than this. */
 const WEBHOOK_DELIVERY_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;

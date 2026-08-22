@@ -1,3 +1,5 @@
+/// <reference types="node" />
+
 import { appendFileSync, readFileSync } from "node:fs";
 import path from "node:path";
 
@@ -21,7 +23,10 @@ interface RegistryMetadata {
   "dist-tags"?: Record<string, string>;
 }
 
-type ReleaseValues = Record<"package" | "version" | "tag" | "published", string>;
+type ReleaseValues = Record<
+  "package" | "version" | "tag" | "dist_tag" | "prerelease" | "published",
+  string
+>;
 
 function parseVersion(version: string): ParsedVersion {
   const match = /^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/.exec(version);
@@ -75,10 +80,10 @@ function readPackage(): PackageJson {
   if (packageJson.name !== PACKAGE_NAME) {
     throw new Error(`Refusing to release unexpected package ${packageJson.name}.`);
   }
-  if (!/^\d+\.\d+\.\d+$/.test(packageJson.version)) {
-    throw new Error(
-      `npm releases require a stable x.y.z version; received ${packageJson.version}. Use pkg.pr.new for previews.`,
-    );
+  const parsed = parseVersion(packageJson.version);
+  const channel = parsed.prerelease?.[0];
+  if (channel !== undefined && channel !== "alpha" && channel !== "beta" && channel !== "rc") {
+    throw new Error(`Unsupported npm prerelease channel ${channel}. Use alpha, beta, or rc.`);
   }
   return packageJson;
 }
@@ -105,10 +110,13 @@ function writeOutputs(values: ReleaseValues): void {
 }
 
 function releaseValues(packageJson: PackageJson, published: boolean) {
+  const parsed = parseVersion(packageJson.version);
   return {
     package: packageJson.name,
     version: packageJson.version,
     tag: `v${packageJson.version}`,
+    dist_tag: parsed.prerelease?.[0] ?? "latest",
+    prerelease: String(parsed.prerelease !== undefined),
     published: String(published),
   } satisfies ReleaseValues;
 }
@@ -128,7 +136,9 @@ async function readiness(): Promise<void> {
 
   const values = releaseValues(packageJson, false);
   writeOutputs(values);
-  console.log(`${values.package}@${values.version} is ready to publish to npm's latest tag.`);
+  console.log(
+    `${values.package}@${values.version} is ready to publish to npm's ${values.dist_tag} tag.`,
+  );
 }
 
 async function metadata(): Promise<void> {
@@ -148,16 +158,17 @@ async function metadata(): Promise<void> {
 
 async function verify(): Promise<void> {
   const packageJson = readPackage();
+  const values = releaseValues(packageJson, true);
   let tags: Record<string, string> = {};
 
   for (let attempt = 1; attempt <= 10; attempt += 1) {
     const registry = await readRegistry();
     tags = registry["dist-tags"] ?? {};
-    if (tags.latest === packageJson.version) {
-      if (tags.preview === packageJson.version) {
+    if (tags[values.dist_tag] === packageJson.version) {
+      if (values.dist_tag === "latest" && tags.preview === packageJson.version) {
         throw new Error(`${packageJson.version} must not be assigned to the preview tag.`);
       }
-      console.log(`Verified npm latest -> ${packageJson.version}; preview remains independent.`);
+      console.log(`Verified npm ${values.dist_tag} -> ${packageJson.version}.`);
       return;
     }
     if (attempt < 10) {
@@ -166,7 +177,7 @@ async function verify(): Promise<void> {
   }
 
   throw new Error(
-    `npm latest points to ${tags.latest ?? "nothing"}, expected ${packageJson.version}.`,
+    `npm ${values.dist_tag} points to ${tags[values.dist_tag] ?? "nothing"}, expected ${packageJson.version}.`,
   );
 }
 

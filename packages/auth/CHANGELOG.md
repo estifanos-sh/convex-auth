@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.0.5-alpha.0
+
+### Fixed
+
+- Restored zero-downtime compatibility for users and sessions created before
+  revocation epochs were introduced. Missing values continue to mean epoch
+  zero, while legacy sessions remain invalid after a user's epoch advances.
+- Restored the durable-session expiration check in authenticated context
+  resolution.
+
+### Migration
+
+- Added the component-owned, bounded `maintenance:backfillEpochs` migration.
+  After deploying this release, normalize legacy rows with
+  `npx convex run --component auth maintenance:backfillEpochs '{}'`. The
+  mutation paginates users and sessions and schedules its own continuation;
+  rerunning it is safe.
+
 ## 0.0.4
 
 ### Breaking
@@ -27,9 +45,8 @@
   raw document validators are no longer exported from the server entry point.
   Applications rely on the inferred `defineAuth` result, generated `api.auth`,
   handler-local `ctx.auth`, and the configured `auth.v` validators instead.
-- User and session epochs are required component data. The compatibility reads
-  for pre-epoch users and sessions were removed after existing deployments
-  migrated, so the component no longer carries a second legacy session model.
+- New users and sessions write explicit revocation epochs. Existing deployments
+  must retain compatibility reads until their pre-epoch rows are backfilled.
 
 ### New
 
