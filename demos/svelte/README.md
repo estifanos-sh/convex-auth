@@ -24,14 +24,8 @@ vp run build:demo
 
 The app uses `/demo` as its SvelteKit base path.
 
-## Deploy
+## Deployment
 
-```bash
-vp run deploy:demo
-```
-
-The GitHub workflow is manual-only and uses the isolated `demo` environment.
-Configure that environment with a deploy key for a dedicated Convex project
-before running it. The estifanos.sh landing/docs deployment is a different
-project and must never be used for this demo. Use `vp run deploy:demo:dev` for a
-development upload.
+This repository does not deploy the demo from CI. If the demo is hosted again,
+give it a dedicated Convex project and deployment workflow; it must not share
+the estifanos.sh landing/docs deployment.
