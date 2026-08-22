@@ -1,0 +1,126 @@
+{
+  "schemaVersion": 1,
+  "id": "convex-auth",
+  "title": "Convex Auth",
+  "description": "The unofficial Convex authentication solution.",
+  "repository": "estifanos-sh/convex-auth",
+  "installCommand": "pnpm add @estifanos-sh/convex-auth",
+  "startSlug": "/getting-started/installation",
+  "llmsDescription": "Authentication and authorization for Convex applications using @estifanos-sh/convex-auth.",
+  "hero": {
+    "eyebrow": "Authentication for Convex",
+    "status": "Open source",
+    "deck": "The unofficial Convex authentication solution.",
+    "paletteLabel": "Start a new Convex Auth project",
+    "paletteSlug": "/getting-started/providers",
+    "paletteText": "providers · sso · passkeys · keys",
+    "cards": [
+      {
+        "slug": "/getting-started/installation",
+        "title": "Installation",
+        "body": "Add the component, wire providers, and run the CLI."
+      },
+      {
+        "slug": "/getting-started/providers",
+        "title": "Providers",
+        "body": "Password, OAuth, magic links, passkeys, and anonymous auth."
+      },
+      {
+        "slug": "/connection/overview",
+        "title": "Enterprise SSO",
+        "body": "OIDC, SAML, SCIM, and connection policies for groups."
+      },
+      {
+        "slug": "/ssr/overview",
+        "title": "Server rendering",
+        "body": "Cookie refresh for Next.js, SvelteKit, and TanStack Start."
+      }
+    ]
+  },
+  "sidebar": [
+    {
+      "label": "Getting started",
+      "items": [
+        { "title": "Installation", "slug": "/getting-started/installation" },
+        { "title": "Providers", "slug": "/getting-started/providers" },
+        { "title": "Environment", "slug": "/getting-started/environment" }
+      ]
+    },
+    {
+      "label": "AI coding",
+      "items": [{ "title": "Agent Skills", "slug": "/ai/agent-skills" }]
+    },
+    {
+      "label": "Frameworks",
+      "items": [
+        { "title": "React", "slug": "/client/react" },
+        { "title": "Svelte", "slug": "/client/svelte" },
+        { "title": "Native apps", "slug": "/guides/native-apps" }
+      ]
+    },
+    {
+      "label": "Guides",
+      "items": [
+        { "title": "Authorization", "slug": "/guides/authorization" },
+        { "title": "One identity, every client", "slug": "/guides/multi-access" },
+        { "title": "Device flow", "slug": "/guides/device-flow" },
+        { "title": "Production", "slug": "/guides/production" }
+      ]
+    },
+    {
+      "label": "Integrations",
+      "items": [
+        { "title": "Context enrichment", "slug": "/integration/context" },
+        { "title": "Fluent Convex", "slug": "/integration/fluent-convex" },
+        { "title": "MCP server", "slug": "/guides/mcp-server" }
+      ]
+    },
+    {
+      "label": "Enterprise",
+      "items": [
+        { "title": "Overview", "slug": "/connection/overview" },
+        { "title": "Connections", "slug": "/connection/connection" },
+        { "title": "Policies", "slug": "/connection/policy" },
+        { "title": "OIDC", "slug": "/connection/oidc" },
+        { "title": "SAML", "slug": "/connection/saml" },
+        { "title": "SCIM", "slug": "/connection/scim" },
+        { "title": "Audit log", "slug": "/connection/audit" },
+        { "title": "Webhooks", "slug": "/connection/webhook" },
+        { "title": "Client RPC", "slug": "/connection/rpc" }
+      ]
+    },
+    {
+      "label": "Server rendering",
+      "items": [
+        { "title": "Overview", "slug": "/ssr/overview" },
+        { "title": "SvelteKit", "slug": "/ssr/sveltekit" },
+        { "title": "TanStack Start", "slug": "/ssr/tanstack" },
+        { "title": "Next.js", "slug": "/ssr/nextjs" }
+      ]
+    },
+    {
+      "label": "API reference",
+      "items": [
+        { "title": "Users", "slug": "/api/user" },
+        { "title": "Sessions", "slug": "/api/session" },
+        { "title": "Accounts", "slug": "/api/account" },
+        { "title": "Factors", "slug": "/api/factor" },
+        { "title": "Groups", "slug": "/api/group" },
+        { "title": "Members", "slug": "/api/member" },
+        { "title": "Invites", "slug": "/api/invite" },
+        { "title": "Keys", "slug": "/api/key" }
+      ]
+    },
+    {
+      "label": "Reference",
+      "items": [
+        { "title": "Configuration", "slug": "/reference/config" },
+        { "title": "Typed returns", "slug": "/reference/typed-returns" },
+        { "title": "Error codes", "slug": "/reference/errors" },
+        { "title": "CLI", "slug": "/reference/cli" },
+        { "title": "How Convex Auth works", "slug": "/reference/architecture" },
+        { "title": ".well-known", "slug": "/reference/well-known" }
+      ]
+    }
+  ]
+}

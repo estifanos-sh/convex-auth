@@ -105,11 +105,11 @@ vp run check
 vp test --run --project convex
 ```
 
-| Directory       | Description                                    |
-| --------------- | ---------------------------------------------- |
-| `packages/auth` | Auth component, server helpers, providers, CLI |
-| `tests/`        | Vitest test suite (convex + node projects)     |
-| `docs/`         | TanStack Start + Solid documentation site      |
+| Directory       | Description                                     |
+| --------------- | ----------------------------------------------- |
+| `packages/auth` | Auth component, server helpers, providers, CLI  |
+| `tests/`        | Vitest test suite (convex + node projects)      |
+| `docs/`         | Product documentation content and configuration |
 
 ## License
 

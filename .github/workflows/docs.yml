@@ -6,61 +6,15 @@ on:
     paths:
       - ".github/workflows/docs.yml"
       - "docs/**"
-      - "scripts/docs/**"
+  pull_request:
+    paths:
+      - ".github/workflows/docs.yml"
+      - "docs/**"
   workflow_dispatch:
-    inputs:
-      ref:
-        description: Git ref to validate and request for release
-        required: false
-        default: main
-        type: string
-
-concurrency:
-  group: convex-auth-docs-${{ github.ref }}
-  cancel-in-progress: true
 
 permissions:
   contents: read
 
 jobs:
   docs:
-    name: Validate and request release
-    runs-on: ubuntu-latest
-    env:
-      ESTIFANOS_SITE_TOKEN: ${{ secrets.ESTIFANOS_SITE_TOKEN }}
-    steps:
-      - name: Check out documentation source
-        uses: actions/checkout@v7
-        with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.sha }}
-          persist-credentials: false
-
-      - name: Set up Vite+
-        uses: voidzero-dev/setup-vp@v1
-        with:
-          node-version: 24.15.0
-          cache: true
-          run-install: |
-            args: ['--frozen-lockfile']
-
-      - name: Build and validate documentation
-        run: vp run build:docs
-
-      - name: Resolve immutable source
-        id: source
-        run: echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-
-      - name: Request landing-site release
-        if: env.ESTIFANOS_SITE_TOKEN != ''
-        env:
-          GH_TOKEN: ${{ env.ESTIFANOS_SITE_TOKEN }}
-          SOURCE_COMMIT: ${{ steps.source.outputs.commit }}
-        run: >-
-          gh workflow run deploy.yml
-          --repo estifanos-sh/estifanos-sh
-          --ref main
-          --field "convex_auth_sha=$SOURCE_COMMIT"
-
-      - name: Report missing release credential
-        if: env.ESTIFANOS_SITE_TOKEN == ''
-        run: echo "::warning::ESTIFANOS_SITE_TOKEN is not configured; documentation was validated but not promoted."
+    uses: estifanos-sh/estifanos-sh/.github/workflows/validate-docs.yml@main
