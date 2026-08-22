@@ -1,15 +1,51 @@
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import process from "node:process";
+
 import {
-  convexCmd,
   readConvexDeployment,
   deploymentTypeFromAdminKey,
   doesAlreadyMatchTemplate,
   isPreviewDeployKey,
+  parseCliOptions,
   resolveConvexSiteUrl,
+  stripTrailingLineBreak,
   stripDeploymentTypePrefix,
   templateToSource,
 } from "@estifanos-sh/convex-auth/cli/index";
+import { convexCommand, resolveConvexCliPath } from "@estifanos-sh/convex-auth/cli/convex";
 import { generateKeys } from "@estifanos-sh/convex-auth/cli/keys";
-import { expect, test, vi } from "vite-plus/test";
+import { afterEach, expect, test, vi } from "vite-plus/test";
+
+const temporaryProjects: string[] = [];
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  for (const projectPath of temporaryProjects.splice(0)) {
+    rmSync(projectPath, { recursive: true, force: true });
+  }
+});
+
+function createProject(): string {
+  const projectPath = mkdtempSync(path.join(tmpdir(), "convex-auth-cli-test-"));
+  temporaryProjects.push(projectPath);
+  writeFileSync(path.join(projectPath, "package.json"), "{}\n");
+  return projectPath;
+}
+
+function installConvexPackage(
+  projectPath: string,
+  packageJson: Record<string, unknown>,
+  binPath = "bin/main.js",
+): string {
+  const packagePath = path.join(projectPath, "node_modules", "convex");
+  const cliPath = path.join(packagePath, binPath);
+  mkdirSync(path.dirname(cliPath), { recursive: true });
+  writeFileSync(path.join(packagePath, "package.json"), JSON.stringify(packageJson));
+  writeFileSync(cliPath, "#!/usr/bin/env node\n");
+  return cliPath;
+}
 
 function expectProcessExitSilently(fn: () => void) {
   const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
@@ -40,12 +76,128 @@ test("templateToSource strips $$ markers", () => {
   expect(result).not.toContain("$$");
 });
 
-test("convexCmd launches the project-local Convex CLI without a package manager", () => {
-  const command = convexCmd("env", "get", "APP_URL");
+test("convexCommand launches the project-local Convex CLI without a package manager", () => {
+  const projectPath = createProject();
+  const cliPath = installConvexPackage(projectPath, {
+    name: "convex",
+    bin: { convex: "bin/main.js" },
+  });
+  const cwd = vi.spyOn(process, "cwd").mockReturnValue(projectPath);
+
+  const command = convexCommand("env", "set", "--", "SECRET", "value with spaces; $HOME");
 
   expect(command.file).toBe(process.execPath);
-  expect(command.args[0]).toMatch(/[/\\]convex[/\\]bin[/\\]main\.js$/);
-  expect(command.args.slice(1)).toEqual(["env", "get", "APP_URL"]);
+  expect(command.args[0]).toBe(realpathSync(cliPath));
+  expect(command.args.slice(1)).toEqual(["env", "set", "--", "SECRET", "value with spaces; $HOME"]);
+  cwd.mockRestore();
+});
+
+test("resolveConvexCliPath supports a string package bin", () => {
+  const projectPath = createProject();
+  const cliPath = installConvexPackage(
+    projectPath,
+    {
+      name: "convex",
+      bin: "bin/convex.js",
+    },
+    "bin/convex.js",
+  );
+
+  expect(resolveConvexCliPath(projectPath)).toBe(realpathSync(cliPath));
+});
+
+test("resolveConvexCliPath explains when Convex is not installed", () => {
+  const projectPath = createProject();
+
+  expect(() => resolveConvexCliPath(projectPath)).toThrow(
+    /Could not find the project-local "convex" package/,
+  );
+});
+
+test("resolveConvexCliPath rejects missing CLI metadata", () => {
+  const projectPath = createProject();
+  installConvexPackage(projectPath, { name: "convex" });
+
+  expect(() => resolveConvexCliPath(projectPath)).toThrow(
+    /does not expose a convex CLI executable/,
+  );
+});
+
+test("resolveConvexCliPath reports malformed package metadata", () => {
+  const projectPath = createProject();
+  const packagePath = path.join(projectPath, "node_modules", "convex");
+  mkdirSync(packagePath, { recursive: true });
+  writeFileSync(path.join(packagePath, "package.json"), "not json");
+
+  expect(() => resolveConvexCliPath(projectPath)).toThrow(
+    /Could not resolve the project-local Convex package metadata/,
+  );
+});
+
+test("resolveConvexCliPath rejects a missing CLI file", () => {
+  const projectPath = createProject();
+  const packagePath = path.join(projectPath, "node_modules", "convex");
+  mkdirSync(packagePath, { recursive: true });
+  writeFileSync(
+    path.join(packagePath, "package.json"),
+    JSON.stringify({ name: "convex", bin: { convex: "bin/missing.js" } }),
+  );
+
+  expect(() => resolveConvexCliPath(projectPath)).toThrow(
+    /points to a missing or invalid CLI file/,
+  );
+});
+
+test("resolveConvexCliPath rejects non-object package metadata", () => {
+  const projectPath = createProject();
+  const packagePath = path.join(projectPath, "node_modules", "convex");
+  mkdirSync(packagePath, { recursive: true });
+  writeFileSync(path.join(packagePath, "package.json"), "null");
+
+  expect(() => resolveConvexCliPath(projectPath)).toThrow(
+    /Could not resolve the project-local Convex package metadata/,
+  );
+});
+
+test("parseCliOptions uses setup as the default command", () => {
+  expect(
+    parseCliOptions(["node", "convex-auth", "--app-url", "http://localhost:3000"]),
+  ).toMatchObject({
+    command: "setup",
+    appUrl: "http://localhost:3000",
+  });
+});
+
+test("parseCliOptions parses a command and deployment flags", () => {
+  expect(
+    parseCliOptions([
+      "node",
+      "convex-auth",
+      "doctor",
+      "--deployment",
+      "dev:example-123",
+      "--skip-git-check",
+    ]),
+  ).toMatchObject({
+    command: "doctor",
+    deployment: "dev:example-123",
+    skipGitCheck: true,
+  });
+});
+
+test("parseCliOptions rejects unknown commands", () => {
+  expectProcessExitSilently(() => parseCliOptions(["node", "convex-auth", "unknown"]));
+});
+
+test("parseCliOptions rejects missing option values", () => {
+  expectProcessExitSilently(() => parseCliOptions(["node", "convex-auth", "--app-url"]));
+});
+
+test("stripTrailingLineBreak removes only the CLI output terminator", () => {
+  expect(stripTrailingLineBreak("value\n")).toBe("value");
+  expect(stripTrailingLineBreak("value\r\n")).toBe("value");
+  expect(stripTrailingLineBreak("value")).toBe("value");
+  expect(stripTrailingLineBreak("value\n\n")).toBe("value\n");
 });
 
 test("templateToSource returns unchanged string when no $$ markers", () => {
