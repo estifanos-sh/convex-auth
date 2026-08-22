@@ -3,7 +3,7 @@ import { Infer, v } from "convex/values";
 
 import * as Provider from "../crypto";
 import type { Hashed } from "../../shared/brand";
-import { maxSignInAttempts } from "../limits";
+import { credentialsSignInLimitIdentifier, maxSignInAttempts } from "../limits";
 import { LOG_LEVELS, log, maybeRedact } from "../log";
 import { Doc, MutationCtx } from "../types";
 import { withSpan } from "../utils/span";
@@ -27,6 +27,7 @@ export async function retrieveAccountWithCredentialsImpl(
   config: Provider.Config,
 ): Promise<ReturnType> {
   const { provider: providerId, account } = args;
+  const limitIdentifier = credentialsSignInLimitIdentifier(providerId, account.id);
   log(LOG_LEVELS.DEBUG, "retrieveAccountWithCredentialsImpl args:", {
     provider: providerId,
     account: { id: account.id, secret: maybeRedact(account.secret ?? "") },
@@ -36,6 +37,7 @@ export async function retrieveAccountWithCredentialsImpl(
     const begun = (await ctx.runMutation(config.component.account.beginCredentialsSignIn, {
       provider: providerId,
       providerAccountId: account.id,
+      limitIdentifier,
       maxAttemptsPerHour: maxSignInAttempts(config),
       reserveAttempt: account.secret !== undefined,
       includeTotp: false,
@@ -63,6 +65,7 @@ export async function retrieveAccountWithCredentialsImpl(
       }
       await ctx.runMutation(config.component.account.completeCredentialsSignIn, {
         accountId: existingAccount._id,
+        limitIdentifier,
         issueSession: false,
         generateTokens: false,
         sessionExpirationTime: 0,

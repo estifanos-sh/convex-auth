@@ -7,7 +7,6 @@ import type { JWTVerifyGetKey, JWTVerifyOptions } from "jose";
 import type { AuthComponentApi } from "../component/api";
 
 import { assertSafeIdpFetchUrl, assertSafeIdpHost } from "../../shared/fetch/guard";
-import { log } from "../log";
 import { normalizeOAuthTokenResponse } from "../oauth/normalize";
 import type {
   OIDCClaimMapping,
@@ -133,8 +132,8 @@ function resolveOidcAuthMethod(
     : "client_secret_post";
 }
 
-function normalizeOidcIssuer(value: unknown): string {
-  return typeof value === "string" ? value.replace(/\/$/, "") : "";
+function oidcIssuer(value: unknown): string {
+  return typeof value === "string" ? value : "";
 }
 
 /**
@@ -163,7 +162,6 @@ export type OidcConfigShape = {
   };
   security?: {
     clockToleranceSeconds?: number;
-    strictIssuer?: boolean;
   };
   profile?: {
     mapping?: OIDCClaimMapping;
@@ -356,7 +354,7 @@ async function userInfoProfile(opts: {
  * attempts to override reserved OAuth parameters. Token validation requires the
  * nonce, verifies the ID token against the JWKS (or the client secret for
  * advertised HS* algorithms), and enforces the audience, the issuer (against
- * the configured/discovered issuer set; exact match when `strictIssuer`), the
+ * exact configured issuer, the
  * nonce, and `azp` when present. UserInfo results are rejected if their subject
  * disagrees with the ID token's.
  *
@@ -381,25 +379,14 @@ export async function createGroupConnectionOidcProvider(
     componentConnection,
     config,
   );
-  const discoveredIssuer = normalizeOidcIssuer(discovery.issuer);
+  const discoveredIssuer = oidcIssuer(discovery.issuer);
   const expectedIssuer =
     typeof discoveryConfig.issuer === "string"
-      ? normalizeOidcIssuer(discoveryConfig.issuer)
+      ? oidcIssuer(discoveryConfig.issuer)
       : discoveredIssuer;
-  const strictIssuer = security.strictIssuer === true;
   if (typeof discoveryConfig.issuer === "string" && expectedIssuer !== discoveredIssuer) {
-    if (strictIssuer) {
-      throw new Error(
-        `Configured OIDC issuer mismatch. configured=${expectedIssuer} discovery=${discoveredIssuer}`,
-      );
-    }
-    log(
-      "WARN",
-      "Configured OIDC issuer differs from discovery issuer; accepting both for token verification.",
-      {
-        configuredIssuer: expectedIssuer,
-        discoveryIssuer: discoveredIssuer,
-      },
+    throw new Error(
+      `Configured OIDC issuer mismatch. configured=${expectedIssuer} discovery=${discoveredIssuer}`,
     );
   }
   const authorizationEndpoint = discovery.authorization_endpoint as string;
@@ -463,9 +450,6 @@ export async function createGroupConnectionOidcProvider(
   if (clockToleranceSeconds < 0 || clockToleranceSeconds > 300) {
     throw new Error("OIDC clockToleranceSeconds must be between 0 and 300.");
   }
-  const expectedIssuers = strictIssuer
-    ? [expectedIssuer]
-    : Array.from(new Set([expectedIssuer, discoveredIssuer]));
   const jwks = getOidcJwks(jwksUri, runtimeOrigin, externalHost, oidcFetch);
   let verifiedClaims: Record<string, unknown> | null = null;
   let verifiedProfile: (OAuthProfile & { emailVerified?: boolean }) | null = null;
@@ -631,12 +615,11 @@ export async function createGroupConnectionOidcProvider(
         throw new Error("OIDC ID token payload is not an object.");
       }
       const tokenIssuerRaw = typeof payload.iss === "string" ? payload.iss : undefined;
-      const tokenIssuer =
-        typeof tokenIssuerRaw === "string" ? tokenIssuerRaw.replace(/\/$/, "") : undefined;
+      const tokenIssuer = typeof tokenIssuerRaw === "string" ? tokenIssuerRaw : undefined;
 
-      if (!tokenIssuer || !expectedIssuers.includes(tokenIssuer)) {
+      if (!tokenIssuer || tokenIssuer !== expectedIssuer) {
         throw new Error(
-          `OIDC token issuer mismatch. Received: ${tokenIssuer ?? "<missing>"}. Expected one of: ${expectedIssuers.join(", ")}`,
+          `OIDC token issuer mismatch. Received: ${tokenIssuer ?? "<missing>"}. Expected: ${expectedIssuer}`,
         );
       }
 

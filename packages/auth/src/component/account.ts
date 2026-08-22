@@ -24,6 +24,7 @@ export const beginCredentialsSignIn = mutation({
   args: {
     provider: v.string(),
     providerAccountId: v.string(),
+    limitIdentifier: v.string(),
     maxAttemptsPerHour: v.number(),
     reserveAttempt: v.boolean(),
     includeTotp: v.boolean(),
@@ -39,6 +40,14 @@ export const beginCredentialsSignIn = mutation({
     }),
   ),
   handler: async (ctx, args) => {
+    const limit = args.reserveAttempt
+      ? await recordSignInLimit(ctx, {
+          identifier: args.limitIdentifier,
+          maxAttemptsPerHour: args.maxAttemptsPerHour,
+        })
+      : { ok: true as const, retryAfter: undefined };
+    if (!limit.ok) return { status: "limited" as const };
+
     const account = await ctx.db
       .query("Account")
       .withIndex("provider_account_id", (q) =>
@@ -47,7 +56,7 @@ export const beginCredentialsSignIn = mutation({
       .unique();
     if (account === null) return { status: "invalid" as const };
 
-    const [user, totp, limit] = await Promise.all([
+    const [user, totp] = await Promise.all([
       ctx.db.get("User", account.userId),
       args.includeTotp
         ? ctx.db
@@ -57,14 +66,7 @@ export const beginCredentialsSignIn = mutation({
             )
             .first()
         : Promise.resolve(null),
-      args.reserveAttempt
-        ? recordSignInLimit(ctx, {
-            identifier: account._id,
-            maxAttemptsPerHour: args.maxAttemptsPerHour,
-          })
-        : Promise.resolve({ ok: true as const, retryAfter: undefined }),
     ]);
-    if (!limit.ok) return { status: "limited" as const };
     if (user === null) return { status: "invalid" as const };
     return {
       status: "ready" as const,
@@ -79,6 +81,7 @@ export const beginCredentialsSignIn = mutation({
 export const completeCredentialsSignIn = mutation({
   args: {
     accountId: v.id("Account"),
+    limitIdentifier: v.string(),
     issueSession: v.boolean(),
     generateTokens: v.boolean(),
     replaceSessionId: v.optional(v.id("Session")),
@@ -99,7 +102,7 @@ export const completeCredentialsSignIn = mutation({
   handler: async (ctx, args) => {
     const account = await ctx.db.get("Account", args.accountId);
     if (account === null) return { status: "rejected" as const };
-    await resetSignInLimit(ctx, account._id);
+    await resetSignInLimit(ctx, args.limitIdentifier);
     if (!args.issueSession) return { status: "reset" as const };
 
     const created = await createSessionRows(ctx, {

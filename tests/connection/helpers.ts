@@ -73,7 +73,7 @@ export function getInteropRuntime(): InteropRuntime {
 }
 
 export function normalizeRuntimeIssuer(value: string) {
-  return `${trimTrailingSlash(value)}/`;
+  return trimTrailingSlash(value);
 }
 
 export function parseSetCookieHeaders(response: {
@@ -398,7 +398,6 @@ export async function groupOidcConfigureRpc(
     };
     security?: {
       clockToleranceSeconds?: number;
-      strictIssuer?: boolean;
     };
     profile?: {
       mapping?: {

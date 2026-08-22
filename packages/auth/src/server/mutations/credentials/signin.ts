@@ -13,7 +13,7 @@ import { GenericId, Infer, v } from "convex/values";
 import * as Provider from "../../crypto";
 import type { Hashed } from "../../../shared/brand";
 import { queueAuthEvent } from "../../events";
-import { maxSignInAttempts } from "../../limits";
+import { credentialsSignInLimitIdentifier, maxSignInAttempts } from "../../limits";
 import { LOG_LEVELS, log, maybeRedact } from "../../log";
 import {
   buildSessionIdentity,
@@ -129,6 +129,7 @@ async function credentialsSignInInner(
   config: Provider.Config,
 ): Promise<CredentialsSignInResult> {
   const { provider: providerId, account, generateTokens, requireVerifiedEmail, enforceTotp } = args;
+  const limitIdentifier = credentialsSignInLimitIdentifier(providerId, account.id);
   log(LOG_LEVELS.DEBUG, "credentialsSignInImpl args:", {
     provider: providerId,
     account: { id: account.id, secret: maybeRedact(account.secret) },
@@ -140,6 +141,7 @@ async function credentialsSignInInner(
   const begun = (await ctx.runMutation(config.component.account.beginCredentialsSignIn, {
     provider: providerId,
     providerAccountId: account.id,
+    limitIdentifier,
     maxAttemptsPerHour: maxSignInAttempts(config),
     reserveAttempt: true,
     includeTotp: enforceTotp,
@@ -186,6 +188,7 @@ async function credentialsSignInInner(
   const complete = async (issueSession: boolean) =>
     (await ctx.runMutation(config.component.account.completeCredentialsSignIn, {
       accountId: existingAccount._id,
+      limitIdentifier,
       issueSession,
       generateTokens,
       replaceSessionId: issueSession ? ((await getAuthSessionId(ctx)) ?? undefined) : undefined,

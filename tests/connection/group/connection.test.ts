@@ -383,9 +383,69 @@ test("group connection OIDC validates HS256 ID tokens with client secret", async
         { nonce },
       ),
     ).resolves.toBeUndefined();
+
+    const trailingSlashIssuerToken = await new SignJWT({
+      sub: "user-1",
+      nonce,
+      email: "user@example.com",
+    })
+      .setProtectedHeader({ alg: "HS256" })
+      .setIssuer(`${issuer}/`)
+      .setAudience(clientId)
+      .setIssuedAt(now)
+      .setExpirationTime(now + 300)
+      .sign(new TextEncoder().encode(clientSecret));
+
+    await expect(
+      oauthConfig.validateTokens?.(
+        { idToken: trailingSlashIssuerToken, accessToken: "access-token" },
+        { nonce },
+      ),
+    ).rejects.toThrow(/OIDC token issuer mismatch/);
   } finally {
     vi.unstubAllGlobals();
   }
+});
+
+test("group connection OIDC rejects a configured issuer that discovery does not attest", async () => {
+  const configuredIssuer = "https://idp.example.com/tenant-a";
+  const discoveredIssuer = "https://idp.example.com/tenant-b";
+  const discoveryUrl = "https://idp.example.com/.well-known/openid-configuration";
+
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            issuer: discoveredIssuer,
+            authorization_endpoint: "https://idp.example.com/authorize",
+            token_endpoint: "https://idp.example.com/token",
+            jwks_uri: "https://idp.example.com/jwks",
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+    ),
+  );
+
+  const mockCtx = {
+    runAction: async (_ref: unknown, args: { url: string }) => {
+      const response = await fetch(args.url);
+      return await response.json();
+    },
+  };
+
+  await expect(
+    createGroupConnectionOidcProvider(
+      mockCtx as never,
+      { cache: { oidcDiscovery: null } } as never,
+      {
+        discovery: { issuer: configuredIssuer, discoveryUrl },
+        client: { id: "test-client-id", secret: "test-client-secret" },
+      },
+      "https://app.example.com/connections/example/oidc/callback",
+    ),
+  ).rejects.toThrow(/Configured OIDC issuer mismatch/);
 });
 
 test("group connection OIDC profile refuses to run before the id_token is verified", async () => {
