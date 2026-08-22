@@ -5,42 +5,13 @@
   "description": "The unofficial Convex authentication solution.",
   "repository": "estifanos-sh/convex-auth",
   "installCommand": "pnpm add @estifanos-sh/convex-auth",
-  "startSlug": "/getting-started/installation",
+  "startSlug": "/getting-started/overview",
   "llmsDescription": "Authentication and authorization for Convex applications using @estifanos-sh/convex-auth.",
-  "hero": {
-    "eyebrow": "Authentication for Convex",
-    "status": "Open source",
-    "deck": "The unofficial Convex authentication solution.",
-    "paletteLabel": "Start a new Convex Auth project",
-    "paletteSlug": "/getting-started/providers",
-    "paletteText": "providers · sso · passkeys · keys",
-    "cards": [
-      {
-        "slug": "/getting-started/installation",
-        "title": "Installation",
-        "body": "Add the component, wire providers, and run the CLI."
-      },
-      {
-        "slug": "/getting-started/providers",
-        "title": "Providers",
-        "body": "Password, OAuth, magic links, passkeys, and anonymous auth."
-      },
-      {
-        "slug": "/connection/overview",
-        "title": "Enterprise SSO",
-        "body": "OIDC, SAML, SCIM, and connection policies for groups."
-      },
-      {
-        "slug": "/ssr/overview",
-        "title": "Server rendering",
-        "body": "Cookie refresh for Next.js, SvelteKit, and TanStack Start."
-      }
-    ]
-  },
   "sidebar": [
     {
       "label": "Getting started",
       "items": [
+        { "title": "Overview", "slug": "/getting-started/overview" },
         { "title": "Installation", "slug": "/getting-started/installation" },
         { "title": "Providers", "slug": "/getting-started/providers" },
         { "title": "Environment", "slug": "/getting-started/environment" }
