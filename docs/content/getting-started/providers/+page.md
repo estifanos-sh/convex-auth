@@ -357,6 +357,9 @@ or store a recovery transaction in the application schema. Those approaches
 split one revocation boundary into several systems and are precisely what the
 credential continuation owns.
 
+See [`auth.provider`](/api/provider) for the lower-level trusted server
+composition methods and when to use them instead of the credential helpers.
+
 ## Password
 
 ```ts

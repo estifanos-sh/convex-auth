@@ -37,9 +37,17 @@ The wizard configures `APP_URL`, generates signing and encryption keys, updates
 providers, exports the client actions, and supplies the server facade used by
 protected functions.
 
-The CLI expects typed deployment identifiers such as `dev:my-deployment`,
-`prod:my-deployment`, or `preview:my-deployment` for Convex Cloud. Use `--url`
-for explicit or self-hosted targets.
+The CLI reads the typed `CONVEX_DEPLOYMENT` value written by Convex, such as
+`dev:my-deployment`, `prod:my-deployment`, or `preview:my-deployment`, when no
+target flag is supplied. For an explicit `--deployment`, use Convex's canonical
+selector vocabulary: a deployment name such as `my-deployment`, a reference
+such as `dev/alice`, `dev`, `prod`, or `local`, or a qualified
+`project-slug:reference` / `team-slug:project-slug:reference` selector.
+
+Selectors such as `dev` or `dev/alice` identify a deployment through the Convex
+CLI but do not contain its HTTP-actions hostname. Pass `--site-url` when
+`doctor` or `urls` cannot derive that hostname. Use `--url` for an explicit
+deployment URL or a self-hosted target.
 
 ## Options
 

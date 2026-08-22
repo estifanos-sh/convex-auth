@@ -114,6 +114,10 @@ at raw HTTP boundaries, and `auth.http()` mounts the authentication protocol
 routes. When the `connection()` provider is configured, `auth.connection`
 provides the private group SSO administration facade.
 
+See [`auth.provider`](/api/provider) for trusted server-side provider
+composition and [`auth.request`](/api/request) for HTTP mounting, route
+descriptors, mixed request authentication, API-key routes, and MCP registration.
+
 The returned `auth.v` validators describe public read results for Convex
 `returns:` validation and carry configured extension fields. Derive a named
 document type from a configured validator only when a separate annotation is
