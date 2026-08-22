@@ -92,8 +92,6 @@ export const vGroupConnectionAccountLinkingPolicy = v.union(
   v.literal("sameConnection"),
 );
 
-const vGroupConnectionScimReuseUserPolicy = v.union(v.literal("externalId"), v.literal("none"));
-
 const vGroupConnectionJitProvisioningMode = v.union(
   v.literal("off"),
   v.literal("createUser"),
@@ -109,11 +107,7 @@ export const vGroupConnectionProfileUpdateMode = v.union(
   v.literal("always"),
 );
 
-const vGroupConnectionProvisioningAuthority = v.union(
-  v.literal("app"),
-  v.literal("connection"),
-  v.literal("scim"),
-);
+const vGroupConnectionProvisioningAuthority = v.union(v.literal("app"), v.literal("scim"));
 
 const vGroupConnectionGroupSyncMode = v.union(v.literal("ignore"), v.literal("sync"));
 
@@ -144,9 +138,6 @@ export const vGroupConnectionPolicy = v.object({
       updateProfileOnLogin: vGroupConnectionProfileUpdateMode,
       updateProfileFromScim: vGroupConnectionProfileUpdateMode,
       authority: vGroupConnectionProvisioningAuthority,
-    }),
-    scimReuse: v.object({
-      user: vGroupConnectionScimReuseUserPolicy,
     }),
     jit: v.object({
       mode: vGroupConnectionJitProvisioningMode,
@@ -815,7 +806,7 @@ export const vGroupConnectionScimIdentityDoc = v.object({
   connectionId: v.id(TABLES.GroupConnection),
   groupId: v.id(TABLES.Group),
   resourceType: vScimResourceType,
-  externalId: v.string(),
+  externalId: v.optional(v.string()),
   userId: v.optional(v.id(TABLES.User)),
   mappedGroupId: v.optional(v.id(TABLES.Group)),
   lastProvisionedAt: v.optional(v.number()),

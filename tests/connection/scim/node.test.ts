@@ -472,20 +472,20 @@ test("SCIM → Convex: direct SCIM server protocol validation", async () => {
   });
   expect(groupRetryRes.status).toBe(200);
   expect(groupRetryRes.body.id).toBe(scimGroupId);
-  expect(groupRetryRes.body.members?.map((member) => member.value)).toEqual([userId]);
+  expect(groupRetryRes.body.members?.map((member) => member.value)).toEqual([secondUserId]);
 
   const groupGetRes = await scimRequest<ScimGroup>(base, `/Groups/${scimGroupId}`, scimToken);
   expect(groupGetRes.status).toBe(200);
   expect(groupGetRes.body.meta?.resourceType).toBe("Group");
   expect(groupGetRes.body.meta?.location).toBe(`${base}/Groups/${scimGroupId}`);
   expect(groupGetRes.headers.get("location")).toBe(`${base}/Groups/${scimGroupId}`);
-  expect(groupGetRes.body.members?.map((member) => member.value)).toEqual([userId]);
+  expect(groupGetRes.body.members?.map((member) => member.value)).toEqual([secondUserId]);
 
   const groupAddRes = await scimRequest<ScimGroup>(base, `/Groups/${scimGroupId}`, scimToken, {
     method: "PATCH",
     body: {
       schemas: ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
-      Operations: [{ op: "add", path: "members", value: [{ value: secondUserId }] }],
+      Operations: [{ op: "add", path: "members", value: [{ value: userId }] }],
     },
   });
   expect(groupAddRes.status).toBe(200);

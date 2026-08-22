@@ -156,7 +156,7 @@ app RPC.
 Today `auth.connection.policy` covers:
 
 The policy covers OIDC and SAML account linking, user creation, profile
-authority, reuse of SCIM identities, just-in-time user and membership creation,
+authority, directory-managed identity lifecycle, just-in-time user and membership creation,
 mapping external groups and roles into membership `roleIds`, and SCIM
 deprovisioning. These choices belong together because they all decide how an
 external identity changes the local auth model.
@@ -194,6 +194,10 @@ const auth = defineAuth(components.auth, {
 
 These hooks run on normalized profile objects rather than raw OIDC claims, SAML
 attributes, or SCIM request bodies.
+
+`afterProvision` runs after the provisioning mutation commits. It is a
+best-effort notification: failures are logged without changing the successful
+SCIM response, so handlers must be idempotent.
 
 Use hooks when your app needs small provisioning customizations without pushing
 tenant-specific logic down into protocol config.

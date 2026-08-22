@@ -131,6 +131,25 @@ export function createGroupConnectionDomain<TDeps extends DomainDeps>(deps: TDep
     config,
     loadGroupPolicyOrThrow,
     validateGroupConnectionPolicy,
+    hasActiveScimConnection: async (ctx, groupId) => {
+      let cursor: string | null = null;
+      let isDone = false;
+      while (!isDone) {
+        const page = await listGroupConnections(ctx, config.component.connection, {
+          where: { groupId, status: "active" },
+          paginationOpts: { cursor, numItems: 200 },
+        });
+        const configs = await Promise.all(
+          page.page.map((connection) =>
+            getScimConfigByConnection(ctx, config.component.connection, connection._id),
+          ),
+        );
+        if (configs.some((scimConfig) => scimConfig?.status === "active")) return true;
+        isDone = page.isDone;
+        if (!isDone) cursor = page.continueCursor;
+      }
+      return false;
+    },
     emitGroupAuthEvent,
   });
 

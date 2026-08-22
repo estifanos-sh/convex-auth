@@ -4,15 +4,15 @@ import { serialize as serializeCookie } from "cookie";
 
 import { configDefaults } from "../config";
 import {
-  getScimIdentity,
   getScimIdentityByConnectionAndUser,
   getScimIdentityByMappedGroup,
-  insertUser,
   listScimIdentitiesByConnection,
   provisionScimUser,
-  removeScimIdentity,
-  updateUser,
-  upsertScimIdentity,
+  provisionScimGroup,
+  revokeScimGroup,
+  revokeScimUser,
+  updateScimGroup,
+  updateScimUser,
   type ScimIdentityRecord,
 } from "../contract";
 import { redirectToParamCookie, useRedirectToParam } from "../cookies";
@@ -53,7 +53,6 @@ import {
 import {
   decodeGroupOidcState,
   encodeGroupOidcState,
-  groupOidcProviderId,
   groupSamlProviderId,
   SCIM_GROUP_SCHEMA_ID,
   SCIM_USER_SCHEMA_ID,
@@ -74,15 +73,6 @@ type AuthRuntime = {
         paginationOpts: { numItems: number; cursor: string | null };
       },
     ): Promise<{ page: Array<Record<string, unknown>>; isDone: boolean; continueCursor: string }>;
-    create(
-      ctx: GenericActionCtx<GenericDataModel>,
-      args: { data: { name: string; parentGroupId: string; type: string } },
-    ): Promise<string>;
-    update(
-      ctx: GenericActionCtx<GenericDataModel>,
-      args: { id: string; patch: Record<string, unknown> },
-    ): Promise<null>;
-    remove(ctx: GenericActionCtx<GenericDataModel>, args: { id: string }): Promise<null>;
   };
   member: {
     list(
@@ -96,26 +86,6 @@ type AuthRuntime = {
       isDone: boolean;
       continueCursor: string;
     }>;
-    create(
-      ctx: GenericActionCtx<GenericDataModel>,
-      args: {
-        data: {
-          groupId: string;
-          userId: string;
-          roleIds: string[];
-          status: string;
-        };
-      },
-    ): Promise<string>;
-    update(
-      ctx: GenericActionCtx<GenericDataModel>,
-      args: { id: string; patch: Record<string, unknown> },
-    ): Promise<null>;
-    remove(ctx: GenericActionCtx<GenericDataModel>, args: { id: string }): Promise<null>;
-    get(
-      ctx: GenericActionCtx<GenericDataModel>,
-      args: { groupId: string; userId: string },
-    ): Promise<{ membership: { _id: string } | null }>;
   };
 };
 
@@ -270,6 +240,15 @@ const SCIM_FILTER_OPERATORS = {
   sw: (values, filterValue) => values.some((value) => value.startsWith(filterValue)),
   ew: (values, filterValue) => values.some((value) => value.endsWith(filterValue)),
 } satisfies Record<ScimFilterOperator, (values: string[], filterValue: string) => boolean>;
+
+/** @internal Post-commit SCIM notifications must never make a committed write retryable. */
+export async function notifyScimAfterProvision(notify: (() => Promise<unknown>) | undefined) {
+  try {
+    await notify?.();
+  } catch (error) {
+    console.error("[auth] SCIM afterProvision hook failed after commit", error);
+  }
+}
 
 export function addGroupHttpRuntime(deps: GroupHttpRuntimeDeps) {
   if (!deps.hasConnection) {
@@ -606,34 +585,6 @@ export function addGroupHttpRuntime(deps: GroupHttpRuntimeDeps) {
       return [String(value)];
     }
     return [];
-  };
-
-  const applyUserProvisioningPatch = (args: {
-    currentUser: Record<string, unknown>;
-    nextUser: Record<string, unknown>;
-    policy: {
-      authority?: "app" | "connection" | "scim";
-      updateProfileOnLogin?: "never" | "missing" | "always";
-      updateProfileFromScim?: "never" | "missing" | "always";
-    };
-    source: "scim";
-  }) => {
-    const mode = args.policy.updateProfileFromScim ?? "always";
-    if (mode === "never") {
-      return {};
-    }
-    if (mode === "always") {
-      return args.nextUser;
-    }
-    return Object.fromEntries(
-      Object.entries(args.nextUser).filter(([key, value]) => {
-        if (value === undefined) {
-          return false;
-        }
-        const current = args.currentUser[key];
-        return current === undefined || current === null || current === "";
-      }),
-    );
   };
 
   const filterScimCollection = <T>(
@@ -1068,34 +1019,6 @@ export function addGroupHttpRuntime(deps: GroupHttpRuntimeDeps) {
         return out;
       };
 
-      const userInConnectionScope = async (state: ScimState, userId: string) => {
-        const identity = await getScimIdentityByConnectionAndUser(
-          state.ctx,
-          config.component.connection,
-          { connectionId: state.connection._id, userId },
-        );
-        if (identity) {
-          return true;
-        }
-        const existing = (
-          await auth.member.list(state.ctx, {
-            where: { groupId: state.connection.groupId, userId },
-            paginationOpts: { numItems: 1, cursor: null },
-          })
-        ).page[0];
-        return existing !== undefined;
-      };
-
-      const firstInvalidScimMember = async (state: ScimState, userIds: Iterable<string>) => {
-        for (const userId of userIds) {
-          const user = await auth.user.get(state.ctx, { id: userId });
-          if (!user || !(await userInConnectionScope(state, userId))) {
-            return userId;
-          }
-        }
-        return null;
-      };
-
       const handleUsersGet: ScimHandler = async (state) => {
         if (state.parsedPath.resourceId) {
           const userId = state.parsedPath.resourceId;
@@ -1228,14 +1151,6 @@ export function addGroupHttpRuntime(deps: GroupHttpRuntimeDeps) {
             profile: extracted as Record<string, unknown>,
           })) as typeof extracted | undefined) ?? extracted;
         const externalId = provisionProfile.externalId;
-        // Provider under which this connection links SSO accounts. The SCIM
-        // externalId is the providerAccountId, so (providerId, externalId) is
-        // the Account's natural key — used both to resolve an already-
-        // provisioned user below and to dedup the Account insert.
-        const providerId =
-          state.connection.protocol === "oidc"
-            ? groupOidcProviderId(state.connection._id)
-            : groupSamlProviderId(state.connection._id);
         const provisionedRoleIds = resolveProvisionedRoleIds({
           policy: state.policy,
           groups: provisionProfile.groups,
@@ -1259,88 +1174,31 @@ export function addGroupHttpRuntime(deps: GroupHttpRuntimeDeps) {
             : {}),
           ...(provisionProfile.extend ? { extend: provisionProfile.extend } : {}),
         };
-        const provisioned = externalId
-          ? await provisionScimUser(state.ctx, config.component.connection, {
-              connectionId: state.connection._id,
-              groupId: state.connection.groupId,
-              externalId,
-              provider: providerId,
-              userData,
-              active: provisionProfile.active !== false,
-              raw: body,
-              lastProvisionedAt: Date.now(),
-            })
-          : {
-              userId: await insertUser(state.ctx, config.component.user, userData),
-              created: true,
-            };
-        const { userId, created } = provisioned;
-        const existingUser = created ? null : await auth.user.get(state.ctx, { id: userId });
-        if (!created && existingUser === null) {
-          throw new ConvexError({
-            code: ErrorCode.ACCOUNT_NOT_FOUND,
-            message: "The SCIM identity references a user that no longer exists.",
-          });
-        }
-        if (existingUser) {
-          const nextUserData: Record<string, unknown> = {
-            name: provisionProfile.name,
-            firstName: provisionProfile.firstName,
-            lastName: provisionProfile.lastName,
-            email: provisionProfile.email,
-            phone: provisionProfile.phone,
-            ...(provisionProfile.extend ? { extend: provisionProfile.extend } : {}),
-          };
-          if (typeof provisionProfile.email === "string") {
-            nextUserData.emailVerificationTime = Date.now();
-          }
-          if (typeof provisionProfile.phone === "string") {
-            nextUserData.phoneVerificationTime = Date.now();
-          }
-          const patchData = applyUserProvisioningPatch({
-            currentUser: existingUser as Record<string, unknown>,
-            nextUser: nextUserData,
-            policy: state.policy.provisioning.user,
-            source: "scim",
-          });
-          if (Object.keys(patchData).length > 0) {
-            await updateUser(state.ctx, config.component.user, {
-              userId,
-              patch: patchData,
-            });
-          }
-        }
-        const resolution = await auth.member.get(state.ctx, {
-          groupId: state.connection.groupId,
-          userId,
+        const provisioned = await provisionScimUser(state.ctx, config.component.connection, {
+          connectionId: state.connection._id,
+          externalId,
+          userData,
+          profileUpdate: state.policy.provisioning.user.updateProfileFromScim,
+          roleIds: provisionedRoleIds,
+          active: provisionProfile.active !== false,
+          raw: body,
+          lastProvisionedAt: Date.now(),
         });
-        if (resolution.membership) {
-          await auth.member.update(state.ctx, {
-            id: resolution.membership._id,
-            patch: { status: body.active === false ? "inactive" : "active" },
-          });
-        } else {
-          await auth.member.create(state.ctx, {
-            data: {
-              groupId: state.connection.groupId,
-              userId,
-              roleIds: provisionedRoleIds,
-              status: provisionProfile.active === false ? "inactive" : "active",
-            },
-          });
-        }
+        const { userId, created } = provisioned;
         await state.recordScimEvent(
           created ? "connection.scim.user.provisioned" : "connection.scim.user.updated",
           "success",
           { type: "user", id: userId },
         );
         const createdUser = await auth.user.get(state.ctx, { id: userId });
-        await config.connection?.hooks?.afterProvision?.({
-          protocol: "scim",
-          connectionId: state.connection._id,
-          profile: provisionProfile as Record<string, unknown>,
-          userId,
-        });
+        await notifyScimAfterProvision(async () =>
+          config.connection?.hooks?.afterProvision?.({
+            protocol: "scim",
+            connectionId: state.connection._id,
+            profile: provisionProfile as Record<string, unknown>,
+            userId,
+          }),
+        );
         const location = `${state.url.origin}${state.url.pathname}/${userId}`;
         return scimJson(
           serializeScimUser({
@@ -1371,11 +1229,7 @@ export function addGroupHttpRuntime(deps: GroupHttpRuntimeDeps) {
             userId,
           },
         );
-        const existingMembership = await auth.member.get(state.ctx, {
-          groupId: state.connection.groupId,
-          userId,
-        });
-        if (!existingIdentity && !existingMembership.membership) {
+        if (!existingIdentity) {
           return scimError(404, "notFound", "User not found.");
         }
         const body = (await readScimJson(state.request)) as ScimBody;
@@ -1466,39 +1320,18 @@ export function addGroupHttpRuntime(deps: GroupHttpRuntimeDeps) {
             unsupportedScimPatch();
           }
         }
-        const nextPatchData = applyUserProvisioningPatch({
-          currentUser: existingUser as Record<string, unknown>,
-          nextUser: patchData,
-          policy: state.policy.provisioning.user,
-          source: "scim",
-        });
-        if (Object.keys(nextPatchData).length > 0) {
-          await updateUser(state.ctx, config.component.user, {
-            userId,
-            patch: nextPatchData,
-          });
-        }
-        const resolution = existingMembership;
-        if (resolution.membership) {
-          await auth.member.update(state.ctx, {
-            id: resolution.membership._id,
-            patch: {
-              roleIds: resolveProvisionedRoleIds({
-                policy: state.policy,
-                groups: provisionProfile.groups,
-                roles: provisionProfile.roles,
-              }),
-              status:
-                provisionProfile.active === false || nextActive === false ? "inactive" : "active",
-            },
-          });
-        }
-        await upsertScimIdentity(state.ctx, config.component.connection, {
+        const resolvedExternalId = externalId ?? existingIdentity.externalId;
+        await updateScimUser(state.ctx, config.component.connection, {
           connectionId: state.connection._id,
-          groupId: state.connection.groupId,
-          resourceType: "user",
-          externalId: externalId ?? existingIdentity?.externalId ?? userId,
           userId,
+          externalId: resolvedExternalId,
+          userData: patchData,
+          profileUpdate: state.policy.provisioning.user.updateProfileFromScim,
+          roleIds: resolveProvisionedRoleIds({
+            policy: state.policy,
+            groups: provisionProfile.groups,
+            roles: provisionProfile.roles,
+          }),
           active: provisionProfile.active !== false && nextActive !== false,
           raw: body,
           lastProvisionedAt: Date.now(),
@@ -1508,12 +1341,14 @@ export function addGroupHttpRuntime(deps: GroupHttpRuntimeDeps) {
           id: userId,
         });
         const updatedUser = await auth.user.get(state.ctx, { id: userId });
-        await config.connection?.hooks?.afterProvision?.({
-          protocol: "scim",
-          connectionId: state.connection._id,
-          profile: provisionProfile as Record<string, unknown>,
-          userId,
-        });
+        await notifyScimAfterProvision(async () =>
+          config.connection?.hooks?.afterProvision?.({
+            protocol: "scim",
+            connectionId: state.connection._id,
+            profile: provisionProfile as Record<string, unknown>,
+            userId,
+          }),
+        );
         const location = `${state.url.origin}${state.url.pathname}`;
         return scimJson(
           serializeScimUser({
@@ -1543,16 +1378,11 @@ export function addGroupHttpRuntime(deps: GroupHttpRuntimeDeps) {
         if (!identity) {
           return scimError(404, "notFound", "User not found.");
         }
-        const resolution = await auth.member.get(state.ctx, {
-          groupId: state.connection.groupId,
+        const { revoked } = await revokeScimUser(state.ctx, config.component.connection, {
+          connectionId: state.connection._id,
           userId,
+          mode: state.policy.provisioning.deprovision.mode,
         });
-        if (resolution.membership) {
-          await auth.member.remove(state.ctx, { id: resolution.membership._id });
-        }
-        const { revoked } = (await state.ctx.runMutation(config.component.session.revokeForUser, {
-          userId,
-        })) as { revoked: number };
         if (revoked > 0) {
           await state.recordScimEvent(
             "session.invalidated",
@@ -1560,21 +1390,6 @@ export function addGroupHttpRuntime(deps: GroupHttpRuntimeDeps) {
             { type: "user", id: userId },
             { userId, reason: "connection_deprovision" },
           );
-        }
-        if (state.policy.provisioning.deprovision.mode === "hard") {
-          await removeScimIdentity(state.ctx, config.component.connection, identity._id);
-        } else {
-          await upsertScimIdentity(state.ctx, config.component.connection, {
-            connectionId: identity.connectionId,
-            groupId: identity.groupId,
-            resourceType: identity.resourceType,
-            externalId: identity.externalId,
-            userId: identity.userId,
-            mappedGroupId: identity.mappedGroupId,
-            active: false,
-            raw: identity.raw,
-            lastProvisionedAt: Date.now(),
-          });
         }
         await state.recordScimEvent("connection.scim.user.deactivated", "success", {
           type: "user",
@@ -1689,104 +1504,41 @@ export function addGroupHttpRuntime(deps: GroupHttpRuntimeDeps) {
 
       const handleGroupsPost: ScimHandler = async (state) => {
         const body = await readScimJson(state.request);
-        const externalId = typeof body.externalId === "string" ? body.externalId : undefined;
-        const existingIdentity = externalId
-          ? await getScimIdentity(state.ctx, config.component.connection, {
-              connectionId: state.connection._id,
-              resourceType: "group",
-              externalId,
-            })
-          : null;
-        const existingGroup = existingIdentity?.mappedGroupId
-          ? await auth.group.get(state.ctx, { id: existingIdentity.mappedGroupId })
-          : null;
-        const created = existingGroup === null;
-        const provisionedRoleIds = resolveProvisionedRoleIds({
-          policy: state.policy,
-          groups: typeof body.displayName === "string" ? [body.displayName] : undefined,
-          roles: pickStringArray((body as Record<string, unknown>).roles),
-        });
-        const groupId = existingGroup?._id
-          ? existingGroup._id
-          : await auth.group.create(state.ctx, {
-              data: {
-                name: typeof body.displayName === "string" ? body.displayName : "Group",
-                parentGroupId: state.connection.groupId,
-                type: "organization",
-              },
-            });
-        if (!created && existingGroup) {
-          const location = `${state.url.origin}${state.url.pathname}/${groupId}`;
-          return scimJson(
-            serializeScimGroup({
-              id: groupId,
-              group: existingGroup,
-              externalId,
-              location,
-              members: (await collectMembers(state.ctx, { groupId, status: "active" })).map(
-                (member) => ({ value: member.userId }),
-              ),
-            }),
-            200,
-            { Location: location },
-          );
-        }
-        await upsertScimIdentity(state.ctx, config.component.connection, {
+        const memberIds = (Array.isArray(body.members) ? body.members : []).map((member) =>
+          String(member.value),
+        );
+        const externalIdForGroup =
+          typeof body.externalId === "string" ? body.externalId : undefined;
+        const provisioned = await provisionScimGroup(state.ctx, config.component.connection, {
           connectionId: state.connection._id,
-          groupId: state.connection.groupId,
-          resourceType: "group",
-          externalId: externalId ?? groupId,
-          mappedGroupId: groupId,
-          active: true,
+          externalId: externalIdForGroup,
+          name: typeof body.displayName === "string" ? body.displayName : "Group",
+          memberIds,
+          roleIds: resolveProvisionedRoleIds({
+            policy: state.policy,
+            groups: typeof body.displayName === "string" ? [body.displayName] : undefined,
+            roles: pickStringArray((body as Record<string, unknown>).roles),
+          }),
           raw: body,
-          lastProvisionedAt: Date.now(),
         });
-        const currentMembers = await collectMembersForReplace(state.ctx, {
-          groupId,
-          status: "active",
-        });
-        const currentByUserId = new Map(currentMembers.map((member) => [member.userId, member]));
-        const nextUserIds = new Set(
-          (Array.isArray(body.members) ? body.members : []).map((member) => String(member.value)),
-        );
-        const toAddUserIds = [...nextUserIds].filter((userId) => !currentByUserId.has(userId));
-        const invalidMember = await firstInvalidScimMember(state, toAddUserIds);
-        if (invalidMember !== null) {
-          return scimError(400, "invalidValue", `Group member user not found: ${invalidMember}`);
-        }
-        for (const member of currentMembers) {
-          if (!nextUserIds.has(member.userId)) {
-            await auth.member.remove(state.ctx, { id: member._id });
-          }
-        }
-        for (const userId of toAddUserIds) {
-          await auth.member.create(state.ctx, {
-            data: {
-              groupId,
-              userId,
-              roleIds: provisionedRoleIds,
-              status: "active",
-            },
-          });
-        }
         await state.recordScimEvent(
-          created ? "connection.scim.group.provisioned" : "connection.scim.group.updated",
+          provisioned.created
+            ? "connection.scim.group.provisioned"
+            : "connection.scim.group.updated",
           "success",
-          { type: "group", id: groupId },
+          { type: "group", id: provisioned.groupId },
         );
-        const group = await auth.group.get(state.ctx, { id: groupId });
-        const location = `${state.url.origin}${state.url.pathname}/${groupId}`;
+        const group = await auth.group.get(state.ctx, { id: provisioned.groupId });
+        const location = `${state.url.origin}${state.url.pathname}/${provisioned.groupId}`;
         return scimJson(
           serializeScimGroup({
-            id: groupId,
+            id: provisioned.groupId,
             group: group ?? {},
-            externalId,
+            externalId: externalIdForGroup,
             location,
-            members: (await collectMembers(state.ctx, { groupId, status: "active" })).map(
-              (member) => ({ value: member.userId }),
-            ),
+            members: memberIds.map((value) => ({ value })),
           }),
-          created ? 201 : 200,
+          provisioned.created ? 201 : 200,
           { Location: location },
         );
       };
@@ -1803,6 +1555,11 @@ export function addGroupHttpRuntime(deps: GroupHttpRuntimeDeps) {
         if (!identity || identity.connectionId !== state.connection._id) {
           return scimError(404, "notFound", "Group not found.");
         }
+        const group = await auth.group.get(state.ctx, { id: groupId });
+        if (!group) return scimError(404, "notFound", "Group not found.");
+        const currentMembers = await collectMembersForReplace(state.ctx, { groupId });
+        const nextMemberIds = new Set(currentMembers.map((member) => member.userId));
+        let name = typeof group.name === "string" ? group.name : "Group";
         const body = (await readScimJson(state.request)) as ScimBody;
         const operations = Array.isArray(body.Operations)
           ? body.Operations
@@ -1817,90 +1574,36 @@ export function addGroupHttpRuntime(deps: GroupHttpRuntimeDeps) {
           ) {
             const value = operation.value as Record<string, unknown>;
             if (typeof value.displayName === "string") {
-              await auth.group.update(state.ctx, {
-                id: groupId,
-                patch: { name: value.displayName },
-              });
+              name = value.displayName;
+            }
+            if (Array.isArray(value.members)) {
+              nextMemberIds.clear();
+              for (const member of value.members) {
+                nextMemberIds.add(String((member as { value?: unknown }).value));
+              }
             }
             continue;
           }
           if (operation.path === "displayName") {
             if (op !== "replace" && op !== "add") unsupportedScimPatch();
-            await auth.group.update(state.ctx, {
-              id: groupId,
-              patch: { name: operation.value },
-            });
+            if (typeof operation.value === "string") {
+              name = operation.value;
+            } else {
+              unsupportedScimPatch();
+            }
             continue;
           }
           if (operation.path === "members" && op === "add") {
             const addUserIds = (Array.isArray(operation.value) ? operation.value : []).map(
-              (member) => String(member.value),
+              (member) => String((member as { value?: unknown }).value),
             );
-            const invalidMember = await firstInvalidScimMember(state, addUserIds);
-            if (invalidMember !== null) {
-              return scimError(
-                400,
-                "invalidValue",
-                `Group member user not found: ${invalidMember}`,
-              );
-            }
-            for (const userId of addUserIds) {
-              const existing = await auth.member.get(state.ctx, { groupId, userId });
-              if (!existing.membership) {
-                await auth.member.create(state.ctx, {
-                  data: {
-                    groupId,
-                    userId,
-                    roleIds: resolveProvisionedRoleIds({
-                      policy: state.policy,
-                      groups: typeof body.displayName === "string" ? [body.displayName] : undefined,
-                      roles: pickStringArray((body as Record<string, unknown>).roles),
-                    }),
-                    status: "active",
-                  },
-                });
-              }
-            }
+            for (const userId of addUserIds) nextMemberIds.add(userId);
             continue;
           }
           if (operation.path === "members" && op === "replace") {
-            const currentMembers = await collectMembersForReplace(state.ctx, {
-              groupId,
-              status: "active",
-            });
-            const currentUserIds = new Set<string>(currentMembers.map((member) => member.userId));
-            const nextUserIds = new Set<string>(
-              (Array.isArray(operation.value) ? operation.value : []).map((member: unknown) =>
-                String((member as { value?: unknown }).value),
-              ),
-            );
-            const toAddUserIds = [...nextUserIds].filter((userId) => !currentUserIds.has(userId));
-            const invalidMember = await firstInvalidScimMember(state, toAddUserIds);
-            if (invalidMember !== null) {
-              return scimError(
-                400,
-                "invalidValue",
-                `Group member user not found: ${invalidMember}`,
-              );
-            }
-            for (const member of currentMembers) {
-              if (!nextUserIds.has(member.userId)) {
-                await auth.member.remove(state.ctx, { id: member._id });
-              }
-            }
-            for (const userId of toAddUserIds) {
-              await auth.member.create(state.ctx, {
-                data: {
-                  groupId,
-                  userId,
-                  roleIds: resolveProvisionedRoleIds({
-                    policy: state.policy,
-                    groups: typeof body.displayName === "string" ? [body.displayName] : undefined,
-                    roles: pickStringArray((body as Record<string, unknown>).roles),
-                  }),
-                  status: "active",
-                },
-              });
+            nextMemberIds.clear();
+            for (const member of Array.isArray(operation.value) ? operation.value : []) {
+              nextMemberIds.add(String((member as { value?: unknown }).value));
             }
             continue;
           }
@@ -1911,34 +1614,35 @@ export function addGroupHttpRuntime(deps: GroupHttpRuntimeDeps) {
           ) {
             const match = operation.path.match(/^members\[value eq "([^"]+)"\]$/);
             const userId = match?.[1];
-            if (userId) {
-              const resolution = await auth.member.get(state.ctx, {
-                groupId,
-                userId,
-              });
-              if (resolution.membership) {
-                await auth.member.remove(state.ctx, { id: resolution.membership._id });
-              }
-            }
+            if (userId) nextMemberIds.delete(userId);
             continue;
           }
           unsupportedScimPatch();
         }
+        await updateScimGroup(state.ctx, config.component.connection, {
+          connectionId: state.connection._id,
+          groupId,
+          name,
+          memberIds: [...nextMemberIds],
+          roleIds: resolveProvisionedRoleIds({
+            policy: state.policy,
+            groups: [name],
+            roles: pickStringArray((body as Record<string, unknown>).roles),
+          }),
+          raw: body,
+        });
         await state.recordScimEvent("connection.scim.group.updated", "success", {
           type: "group",
           id: groupId,
         });
-        const group = await auth.group.get(state.ctx, { id: groupId });
         const location = `${state.url.origin}${state.url.pathname}`;
-        const members = await collectMembers(state.ctx, { groupId, status: "active" });
         return scimJson(
           serializeScimGroup({
             id: groupId,
-            group: group ?? {},
+            group: { ...group, name },
+            externalId: identity.externalId,
             location,
-            members: members.map((member) => ({
-              value: member.userId,
-            })),
+            members: [...nextMemberIds].map((value) => ({ value })),
           }),
           200,
           { Location: location },
@@ -1957,8 +1661,10 @@ export function addGroupHttpRuntime(deps: GroupHttpRuntimeDeps) {
         if (!identity || identity.connectionId !== state.connection._id) {
           return scimError(404, "notFound", "Group not found.");
         }
-        await auth.group.remove(state.ctx, { id: groupId });
-        await removeScimIdentity(state.ctx, config.component.connection, identity._id);
+        await revokeScimGroup(state.ctx, config.component.connection, {
+          connectionId: state.connection._id,
+          groupId,
+        });
         await state.recordScimEvent("connection.scim.group.deactivated", "success", {
           type: "group",
           id: groupId,

@@ -4,9 +4,7 @@ import {
   getGroupConnection,
   getScimConfigByConnection,
   getScimConfigByTokenHash,
-  getScimIdentity,
   upsertScimConfig,
-  upsertScimIdentity,
 } from "../contract";
 import { convexError } from "../errors";
 import type { EmitGroupAuthEventInput } from "./group/service";
@@ -150,15 +148,6 @@ export function createGroupScimDomain(deps: ScimDeps) {
       message: hasBasePath ? undefined : "SCIM basePath does not match the derived route.",
     });
 
-    const supportsIdempotentExternalId = policy.provisioning.scimReuse.user === "externalId";
-    checks.push({
-      name: "user_external_id_reuse_enabled",
-      ok: supportsIdempotentExternalId,
-      message: supportsIdempotentExternalId
-        ? undefined
-        : "SCIM user retry-safe provisioning works best with scimReuse.user = externalId.",
-    });
-
     checks.push({
       name: "filter_subset_supported",
       ok: true,
@@ -222,13 +211,21 @@ export function createGroupScimDomain(deps: ScimDeps) {
       if (connection === null) {
         throw convexError(ErrorCode.INVALID_PARAMETERS, "Connection not found.");
       }
+      const policy = await loadGroupPolicyOrThrow(ctx, connection.groupId);
+      const status = data.status ?? "active";
+      if (policy.provisioning.user.authority === "scim" && status !== "active") {
+        throw convexError(
+          ErrorCode.INVALID_PARAMETERS,
+          "SCIM-managed provisioning requires an active SCIM configuration.",
+        );
+      }
       const rawToken = generateRandomString(48, INVITE_TOKEN_ALPHABET);
       const tokenHash = await sha256(rawToken);
       const basePath = getScimBasePath(connection._id);
       const configId = await upsertScimConfig(ctx, config.component.connection, {
         connectionId: connection._id,
         groupId: connection.groupId,
-        status: data.status ?? "active",
+        status,
         basePath,
         tokenHash,
         lastRotatedAt: Date.now(),
@@ -295,36 +292,6 @@ export function createGroupScimDomain(deps: ScimDeps) {
     },
     validate: async (ctx: ComponentReadCtx, args: { connectionId: string }) => {
       return await validateScim(ctx, args.connectionId);
-    },
-    identity: {
-      get: async (
-        ctx: ComponentReadCtx,
-        data: {
-          connectionId: string;
-          resourceType: "user" | "group";
-          externalId: string;
-        },
-      ) => {
-        return await getScimIdentity(ctx, config.component.connection, data);
-      },
-      upsert: async (
-        ctx: ComponentCtx,
-        data: {
-          connectionId: string;
-          groupId: string;
-          resourceType: "user" | "group";
-          externalId: string;
-          userId?: string;
-          mappedGroupId?: string;
-          active?: boolean;
-          raw?: Record<string, unknown>;
-        },
-      ) => {
-        return await upsertScimIdentity(ctx, config.component.connection, {
-          ...data,
-          lastProvisionedAt: Date.now(),
-        });
-      },
     },
   };
 }

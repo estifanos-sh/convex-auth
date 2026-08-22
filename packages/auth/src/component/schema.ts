@@ -531,7 +531,7 @@ export default defineSchema({
     connectionId: v.id("GroupConnection"),
     groupId: v.id("Group"),
     resourceType: vScimResourceType,
-    externalId: v.string(),
+    externalId: v.optional(v.string()),
     userId: v.optional(v.id("User")),
     mappedGroupId: v.optional(v.id("Group")),
     lastProvisionedAt: v.optional(v.number()),

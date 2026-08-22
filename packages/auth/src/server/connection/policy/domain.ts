@@ -19,12 +19,18 @@ type PolicyDeps = {
   validateGroupConnectionPolicy: (
     policy: GroupConnectionPolicy,
   ) => Array<{ name: string; ok: boolean; message?: string }>;
+  hasActiveScimConnection: (ctx: ComponentReadCtx, groupId: string) => Promise<boolean>;
   emitGroupAuthEvent: (ctx: ComponentCtx, data: EmitGroupAuthEventInput) => Promise<string>;
 };
 
 export function createGroupPolicyDomain(deps: PolicyDeps) {
-  const { config, loadGroupPolicyOrThrow, validateGroupConnectionPolicy, emitGroupAuthEvent } =
-    deps;
+  const {
+    config,
+    loadGroupPolicyOrThrow,
+    validateGroupConnectionPolicy,
+    hasActiveScimConnection,
+    emitGroupAuthEvent,
+  } = deps;
 
   return {
     get: async (ctx: ComponentReadCtx, args: { groupId: string }) => {
@@ -40,6 +46,22 @@ export function createGroupPolicyDomain(deps: PolicyDeps) {
         throw convexError(ErrorCode.INVALID_PARAMETERS, "Group not found.");
       }
       const policy = patchGroupConnectionPolicy(group.policy, args.patch);
+      const invalidChecks = validateGroupConnectionPolicy(policy).filter((check) => !check.ok);
+      if (invalidChecks.length > 0) {
+        throw convexError(
+          ErrorCode.INVALID_PARAMETERS,
+          invalidChecks.map((check) => check.message ?? check.name).join(" "),
+        );
+      }
+      if (
+        policy.provisioning.user.authority === "scim" &&
+        !(await hasActiveScimConnection(ctx, groupId))
+      ) {
+        throw convexError(
+          ErrorCode.INVALID_PARAMETERS,
+          "SCIM-managed provisioning requires an active SCIM configuration.",
+        );
+      }
       await ctx.runMutation(config.component.group.update, {
         id: groupId,
         patch: { policy },

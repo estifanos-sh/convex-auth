@@ -225,6 +225,18 @@ export function createGroupService(deps: {
     }> = [];
 
     checks.push({ name: "policy_version", ok: policy.version === 1 });
+    const directoryManaged = policy.provisioning.user.authority === "scim";
+    checks.push({
+      name: "scim_managed_sign_in_provisioning_disabled",
+      ok:
+        !directoryManaged ||
+        (!policy.provisioning.user.createOnSignIn && policy.provisioning.jit.mode === "off"),
+      message:
+        !directoryManaged ||
+        (!policy.provisioning.user.createOnSignIn && policy.provisioning.jit.mode === "off")
+          ? undefined
+          : "SCIM-managed connections cannot create users or memberships during sign-in.",
+    });
     if (hasConfiguredRoles) {
       checks.push({
         name: "jit_default_role_ids_known",
@@ -260,13 +272,6 @@ export function createGroupService(deps: {
           : "Provisioning group mappings contain unknown roleIds.",
       });
     }
-    checks.push({
-      name: "scim_reuse_supported",
-      ok:
-        policy.provisioning.scimReuse.user === "externalId" ||
-        policy.provisioning.scimReuse.user === "none",
-    });
-
     return checks;
   };
 

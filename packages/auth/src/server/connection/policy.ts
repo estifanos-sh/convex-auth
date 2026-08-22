@@ -16,9 +16,6 @@ const DEFAULT_GROUP_CONNECTION_POLICY: GroupConnectionPolicy = {
       updateProfileFromScim: "always",
       authority: "app",
     },
-    scimReuse: {
-      user: "externalId",
-    },
     jit: {
       mode: "createUserAndMembership",
       defaultRoleIds: [],
@@ -67,7 +64,6 @@ export function normalizeGroupConnectionPolicy(policy: unknown): GroupConnection
   const identity = asRecord(input.identity) ?? {};
   const accountLinking = asRecord(identity.accountLinking) ?? {};
   const provisioning = asRecord(input.provisioning) ?? {};
-  const scimReuse = asRecord(provisioning.scimReuse) ?? {};
   const user = asRecord(provisioning.user) ?? {};
   const jit = asRecord(provisioning.jit) ?? {};
   const deprovision = asRecord(provisioning.deprovision) ?? {};
@@ -102,18 +98,15 @@ export function normalizeGroupConnectionPolicy(policy: unknown): GroupConnection
             : d.provisioning.user.createOnSignIn,
         updateProfileOnLogin: oneOf(
           user.updateProfileOnLogin,
-          ["never", "always"],
+          ["never", "missing", "always"],
           d.provisioning.user.updateProfileOnLogin,
         ),
         updateProfileFromScim: oneOf(
           user.updateProfileFromScim,
-          ["never", "missing"],
+          ["never", "missing", "always"],
           d.provisioning.user.updateProfileFromScim,
         ),
-        authority: oneOf(user.authority, ["connection", "scim"], d.provisioning.user.authority),
-      },
-      scimReuse: {
-        user: oneOf(scimReuse.user, ["none"], d.provisioning.scimReuse.user),
+        authority: oneOf(user.authority, ["app", "scim"], d.provisioning.user.authority),
       },
       jit: {
         mode: oneOf(
@@ -134,14 +127,14 @@ export function normalizeGroupConnectionPolicy(policy: unknown): GroupConnection
             : d.provisioning.jit.defaultRoleIds,
       },
       deprovision: {
-        mode: oneOf(deprovision.mode, ["hard"], d.provisioning.deprovision.mode),
+        mode: oneOf(deprovision.mode, ["soft", "hard"], d.provisioning.deprovision.mode),
       },
       groups: {
-        mode: oneOf(groups.mode, ["sync"], d.provisioning.groups.mode),
+        mode: oneOf(groups.mode, ["ignore", "sync"], d.provisioning.groups.mode),
         source: "protocol",
       },
       roles: {
-        mode: oneOf(roles.mode, ["map"], d.provisioning.roles.mode),
+        mode: oneOf(roles.mode, ["ignore", "map"], d.provisioning.roles.mode),
         source: "protocol",
       },
     },
@@ -171,10 +164,6 @@ export function patchGroupConnectionPolicy(
     provisioning: {
       ...base.provisioning,
       ...patch.provisioning,
-      scimReuse: {
-        ...base.provisioning.scimReuse,
-        ...patch.provisioning?.scimReuse,
-      },
       user: {
         ...base.provisioning.user,
         ...patch.provisioning?.user,
