@@ -81,7 +81,7 @@ for (const name of skillNames) {
   }
 }
 
-const docsPage = path.join(root, "docs", "content", "ai", "agent-skills", "+page.md");
+const docsPage = path.join(root, "docs", "content", "ai", "agent-skills.md");
 if (!existsSync(docsPage)) fail("missing Agent Skills documentation page");
 const docs = readFileSync(docsPage, "utf8");
 for (const name of expectedSkills) {
