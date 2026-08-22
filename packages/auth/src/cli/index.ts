@@ -1,10 +1,10 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
-import { createRequire } from "node:module";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
+import { parseArgs as parseNodeArgs } from "node:util";
 
 import * as p from "@clack/prompts";
 import { config as loadEnvFile } from "dotenv";
@@ -12,6 +12,7 @@ import figlet from "figlet";
 import ansiShadow from "figlet/importable-fonts/ANSI Shadow.js";
 import gradientString from "gradient-string";
 
+import { convexCommand } from "./convex";
 import { generateKeys } from "./keys";
 
 figlet.parseFont("ANSI Shadow", ansiShadow);
@@ -41,32 +42,6 @@ function getPackageVersion(): string {
 }
 
 const version = getPackageVersion();
-
-/** @internal */
-export function convexCmd(...subArgs: string[]): { file: string; args: string[] } {
-  const requireFromProject = createRequire(path.join(process.cwd(), "package.json"));
-  let packagePath: string;
-  try {
-    packagePath = requireFromProject.resolve("convex/package.json");
-  } catch {
-    throw new Error(
-      'Could not find the project-local "convex" package. Install Convex in this project before running convex-auth.',
-    );
-  }
-
-  const packageJson = JSON.parse(readFileSync(packagePath, "utf-8")) as {
-    bin?: string | Record<string, string>;
-  };
-  const bin = typeof packageJson.bin === "string" ? packageJson.bin : packageJson.bin?.convex;
-  if (!bin) {
-    throw new Error('The installed "convex" package does not expose a convex CLI executable.');
-  }
-
-  return {
-    file: process.execPath,
-    args: [path.resolve(path.dirname(packagePath), bin), ...subArgs],
-  };
-}
 
 type DeploymentOptions = {
   url?: string;
@@ -159,64 +134,56 @@ function printHelp() {
   console.log();
 }
 
-function parseArgs(argv: string[]): CliOptions {
-  const rawArgs = argv.slice(2);
-  const knownCommands = new Set(["setup", "doctor", "urls", "keys"]);
-  const firstArg = rawArgs[0];
-  const command = knownCommands.has(firstArg ?? "") ? (firstArg as CliOptions["command"]) : "setup";
-  const args =
-    command === "setup" && !knownCommands.has(firstArg ?? "") ? rawArgs : rawArgs.slice(1);
-
-  const strings = new Map<string, string>();
-  const booleans = new Set<string>();
-
-  let i = 0;
-  while (i < args.length) {
-    const arg = args[i];
-    if (!arg.startsWith("--")) {
-      i++;
-      continue;
-    }
-    const name = arg.slice(2);
-    const def = flagDefs.get(name);
-    if (def === undefined) {
-      p.log.error(`Unknown flag: ${arg}`);
-      process.exit(1);
-    }
-    if (def.type === "boolean") {
-      booleans.add(name);
-      i++;
-    } else {
-      const value = args[i + 1];
-      if (value === undefined || value.startsWith("--")) {
-        p.log.error(`Flag --${name} requires a value.`);
-        process.exit(1);
-      }
-      strings.set(name, value);
-      i += 2;
-    }
+/** @internal */
+export function parseCliOptions(argv: string[]): CliOptions {
+  let parsed: ReturnType<typeof parseNodeArgs>;
+  try {
+    parsed = parseNodeArgs({
+      args: argv.slice(2),
+      options: Object.fromEntries(
+        [...flagDefs].map(([name, definition]) => [name, { type: definition.type }]),
+      ),
+      allowPositionals: true,
+      strict: true,
+    });
+  } catch (error) {
+    logErrorAndExit(error instanceof Error ? error.message : String(error));
   }
 
-  if (booleans.has("help")) {
+  const [commandName, ...extraPositionals] = parsed.positionals;
+  const knownCommands = new Set<CliOptions["command"]>(["setup", "doctor", "urls", "keys"]);
+  if (commandName !== undefined && !knownCommands.has(commandName as CliOptions["command"])) {
+    logErrorAndExit(`Unknown command: ${commandName}`);
+  }
+  if (extraPositionals.length > 0) {
+    logErrorAndExit(`Unexpected arguments: ${extraPositionals.join(" ")}`);
+  }
+
+  if (parsed.values.help === true) {
     printHelp();
     process.exit(0);
   }
-  if (booleans.has("version")) {
+  if (parsed.values.version === true) {
     console.log(version);
     process.exit(0);
   }
 
+  const stringValue = (name: string) => {
+    const value = parsed.values[name];
+    return typeof value === "string" ? value : undefined;
+  };
+
   return {
-    command,
-    appUrl: strings.get("app-url"),
-    variables: strings.get("variables"),
-    skipGitCheck: booleans.has("skip-git-check"),
-    allowDirtyGitState: booleans.has("allow-dirty-git-state"),
-    url: strings.get("url"),
-    siteUrl: strings.get("site-url"),
-    adminKey: strings.get("admin-key"),
-    prod: booleans.has("prod"),
-    deployment: strings.get("deployment"),
+    command: (commandName as CliOptions["command"] | undefined) ?? "setup",
+    appUrl: stringValue("app-url"),
+    variables: stringValue("variables"),
+    skipGitCheck: parsed.values["skip-git-check"] === true,
+    allowDirtyGitState: parsed.values["allow-dirty-git-state"] === true,
+    url: stringValue("url"),
+    siteUrl: stringValue("site-url"),
+    adminKey: stringValue("admin-key"),
+    prod: parsed.values.prod === true,
+    deployment: stringValue("deployment"),
   };
 }
 
@@ -414,7 +381,7 @@ async function runKeys(options: CliOptions) {
  * @returns A promise that resolves when setup completes successfully.
  */
 const runCli = async (argv = process.argv) => {
-  const options = parseArgs(argv);
+  const options = parseCliOptions(argv);
   if (options.command === "setup") await runSetup(options);
   else if (options.command === "doctor") await runDoctor(options);
   else if (options.command === "urls") await runUrls(options);
@@ -552,11 +519,17 @@ async function configureKeys(config: ProjectConfig) {
 }
 
 function backendEnvVar(config: ProjectConfig, name: string): string {
-  const { file, args } = convexCmd("env", "get", ...deploymentArgs(config), name);
-  return execFileSync(file, args, {
+  const { file, args } = convexCommand("env", "get", ...deploymentArgs(config), name);
+  const output = execFileSync(file, args, {
     stdio: "pipe",
     encoding: "utf-8",
-  }).slice(0, -1);
+  });
+  return stripTrailingLineBreak(output);
+}
+
+/** @internal */
+export function stripTrailingLineBreak(output: string): string {
+  return output.replace(/\r?\n$/, "");
 }
 
 function hasBackendEnvVar(config: ProjectConfig, name: string): boolean {
@@ -573,7 +546,7 @@ async function setEnvVar(
   value: string,
   options?: { hideValue: boolean },
 ) {
-  const { file, args } = convexCmd("env", "set", ...deploymentArgs(config), "--", name, value);
+  const { file, args } = convexCommand("env", "set", ...deploymentArgs(config), "--", name, value);
   execFileSync(file, args, {
     stdio: options?.hideValue ? "ignore" : "inherit",
   });
@@ -586,8 +559,8 @@ async function setEnvVarFromFile(config: ProjectConfig, name: string, value: str
   const tmpDir = mkdtempSync(path.join(tmpdir(), "convex-auth-"));
   const tmpFile = path.join(tmpDir, `${name}.tmp`);
   try {
-    writeFileSync(tmpFile, value, "utf-8");
-    const { file, args } = convexCmd(
+    writeFileSync(tmpFile, value, { encoding: "utf8", mode: 0o600 });
+    const { file, args } = convexCommand(
       "env",
       "set",
       ...deploymentArgs(config),
@@ -598,11 +571,7 @@ async function setEnvVarFromFile(config: ProjectConfig, name: string, value: str
     execFileSync(file, args, { stdio: "ignore" });
     p.log.success(`Set ${name} on ${printDeployment(config)}`);
   } finally {
-    try {
-      unlinkSync(tmpFile);
-    } catch {
-      /* empty */
-    }
+    rmSync(tmpDir, { recursive: true, force: true });
   }
 }
 
