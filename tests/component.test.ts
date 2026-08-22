@@ -337,6 +337,99 @@ test("refresh token exchange returns the session user in the rotation transactio
   expect(exchanged.user.email).toBe("refresh-user@example.com");
 });
 
+test("session issuance retains a bounded active-session set", async () => {
+  const t = convexTest(schema);
+  const userId = await t.run((ctx) =>
+    ctx.runMutation(components.auth.user.create, {
+      data: { email: "session-cap@example.com" },
+    }),
+  );
+  const expirationTime = Date.now() + 60_000;
+
+  for (let index = 0; index < 17; index += 1) {
+    await t.run((ctx) =>
+      ctx.runMutation(components.auth.session.create, {
+        userId,
+        sessionExpirationTime: expirationTime + index,
+        refreshTokenExpirationTime: expirationTime + index,
+      }),
+    );
+  }
+
+  const sessions = await t.run((ctx) => ctx.runQuery(components.auth.session.list, { userId }));
+  expect(sessions).toHaveLength(16);
+});
+
+test("account switching replaces only the authenticated account's session", async () => {
+  const t = convexTest(schema);
+  const { authenticatedUserId, targetUserId, authenticatedSessionId } = await t.run(async (ctx) => {
+    const authenticatedUserId = await ctx.runMutation(components.auth.user.create, {
+      data: { email: "signed-in@example.com" },
+    });
+    const targetUserId = await ctx.runMutation(components.auth.user.create, {
+      data: { email: "switched-to@example.com" },
+    });
+    const authenticated = await ctx.runMutation(components.auth.session.create, {
+      userId: authenticatedUserId,
+      sessionExpirationTime: Date.now() + 60_000,
+    });
+    return { authenticatedUserId, targetUserId, authenticatedSessionId: authenticated.sessionId };
+  });
+
+  const issued = await t.run((ctx) =>
+    ctx.runMutation(components.auth.session.create, {
+      userId: targetUserId,
+      replaceSession: {
+        sessionId: authenticatedSessionId,
+        authenticatedUserId,
+      },
+      sessionExpirationTime: Date.now() + 60_000,
+    }),
+  );
+
+  const state = await t.run(async (ctx) => ({
+    replaced: await ctx.runQuery(components.auth.session.get, { id: authenticatedSessionId }),
+    issued: await ctx.runQuery(components.auth.session.get, { id: issued.sessionId }),
+  }));
+  expect(issued.replacedSessionId).toBe(authenticatedSessionId);
+  expect(state.replaced).toBeNull();
+  expect(state.issued?.userId).toBe(targetUserId);
+});
+
+test("session replacement cannot delete a session owned by another user", async () => {
+  const t = convexTest(schema);
+  const { authenticatedUserId, targetUserId, otherSessionId } = await t.run(async (ctx) => {
+    const authenticatedUserId = await ctx.runMutation(components.auth.user.create, {
+      data: { email: "replacement-caller@example.com" },
+    });
+    const targetUserId = await ctx.runMutation(components.auth.user.create, {
+      data: { email: "replacement-target@example.com" },
+    });
+    const other = await ctx.runMutation(components.auth.session.create, {
+      userId: targetUserId,
+      sessionExpirationTime: Date.now() + 60_000,
+    });
+    return { authenticatedUserId, targetUserId, otherSessionId: other.sessionId };
+  });
+
+  const issued = await t.run((ctx) =>
+    ctx.runMutation(components.auth.session.create, {
+      userId: targetUserId,
+      replaceSession: {
+        sessionId: otherSessionId,
+        authenticatedUserId,
+      },
+      sessionExpirationTime: Date.now() + 60_000,
+    }),
+  );
+
+  const other = await t.run((ctx) =>
+    ctx.runQuery(components.auth.session.get, { id: otherSessionId }),
+  );
+  expect(issued.replacedSessionId).toBeUndefined();
+  expect(other?._id).toBe(otherSessionId);
+});
+
 test("auth verifier lookups ignore expired verifiers", async () => {
   const t = convexTest(schema);
 

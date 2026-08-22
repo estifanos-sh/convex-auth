@@ -1491,6 +1491,8 @@ export type SessionInfo<TTokens = AuthTokens | null> = {
 export type SessionTokenIdentityClaims = {
   subject: GenericId<"User">;
   sessionId: GenericId<"Session">;
+  /** Session epoch captured when this access token was issued. */
+  sessionEpoch: number;
   name?: string;
   email?: string;
   emailVerified?: boolean;

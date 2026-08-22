@@ -224,7 +224,7 @@ test("connection.get by domain ignores unverified domains and resolves once veri
   expect((afterVerify as { connection: { _id: string } }).connection._id).toBe(connectionId);
 });
 
-test("session.revokeForUser deletes every session and its refresh tokens", async () => {
+test("session.revokeForUser advances the epoch before bounded cleanup", async () => {
   const t = convexTest(schema);
   const now = Date.now();
   const farFuture = now + 365 * 24 * 60 * 60 * 1000;
@@ -252,7 +252,9 @@ test("session.revokeForUser deletes every session and its refresh tokens", async
   const result = await t.run((ctx) =>
     ctx.runMutation(components.auth.session.revokeForUser, { userId }),
   );
-  expect(result.revoked).toBe(2);
+  expect(result.epoch).toBe(1);
+  expect(result.cleanedSessions).toBe(2);
+  expect(result.cleanupPending).toBe(false);
 
   const [a, b, tokens] = await t.run(async (ctx) => {
     const sa = await ctx.runQuery(components.auth.session.get, { id: sessionA.sessionId });
@@ -265,4 +267,9 @@ test("session.revokeForUser deletes every session and its refresh tokens", async
   expect(a).toBeNull();
   expect(b).toBeNull();
   expect(tokens).toEqual([]);
+
+  const user = (await t.run((ctx) => ctx.runQuery(components.auth.user.get, { id: userId }))) as {
+    sessionEpoch?: number;
+  } | null;
+  expect(user?.sessionEpoch).toBe(1);
 });

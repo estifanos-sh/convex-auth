@@ -91,7 +91,10 @@ export function authDb(ctx: ComponentRunContext, config: AuthComponentBoundaryCo
       create: (args: {
         userId: string;
         sessionId?: string;
-        replaceSessionId?: string;
+        replaceSession?: {
+          sessionId: string;
+          authenticatedUserId: string;
+        };
         sessionExpirationTime: number;
         refreshTokenExpirationTime?: number;
       }) =>
@@ -100,6 +103,7 @@ export function authDb(ctx: ComponentRunContext, config: AuthComponentBoundaryCo
           sessionId: GenericId<"Session">;
           refreshTokenId?: GenericId<"RefreshToken">;
           replacedSessionId?: GenericId<"Session">;
+          epoch: number;
           user: Doc<"User">;
         }>,
       get: (sessionId: string) =>
@@ -107,6 +111,15 @@ export function authDb(ctx: ComponentRunContext, config: AuthComponentBoundaryCo
       delete: (sessionId: string) => runMutation(ctx, component.session.remove, { id: sessionId }),
       listByUser: (userId: string) =>
         runQuery(ctx, component.session.list, { userId }) as Promise<Doc<"Session">[]>,
+      revokeForUser: (args: { userId: string; except?: string[] }) =>
+        runMutation(ctx, component.session.revokeForUser, args) as Promise<{
+          epoch: number;
+          retainedSessionIds: GenericId<"Session">[];
+          cleanedSessionIds: GenericId<"Session">[];
+          cleanedSessions: number;
+          cleanedRefreshTokens: number;
+          cleanupPending: boolean;
+        }>,
     },
     factors: {
       getPasskey: (passkeyId: string) =>
@@ -176,6 +189,7 @@ export function authDb(ctx: ComponentRunContext, config: AuthComponentBoundaryCo
               user: Doc<"User">;
               sessionId: string;
               refreshTokenId: string;
+              epoch: number;
             }
           | { status: "reuse_detected"; userId: string; refreshTokenId: string }
           | { status: "invalid" }

@@ -48,6 +48,8 @@ export default defineSchema({
     phoneVerificationTime: v.optional(v.number()),
     isAnonymous: v.optional(v.boolean()),
     lastActiveGroup: v.optional(v.id("Group")),
+    /** Incremented to invalidate every session token issued before this value. */
+    sessionEpoch: v.optional(v.number()),
     extend: v.optional(v.any()),
   })
     .index("email", ["email"])
@@ -94,8 +96,11 @@ export default defineSchema({
   Session: defineTable({
     userId: v.id("User"),
     expirationTime: v.number(),
+    /** User session epoch at issuance. Missing legacy values are epoch zero. */
+    epoch: v.optional(v.number()),
   })
     .index("user_id", ["userId"])
+    .index("user_id_epoch_expiration_time", ["userId", "epoch", "expirationTime"])
     .index("expiration_time", ["expirationTime"]),
 
   /**

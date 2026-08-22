@@ -1378,19 +1378,17 @@ export function addGroupHttpRuntime(deps: GroupHttpRuntimeDeps) {
         if (!identity) {
           return scimError(404, "notFound", "User not found.");
         }
-        const { revoked } = await revokeScimUser(state.ctx, config.component.connection, {
+        const { cleanupPending } = await revokeScimUser(state.ctx, config.component.connection, {
           connectionId: state.connection._id,
           userId,
           mode: state.policy.provisioning.deprovision.mode,
         });
-        if (revoked > 0) {
-          await state.recordScimEvent(
-            "session.invalidated",
-            "success",
-            { type: "user", id: userId },
-            { userId, reason: "connection_deprovision" },
-          );
-        }
+        await state.recordScimEvent(
+          "session.invalidated",
+          "success",
+          { type: "user", id: userId },
+          { userId, reason: "connection_deprovision", cleanupPending },
+        );
         await state.recordScimEvent("connection.scim.user.deactivated", "success", {
           type: "user",
           id: userId,

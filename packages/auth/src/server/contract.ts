@@ -422,11 +422,10 @@ export const revokeScimUser = (
   componentConnection: ComponentConnection,
   args: FunctionArgs<ComponentConnection["scim"]["identity"]["revoke"]>,
 ) =>
-  componentMutation<typeof args, { revoked: number }>(
-    ctx,
-    componentConnection.scim.identity.revoke,
-    args,
-  );
+  componentMutation<
+    typeof args,
+    { epoch: number; cleanedSessions: number; cleanupPending: boolean }
+  >(ctx, componentConnection.scim.identity.revoke, args);
 
 export const provisionScimGroup = (
   ctx: ComponentWriteCtx,

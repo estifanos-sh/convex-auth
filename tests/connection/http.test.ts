@@ -99,7 +99,7 @@ function assertNoRouteCollisions(routes: RouteSpec[]) {
   }
 }
 
-function parseJwtPayload(token: string): { sub?: string } {
+function parseJwtPayload(token: string): { sub?: string; sid?: string; session_epoch?: number } {
   const payload = token.split(".")[1];
   if (!payload) {
     return {};
@@ -107,7 +107,7 @@ function parseJwtPayload(token: string): { sub?: string } {
   const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
   const padded = normalized.padEnd(normalized.length + ((4 - (normalized.length % 4)) % 4), "=");
   const json = atob(padded);
-  return JSON.parse(json) as { sub?: string };
+  return JSON.parse(json) as { sub?: string; sid?: string; session_epoch?: number };
 }
 
 async function groupAdmin(t: any) {
@@ -121,10 +121,14 @@ async function groupAdmin(t: any) {
     throw new Error(`Expected signedIn with session token, got: ${JSON.stringify(result)}`);
   }
   const payload = parseJwtPayload(result.session.token);
-  if (!payload.sub) {
+  if (!payload.sub || !payload.sid || payload.session_epoch === undefined) {
     throw new Error(`Missing expected subject claim: ${JSON.stringify(payload)}`);
   }
-  return t.withIdentity({ subject: payload.sub });
+  return t.withIdentity({
+    subject: payload.sub,
+    sid: payload.sid,
+    session_epoch: payload.session_epoch,
+  });
 }
 
 test("auth-owned HTTP route registrations are collision-free", () => {

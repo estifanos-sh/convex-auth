@@ -12,9 +12,9 @@ import { v } from "convex/values";
 import { mutation, query } from "../functions";
 import { recordSignInLimit, resetSignInLimit } from "../limits";
 import { vAccountDoc, vUserDoc, vVerificationCodeDoc } from "../model";
-import { createSessionRows, type SessionRows } from "../session";
+import { createSessionRows, type SessionRows, vSessionReplacement } from "../session";
 
-type VerifiedSession = SessionRows & { status: "signedIn" };
+type VerifiedSession = Omit<SessionRows, "epoch"> & { status: "signedIn" };
 
 /** Reserve verification attempts and resolve a valid code plus account atomically. */
 export const beginVerification = mutation({
@@ -79,7 +79,7 @@ export const completeVerification = mutation({
     codeId: v.id("VerificationCode"),
     userId: v.id("User"),
     identifier: v.optional(v.string()),
-    replaceSessionId: v.optional(v.id("Session")),
+    replaceSession: v.optional(vSessionReplacement),
     createSession: v.boolean(),
     generateTokens: v.boolean(),
     sessionExpirationTime: v.number(),
@@ -115,7 +115,7 @@ export const completeVerification = mutation({
     }
     const created = await createSessionRows(ctx, {
       userId: args.userId,
-      replaceSessionId: args.replaceSessionId,
+      replaceSession: args.replaceSession,
       sessionExpirationTime: args.sessionExpirationTime,
       refreshTokenExpirationTime: args.generateTokens ? args.refreshTokenExpirationTime : undefined,
     });

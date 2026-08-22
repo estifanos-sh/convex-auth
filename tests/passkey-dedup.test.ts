@@ -379,7 +379,10 @@ test("passkey registration completion stores the credential and replaces the ses
     ctx.runMutation(components.auth.factor.passkey.completeRegistration, {
       ...passkeyArgs(userId),
       credentialId: "registration-complete-credential",
-      replaceSessionId: previousSessionId,
+      replaceSession: {
+        sessionId: previousSessionId,
+        authenticatedUserId: userId,
+      },
       sessionExpirationTime: Date.now() + 60_000,
       refreshTokenExpirationTime: Date.now() + 120_000,
     }),

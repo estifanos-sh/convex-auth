@@ -124,6 +124,7 @@ const refreshSessionExchangeResult = v.union(
     user: vUserDoc,
     sessionId: v.id("Session"),
     refreshTokenId: v.id("RefreshToken"),
+    epoch: v.number(),
   }),
   v.object({
     status: v.literal("reuse_detected"),
@@ -177,12 +178,13 @@ export const exchange = mutation({
     }
 
     const session = await ctx.db.get("Session", args.sessionId);
-    if (session === null || session.expirationTime < args.now) {
+    if (session === null || session.expirationTime <= args.now) {
       await cleanupSessionArtifacts();
       return { status: "invalid" as const };
     }
     const user = await ctx.db.get("User", session.userId);
-    if (user === null) {
+    const sessionEpoch = session.epoch ?? 0;
+    if (user === null || sessionEpoch !== (user.sessionEpoch ?? 0)) {
       await cleanupSessionArtifacts();
       return { status: "invalid" as const };
     }
@@ -205,6 +207,7 @@ export const exchange = mutation({
         user,
         sessionId: args.sessionId,
         refreshTokenId,
+        epoch: sessionEpoch,
       };
     }
 
@@ -226,6 +229,7 @@ export const exchange = mutation({
         user,
         sessionId: args.sessionId,
         refreshTokenId: activeRefreshToken._id,
+        epoch: sessionEpoch,
       };
     }
 
@@ -237,6 +241,7 @@ export const exchange = mutation({
         user,
         sessionId: args.sessionId,
         refreshTokenId,
+        epoch: sessionEpoch,
       };
     }
 

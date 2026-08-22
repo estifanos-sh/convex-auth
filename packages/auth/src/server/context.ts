@@ -8,6 +8,7 @@ import {
   getAuthenticatedUserIdOrNull,
   getUserIdentityOrNull,
   oauthScopesFromIdentity,
+  sessionIdFromIdentity,
   userIdFromIdentity,
 } from "./identity/claims";
 
@@ -133,6 +134,9 @@ export type AuthLike = {
       grants: string[];
     } | null>;
   };
+  session: {
+    get: (ctx: AuthContextReadCtx, args: { id: string }) => Promise<Doc<"Session"> | null>;
+  };
 };
 
 /**
@@ -244,9 +248,10 @@ export async function getAuthContextForUser(
   ctx: AuthContextReadCtx,
   userId: string,
   oauthScopes?: readonly string[],
+  knownUser?: UserDoc | null,
 ): Promise<AuthContext> {
   const [user, resolved] = await Promise.all([
-    auth.user.get(ctx, { id: userId }),
+    knownUser === undefined ? auth.user.get(ctx, { id: userId }) : knownUser,
     resolveActiveMembership(auth, ctx, userId),
   ]);
   if (user === null) {
@@ -281,7 +286,31 @@ export async function getAuthContext(
   }
   const userId = userIdFromIdentity(identity);
   const oauthScopes = oauthScopesFromIdentity(identity);
-  return await getAuthContextForUser(auth, ctx, userId, oauthScopes ?? undefined);
+  if (oauthScopes !== null) {
+    return await getAuthContextForUser(auth, ctx, userId, oauthScopes);
+  }
+
+  let sessionId;
+  try {
+    sessionId = sessionIdFromIdentity(identity);
+  } catch {
+    return null;
+  }
+  const [session, user] = await Promise.all([
+    auth.session.get(ctx, { id: sessionId }),
+    auth.user.get(ctx, { id: userId }),
+  ]);
+  if (
+    session === null ||
+    user === null ||
+    session.userId !== userId ||
+    session.expirationTime <= Date.now() ||
+    (session.epoch ?? 0) !== (user.sessionEpoch ?? 0) ||
+    (identity.session_epoch ?? 0) !== (session.epoch ?? 0)
+  ) {
+    return null;
+  }
+  return await getAuthContextForUser(auth, ctx, userId, undefined, user);
 }
 
 /** @internal */

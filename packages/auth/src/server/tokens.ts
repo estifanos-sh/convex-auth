@@ -214,6 +214,7 @@ export async function generateToken(
   const claims = {
     sub: args.identity.subject,
     sid: args.identity.sessionId,
+    session_epoch: args.identity.sessionEpoch,
     ...(args.identity.name !== undefined ? { name: args.identity.name } : null),
     ...(args.identity.email !== undefined ? { email: args.identity.email } : null),
     ...(args.identity.emailVerified !== undefined

@@ -4,7 +4,12 @@ import { GenericId } from "convex/values";
 import type { RefreshToken } from "../../shared/brand";
 import { authDb } from "../db";
 import { queueAuthEvent } from "../events";
-import { getAuthenticatedSessionIdOrNull } from "../identity/claims";
+import {
+  getAuthenticatedSessionIdOrNull,
+  getUserIdentityOrNull,
+  sessionIdFromIdentity,
+  userIdFromIdentity,
+} from "../identity/claims";
 import { LOG_LEVELS, log, maybeRedact } from "../log";
 import { encodeRefreshToken, refreshTokenExpirationTime } from "../token/refresh";
 import { generateToken } from "../tokens";
@@ -46,6 +51,18 @@ export type SessionIssuance = {
 };
 
 /**
+ * Proof that a session being replaced belongs to the currently authenticated
+ * user. Passing the identity-derived pair lets a sign-in for another account
+ * replace only the caller's own current session.
+ *
+ * @internal
+ */
+export type AuthSessionReplacement = {
+  sessionId: GenericId<"Session">;
+  authenticatedUserId: GenericId<"User">;
+};
+
+/**
  * Build the JWT identity-claim set for a session from the user document.
  *
  * Shared by {@link issueSession} and the refresh exchange so both mint
@@ -61,6 +78,7 @@ export function buildSessionIdentity(
   return {
     subject: userId,
     sessionId,
+    sessionEpoch: user?.sessionEpoch ?? 0,
     ...(typeof user?.name === "string" ? { name: user.name } : null),
     ...(typeof user?.email === "string" ? { email: user.email } : null),
     ...(user?.emailVerificationTime !== undefined
@@ -130,7 +148,7 @@ export async function issueSession(
   args: {
     userId: GenericId<"User">;
     existingSessionId?: GenericId<"Session">;
-    replaceSessionId?: GenericId<"Session">;
+    replaceSession?: AuthSessionReplacement;
     generateTokens: boolean;
   },
 ): Promise<SessionIssuance> {
@@ -138,7 +156,7 @@ export async function issueSession(
   const issued = await db.sessions.create({
     userId: args.userId,
     sessionId: args.existingSessionId,
-    replaceSessionId: args.replaceSessionId,
+    replaceSession: args.replaceSession,
     sessionExpirationTime: sessionExpirationTime(config),
     refreshTokenExpirationTime: args.generateTokens
       ? refreshTokenExpirationTime(config)
@@ -192,4 +210,23 @@ export async function deleteSession(
  */
 export async function getAuthSessionId(ctx: { auth: Auth }) {
   return await getAuthenticatedSessionIdOrNull(ctx);
+}
+
+/**
+ * Return the identity-bound proof needed to replace the caller's current
+ * session while issuing a session for any account.
+ *
+ * @internal
+ */
+export async function getAuthSessionReplacement(ctx: {
+  auth: Auth;
+}): Promise<AuthSessionReplacement | undefined> {
+  const identity = await getUserIdentityOrNull(ctx);
+  if (identity === null || typeof identity.sid !== "string" || identity.sid.length === 0) {
+    return undefined;
+  }
+  return {
+    sessionId: sessionIdFromIdentity(identity),
+    authenticatedUserId: userIdFromIdentity(identity),
+  };
 }

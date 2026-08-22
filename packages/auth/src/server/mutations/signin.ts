@@ -5,7 +5,11 @@ import * as Provider from "../crypto";
 import { queueAuthEvent } from "../events";
 import { LOG_LEVELS } from "../log";
 import { log } from "../log";
-import { finalizeSessionIssuance, getAuthSessionId, issueSession } from "../session/lifecycle";
+import {
+  finalizeSessionIssuance,
+  getAuthSessionReplacement,
+  issueSession,
+} from "../session/lifecycle";
 import type { SessionIssuance } from "../session/lifecycle";
 import { buildKnownSignInIdentityAttributes } from "../telemetry";
 import { GenericActionCtxWithAuthConfig, MutationCtx, SessionInfo } from "../types";
@@ -36,12 +40,12 @@ export async function signInSessionImpl(
       log(LOG_LEVELS.DEBUG, "signInSessionImpl args:", args);
       const { userId, sessionId: existingSessionId, provider, generateTokens } = args;
       const typedUserId = userId as GenericId<"User">;
-      const replaceSessionId =
-        existingSessionId === undefined ? ((await getAuthSessionId(ctx)) ?? undefined) : undefined;
+      const replaceSession =
+        existingSessionId === undefined ? await getAuthSessionReplacement(ctx) : undefined;
       const issuance = await issueSession(ctx, config, {
         userId: typedUserId,
         existingSessionId: existingSessionId as GenericId<"Session"> | undefined,
-        replaceSessionId,
+        replaceSession,
         generateTokens,
       });
       setActiveSpanAttributes({

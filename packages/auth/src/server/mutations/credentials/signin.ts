@@ -17,7 +17,7 @@ import { credentialsSignInLimitIdentifier, maxSignInAttempts } from "../../limit
 import { LOG_LEVELS, log, maybeRedact } from "../../log";
 import {
   buildSessionIdentity,
-  getAuthSessionId,
+  getAuthSessionReplacement,
   sessionExpirationTime,
 } from "../../session/lifecycle";
 import type { SessionIssuance } from "../../session/lifecycle";
@@ -191,7 +191,7 @@ async function credentialsSignInInner(
       limitIdentifier,
       issueSession,
       generateTokens,
-      replaceSessionId: issueSession ? ((await getAuthSessionId(ctx)) ?? undefined) : undefined,
+      replaceSession: issueSession ? await getAuthSessionReplacement(ctx) : undefined,
       sessionExpirationTime: sessionExpirationTime(config),
       refreshTokenExpirationTime: refreshTokenExpirationTime(config),
     })) as
