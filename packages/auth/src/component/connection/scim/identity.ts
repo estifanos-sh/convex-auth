@@ -14,7 +14,7 @@ import { paginator } from "convex-helpers/server/pagination";
 
 import { ErrorCode } from "../../../shared/codes";
 import type { Id } from "../../_generated/dataModel";
-import type { MutationCtx } from "../../_generated/server";
+import type { MutationCtx, QueryCtx } from "../../_generated/server";
 import { assertBatchSelectorSize } from "../../batch";
 import { mutation, query } from "../../_generated/server";
 import { vGroupConnectionScimIdentityDoc } from "../../documents";
@@ -28,6 +28,54 @@ import schema from "../../schema";
 import { revokeSessionState } from "../../session";
 
 const vScimUserData = schema.tables.User.validator.omit("sessionEpoch");
+
+/**
+ * Load the SCIM identity row for `userId` on this connection, asserting it is
+ * a user resource owned by this connection's group and that no *other* SCIM
+ * connection already manages the same user.
+ *
+ * `update` and `revoke` both gate on exactly this. It is a tenancy boundary —
+ * two copies is two chances for one of them to stop checking the group.
+ */
+async function requireScimUserIdentity(
+  ctx: QueryCtx,
+  args: { connectionId: Id<"GroupConnection">; userId: Id<"User">; groupId: string },
+) {
+  const identity = await ctx.db
+    .query("GroupConnectionScimIdentity")
+    .withIndex("group_connection_id_user_id", (idx) =>
+      idx.eq("connectionId", args.connectionId).eq("userId", args.userId),
+    )
+    .unique();
+  if (identity === null || identity.resourceType !== "user" || identity.groupId !== args.groupId)
+    throw new ConvexError({ code: ErrorCode.ACCOUNT_NOT_FOUND, message: "SCIM user not found." });
+  const conflictingIdentity = await ctx.db
+    .query("GroupConnectionScimIdentity")
+    .withIndex("user_id", (idx) => idx.eq("userId", args.userId))
+    .filter((query) => query.neq(query.field("connectionId"), args.connectionId))
+    .first();
+  if (conflictingIdentity !== null) {
+    throw new ConvexError({
+      code: ErrorCode.ACCOUNT_ALREADY_LINKED,
+      message: "User is managed by another SCIM connection.",
+    });
+  }
+  return identity;
+}
+
+/**
+ * Resolve the `Account` row a SCIM `externalId` maps to for this connection's
+ * synthetic provider, or `null` when there is no external id to look up.
+ */
+function scimAccountByExternalId(ctx: QueryCtx, provider: string, externalId: string | undefined) {
+  if (externalId === undefined) return Promise.resolve(null);
+  return ctx.db
+    .query("Account")
+    .withIndex("provider_account_id", (idx) =>
+      idx.eq("provider", provider).eq("providerAccountId", externalId),
+    )
+    .unique();
+}
 
 /** Maximum memberships changed by one SCIM group mutation. */
 const SCIM_GROUP_MEMBERSHIP_BATCH_SIZE = 100;
@@ -206,15 +254,7 @@ export const provision = mutation({
                 .eq("externalId", externalId),
             )
             .unique();
-    const account =
-      externalId === undefined
-        ? null
-        : await ctx.db
-            .query("Account")
-            .withIndex("provider_account_id", (idx) =>
-              idx.eq("provider", provider).eq("providerAccountId", externalId),
-            )
-            .unique();
+    const account = await scimAccountByExternalId(ctx, provider, externalId);
     if (identity?.userId !== undefined && account !== null && identity.userId !== account.userId) {
       throw new ConvexError({
         code: ErrorCode.ACCOUNT_ALREADY_LINKED,
@@ -315,29 +355,11 @@ export const update = mutation({
   handler: async (ctx, args) => {
     const connection = await activeScimConnection(ctx, args.connectionId);
     const externalId = args.externalId;
-    const identity = await ctx.db
-      .query("GroupConnectionScimIdentity")
-      .withIndex("group_connection_id_user_id", (idx) =>
-        idx.eq("connectionId", args.connectionId).eq("userId", args.userId),
-      )
-      .unique();
-    if (
-      identity === null ||
-      identity.resourceType !== "user" ||
-      identity.groupId !== connection.groupId
-    )
-      throw new ConvexError({ code: ErrorCode.ACCOUNT_NOT_FOUND, message: "SCIM user not found." });
-    const conflictingIdentity = await ctx.db
-      .query("GroupConnectionScimIdentity")
-      .withIndex("user_id", (idx) => idx.eq("userId", args.userId))
-      .filter((query) => query.neq(query.field("connectionId"), args.connectionId))
-      .first();
-    if (conflictingIdentity !== null) {
-      throw new ConvexError({
-        code: ErrorCode.ACCOUNT_ALREADY_LINKED,
-        message: "User is managed by another SCIM connection.",
-      });
-    }
+    const identity = await requireScimUserIdentity(ctx, {
+      connectionId: args.connectionId,
+      userId: args.userId,
+      groupId: connection.groupId,
+    });
     const conflicting =
       externalId === undefined
         ? null
@@ -361,22 +383,10 @@ export const update = mutation({
     const provider = providerForConnection(connection);
     const currentExternalId = identity.externalId;
     const [currentAccount, nextAccount] = await Promise.all([
-      currentExternalId === undefined
+      scimAccountByExternalId(ctx, provider, currentExternalId),
+      currentExternalId === externalId
         ? Promise.resolve(null)
-        : ctx.db
-            .query("Account")
-            .withIndex("provider_account_id", (idx) =>
-              idx.eq("provider", provider).eq("providerAccountId", currentExternalId),
-            )
-            .unique(),
-      externalId === undefined || currentExternalId === externalId
-        ? Promise.resolve(null)
-        : ctx.db
-            .query("Account")
-            .withIndex("provider_account_id", (idx) =>
-              idx.eq("provider", provider).eq("providerAccountId", externalId),
-            )
-            .unique(),
+        : scimAccountByExternalId(ctx, provider, externalId),
     ]);
     if (nextAccount !== null && nextAccount.userId !== args.userId) {
       throw new ConvexError({
@@ -453,40 +463,14 @@ export const revoke = mutation({
   }),
   handler: async (ctx, args) => {
     const connection = await activeScimConnection(ctx, args.connectionId);
-    const identity = await ctx.db
-      .query("GroupConnectionScimIdentity")
-      .withIndex("group_connection_id_user_id", (idx) =>
-        idx.eq("connectionId", args.connectionId).eq("userId", args.userId),
-      )
-      .unique();
-    if (
-      identity === null ||
-      identity.resourceType !== "user" ||
-      identity.groupId !== connection.groupId
-    )
-      throw new ConvexError({ code: ErrorCode.ACCOUNT_NOT_FOUND, message: "SCIM user not found." });
-    const conflictingIdentity = await ctx.db
-      .query("GroupConnectionScimIdentity")
-      .withIndex("user_id", (idx) => idx.eq("userId", args.userId))
-      .filter((query) => query.neq(query.field("connectionId"), args.connectionId))
-      .first();
-    if (conflictingIdentity !== null) {
-      throw new ConvexError({
-        code: ErrorCode.ACCOUNT_ALREADY_LINKED,
-        message: "User is managed by another SCIM connection.",
-      });
-    }
+    const identity = await requireScimUserIdentity(ctx, {
+      connectionId: args.connectionId,
+      userId: args.userId,
+      groupId: connection.groupId,
+    });
     const provider = providerForConnection(connection);
     const externalId = identity.externalId;
-    const account =
-      externalId === undefined
-        ? null
-        : await ctx.db
-            .query("Account")
-            .withIndex("provider_account_id", (idx) =>
-              idx.eq("provider", provider).eq("providerAccountId", externalId),
-            )
-            .unique();
+    const account = await scimAccountByExternalId(ctx, provider, externalId);
     if (account !== null && account.userId !== args.userId) {
       throw new ConvexError({
         code: ErrorCode.ACCOUNT_ALREADY_LINKED,
