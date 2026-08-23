@@ -12,7 +12,7 @@ user has one identity and one session lifecycle regardless of how they sign in.
 ```ts
 import { authEvents, defineAuth } from "@estifanos-sh/convex-auth/server";
 import { definePermissions } from "@estifanos-sh/convex-auth/permissions";
-import { password } from "@estifanos-sh/convex-auth/providers";
+import { password } from "@estifanos-sh/convex-auth/providers/password";
 import { components } from "./_generated/api";
 import { v } from "convex/values";
 

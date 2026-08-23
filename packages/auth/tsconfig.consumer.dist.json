@@ -18,7 +18,6 @@
       "@estifanos-sh/convex-auth/convex.config": ["./dist/component/convex.config.d.ts"],
       "@estifanos-sh/convex-auth/expo": ["./dist/expo/index.d.ts"],
       "@estifanos-sh/convex-auth/server": ["./dist/server/index.d.ts"],
-      "@estifanos-sh/convex-auth/providers": ["./dist/providers/index.d.ts"],
       "@estifanos-sh/convex-auth/providers/*": ["./dist/providers/*.d.ts"]
     }
   },

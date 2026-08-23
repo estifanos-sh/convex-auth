@@ -20,7 +20,6 @@
       "@estifanos-sh/convex-auth/_generated/component.js": ["./src/component/_generated/component"],
       "@estifanos-sh/convex-auth/expo": ["./src/expo/index"],
       "@estifanos-sh/convex-auth/server": ["./src/server/index"],
-      "@estifanos-sh/convex-auth/providers": ["./src/providers/index"],
       "@estifanos-sh/convex-auth/providers/*": ["./src/providers/*"]
     }
   },

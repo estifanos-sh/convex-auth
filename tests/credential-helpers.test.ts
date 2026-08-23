@@ -1,4 +1,4 @@
-import { webauthn } from "@estifanos-sh/convex-auth/providers";
+import { webauthn } from "@estifanos-sh/convex-auth/providers/webauthn";
 import { createCoreDomains } from "@estifanos-sh/convex-auth/server/core";
 import { expect, test, vi } from "vite-plus/test";
 

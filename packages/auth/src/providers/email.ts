@@ -35,7 +35,7 @@ export interface EmailProviderConfig<Id extends string = "email"> {
  *
  * @example
  * ```ts
- * import { email } from "@estifanos-sh/convex-auth/providers";
+ * import { email } from "@estifanos-sh/convex-auth/providers/email";
  *
  * email({
  *   from: "My App <noreply@example.com>",
@@ -80,3 +80,5 @@ export function email<const Id extends string = "email">(
     options: { from },
   };
 }
+
+export type { EmailConfig } from "../server/types";

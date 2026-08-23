@@ -9,7 +9,7 @@ the user enters on a secondary device.
 ## Setup
 
 ```ts
-import { device } from "@estifanos-sh/convex-auth/providers";
+import { device } from "@estifanos-sh/convex-auth/providers/device";
 
 defineAuth(components.auth, {
   providers: [device({ verificationUri: "https://myapp.com/device" })],

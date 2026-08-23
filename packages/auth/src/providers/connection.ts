@@ -23,7 +23,7 @@ import type { ConnectionProviderConfig } from "../server/types";
  *
  * @example
  * ```ts
- * import { connection } from "@estifanos-sh/convex-auth/providers";
+ * import { connection } from "@estifanos-sh/convex-auth/providers/connection";
  *
  * connection()
  * ```

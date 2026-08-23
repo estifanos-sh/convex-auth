@@ -2,7 +2,7 @@
  * Anonymous authentication provider.
  *
  * ```ts
- * import { anonymous } from "@estifanos-sh/convex-auth/providers";
+ * import { anonymous } from "@estifanos-sh/convex-auth/providers/anonymous";
  *
  * anonymous()
  * ```
@@ -55,7 +55,7 @@ function defaultAnonymousProfile<DataModel extends GenericDataModel>() {
  *
  * @example
  * ```ts
- * import { anonymous } from "@estifanos-sh/convex-auth/providers";
+ * import { anonymous } from "@estifanos-sh/convex-auth/providers/anonymous";
  *
  * anonymous()
  * ```

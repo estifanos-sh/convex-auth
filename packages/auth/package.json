@@ -86,10 +86,6 @@
       "import": "./dist/component/convex.config.js",
       "default": "./dist/component/convex.config.js"
     },
-    "./providers": {
-      "types": "./dist/providers/index.d.ts",
-      "import": "./dist/providers/index.js"
-    },
     "./providers/*": {
       "types": "./dist/providers/*.d.ts",
       "import": "./dist/providers/*.js"

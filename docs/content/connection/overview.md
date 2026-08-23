@@ -10,7 +10,7 @@ browser-facing connection API.
 
 ```ts
 import { defineAuth } from "@estifanos-sh/convex-auth/server";
-import { connection } from "@estifanos-sh/convex-auth/providers";
+import { connection } from "@estifanos-sh/convex-auth/providers/connection";
 import { components } from "./_generated/api";
 
 export const auth = defineAuth(components.auth, {

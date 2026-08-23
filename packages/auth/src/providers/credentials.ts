@@ -2,7 +2,7 @@
  * Credentials provider for custom authentication flows.
  *
  * ```ts
- * import { credentials } from "@estifanos-sh/convex-auth/providers";
+ * import { credentials } from "@estifanos-sh/convex-auth/providers/credentials";
  * import { v } from "convex/values";
  *
  * credentials({
@@ -116,7 +116,7 @@ export type CredentialsConfig<
  *
  * @example
  * ```ts
- * import { credentials } from "@estifanos-sh/convex-auth/providers";
+ * import { credentials } from "@estifanos-sh/convex-auth/providers/credentials";
  * import { v } from "convex/values";
  *
  * credentials({

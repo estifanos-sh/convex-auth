@@ -26,21 +26,19 @@ credential names.
 
 ```ts
 import { defineAuth } from "@estifanos-sh/convex-auth/server";
-import {
-  anonymous,
-  apple,
-  credentials,
-  custom,
-  email,
-  github,
-  google,
-  microsoft,
-  webauthn,
-  password,
-  phone,
-  connection,
-  totp,
-} from "@estifanos-sh/convex-auth/providers";
+import { anonymous } from "@estifanos-sh/convex-auth/providers/anonymous";
+import { apple } from "@estifanos-sh/convex-auth/providers/apple";
+import { connection } from "@estifanos-sh/convex-auth/providers/connection";
+import { credentials } from "@estifanos-sh/convex-auth/providers/credentials";
+import { custom } from "@estifanos-sh/convex-auth/providers/custom";
+import { email } from "@estifanos-sh/convex-auth/providers/email";
+import { github } from "@estifanos-sh/convex-auth/providers/github";
+import { google } from "@estifanos-sh/convex-auth/providers/google";
+import { microsoft } from "@estifanos-sh/convex-auth/providers/microsoft";
+import { password } from "@estifanos-sh/convex-auth/providers/password";
+import { phone } from "@estifanos-sh/convex-auth/providers/phone";
+import { totp } from "@estifanos-sh/convex-auth/providers/totp";
+import { webauthn } from "@estifanos-sh/convex-auth/providers/webauthn";
 import { components } from "./_generated/api";
 import { env } from "./_generated/server";
 
@@ -96,7 +94,7 @@ linking, or profile synchronization only when the provider registration or your
 identity policy requires different behavior.
 
 ```ts
-import { google } from "@estifanos-sh/convex-auth/providers";
+import { google } from "@estifanos-sh/convex-auth/providers/google";
 
 defineAuth(components.auth, {
   providers: [
@@ -118,7 +116,7 @@ profile and email fetch required to normalize GitHub identity into a Convex Auth
 user.
 
 ```ts
-import { github } from "@estifanos-sh/convex-auth/providers";
+import { github } from "@estifanos-sh/convex-auth/providers/github";
 
 defineAuth(components.auth, {
   providers: [
@@ -141,7 +139,7 @@ persists the normalized profile instead of requiring application code to
 reconstruct it on later sign-ins.
 
 ```ts
-import { apple } from "@estifanos-sh/convex-auth/providers";
+import { apple } from "@estifanos-sh/convex-auth/providers/apple";
 
 defineAuth(components.auth, {
   providers: [
@@ -167,7 +165,7 @@ choice explicit because it determines which Microsoft directory may establish
 an identity.
 
 ```ts
-import { microsoft } from "@estifanos-sh/convex-auth/providers";
+import { microsoft } from "@estifanos-sh/convex-auth/providers/microsoft";
 
 defineAuth(components.auth, {
   providers: [
@@ -236,7 +234,7 @@ interface, or assertion is necessary.
 
 ```ts
 import { v } from "convex/values";
-import { credentials } from "@estifanos-sh/convex-auth/providers";
+import { credentials } from "@estifanos-sh/convex-auth/providers/credentials";
 
 defineAuth(components.auth, {
   providers: [
@@ -273,7 +271,9 @@ session revocation, and final session.
 
 ```ts
 import { v } from "convex/values";
-import { credentials, password, webauthn } from "@estifanos-sh/convex-auth/providers";
+import { credentials } from "@estifanos-sh/convex-auth/providers/credentials";
+import { password } from "@estifanos-sh/convex-auth/providers/password";
+import { webauthn } from "@estifanos-sh/convex-auth/providers/webauthn";
 
 const passkeys = webauthn({ securityKeysOnly: true });
 const pin = password({
@@ -385,7 +385,8 @@ await auth.signIn("password", { email, currentPassword, newPassword, flow: "chan
 To enable `reset` and post-signup email verification, pass an email provider:
 
 ```ts
-import { password, email } from "@estifanos-sh/convex-auth/providers";
+import { email } from "@estifanos-sh/convex-auth/providers/email";
+import { password } from "@estifanos-sh/convex-auth/providers/password";
 
 const emailProvider = email({ from: "noreply@example.com", send: ... });
 
@@ -396,7 +397,8 @@ To require a replacement passkey during account recovery, reuse the configured
 WebAuthn provider and pass its typed rotation operation to `afterReset`:
 
 ```ts
-import { password, webauthn } from "@estifanos-sh/convex-auth/providers";
+import { password } from "@estifanos-sh/convex-auth/providers/password";
+import { webauthn } from "@estifanos-sh/convex-auth/providers/webauthn";
 
 const passkeys = webauthn();
 
@@ -452,7 +454,7 @@ profile guides supporting browsers toward roaming security keys, but does not
 enforce a hardware manufacturer:
 
 ```ts
-import { webauthn } from "@estifanos-sh/convex-auth/providers";
+import { webauthn } from "@estifanos-sh/convex-auth/providers/webauthn";
 
 defineAuth(components.auth, {
   providers: [
@@ -497,7 +499,7 @@ synced passkeys, and other credentials without trusted manufacturer evidence,
 add the FIDO Metadata Service policy inside `registration`:
 
 ```ts
-import { webauthn } from "@estifanos-sh/convex-auth/providers";
+import { webauthn } from "@estifanos-sh/convex-auth/providers/webauthn";
 
 defineAuth(components.auth, {
   providers: [

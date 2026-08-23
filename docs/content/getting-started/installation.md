@@ -34,7 +34,7 @@ but the surrounding architecture is the same for every provider.
 
 ```ts
 // convex/auth.ts
-import { github } from "@estifanos-sh/convex-auth/providers";
+import { github } from "@estifanos-sh/convex-auth/providers/github";
 import { defineAuth } from "@estifanos-sh/convex-auth/server";
 import { components } from "./_generated/api";
 import { env } from "./_generated/server";

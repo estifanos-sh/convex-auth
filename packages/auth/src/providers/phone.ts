@@ -26,7 +26,7 @@ export interface PhoneProviderConfig<Id extends string = "phone"> {
  *
  * @example
  * ```ts
- * import { phone } from "@estifanos-sh/convex-auth/providers";
+ * import { phone } from "@estifanos-sh/convex-auth/providers/phone";
  *
  * phone({
  *   send: async ({ identifier, token }) => {
@@ -56,3 +56,5 @@ export function phone<const Id extends string = "phone">(
     options: {},
   };
 }
+
+export type { PhoneConfig } from "../server/types";

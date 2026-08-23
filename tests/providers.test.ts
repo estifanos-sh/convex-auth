@@ -20,18 +20,16 @@ import { credentials } from "@estifanos-sh/convex-auth/providers/credentials";
 import { custom } from "@estifanos-sh/convex-auth/providers/custom";
 import { github } from "@estifanos-sh/convex-auth/providers/github";
 import { google } from "@estifanos-sh/convex-auth/providers/google";
-import {
-  anonymous,
-  connection,
-  device,
-  email,
-  webauthn,
-  phone,
-  totp,
-} from "@estifanos-sh/convex-auth/providers/index";
+import { anonymous } from "@estifanos-sh/convex-auth/providers/anonymous";
+import { connection } from "@estifanos-sh/convex-auth/providers/connection";
+import { device } from "@estifanos-sh/convex-auth/providers/device";
+import { email } from "@estifanos-sh/convex-auth/providers/email";
+import { phone } from "@estifanos-sh/convex-auth/providers/phone";
+import { totp } from "@estifanos-sh/convex-auth/providers/totp";
+import { webauthn } from "@estifanos-sh/convex-auth/providers/webauthn";
 import { microsoft } from "@estifanos-sh/convex-auth/providers/microsoft";
 import { password } from "@estifanos-sh/convex-auth/providers/password";
-import * as providers from "@estifanos-sh/convex-auth/providers/index";
+import * as webauthnModule from "@estifanos-sh/convex-auth/providers/webauthn";
 import { v } from "convex/values";
 import { decodeJwt, decodeProtectedHeader } from "jose";
 import { expect, test, vi } from "vite-plus/test";
@@ -499,8 +497,11 @@ test("webauthn() carries a strict FIDO MDS policy inside registration", () => {
 });
 
 test("FIDO MDS is namespaced under the WebAuthn provider", () => {
-  expect(providers).not.toHaveProperty("fidoMds");
-  expect(providers.webauthn.attestation.fidoMds).toBeTypeOf("function");
+  // Reachable as `webauthn.attestation.fidoMds`, never as a loose export of the
+  // module: an attestation policy is meaningless outside the provider it
+  // configures, and a top-level export invites it being passed somewhere else.
+  expect(webauthnModule).not.toHaveProperty("fidoMds");
+  expect(webauthnModule.webauthn.attestation.fidoMds).toBeTypeOf("function");
 });
 
 test("webauthn.attestation.fidoMds() rejects an empty or malformed AAGUID allow list", () => {

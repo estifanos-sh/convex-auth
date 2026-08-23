@@ -6,7 +6,7 @@ below show the stable shape at publication time.
 ## OAuth
 
 ```ts
-import { github } from "@estifanos-sh/convex-auth/providers";
+import { github } from "@estifanos-sh/convex-auth/providers/github";
 import { env } from "./_generated/server";
 
 if (!env.GITHUB_CLIENT_ID || !env.GITHUB_CLIENT_SECRET) {
@@ -31,7 +31,8 @@ a genuinely non-OAuth authentication ceremony.
 ## Password and email
 
 ```ts
-import { email, password } from "@estifanos-sh/convex-auth/providers";
+import { email } from "@estifanos-sh/convex-auth/providers/email";
+import { password } from "@estifanos-sh/convex-auth/providers/password";
 
 const mail = email({
   from: "App <noreply@example.com>",
@@ -50,7 +51,7 @@ case.
 ## Passkeys and WebAuthn
 
 ```ts
-import { webauthn } from "@estifanos-sh/convex-auth/providers";
+import { webauthn } from "@estifanos-sh/convex-auth/providers/webauthn";
 
 const passkeys = webauthn();
 ```

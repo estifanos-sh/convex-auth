@@ -199,7 +199,7 @@ function createRuntimeClient(config: CustomOAuthConfig): OAuthRuntimeClient {
  *
  * @example
  * ```ts
- * import { custom } from "@estifanos-sh/convex-auth/providers";
+ * import { custom } from "@estifanos-sh/convex-auth/providers/custom";
  *
  * custom({
  *   id: "workos",
@@ -222,3 +222,5 @@ export function custom<const Id extends string>(config: CustomOAuthConfig<Id>) {
     updateProfileOnLogin: config.updateProfileOnLogin,
   });
 }
+
+export type { OAuthProfile, OAuthTokens } from "../server/types";

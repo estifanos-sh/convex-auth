@@ -1,6 +1,6 @@
 import { api } from "@convex/_generated/api";
 import schema from "@convex/schema";
-import { custom } from "@estifanos-sh/convex-auth/providers";
+import { custom } from "@estifanos-sh/convex-auth/providers/custom";
 import {
   OAUTH_SIGN_IN_CODE_ALPHABET,
   OAUTH_SIGN_IN_CODE_LENGTH,

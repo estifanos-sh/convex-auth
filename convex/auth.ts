@@ -1,14 +1,12 @@
 import { defineAuth } from "@estifanos-sh/convex-auth/server";
-import {
-  anonymous,
-  device,
-  email,
-  google,
-  webauthn,
-  password,
-  connection,
-  totp,
-} from "@estifanos-sh/convex-auth/providers";
+import { anonymous } from "@estifanos-sh/convex-auth/providers/anonymous";
+import { connection } from "@estifanos-sh/convex-auth/providers/connection";
+import { device } from "@estifanos-sh/convex-auth/providers/device";
+import { email } from "@estifanos-sh/convex-auth/providers/email";
+import { google } from "@estifanos-sh/convex-auth/providers/google";
+import { password } from "@estifanos-sh/convex-auth/providers/password";
+import { totp } from "@estifanos-sh/convex-auth/providers/totp";
+import { webauthn } from "@estifanos-sh/convex-auth/providers/webauthn";
 
 import { components } from "./_generated/api";
 import { env } from "./_generated/server";
