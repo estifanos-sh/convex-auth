@@ -12,8 +12,10 @@ export type {
   WebAuthnAttestationPolicy,
   WebAuthnAlgorithm,
   WebAuthnAuthenticationConfig,
+  WebAuthnCeremonyPolicy,
   WebAuthnConfig,
   WebAuthnHint,
+  WebAuthnOperationContext,
   WebAuthnRegistrationConfig,
 } from "./webauthn";
 export { totp } from "./totp";
