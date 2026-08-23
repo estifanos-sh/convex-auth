@@ -11,23 +11,26 @@ import type {
   WebAuthnProviderConfig,
   WebAuthnRotateOperation,
 } from "../server/types";
+import type {
+  WebAuthnAlgorithm,
+  WebAuthnAttachment,
+  WebAuthnHint,
+  WebAuthnResidentKey,
+  WebAuthnUserVerification,
+} from "../shared/webauthn";
 import { fidoMds } from "./webauthn/attestation";
-import { coupleSecurityKeysOnly, type WebAuthnHintName } from "../shared/webauthn";
+import { coupleSecurityKeysOnly } from "../shared/webauthn";
 
-/** WebAuthn Level 3 hints that browsers may use to guide authenticator selection. */
-export type WebAuthnHint = WebAuthnHintName;
-
-/** COSE algorithms supported by the WebAuthn verifier. */
-export type WebAuthnAlgorithm = -7 | -257;
+export type { WebAuthnAlgorithm, WebAuthnHint } from "../shared/webauthn";
 
 /** Registration-ceremony options for the {@link webauthn} provider. */
 export interface WebAuthnRegistrationConfig {
   /** Restrict registration to platform or roaming authenticators. */
-  authenticatorAttachment?: "platform" | "cross-platform";
+  authenticatorAttachment?: WebAuthnAttachment;
   /** Discoverable credential preference. */
-  residentKey?: "required" | "preferred" | "discouraged";
+  residentKey?: WebAuthnResidentKey;
   /** User verification requirement for registration. */
-  userVerification?: "required" | "preferred" | "discouraged";
+  userVerification?: WebAuthnUserVerification;
   /** Non-binding hints used by supporting browsers to guide authenticator selection. */
   hints?: readonly WebAuthnHint[];
   /** Supported COSE algorithms in authenticator preference order. */
@@ -43,7 +46,7 @@ export interface WebAuthnRegistrationConfig {
 /** Authentication-ceremony options for the {@link webauthn} provider. */
 export interface WebAuthnAuthenticationConfig {
   /** User verification requirement for authentication. */
-  userVerification?: "required" | "preferred" | "discouraged";
+  userVerification?: WebAuthnUserVerification;
   /** Non-binding hints used by supporting browsers to guide authenticator selection. */
   hints?: readonly WebAuthnHint[];
 }

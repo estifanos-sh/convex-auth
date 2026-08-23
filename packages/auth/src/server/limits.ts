@@ -1,7 +1,12 @@
 import { hmac } from "@oslojs/crypto/hmac";
 import { SHA256 } from "@oslojs/crypto/sha2";
 import { encodeHexLowerCase } from "@oslojs/encoding";
-import type { FunctionReference, FunctionReturnType, OptionalRestArgs } from "convex/server";
+import type {
+  FunctionReference,
+  FunctionReturnType,
+  FunctionVisibility,
+  OptionalRestArgs,
+} from "convex/server";
 
 import { requireAuthKey } from "./env";
 import type { ConvexAuthConfig } from "./types";
@@ -19,11 +24,11 @@ const DEFAULT_MAX_SIGN_IN_ATTEMPTS_PER_HOUR = 10;
  * @internal
  */
 export type SignInLimitCtx = {
-  runQuery: <Query extends FunctionReference<"query", "public" | "internal">>(
+  runQuery: <Query extends FunctionReference<"query", FunctionVisibility>>(
     query: Query,
     ...args: OptionalRestArgs<Query>
   ) => Promise<FunctionReturnType<Query>>;
-  runMutation: <Mutation extends FunctionReference<"mutation", "public" | "internal">>(
+  runMutation: <Mutation extends FunctionReference<"mutation", FunctionVisibility>>(
     mutation: Mutation,
     ...args: OptionalRestArgs<Mutation>
   ) => Promise<FunctionReturnType<Mutation>>;

@@ -2,6 +2,7 @@ import { decodeBase64urlIgnorePadding, encodeBase64urlNoPadding } from "@oslojs/
 import { createIdentityProvider, createServiceProvider, setSchemaValidator } from "./saml/index";
 import {
   BINDING_URI,
+  type BindingKind,
   DEFAULT_MAX_SAML_METADATA_SIZE,
   DEFAULT_MAX_SAML_RESPONSE_SIZE,
 } from "./saml/constants";
@@ -47,7 +48,7 @@ type SamlIdentityProvider = ReturnType<typeof createIdentityProvider>;
 type SamlServiceProvider = ReturnType<typeof createSamlServiceProvider> & {
   createLoginRequest(
     idp: SamlIdentityProvider,
-    binding: "redirect" | "post",
+    binding: BindingKind,
   ): SamlLoginRequest | PostBindingContext | SimpleSignBindingContext;
   parseLoginResponse(
     idp: SamlIdentityProvider,

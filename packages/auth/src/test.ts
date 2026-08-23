@@ -4,6 +4,7 @@ import type {
   FunctionArgs,
   FunctionReference,
   FunctionReturnType,
+  FunctionVisibility,
   GenericSchema,
   SchemaDefinition,
 } from "convex/server";
@@ -63,9 +64,7 @@ export function register(t: AuthTestHarness, name: string = "auth") {
  * ```
  */
 export function createAuthTest(t: AuthTestHarness, component: AuthComponentApi) {
-  const runMutation = async <
-    Reference extends FunctionReference<"mutation", "public" | "internal">,
-  >(
+  const runMutation = async <Reference extends FunctionReference<"mutation", FunctionVisibility>>(
     reference: Reference,
     args: FunctionArgs<Reference>,
   ): Promise<FunctionReturnType<Reference>> =>

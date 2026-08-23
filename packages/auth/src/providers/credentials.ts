@@ -22,7 +22,7 @@ import type { GenericId, GenericValidator, Infer } from "convex/values";
 import type { ProviderParams } from "../shared/params";
 import type { SignInFlowResult } from "../shared/results";
 import type { SessionIssuance } from "../server/session/lifecycle";
-import type { AuthProfile } from "../server/payloads";
+import type { AuthProfile, AuthProfileMatchField } from "../server/payloads";
 import type {
   AuthProviderConfig,
   ConvexCredentialsConfig,
@@ -35,7 +35,7 @@ export type CredentialsProvisioning = {
   /** User profile established by the provider's verified ceremony. */
   profile: AuthProfile;
   /** Verified profile fields that may safely match an existing user. */
-  match?: Array<"email" | "phone">;
+  match?: AuthProfileMatchField[];
 };
 
 export type CredentialsAuthorizeResult =

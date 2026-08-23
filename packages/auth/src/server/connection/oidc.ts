@@ -120,10 +120,17 @@ function validateOidcUserInfo(data: unknown): OidcUserInfo {
 
 const asError = (error: unknown) => (error instanceof Error ? error : new Error(String(error)));
 
+/**
+ * Confidential client-authentication methods this library will use against an
+ * IdP token endpoint (RFC 7591 `token_endpoint_auth_method`). `none` is not in
+ * the set: a group connection always holds a client secret.
+ */
+export type OidcClientAuthMethod = "client_secret_basic" | "client_secret_post";
+
 function resolveOidcAuthMethod(
   client: Record<string, unknown>,
   discoveredMethods: string[],
-): "client_secret_basic" | "client_secret_post" {
+): OidcClientAuthMethod {
   if (client.authMethod === "client_secret_basic" || client.authMethod === "client_secret_post") {
     return client.authMethod;
   }
@@ -153,7 +160,7 @@ export type OidcConfigShape = {
   client?: {
     id?: string;
     secret?: string;
-    authMethod?: "client_secret_post" | "client_secret_basic";
+    authMethod?: OidcClientAuthMethod;
   };
   request?: {
     scopes?: string[];

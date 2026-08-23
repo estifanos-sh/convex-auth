@@ -24,7 +24,7 @@ import { log } from "../log";
 import { createOAuthAuthorizationURL, handleOAuthCallback } from "../oauth/runtime";
 import type { AuthAccountExtend, AuthProfile } from "../payloads";
 import { redirectAbsoluteUrl, setURLSearchParam } from "../redirects";
-import type { AuthEventKind, AuthEventObject, AuthEventSubject } from "../events";
+import type { AuthEventKind, AuthEventObject, AuthEventOutcome, AuthEventSubject } from "../events";
 import type { EmitGroupAuthEventInput } from "./group/service";
 import type { ConnectionProtocol, GroupConnectionPolicy } from "../types";
 import { createGroupConnectionOidcRuntime } from "./oidc";
@@ -286,7 +286,7 @@ export function addGroupHttpRuntime(deps: GroupHttpRuntimeDeps) {
     policy: GroupPolicy;
     recordScimEvent: (
       kind: AuthEventKind,
-      outcome: "success" | "failure",
+      outcome: AuthEventOutcome,
       subject: AuthEventSubject,
       data?: Record<string, unknown>,
     ) => Promise<void>;
@@ -312,7 +312,7 @@ export function addGroupHttpRuntime(deps: GroupHttpRuntimeDeps) {
     args: {
       connection: { _id: string; groupId: string };
       protocol: ConnectionProtocol;
-      outcome: "success" | "failure";
+      outcome: AuthEventOutcome;
       userId?: string;
       error?: unknown;
     },

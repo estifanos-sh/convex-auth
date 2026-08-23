@@ -1,14 +1,8 @@
-import { v } from "convex/values";
+import { type Infer, v } from "convex/values";
 
-const vPayloadPrimitive = v.union(v.string(), v.number(), v.boolean(), v.null());
-
-const vPayloadArray = v.array(vPayloadPrimitive);
-
-const vPayloadNestedRecord = v.record(v.string(), v.union(vPayloadPrimitive, vPayloadArray));
-
-const vPayloadValue = v.union(vPayloadPrimitive, vPayloadArray, vPayloadNestedRecord);
-
-export const vPayloadRecord = v.record(v.string(), vPayloadValue);
+// The JSON-payload validator is owned by the component model; re-exported here
+// so server call sites keep importing it from the module they already use.
+export { vPayloadRecord } from "../component/model";
 
 const vAccountIdentity = v.object({
   type: v.optional(v.string()),
@@ -41,6 +35,9 @@ type PayloadValue =
 
 type PayloadRecord = Record<string, PayloadValue>;
 
+/** Verified profile fields a provider may use to select an existing user. */
+export type AuthProfileMatchField = "email" | "phone";
+
 export type SignInParams = PayloadRecord;
 
 export type AuthProfile = PayloadRecord & {
@@ -50,20 +47,5 @@ export type AuthProfile = PayloadRecord & {
   phoneVerified?: boolean;
 };
 
-export type AuthAccountExtend = {
-  identity?: {
-    type?: string;
-    provider?: string;
-    providerAccountId?: string;
-    protocol?: string;
-    connectionId?: string;
-    subject?: string;
-    issuer?: string;
-    discoveryUrl?: string;
-    entityId?: string;
-  };
-  saml?: {
-    attributes?: Record<string, string | string[]>;
-    sessionIndex?: string;
-  };
-};
+/** Provider-supplied account metadata, derived from {@link vAccountExtend}. */
+export type AuthAccountExtend = Infer<typeof vAccountExtend>;

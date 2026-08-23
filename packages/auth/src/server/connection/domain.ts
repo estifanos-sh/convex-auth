@@ -24,6 +24,7 @@ import {
   verifyConnectionDomain,
 } from "../contract";
 import { log } from "../log";
+import type { OidcClientAuthMethod } from "./oidc";
 import type { EmitGroupAuthEventInput } from "./group/service";
 import type {
   ConnectionProtocol,
@@ -1364,7 +1365,7 @@ export function createGroupConnectionDomain<TDeps extends DomainDeps>(deps: TDep
           client: {
             id: string;
             secret?: string;
-            authMethod?: "client_secret_post" | "client_secret_basic";
+            authMethod?: OidcClientAuthMethod;
           };
           request?: {
             scopes?: string[];

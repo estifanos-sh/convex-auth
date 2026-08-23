@@ -4,7 +4,7 @@ import type { Infer } from "convex/values";
 
 import type { MutationCtx } from "../../_generated/server";
 import { appendAuthEventProjection } from "../../event";
-import { vAuthEventKind } from "../../model";
+import { type AuthEventOutcome, vAuthEventKind } from "../../model";
 
 export async function appendDeliveryEvent(
   ctx: MutationCtx,
@@ -19,7 +19,7 @@ export async function appendDeliveryEvent(
       | "webhook.delivery.attempted"
       | "webhook.delivery.succeeded"
       | "webhook.delivery.failed";
-    outcome: "success" | "failure";
+    outcome: AuthEventOutcome;
     occurredAt: number;
     data?: {
       attemptCount?: number;

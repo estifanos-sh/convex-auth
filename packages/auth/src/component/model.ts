@@ -276,6 +276,9 @@ export const vAuthEventSubjectType = v.union(
 /** Whether the action behind an auth event succeeded or failed. */
 export const vAuthEventOutcome = v.union(v.literal("success"), v.literal("failure"));
 
+/** Whether the action behind an auth event succeeded or failed. @see {@link vAuthEventOutcome} */
+export type AuthEventOutcome = Infer<typeof vAuthEventOutcome>;
+
 const vAuthEventStringArray = v.array(v.string());
 const vAuthExternalObject = v.record(v.string(), v.any());
 

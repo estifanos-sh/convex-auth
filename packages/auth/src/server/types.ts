@@ -14,7 +14,7 @@ import {
 import type { GenericValidator, Infer } from "convex/values";
 import type {
   WebAuthnAttachment,
-  WebAuthnHintName,
+  WebAuthnHint,
   WebAuthnResidentKey,
   WebAuthnUserVerification,
 } from "../shared/webauthn";
@@ -28,7 +28,14 @@ import type { AuthComponentApi } from "./component/api";
 import type { CredentialsConfig } from "../providers/credentials";
 import type { AuthEventHandlerMap, OidcClaims, SamlClaims, ScimRawAttributes } from "./events";
 import type { AuthTokens, SignInFlowResult } from "../shared/results";
-import type { AuthProfile } from "./payloads";
+import type { AuthProfile, AuthProfileMatchField } from "./payloads";
+import type {
+  WebAuthnAlgorithm,
+  WebAuthnAttachment,
+  WebAuthnHint,
+  WebAuthnResidentKey,
+  WebAuthnUserVerification,
+} from "../shared/webauthn";
 
 /**
  * A value that is either `T` or a `PromiseLike<T>`.
@@ -761,16 +768,16 @@ export interface WebAuthnProviderConfig {
     /** Reject platform and synced passkeys at registration and sign-in. */
     securityKeysOnly?: boolean;
     registration: {
-      userVerification: "required" | "preferred" | "discouraged";
-      residentKey: "required" | "preferred" | "discouraged";
-      authenticatorAttachment?: "platform" | "cross-platform";
-      hints?: WebAuthnHintName[];
-      algorithms: Array<-7 | -257>;
+      userVerification: WebAuthnUserVerification;
+      residentKey: WebAuthnResidentKey;
+      authenticatorAttachment?: WebAuthnAttachment;
+      hints?: WebAuthnHint[];
+      algorithms: WebAuthnAlgorithm[];
       attestation?: WebAuthnAttestationPolicy;
     };
     authentication: {
-      userVerification: "required" | "preferred" | "discouraged";
-      hints?: WebAuthnHintName[];
+      userVerification: WebAuthnUserVerification;
+      hints?: WebAuthnHint[];
     };
   };
 }
@@ -795,11 +802,11 @@ export type WebAuthnCeremonyPolicy = {
     authenticatorAttachment?: WebAuthnAttachment;
     residentKey?: WebAuthnResidentKey;
     userVerification?: WebAuthnUserVerification;
-    hints?: WebAuthnHintName[];
+    hints?: WebAuthnHint[];
   };
   authentication?: {
     userVerification?: WebAuthnUserVerification;
-    hints?: WebAuthnHintName[];
+    hints?: WebAuthnHint[];
   };
 };
 
@@ -1028,7 +1035,7 @@ type AuthCredentialsProvisionArgs = {
   /** User profile to create, or to use when safely linking an existing user. */
   profile: AuthProfile;
   /** Verified profile fields that may safely select an existing user. */
-  match?: Array<"email" | "phone">;
+  match?: AuthProfileMatchField[];
   /** Target ceremony, bound to the staged identity. */
   operation: WebAuthnRotateOperation;
 };
@@ -1671,7 +1678,7 @@ export type KeyDoc = Infer<typeof vApiKeyDoc>;
 
 export type {
   WebAuthnAttachment,
-  WebAuthnHintName,
+  WebAuthnHint,
   WebAuthnResidentKey,
   WebAuthnUserVerification,
 } from "../shared/webauthn";

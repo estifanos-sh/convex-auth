@@ -314,7 +314,7 @@ export function createCoreDomains(deps: CoreDeps) {
         verifier: ConvexCredentialsConfig;
         account: { id: string; secret?: string };
         profile: import("./payloads").AuthProfile;
-        match?: Array<"email" | "phone">;
+        match?: import("./payloads").AuthProfileMatchField[];
         operation: WebAuthnRotateOperation;
       },
     ) => {

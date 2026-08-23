@@ -14,7 +14,7 @@ import {
 } from "../shared/event/kinds";
 // Imported from the component model rather than `./types` so the only edge
 // between this module and `server/types.ts` stays one-directional.
-import type { ConnectionProtocol, SortOrder } from "../component/model";
+import type { AuthEventOutcome, ConnectionProtocol, SortOrder } from "../component/model";
 import type { AuthComponentApi } from "./component/api";
 import type { ComponentCtx } from "./component/context";
 import { generateRandomString } from "./random";
@@ -37,7 +37,7 @@ export type ScimRawAttributes = AuthEventObject;
 type AuthEventCtx = ComponentCtx;
 type QueuedAuthEventCtx = AuthEventCtx & Pick<GenericActionCtx<GenericDataModel>, "scheduler">;
 
-export type AuthEventOutcome = "success" | "failure";
+export type { AuthEventOutcome };
 export type AuthEventTargetKind =
   | "user"
   | "session"

@@ -50,6 +50,7 @@ import { ErrorCode } from "../shared/codes";
 import {
   MAX_WEBAUTHN_CREDENTIAL_ID_LENGTH,
   MAX_WEBAUTHN_CREDENTIALS_PER_USER,
+  type WebAuthnUserVerification,
 } from "../shared/webauthn";
 import { authFlowError } from "../shared/errors";
 import { requireAuthKey } from "./env";
@@ -438,7 +439,7 @@ function verifyRpId<T extends { verifyRelyingPartyIdHash: (id: string) => boolea
 
 function verifyUserFlags<T extends { userPresent: boolean; userVerified: boolean }>(
   authData: T,
-  userVerification: "required" | "preferred" | "discouraged",
+  userVerification: WebAuthnUserVerification,
 ): T {
   if (!authData.userPresent) {
     throw convexError(ErrorCode.PASSKEY_USER_PRESENCE, "User presence flag not set.");

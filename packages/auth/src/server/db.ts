@@ -2,6 +2,7 @@ import type {
   FunctionArgs,
   FunctionReference,
   FunctionReturnType,
+  FunctionVisibility,
   GenericActionCtx,
   GenericDataModel,
 } from "convex/server";
@@ -20,7 +21,7 @@ type ComponentRunContext = {
 /** @internal */
 export type AuthComponentBoundaryConfig = { component: AuthComponentApi };
 
-function runQuery<Ref extends FunctionReference<"query", "public" | "internal">>(
+function runQuery<Ref extends FunctionReference<"query", FunctionVisibility>>(
   ctx: ComponentRunContext,
   ref: Ref,
   args: FunctionArgs<Ref>,
@@ -28,7 +29,7 @@ function runQuery<Ref extends FunctionReference<"query", "public" | "internal">>
   return ctx.runQuery(ref, args) as Promise<FunctionReturnType<Ref>>;
 }
 
-function runMutation<Ref extends FunctionReference<"mutation", "public" | "internal">>(
+function runMutation<Ref extends FunctionReference<"mutation", FunctionVisibility>>(
   ctx: ComponentRunContext,
   ref: Ref,
   args: FunctionArgs<Ref>,
