@@ -10,14 +10,12 @@ import { ConvexError, v, type Infer } from "convex/values";
 
 import { ErrorCode } from "../shared/codes";
 import { EVENT_KIND_CATEGORY } from "../shared/event/kinds";
-import type { Doc } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
 import { vAuthEventProjectionDoc } from "./documents";
 import { appendAuthEvent, readOrderedAuthEvents } from "./eventstream";
 import { internalQuery, mutation, query } from "./_generated/server";
 import {
   vAuthEvent,
-  vAuthEventData,
   vAuthEventInput,
   vAuthEventKind,
   vAuthEventTarget,
@@ -43,98 +41,6 @@ export const orderedEvents = internalQuery({
 
 function targetKey(target: AuthEventTarget): string {
   return `${target.kind}:${target.id}`;
-}
-
-const PUBLIC_DATA_KEYS = {
-  user: ["type", "provider", "existingUserId"],
-  session: ["provider", "method", "reason"],
-  account: ["provider", "accountId"],
-  password: ["userId"],
-  passkey: ["passkeyId"],
-  totp: ["totpId"],
-  email: ["userId"],
-  phone: ["userId"],
-  api_key: ["keyId", "name", "prefix", "reason"],
-  oauth: ["clientId", "codeId", "name", "scopes", "grantType", "resource", "userId"],
-  connection: [
-    "connectionId",
-    "changed",
-    "userId",
-    "protocol",
-    "domain",
-    "recordName",
-    "expiresAt",
-    "verifiedAt",
-    "metadataUrl",
-    "domains",
-    "version",
-    "errorCode",
-    "issuer",
-    "discoveryUrl",
-    "jwksUri",
-    "audience",
-    "tokenEndpointAuthMethod",
-  ],
-  scim: [
-    "scimConfigId",
-    "resourceType",
-    "resourceId",
-    "operation",
-    "externalId",
-    "active",
-    "groupId",
-    "userId",
-  ],
-  webhook: [
-    "endpointId",
-    "deliveryId",
-    "sourceEventId",
-    "sourceEventType",
-    "attemptCount",
-    "status",
-    "error",
-  ],
-  security: ["reason", "errorCode"],
-} as const;
-
-function publicData(
-  kind: AuthEvent["kind"],
-  value: unknown,
-): Infer<typeof vAuthEventData> | undefined {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) return undefined;
-  const category = EVENT_KIND_CATEGORY[kind];
-  const keys = PUBLIC_DATA_KEYS[category] ?? [];
-  const source = value as Record<string, unknown>;
-  const redacted: Record<string, unknown> = {};
-  for (const key of keys) {
-    const nested = source[key];
-    if (nested !== undefined) redacted[key] = nested;
-  }
-  return Object.keys(redacted).length === 0
-    ? undefined
-    : (redacted as Infer<typeof vAuthEventData>);
-}
-
-function publicProjection(doc: Doc<"AuthEventProjection">): Infer<typeof vAuthEventProjectionDoc> {
-  return {
-    _id: doc._id,
-    _creationTime: doc._creationTime,
-    eventId: doc.eventId,
-    targetKind: doc.targetKind,
-    targetId: doc.targetId,
-    kind: doc.kind,
-    category: doc.category,
-    occurredAt: doc.occurredAt,
-    actorType: doc.actorType,
-    actorId: doc.actorId,
-    subjectType: doc.subjectType,
-    subjectId: doc.subjectId,
-    outcome: doc.outcome,
-    errorCode: doc.errorCode,
-    requestId: doc.requestId,
-    ip: undefined,
-    data: publicData(doc.kind, doc.data),
-  };
 }
 
 function lowerBound(where: AuthEventWhere) {
@@ -269,7 +175,7 @@ export const get = query({
   returns: v.union(vAuthEventProjectionDoc, v.null()),
   handler: async (ctx, { id }) => {
     const doc = await ctx.db.get("AuthEventProjection", id);
-    return doc === null ? null : publicProjection(doc);
+    return doc;
   },
 });
 
@@ -293,7 +199,7 @@ export const list = query({
       .paginate(paginationOpts);
     return {
       ...result,
-      page: result.page.map(publicProjection),
+      page: result.page,
     };
   },
 });
@@ -352,7 +258,7 @@ export async function appendAuthEventProjection(
       )
       .unique();
     if (existing !== null) {
-      projections.push(publicProjection(existing));
+      projections.push(existing);
       continue;
     }
 
@@ -375,7 +281,7 @@ export async function appendAuthEventProjection(
       data: event.data,
     });
     const projection = await ctx.db.get("AuthEventProjection", projectionId);
-    if (projection !== null) projections.push(publicProjection(projection));
+    if (projection !== null) projections.push(projection);
     createdTargets.push(target);
   }
   await appendAuthEvent(ctx, event);
