@@ -6,14 +6,16 @@
 
 import type {
   WebAuthnAttestationPolicy,
+  WebAuthnOperationContext,
   WebAuthnSignInOperation,
   WebAuthnProviderConfig,
   WebAuthnRotateOperation,
 } from "../server/types";
 import { fidoMds } from "./webauthn/attestation";
+import { coupleSecurityKeysOnly, type WebAuthnHintName } from "../shared/webauthn";
 
 /** WebAuthn Level 3 hints that browsers may use to guide authenticator selection. */
-export type WebAuthnHint = "security-key" | "client-device" | "hybrid";
+export type WebAuthnHint = WebAuthnHintName;
 
 /** COSE algorithms supported by the WebAuthn verifier. */
 export type WebAuthnAlgorithm = -7 | -257;
@@ -113,9 +115,7 @@ export const webauthn = Object.assign(
     };
 
     if (config.securityKeysOnly) {
-      registration.authenticatorAttachment = "cross-platform";
-      registration.hints = ["security-key"];
-      authentication.hints = ["security-key"];
+      coupleSecurityKeysOnly(registration, authentication);
     } else {
       if (config.registration?.authenticatorAttachment !== undefined) {
         registration.authenticatorAttachment = config.registration.authenticatorAttachment;
@@ -134,11 +134,19 @@ export const webauthn = Object.assign(
     const provider: WebAuthnProviderConfig = {
       id: "webauthn",
       type: "webauthn",
-      rotate(): WebAuthnRotateOperation {
-        return Object.freeze({ provider, operation: "rotate" });
+      rotate(context?: WebAuthnOperationContext): WebAuthnRotateOperation {
+        return Object.freeze(
+          context === undefined
+            ? { provider, operation: "rotate" }
+            : { provider, operation: "rotate", context: Object.freeze({ ...context }) },
+        );
       },
-      signIn(): WebAuthnSignInOperation {
-        return Object.freeze({ provider, operation: "signIn" });
+      signIn(context?: WebAuthnOperationContext): WebAuthnSignInOperation {
+        return Object.freeze(
+          context === undefined
+            ? { provider, operation: "signIn" }
+            : { provider, operation: "signIn", context: Object.freeze({ ...context }) },
+        );
       },
       options: {
         rpName: config.rpName,
@@ -158,4 +166,9 @@ export const webauthn = Object.assign(
   },
 );
 
-export type { WebAuthnAttestationEvidence, WebAuthnAttestationPolicy } from "../server/types";
+export type {
+  WebAuthnAttestationEvidence,
+  WebAuthnAttestationPolicy,
+  WebAuthnCeremonyPolicy,
+  WebAuthnOperationContext,
+} from "../server/types";
