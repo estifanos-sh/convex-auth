@@ -9,6 +9,7 @@
 
 import { v } from "convex/values";
 
+import type { Id } from "../_generated/dataModel";
 import { mutation, query } from "../_generated/server";
 import { vRefreshTokenDoc, vUserDoc } from "../documents";
 
@@ -190,6 +191,23 @@ export const exchange = mutation({
       return { status: "invalid" as const };
     }
 
+    /**
+     * The three rotation outcomes below differ only in which refresh token id
+     * they hand back; everything else is the same session snapshot. Building
+     * it once keeps a field added to one branch from silently missing on the
+     * other two.
+     */
+    const rotated = (refreshTokenId: Id<"RefreshToken">) =>
+      ({
+        status: "rotated" as const,
+        userId: session.userId,
+        user,
+        sessionId: args.sessionId,
+        sessionExpirationTime: session.expirationTime,
+        refreshTokenId,
+        epoch: sessionEpoch,
+      }) as const;
+
     const issueRefreshToken = () =>
       ctx.db.insert("RefreshToken", {
         sessionId: args.sessionId,
@@ -202,15 +220,7 @@ export const exchange = mutation({
         firstUsedTime: args.now,
       });
       const refreshTokenId = await issueRefreshToken();
-      return {
-        status: "rotated" as const,
-        userId: session.userId,
-        user,
-        sessionId: args.sessionId,
-        sessionExpirationTime: session.expirationTime,
-        refreshTokenId,
-        epoch: sessionEpoch,
-      };
+      return rotated(refreshTokenId);
     }
 
     const activeRefreshToken = await ctx.db
@@ -225,28 +235,12 @@ export const exchange = mutation({
       activeRefreshToken !== null &&
       activeRefreshToken.parentRefreshTokenId === args.refreshTokenId
     ) {
-      return {
-        status: "rotated" as const,
-        userId: session.userId,
-        user,
-        sessionId: args.sessionId,
-        sessionExpirationTime: session.expirationTime,
-        refreshTokenId: activeRefreshToken._id,
-        epoch: sessionEpoch,
-      };
+      return rotated(activeRefreshToken._id);
     }
 
     if (refreshTokenDoc.firstUsedTime + args.reuseWindowMs > args.now) {
       const refreshTokenId = await issueRefreshToken();
-      return {
-        status: "rotated" as const,
-        userId: session.userId,
-        user,
-        sessionId: args.sessionId,
-        sessionExpirationTime: session.expirationTime,
-        refreshTokenId,
-        epoch: sessionEpoch,
-      };
+      return rotated(refreshTokenId);
     }
 
     const reuseUserId = session.userId;

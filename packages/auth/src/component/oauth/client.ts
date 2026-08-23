@@ -13,9 +13,26 @@ import { ErrorCode } from "../../shared/codes";
 
 import { internal } from "../_generated/api";
 import { vOAuthClientDoc } from "../documents";
-import { internalMutation, mutation, query } from "../_generated/server";
+import { internalMutation, mutation, type QueryCtx, query } from "../_generated/server";
 import { vPaginated, vTokenEndpointAuthMethod } from "../model";
 import schema from "../schema";
+
+/**
+ * Resolve a registration row by its public `clientId`, throwing
+ * `OAUTH_CLIENT_NOT_FOUND` when absent. Every mutation on this table selects
+ * its target this way; sharing the lookup keeps the thrown error shape
+ * identical across `update`, `revoke` and `remove`.
+ */
+async function clientByClientIdOrThrow(ctx: QueryCtx, clientId: string) {
+  const doc = await ctx.db
+    .query("OAuthClient")
+    .withIndex("client_id", (q) => q.eq("clientId", clientId))
+    .first();
+  if (doc === null) {
+    throw new ConvexError({ code: ErrorCode.OAUTH_CLIENT_NOT_FOUND, clientId });
+  }
+  return doc;
+}
 
 /**
  * Read a client by identity. Accepts exactly one selector:
@@ -95,13 +112,7 @@ export const update = mutation({
   },
   returns: v.null(),
   handler: async (ctx, { clientId, patch }) => {
-    const doc = await ctx.db
-      .query("OAuthClient")
-      .withIndex("client_id", (q) => q.eq("clientId", clientId))
-      .first();
-    if (doc === null) {
-      throw new ConvexError({ code: ErrorCode.OAUTH_CLIENT_NOT_FOUND, clientId });
-    }
+    const doc = await clientByClientIdOrThrow(ctx, clientId);
     const next =
       patch.tokenEndpointAuthMethod === "none" ? { ...patch, clientSecretHash: undefined } : patch;
     await ctx.db.patch("OAuthClient", doc._id, next);
@@ -147,13 +158,7 @@ export const revoke = mutation({
   args: { clientId: v.string() },
   returns: v.null(),
   handler: async (ctx, { clientId }) => {
-    const doc = await ctx.db
-      .query("OAuthClient")
-      .withIndex("client_id", (q) => q.eq("clientId", clientId))
-      .first();
-    if (doc === null) {
-      throw new ConvexError({ code: ErrorCode.OAUTH_CLIENT_NOT_FOUND, clientId });
-    }
+    const doc = await clientByClientIdOrThrow(ctx, clientId);
     await ctx.db.patch("OAuthClient", doc._id, {
       revoked: true,
       revokedAt: doc.revokedAt ?? Date.now(),
@@ -171,13 +176,7 @@ const remove = mutation({
   args: { clientId: v.string() },
   returns: v.null(),
   handler: async (ctx, { clientId }) => {
-    const doc = await ctx.db
-      .query("OAuthClient")
-      .withIndex("client_id", (q) => q.eq("clientId", clientId))
-      .first();
-    if (doc === null) {
-      throw new ConvexError({ code: ErrorCode.OAUTH_CLIENT_NOT_FOUND, clientId });
-    }
+    const doc = await clientByClientIdOrThrow(ctx, clientId);
     await ctx.db.delete("OAuthClient", doc._id);
     return null;
   },
