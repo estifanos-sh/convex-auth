@@ -237,10 +237,9 @@ async function runSetup(options: CliOptions) {
   await configureAppUrl(config, options.appUrl);
   await configureKeys(config);
   await modifyTsConfig(config);
-  await configureConvexConfig(config);
-  await initializeAuth(config);
-  await initializeHttp(config);
-  await initializeAuthConfig(config);
+  for (const file of SCAFFOLDED_FILES) {
+    await scaffoldFile({ config, ...file });
+  }
 
   if (options.variables !== undefined) {
     await configureOtherVariables(config, options.variables);
@@ -697,9 +696,24 @@ function addCompilerOption(
   }
 }
 
-async function configureConvexConfig(config: ProjectConfig) {
-  logStep(config, "Configure convex config file");
-  const sourceTemplate = `\
+type ScaffoldedFile = {
+  step: string;
+  basename: string;
+  sourceTemplate: string;
+  guidance: string;
+};
+
+/**
+ * `sourceTemplate` does double duty: `$$` markers are stripped to produce the
+ * file that gets written, and become `.*` wildcards in the "already set up?"
+ * match. Editing a template changes both.
+ */
+const SCAFFOLDED_FILES: readonly ScaffoldedFile[] = [
+  {
+    step: "Configure convex config file",
+    basename: "convex.config",
+    guidance: "registers the auth component",
+    sourceTemplate: `\
 import { defineApp } from "convex/server";
 import auth from "@estifanos-sh/convex-auth/convex.config";
 
@@ -708,38 +722,13 @@ const app = defineApp();
 app.use(auth);
 
 export default app;
-`;
-  const source = templateToSource(sourceTemplate);
-  const convexConfigPath = path.join(config.convexFolderPath, "convex.config");
-  const existingConfigPath = existingNonEmptySourcePath(convexConfigPath);
-  if (existingConfigPath !== null) {
-    const existingConfig = readFileSync(existingConfigPath, "utf8");
-    if (doesAlreadyMatchTemplate(existingConfig, sourceTemplate)) {
-      p.log.success(`${existingConfigPath} is already set up.`);
-    } else {
-      p.log.info(
-        `You already have ${existingConfigPath}. Make sure it registers the auth component:`,
-      );
-      p.log.message(indent(`\n${source}\n`));
-      const ready = await p.confirm({ message: "Ready to continue?" });
-      handleCancel(ready);
-      if (!ready) {
-        p.cancel("Setup cancelled.");
-        process.exit(1);
-      }
-    }
-  } else {
-    const newConfigPath = config.usesTypeScript
-      ? `${convexConfigPath}.ts`
-      : `${convexConfigPath}.js`;
-    writeFileSync(newConfigPath, source);
-    p.log.success(`Created ${newConfigPath}`);
-  }
-}
-
-async function initializeAuth(config: ProjectConfig) {
-  logStep(config, "Initialize auth file");
-  const sourceTemplate = `\
+`,
+  },
+  {
+    step: "Initialize auth file",
+    basename: "auth",
+    guidance: "initializes auth with defineAuth",
+    sourceTemplate: `\
 import { defineAuth } from "@estifanos-sh/convex-auth/server";
 import { components } from "./_generated/api";
 
@@ -749,69 +738,23 @@ const auth = defineAuth(components.auth, {$$
 
 export { auth };
 export const { signIn, signOut, store } = auth;
-`;
-  const source = templateToSource(sourceTemplate);
-  const authPath = path.join(config.convexFolderPath, "auth");
-  const existingAuthPath = existingNonEmptySourcePath(authPath);
-  if (existingAuthPath !== null) {
-    const existingAuth = readFileSync(existingAuthPath, "utf8");
-    if (doesAlreadyMatchTemplate(existingAuth, sourceTemplate)) {
-      p.log.success(`${existingAuthPath} is already set up.`);
-    } else {
-      p.log.info(
-        `You already have ${existingAuthPath}. Make sure it initializes auth with defineAuth:`,
-      );
-      p.log.message(indent(`\n${source}\n`));
-      const ready = await p.confirm({ message: "Ready to continue?" });
-      handleCancel(ready);
-      if (!ready) {
-        p.cancel("Setup cancelled.");
-        process.exit(1);
-      }
-    }
-  } else {
-    const newAuthPath = config.usesTypeScript ? `${authPath}.ts` : `${authPath}.js`;
-    writeFileSync(newAuthPath, source);
-    p.log.success(`Created ${newAuthPath}`);
-  }
-}
-
-async function initializeHttp(config: ProjectConfig) {
-  logStep(config, "Initialize HTTP auth routes");
-  const sourceTemplate = `\
+`,
+  },
+  {
+    step: "Initialize HTTP auth routes",
+    basename: "http",
+    guidance: "mounts Convex Auth protocol routes",
+    sourceTemplate: `\
 import { auth } from "./auth";
 
 export default auth.http();
-`;
-  const source = templateToSource(sourceTemplate);
-  const httpPath = path.join(config.convexFolderPath, "http");
-  const existingPath = existingNonEmptySourcePath(httpPath);
-  if (existingPath !== null) {
-    const existing = readFileSync(existingPath, "utf8");
-    if (doesAlreadyMatchTemplate(existing, sourceTemplate)) {
-      p.log.success(`${existingPath} is already set up.`);
-    } else {
-      p.log.info(
-        `You already have ${existingPath}. Make sure it mounts Convex Auth protocol routes:`,
-      );
-      p.log.message(indent(`\n${source}\n`));
-      const ready = await p.confirm({ message: "Ready to continue?" });
-      handleCancel(ready);
-      if (!ready) {
-        p.cancel("Setup cancelled.");
-        process.exit(1);
-      }
-    }
-  } else {
-    const newPath = config.usesTypeScript ? `${httpPath}.ts` : `${httpPath}.js`;
-    writeFileSync(newPath, source);
-    p.log.success(`Created ${newPath}`);
-  }
-}
-
-async function initializeAuthConfig(config: ProjectConfig) {
-  logStep(config, "Initialize auth.config file");
-  const sourceTemplate = `\
+`,
+  },
+  {
+    step: "Initialize auth.config file",
+    basename: "auth.config",
+    guidance: "trusts env.CONVEX_SITE_URL as the Convex auth issuer",
+    sourceTemplate: `\
 import { env } from "./_generated/server";$$
 $$
 export default {$$
@@ -822,18 +765,27 @@ export default {$$
     },$$
   ],$$
 };
-`;
+`,
+  },
+];
+
+async function scaffoldFile({
+  config,
+  step,
+  basename,
+  sourceTemplate,
+  guidance,
+}: ScaffoldedFile & { config: ProjectConfig }) {
+  logStep(config, step);
   const source = templateToSource(sourceTemplate);
-  const authConfigPath = path.join(config.convexFolderPath, "auth.config");
-  const existingPath = existingNonEmptySourcePath(authConfigPath);
+  const targetPath = path.join(config.convexFolderPath, basename);
+  const existingPath = existingNonEmptySourcePath(targetPath);
   if (existingPath !== null) {
     const existing = readFileSync(existingPath, "utf8");
     if (doesAlreadyMatchTemplate(existing, sourceTemplate)) {
       p.log.success(`${existingPath} is already set up.`);
     } else {
-      p.log.info(
-        `You already have ${existingPath}. Make sure it trusts env.CONVEX_SITE_URL as the Convex auth issuer:`,
-      );
+      p.log.info(`You already have ${existingPath}. Make sure it ${guidance}:`);
       p.log.message(indent(`\n${source}\n`));
       const ready = await p.confirm({ message: "Ready to continue?" });
       handleCancel(ready);
@@ -843,7 +795,7 @@ export default {$$
       }
     }
   } else {
-    const newPath = config.usesTypeScript ? `${authConfigPath}.ts` : `${authConfigPath}.js`;
+    const newPath = config.usesTypeScript ? `${targetPath}.ts` : `${targetPath}.js`;
     writeFileSync(newPath, source);
     p.log.success(`Created ${newPath}`);
   }
