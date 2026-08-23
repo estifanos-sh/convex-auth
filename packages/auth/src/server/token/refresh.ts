@@ -1,7 +1,8 @@
-import { ConvexError, GenericId } from "convex/values";
+import { GenericId } from "convex/values";
 
 import type { RefreshToken } from "../../shared/brand";
 import { ErrorCode } from "../../shared/codes";
+import { convexError } from "../errors";
 import { maybeRedact } from "../log";
 import type { ConvexAuthConfig } from "../types";
 
@@ -30,11 +31,11 @@ export const parseRefreshToken = (refreshToken: string): ParsedRefreshToken => {
   const parts = refreshToken.split(REFRESH_TOKEN_DIVIDER);
   const message = `Can't parse refresh token: ${maybeRedact(refreshToken)}`;
   if (parts.length !== 2) {
-    throw new ConvexError({ code: ErrorCode.INVALID_REFRESH_TOKEN, message });
+    throw convexError(ErrorCode.INVALID_REFRESH_TOKEN, message);
   }
   const [refreshTokenId, sessionId] = parts;
   if (refreshTokenId == null || sessionId == null) {
-    throw new ConvexError({ code: ErrorCode.INVALID_REFRESH_TOKEN, message });
+    throw convexError(ErrorCode.INVALID_REFRESH_TOKEN, message);
   }
   return {
     refreshTokenId: refreshTokenId as GenericId<"RefreshToken">,

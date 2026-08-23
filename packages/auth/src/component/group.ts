@@ -8,10 +8,11 @@
  */
 
 import { paginationOptsValidator } from "convex/server";
-import { ConvexError, v } from "convex/values";
+import { v } from "convex/values";
 import { paginator } from "convex-helpers/server/pagination";
 import { stream } from "convex-helpers/server/stream";
 import { ErrorCode } from "../shared/codes";
+import { convexError } from "../shared/errors";
 
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
@@ -350,19 +351,19 @@ async function activeHierarchyOperationForGroup(ctx: MutationCtx, groupId: Id<"G
 
 async function assertGroupNotBeingRemoved(ctx: MutationCtx, groupId: Id<"Group">) {
   if ((await activeRemovalForGroup(ctx, groupId)) !== null) {
-    throw new ConvexError({
-      code: ErrorCode.INVALID_PARAMETERS,
-      message: `Group ${groupId} is being removed and cannot be changed.`,
-    });
+    throw convexError(
+      ErrorCode.INVALID_PARAMETERS,
+      `Group ${groupId} is being removed and cannot be changed.`,
+    );
   }
 }
 
 async function assertGroupCanAcceptChild(ctx: MutationCtx, groupId: Id<"Group">) {
   if ((await activeHierarchyOperationForGroup(ctx, groupId)) !== null) {
-    throw new ConvexError({
-      code: ErrorCode.INVALID_PARAMETERS,
-      message: `Group ${groupId} has a hierarchy operation in progress and cannot accept a child.`,
-    });
+    throw convexError(
+      ErrorCode.INVALID_PARAMETERS,
+      `Group ${groupId} has a hierarchy operation in progress and cannot accept a child.`,
+    );
   }
 }
 

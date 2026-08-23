@@ -1,23 +1,11 @@
 import { ConvexError } from "convex/values";
 
 import { ErrorCode } from "../shared/codes";
-import { AuthFlowError, authFlowError } from "../shared/errors";
+import type { AuthErrorData } from "../shared/errors";
+import { AuthFlowError, authFlowError, convexError } from "../shared/errors";
 
-export type AuthErrorData = {
-  code: ErrorCode;
-  message: string;
-};
-
-/**
- * Build a `ConvexError` carrying an auth error `code` and `message`, plus any
- * extra structured fields.
- * @internal
- */
-export const convexError = (
-  code: ErrorCode,
-  message: string,
-  extra?: Record<string, unknown>,
-): ConvexError<AuthErrorData> => new ConvexError({ code, message, ...extra });
+export { convexError };
+export type { AuthErrorData };
 
 /**
  * Render an unknown thrown value as a short, human-readable fragment for an
@@ -64,17 +52,6 @@ export const toConvexError = (error: unknown): ConvexError<AuthErrorData> => {
 };
 
 /**
- * Normalize a caught value into a `ConvexError` carrying `code`.
- *
- * An already-structured `ConvexError` passes through untouched; a plain
- * `Error` keeps its own message (falling back to `message` when empty);
- * anything else becomes `code`/`message`. Used by the passkey and TOTP
- * ceremony handlers, which must never let a value thrown by a provider
- * callback escape as an opaque failure.
- *
- * @internal
- */
-/**
  * The canonical "there is no authenticated user" error.
  *
  * Ten call sites across the HTTP surface, the facade, and the domain helpers
@@ -88,6 +65,17 @@ export const notSignedInError = (
   message = "Authentication required.",
 ): ConvexError<AuthErrorData> => convexError(ErrorCode.NOT_SIGNED_IN, message);
 
+/**
+ * Normalize a caught value into a `ConvexError` carrying `code`.
+ *
+ * An already-structured `ConvexError` passes through untouched; a plain
+ * `Error` keeps its own message (falling back to `message` when empty);
+ * anything else becomes `code`/`message`. Used by the passkey and TOTP
+ * ceremony handlers, which must never let a value thrown by a provider
+ * callback escape as an opaque failure.
+ *
+ * @internal
+ */
 export const asConvexError = (
   error: unknown,
   code: ErrorCode,

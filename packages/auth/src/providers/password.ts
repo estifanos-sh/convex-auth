@@ -24,7 +24,7 @@
 import { scryptAsync } from "@noble/hashes/scrypt.js";
 import { bytesToHex } from "@noble/hashes/utils.js";
 import { DocumentByName, GenericDataModel, WithoutSystemFields } from "convex/server";
-import { ConvexError, GenericId, v } from "convex/values";
+import { GenericId, v } from "convex/values";
 
 import { emitAuthEvent } from "../server/events";
 import { getAuthenticatedUserIdOrNull } from "../server/identity/claims";
@@ -34,6 +34,7 @@ import { sha256 } from "../server/random";
 import { mutatePasswordRecovery } from "../server/component/factor/db";
 import type { Hashed } from "../shared/brand";
 import { ErrorCode } from "../shared/codes";
+import { convexError } from "../server/errors";
 import type { PasswordParams } from "../shared/params";
 import type {
   EmailConfig,
@@ -260,16 +261,13 @@ export function password<
             enforceTotp: true,
           });
           if (result.kind === "invalidAccount" || result.kind === "invalidSecret") {
-            throw new ConvexError({
-              code: ErrorCode.INVALID_CREDENTIALS,
-              message: "Invalid credentials",
-            });
+            throw convexError(ErrorCode.INVALID_CREDENTIALS, "Invalid credentials");
           }
           if (result.kind === "tooManyAttempts") {
-            throw new ConvexError({
-              code: ErrorCode.RATE_LIMITED,
-              message: "Too many failed sign-in attempts. Please try again later.",
-            });
+            throw convexError(
+              ErrorCode.RATE_LIMITED,
+              "Too many failed sign-in attempts. Please try again later.",
+            );
           }
           if (result.kind === "emailVerificationRequired") {
             return await ctx.auth.provider.signIn(ctx, {
@@ -331,10 +329,7 @@ export function password<
               account: { id: email },
             });
             if (account === null) {
-              throw new ConvexError({
-                code: ErrorCode.INVALID_CREDENTIALS,
-                message: "Invalid code",
-              });
+              throw convexError(ErrorCode.INVALID_CREDENTIALS, "Invalid code");
             }
             if (resetProvider.authorize !== undefined) {
               await resetProvider.authorize(params, account.account);
@@ -355,16 +350,13 @@ export function password<
               operation: afterReset.operation,
             });
             if (recovery.status === "limited") {
-              throw new ConvexError({
-                code: ErrorCode.RATE_LIMITED,
-                message: "Too many failed recovery attempts. Please try again later.",
-              });
+              throw convexError(
+                ErrorCode.RATE_LIMITED,
+                "Too many failed recovery attempts. Please try again later.",
+              );
             }
             if (recovery.status !== "accepted") {
-              throw new ConvexError({
-                code: ErrorCode.INVALID_CREDENTIALS,
-                message: "Invalid code",
-              });
+              throw convexError(ErrorCode.INVALID_CREDENTIALS, "Invalid code");
             }
             return await ctx.auth.provider.continueRecovery(ctx, {
               userId: recovery.userId as GenericDoc<DataModel, "User">["_id"],
@@ -377,16 +369,10 @@ export function password<
             params,
           });
           if (result === null) {
-            throw new ConvexError({
-              code: ErrorCode.INVALID_CREDENTIALS,
-              message: "Invalid code",
-            });
+            throw convexError(ErrorCode.INVALID_CREDENTIALS, "Invalid code");
           }
           if ("kind" in result) {
-            throw new ConvexError({
-              code: ErrorCode.INVALID_CREDENTIALS,
-              message: "Invalid code",
-            });
+            throw convexError(ErrorCode.INVALID_CREDENTIALS, "Invalid code");
           }
           const { userId, sessionId } = result;
           await ctx.auth.account.update(ctx, {
@@ -429,10 +415,7 @@ export function password<
         change: async () => {
           const authedUserId = await getAuthenticatedUserIdOrNull(ctx);
           if (authedUserId === null) {
-            throw new ConvexError({
-              code: ErrorCode.NOT_SIGNED_IN,
-              message: "Sign in first to change your password.",
-            });
+            throw convexError(ErrorCode.NOT_SIGNED_IN, "Sign in first to change your password.");
           }
           const currentPassword = requireStringParam(
             "currentPassword" in params ? params.currentPassword : undefined,
@@ -454,16 +437,13 @@ export function password<
             enforceTotp: false,
           });
           if (result.kind === "invalidAccount" || result.kind === "invalidSecret") {
-            throw new ConvexError({
-              code: ErrorCode.INVALID_CREDENTIALS,
-              message: "Invalid current password",
-            });
+            throw convexError(ErrorCode.INVALID_CREDENTIALS, "Invalid current password");
           }
           if (result.kind === "tooManyAttempts") {
-            throw new ConvexError({
-              code: ErrorCode.RATE_LIMITED,
-              message: "Too many failed attempts. Please try again later.",
-            });
+            throw convexError(
+              ErrorCode.RATE_LIMITED,
+              "Too many failed attempts. Please try again later.",
+            );
           }
           if (result.kind !== "signedIn") {
             throw new Error(`Unexpected sign-in result: ${result.kind}`);

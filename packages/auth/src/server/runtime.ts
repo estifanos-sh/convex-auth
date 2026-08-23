@@ -7,12 +7,13 @@ import {
   internalMutationGeneric,
 } from "convex/server";
 import type { RouteSpec } from "convex/server";
-import { ConvexError, v } from "convex/values";
+import { v } from "convex/values";
 import { validate } from "convex-helpers/validators";
 import type { GenericValidator } from "convex/values";
 
 import type { AuthTokens, SignInFlowResult } from "../shared/results";
 import { ErrorCode } from "../shared/codes";
+import { convexError } from "./errors";
 import { createCoreDomains } from "./core";
 import { applyCeremonyPolicy } from "./webauthn";
 import { GetProviderOrThrowFunc, hash as hashCredentialSecret } from "./crypto";
@@ -751,33 +752,33 @@ export function Auth(config_: ConvexAuthConfig<any>) {
             args.continuation,
           );
           if (continuation === null || continuation.provider !== providerId) {
-            throw new ConvexError({
-              code: ErrorCode.CONTINUATION_INVALID,
-              message: "The provider continuation is invalid or expired.",
-            });
+            throw convexError(
+              ErrorCode.CONTINUATION_INVALID,
+              "The provider continuation is invalid or expired.",
+            );
           }
           provider = getProviderOrThrow(providerId, true);
           if (provider.type !== "webauthn") {
-            throw new ConvexError({
-              code: ErrorCode.CONTINUATION_INVALID,
-              message: "The provider continuation does not support this provider.",
-            });
+            throw convexError(
+              ErrorCode.CONTINUATION_INVALID,
+              "The provider continuation does not support this provider.",
+            );
           }
         } else if (typeof providerId === "string") {
           provider = getProviderOrThrow(providerId);
         }
         if (provider?.type === "credentials") {
           if (!validate(provider.params, args.params)) {
-            throw new ConvexError({
-              code: ErrorCode.INVALID_PARAMETERS,
-              message: `Invalid parameters for credentials provider ${provider.id}.`,
-            });
+            throw convexError(
+              ErrorCode.INVALID_PARAMETERS,
+              `Invalid parameters for credentials provider ${provider.id}.`,
+            );
           }
         } else if (!validate(v.optional(vPayloadRecord), args.params)) {
-          throw new ConvexError({
-            code: ErrorCode.INVALID_PARAMETERS,
-            message: "Sign-in parameters must contain only supported payload values.",
-          });
+          throw convexError(
+            ErrorCode.INVALID_PARAMETERS,
+            "Sign-in parameters must contain only supported payload values.",
+          );
         }
         const authSiteUrl =
           provider?.type === "oauth" || provider?.type === "connection"

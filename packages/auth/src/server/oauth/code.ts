@@ -2,6 +2,7 @@ import { ConvexError, type Infer } from "convex/values";
 
 import { vOAuthCodeDoc } from "../../component/documents";
 import { ErrorCode } from "../../shared/codes";
+import { convexError } from "../errors";
 import { cached } from "../cache/context";
 import type { AuthComponentApi } from "../component/api";
 import type { ComponentCtx } from "../component/context";
@@ -68,12 +69,11 @@ async function assertAuthorizeCallerMatchesUser(ctx: ComponentCtx, userId: strin
   const identity =
     typeof auth?.getUserIdentity === "function" ? await auth.getUserIdentity() : undefined;
   if (!identity || identity.subject !== userId) {
-    throw new ConvexError({
-      code: ErrorCode.NOT_AUTHORIZED,
-      message:
-        "oauth.authorize must be called by the authenticated user it authorizes; " +
+    throw convexError(
+      ErrorCode.NOT_AUTHORIZED,
+      "oauth.authorize must be called by the authenticated user it authorizes; " +
         "resolve `userId` from ctx.auth.getUserIdentity() rather than request input.",
-    });
+    );
   }
 }
 

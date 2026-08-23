@@ -8,9 +8,10 @@
  */
 
 import { paginationOptsValidator } from "convex/server";
-import { ConvexError, v } from "convex/values";
+import { v } from "convex/values";
 import { stream } from "convex-helpers/server/stream";
 import { ErrorCode } from "../../shared/codes";
+import { convexError } from "../../shared/errors";
 
 import { mutation, query } from "../_generated/server";
 import schema from "../schema";
@@ -34,11 +35,10 @@ function isValidRateLimit(rateLimit: ApiKeyRateLimit): boolean {
 
 function assertValidRateLimit(rateLimit: ApiKeyRateLimit | undefined): void {
   if (rateLimit !== undefined && !isValidRateLimit(rateLimit)) {
-    throw new ConvexError({
-      code: ErrorCode.INVALID_PARAMETERS,
-      message:
-        "API key rate limits require a positive integer maxRequests and positive finite windowMs.",
-    });
+    throw convexError(
+      ErrorCode.INVALID_PARAMETERS,
+      "API key rate limits require a positive integer maxRequests and positive finite windowMs.",
+    );
   }
 }
 
@@ -156,11 +156,7 @@ export const update = mutation({
     assertValidRateLimit(patch.rateLimit);
     const key = await ctx.db.get("ApiKey", keyId);
     if (key === null) {
-      throw new ConvexError({
-        code: ErrorCode.KEY_NOT_FOUND,
-        message: "API key not found",
-        keyId,
-      });
+      throw convexError(ErrorCode.KEY_NOT_FOUND, "API key not found", { keyId });
     }
     await ctx.db.patch("ApiKey", keyId, patch);
     return null;
@@ -348,11 +344,7 @@ const remove = mutation({
   handler: async (ctx, { id: keyId }) => {
     const key = await ctx.db.get("ApiKey", keyId);
     if (key === null) {
-      throw new ConvexError({
-        code: ErrorCode.KEY_NOT_FOUND,
-        message: "API key not found",
-        keyId,
-      });
+      throw convexError(ErrorCode.KEY_NOT_FOUND, "API key not found", { keyId });
     }
     await ctx.db.delete("ApiKey", keyId);
     return null;

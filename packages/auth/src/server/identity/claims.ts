@@ -1,15 +1,13 @@
 import type { UserIdentity } from "convex/server";
-import { ConvexError, type GenericId } from "convex/values";
+import type { GenericId } from "convex/values";
 
 import { ErrorCode } from "../../shared/codes";
+import { convexError } from "../errors";
 
 /** @internal */
 export function userIdFromIdentitySubject(subject: string): string {
   if (typeof subject !== "string" || subject.length === 0) {
-    throw new ConvexError({
-      code: ErrorCode.INTERNAL_ERROR,
-      message: "Authenticated identity subject is malformed.",
-    });
+    throw convexError(ErrorCode.INTERNAL_ERROR, "Authenticated identity subject is malformed.");
   }
   return subject;
 }
@@ -23,10 +21,10 @@ export function userIdFromIdentity(identity: UserIdentity): GenericId<"User"> {
 export function sessionIdFromIdentity(identity: UserIdentity): GenericId<"Session"> {
   const sessionId = identity.sid;
   if (typeof sessionId !== "string" || sessionId.length === 0) {
-    throw new ConvexError({
-      code: ErrorCode.INTERNAL_ERROR,
-      message: "Authenticated identity is missing a session id claim.",
-    });
+    throw convexError(
+      ErrorCode.INTERNAL_ERROR,
+      "Authenticated identity is missing a session id claim.",
+    );
   }
   return sessionId as GenericId<"Session">;
 }

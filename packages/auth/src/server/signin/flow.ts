@@ -14,7 +14,7 @@ import type {
 } from "../../shared/results";
 import { handleDevice } from "../device";
 import type { AuthErrorData } from "../errors";
-import { describeUnknown, toConvexError } from "../errors";
+import { convexError, describeUnknown, toConvexError } from "../errors";
 import { log } from "../log";
 import {
   callCreateVerificationCode,
@@ -91,10 +91,10 @@ const asCredentialsError = (error: unknown): ConvexError<AuthErrorData> => {
     return error as ConvexError<AuthErrorData>;
   }
   if (error instanceof Error) {
-    return new ConvexError({
-      code: error.message.startsWith("Missing `") ? "INVALID_PARAMETERS" : "INVALID_CREDENTIALS",
-      message: error.message,
-    });
+    return convexError(
+      error.message.startsWith("Missing `") ? "INVALID_PARAMETERS" : "INVALID_CREDENTIALS",
+      error.message,
+    );
   }
   return toConvexError(authFlowError("INTERNAL_ERROR", "Failed to authorize credentials."));
 };

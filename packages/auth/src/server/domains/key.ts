@@ -1,7 +1,8 @@
 import type { PaginationResult } from "convex/server";
-import { ConvexError, type GenericId } from "convex/values";
+import type { GenericId } from "convex/values";
 
 import { ErrorCode } from "../../shared/codes";
+import { convexError } from "../errors";
 import type { ComponentCtx, ComponentReadCtx } from "../component/context";
 import { configDefaults } from "../config";
 import { emitAuthEvent } from "../events";
@@ -150,10 +151,7 @@ export function createKeyDomain(deps: KeyDeps) {
         hashedKey,
       })) as KeyDoc | null;
       if (!doc) {
-        throw new ConvexError({
-          code: ErrorCode.INVALID_API_KEY,
-          message: "Invalid API key.",
-        });
+        throw convexError(ErrorCode.INVALID_API_KEY, "Invalid API key.");
       }
       // Make the successful verification decision and update usage in ONE
       // component mutation on the `ApiKey` row. The hash lookup above only
@@ -179,25 +177,16 @@ export function createKeyDomain(deps: KeyDeps) {
           };
       switch (result.status) {
         case "invalid":
-          throw new ConvexError({
-            code: ErrorCode.INVALID_API_KEY,
-            message: "Invalid API key.",
-          });
+          throw convexError(ErrorCode.INVALID_API_KEY, "Invalid API key.");
         case "revoked":
-          throw new ConvexError({
-            code: ErrorCode.API_KEY_REVOKED,
-            message: "This API key has been revoked.",
-          });
+          throw convexError(ErrorCode.API_KEY_REVOKED, "This API key has been revoked.");
         case "expired":
-          throw new ConvexError({
-            code: ErrorCode.API_KEY_EXPIRED,
-            message: "This API key has expired.",
-          });
+          throw convexError(ErrorCode.API_KEY_EXPIRED, "This API key has expired.");
         case "limited":
-          throw new ConvexError({
-            code: ErrorCode.API_KEY_RATE_LIMITED,
-            message: "API key rate limit exceeded. Please try again later.",
-          });
+          throw convexError(
+            ErrorCode.API_KEY_RATE_LIMITED,
+            "API key rate limit exceeded. Please try again later.",
+          );
       }
       return {
         userId: result.userId,
@@ -408,22 +397,16 @@ export function createKeyDomain(deps: KeyDeps) {
         expiresAt: opts.expiresAt,
       });
       if (result.status === "invalid") {
-        throw new ConvexError({
-          code: ErrorCode.INVALID_PARAMETERS,
-          message: "The provided parameters are invalid.",
-        });
+        throw convexError(ErrorCode.INVALID_PARAMETERS, "The provided parameters are invalid.");
       }
       if (result.status === "revoked") {
-        throw new ConvexError({
-          code: ErrorCode.API_KEY_REVOKED,
-          message: "This API key has been revoked.",
-        });
+        throw convexError(ErrorCode.API_KEY_REVOKED, "This API key has been revoked.");
       }
       if (result.status === "invalid_rate_limit") {
-        throw new ConvexError({
-          code: ErrorCode.INVALID_PARAMETERS,
-          message: "The API key has an invalid rate limit configuration.",
-        });
+        throw convexError(
+          ErrorCode.INVALID_PARAMETERS,
+          "The API key has an invalid rate limit configuration.",
+        );
       }
       await emitCommittedKeyEvent(ctx, {
         kind: "api_key.revoked",

@@ -1,9 +1,9 @@
 import { sha256 as rawSha256 } from "@oslojs/crypto/sha2";
 import { decodeBase64urlIgnorePadding, encodeBase64urlNoPadding } from "@oslojs/encoding";
-import { ConvexError } from "convex/values";
 
 import type { EncryptedSecret } from "../shared/brand";
 import { ErrorCode } from "../shared/codes";
+import { convexError } from "./errors";
 
 import { requireAuthKey } from "./env";
 
@@ -38,10 +38,7 @@ export async function encryptSecret(value: string): Promise<EncryptedSecret> {
 export async function decryptSecret(ciphertext: string) {
   const parts = ciphertext.split(".");
   if (parts.length !== 2 || !parts[0] || !parts[1]) {
-    throw new ConvexError({
-      code: ErrorCode.INVALID_PARAMETERS,
-      message: "Stored group connection secret is malformed.",
-    });
+    throw convexError(ErrorCode.INVALID_PARAMETERS, "Stored group connection secret is malformed.");
   }
   const [ivEncoded, payloadEncoded] = parts;
   const key = await getSecretCryptoKey();

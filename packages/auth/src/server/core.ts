@@ -1,8 +1,8 @@
 import { Auth, GenericActionCtx, GenericDataModel } from "convex/server";
-import { ConvexError, GenericId } from "convex/values";
+import { GenericId } from "convex/values";
 
 import { ErrorCode } from "../shared/codes";
-import { notSignedInError } from "./errors";
+import { convexError, notSignedInError } from "./errors";
 import type { ComponentCtx, ComponentReadCtx } from "./component/context";
 import { configDefaults } from "./config";
 import { createOAuthClientDomain } from "./oauth/client";
@@ -142,9 +142,7 @@ export function createCoreDomains(deps: CoreDeps) {
     const normalized = Array.from(new Set(roleIds ?? []));
     const invalid = normalized.filter((id) => getRoleDefinition(id) === null);
     if (invalid.length > 0) {
-      throw new ConvexError({
-        code: ErrorCode.INVALID_ROLE_IDS,
-        message: "One or more role IDs are invalid.",
+      throw convexError(ErrorCode.INVALID_ROLE_IDS, "One or more role IDs are invalid.", {
         invalidRoleIds: invalid,
       });
     }
@@ -280,16 +278,14 @@ export function createCoreDomains(deps: CoreDeps) {
         account: args.account,
       });
       if (typeof verified === "string") {
-        throw new ConvexError({
-          code:
-            verified === "TooManyFailedAttempts"
-              ? ErrorCode.RATE_LIMITED
-              : ErrorCode.INVALID_CREDENTIALS,
-          message:
-            verified === "TooManyFailedAttempts"
-              ? "Too many failed credentials attempts. Please try again later."
-              : "Invalid credentials.",
-        });
+        throw convexError(
+          verified === "TooManyFailedAttempts"
+            ? ErrorCode.RATE_LIMITED
+            : ErrorCode.INVALID_CREDENTIALS,
+          verified === "TooManyFailedAttempts"
+            ? "Too many failed credentials attempts. Please try again later."
+            : "Invalid credentials.",
+        );
       }
       return await deps.continueWithProvider(ctx, {
         userId: verified.account.userId as GenericId<"User">,
@@ -330,16 +326,14 @@ export function createCoreDomains(deps: CoreDeps) {
         });
       }
       if (existing !== "InvalidAccountId") {
-        throw new ConvexError({
-          code:
-            existing === "TooManyFailedAttempts"
-              ? ErrorCode.RATE_LIMITED
-              : ErrorCode.INVALID_CREDENTIALS,
-          message:
-            existing === "TooManyFailedAttempts"
-              ? "Too many failed credentials attempts. Please try again later."
-              : "Invalid credentials.",
-        });
+        throw convexError(
+          existing === "TooManyFailedAttempts"
+            ? ErrorCode.RATE_LIMITED
+            : ErrorCode.INVALID_CREDENTIALS,
+          existing === "TooManyFailedAttempts"
+            ? "Too many failed credentials attempts. Please try again later."
+            : "Invalid credentials.",
+        );
       }
       return await stageCredentialEnrollment(ctx, {
         verifier: args.verifier,

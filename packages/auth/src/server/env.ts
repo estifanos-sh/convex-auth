@@ -1,6 +1,5 @@
-import { ConvexError } from "convex/values";
-
 import { ErrorCode } from "../shared/codes";
+import { convexError } from "./errors";
 import { AuthKeyringError, parseAuthKeyring, type AuthKeyring } from "../shared/keyring";
 
 function readRawEnv(name: string): string | undefined {
@@ -73,10 +72,10 @@ export function requireAuthKey<Purpose extends AuthKeyPurpose>(
     }
     return parseAuthKeyring(value)[purpose];
   } catch (error) {
-    throw new ConvexError({
-      code: ErrorCode.MISSING_ENV_VAR,
-      message: error instanceof AuthKeyringError ? error.message : missingEnvMessage("AUTH_KEYS"),
-    });
+    throw convexError(
+      ErrorCode.MISSING_ENV_VAR,
+      error instanceof AuthKeyringError ? error.message : missingEnvMessage("AUTH_KEYS"),
+    );
   }
 }
 
@@ -85,9 +84,9 @@ export function requireEnv(name: string) {
   try {
     return readConfigSync(envString(name));
   } catch (error) {
-    throw new ConvexError({
-      code: ErrorCode.MISSING_ENV_VAR,
-      message: error instanceof AuthKeyringError ? error.message : missingEnvMessage(name),
-    });
+    throw convexError(
+      ErrorCode.MISSING_ENV_VAR,
+      error instanceof AuthKeyringError ? error.message : missingEnvMessage(name),
+    );
   }
 }

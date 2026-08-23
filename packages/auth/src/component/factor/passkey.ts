@@ -8,9 +8,10 @@
  */
 
 import { getOneFrom } from "convex-helpers/server/relationships";
-import { ConvexError, type Infer, v } from "convex/values";
+import { type Infer, v } from "convex/values";
 
 import { ErrorCode } from "../../shared/codes";
+import { convexError } from "../../shared/errors";
 import { MAX_WEBAUTHN_CREDENTIALS_PER_USER } from "../../shared/webauthn";
 import type { Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
@@ -404,11 +405,11 @@ async function createPasskey(ctx: MutationCtx, args: Infer<typeof vPasskeyCreate
   const linkedAccounts = [linkedAccount];
   for (const account of linkedAccounts) {
     if (account !== null && account.userId !== args.userId) {
-      throw new ConvexError({
-        code: ErrorCode.ACCOUNT_ALREADY_LINKED,
-        message: "This passkey credential is already registered to another account.",
-        credentialId: args.credentialId,
-      });
+      throw convexError(
+        ErrorCode.ACCOUNT_ALREADY_LINKED,
+        "This passkey credential is already registered to another account.",
+        { credentialId: args.credentialId },
+      );
     }
   }
 
@@ -418,11 +419,11 @@ async function createPasskey(ctx: MutationCtx, args: Infer<typeof vPasskeyCreate
     .first();
   if (existing !== null) {
     if (existing.userId !== args.userId) {
-      throw new ConvexError({
-        code: ErrorCode.ACCOUNT_ALREADY_LINKED,
-        message: "This passkey credential is already registered to another account.",
-        credentialId: args.credentialId,
-      });
+      throw convexError(
+        ErrorCode.ACCOUNT_ALREADY_LINKED,
+        "This passkey credential is already registered to another account.",
+        { credentialId: args.credentialId },
+      );
     }
     if (linkedAccounts[0] === null) {
       await ctx.db.insert("Account", {
@@ -444,10 +445,10 @@ async function createPasskey(ctx: MutationCtx, args: Infer<typeof vPasskeyCreate
     .withIndex("user_id", (q) => q.eq("userId", args.userId))
     .take(MAX_WEBAUTHN_CREDENTIALS_PER_USER);
   if (userPasskeys.length >= MAX_WEBAUTHN_CREDENTIALS_PER_USER) {
-    throw new ConvexError({
-      code: ErrorCode.INVALID_PARAMETERS,
-      message: `A user can register at most ${MAX_WEBAUTHN_CREDENTIALS_PER_USER} WebAuthn credentials.`,
-    });
+    throw convexError(
+      ErrorCode.INVALID_PARAMETERS,
+      `A user can register at most ${MAX_WEBAUTHN_CREDENTIALS_PER_USER} WebAuthn credentials.`,
+    );
   }
   const passkeyId = await ctx.db.insert("Passkey", args);
   if (linkedAccounts[0] === null) {
@@ -710,10 +711,7 @@ export const update = mutation({
     if (userId !== undefined) {
       const passkey = await ctx.db.get("Passkey", passkeyId);
       if (passkey === null || passkey.userId !== userId) {
-        throw new ConvexError({
-          code: ErrorCode.PASSKEY_NOT_FOUND,
-          message: "Passkey not found.",
-        });
+        throw convexError(ErrorCode.PASSKEY_NOT_FOUND, "Passkey not found.");
       }
     }
     await ctx.db.patch("Passkey", passkeyId, patch);
@@ -828,18 +826,12 @@ const remove = mutation({
     const passkey = await ctx.db.get("Passkey", passkeyId);
     if (passkey === null) {
       if (userId !== undefined) {
-        throw new ConvexError({
-          code: ErrorCode.PASSKEY_NOT_FOUND,
-          message: "Passkey not found.",
-        });
+        throw convexError(ErrorCode.PASSKEY_NOT_FOUND, "Passkey not found.");
       }
       return null;
     }
     if (userId !== undefined && passkey.userId !== userId) {
-      throw new ConvexError({
-        code: ErrorCode.PASSKEY_NOT_FOUND,
-        message: "Passkey not found.",
-      });
+      throw convexError(ErrorCode.PASSKEY_NOT_FOUND, "Passkey not found.");
     }
     const linkedAccounts = [];
     const accounts = await ctx.db
@@ -856,10 +848,10 @@ const remove = mutation({
         .withIndex("user_id_provider", (q) => q.eq("userId", passkey.userId))
         .take(PASSKEY_LIST_BATCH);
       if (!otherAccount.some((account) => !linkedIds.has(account._id))) {
-        throw new ConvexError({
-          code: ErrorCode.INVALID_PARAMETERS,
-          message: "Cannot remove the user's last sign-in method.",
-        });
+        throw convexError(
+          ErrorCode.INVALID_PARAMETERS,
+          "Cannot remove the user's last sign-in method.",
+        );
       }
     }
     for (const account of linkedAccounts) {
