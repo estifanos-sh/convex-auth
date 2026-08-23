@@ -21,7 +21,7 @@ import {
   GROUP_SAML_PROVIDER_PREFIX,
   isGroupProviderId,
 } from "../connection/shared";
-import type { ConnectionHookProtocol, ConnectionProtocol, Doc, MutationCtx } from "../types";
+import type { ConnectionProtocol, Doc, MutationCtx } from "../types";
 import { upsertUserAndAccount } from "../user/account";
 import { AUTH_STORE_REF } from "./store/refs";
 

@@ -14,7 +14,7 @@ import type {
 } from "../../shared/results";
 import { handleDevice } from "../device";
 import type { AuthErrorData } from "../errors";
-import { toConvexError } from "../errors";
+import { describeUnknown, toConvexError } from "../errors";
 import { log } from "../log";
 import {
   callCreateVerificationCode,
@@ -70,22 +70,6 @@ const normalizeVerificationParams = (params: SignInParams | undefined) => {
     protocol: value.protocol,
     code: value.code,
   };
-};
-
-const describeUnknown = (value: unknown) => {
-  if (typeof value === "string") {
-    return JSON.stringify(value);
-  }
-  if (
-    typeof value === "number" ||
-    typeof value === "boolean" ||
-    typeof value === "bigint" ||
-    value === null
-  ) {
-    return String(value);
-  }
-  const json = JSON.stringify(value);
-  return json ?? Object.prototype.toString.call(value);
 };
 
 const asConvexError = (

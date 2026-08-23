@@ -1,7 +1,7 @@
 import { Auth } from "convex/server";
-import { ConvexError, GenericId } from "convex/values";
+import type { GenericId } from "convex/values";
 
-import { ErrorCode } from "../../shared/codes";
+import { notSignedInError } from "../errors";
 import type { ComponentCtx, ComponentReadCtx } from "../component/context";
 import { configDefaults } from "../config";
 import { getSessionUserId } from "../context";
@@ -88,10 +88,7 @@ export function createUserDomain(deps: UserDeps) {
     const userId = opts?.userId ?? (await getSessionUserId(ctx));
     if (userId === null || userId === undefined) {
       if (setting) {
-        throw new ConvexError({
-          code: ErrorCode.NOT_SIGNED_IN,
-          message: "Authentication required.",
-        });
+        throw notSignedInError();
       }
       return null;
     }
@@ -229,10 +226,7 @@ export function createUserDomain(deps: UserDeps) {
       ): Promise<{ email: string }> => {
         const userId = args.userId ?? (await getSessionUserId(ctx));
         if (userId === null || userId === undefined) {
-          throw new ConvexError({
-            code: ErrorCode.NOT_SIGNED_IN,
-            message: "Authentication required.",
-          });
+          throw notSignedInError();
         }
         const addr = args.email.toLowerCase();
         await ctx.runMutation(config.component.user.email.upsert, {
@@ -250,10 +244,7 @@ export function createUserDomain(deps: UserDeps) {
       ): Promise<{ email: string }> => {
         const userId = args.userId ?? (await getSessionUserId(ctx));
         if (userId === null || userId === undefined) {
-          throw new ConvexError({
-            code: ErrorCode.NOT_SIGNED_IN,
-            message: "Authentication required.",
-          });
+          throw notSignedInError();
         }
         const addr = args.email.toLowerCase();
         await ctx.runMutation(config.component.user.email.remove, {

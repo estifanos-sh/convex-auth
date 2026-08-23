@@ -18,10 +18,8 @@ import { createTOTPKeyURI, verifyTOTPWithGracePeriod } from "@oslojs/otp";
 import { ConvexError, GenericId } from "convex/values";
 
 import { ErrorCode } from "../shared/codes";
-import { authFlowError } from "../shared/errors";
 import type { AuthTokens, SignInSessionResult, SignInTotpSetupResult } from "../shared/results";
-import type { AuthErrorData } from "./errors";
-import { toConvexError } from "./errors";
+import { asConvexError, convexError } from "./errors";
 import { queueAuthEvent } from "./events";
 import { getAuthenticatedUserIdOrNull } from "./identity/claims";
 import { maxSignInAttempts } from "./limits";
@@ -63,20 +61,6 @@ type TotpDispatch =
   | { flow: "verify"; code: string; verifier: string; totpId: string; intent: "enrollment" }
   /** 2FA challenge during sign-in. */
   | { flow: "verify"; code: string; verifier: string; totpId?: undefined; intent: "challenge" };
-
-const convexError = (code: ErrorCode, message: string) =>
-  toConvexError(authFlowError(code, message));
-
-const asConvexError = (
-  error: unknown,
-  code: ErrorCode,
-  message: string,
-): ConvexError<AuthErrorData> =>
-  error instanceof ConvexError
-    ? error
-    : error instanceof Error
-      ? toConvexError(authFlowError(code, error.message || message))
-      : convexError(code, message);
 
 /**
  * Encrypt a raw TOTP secret for storage. The secret bytes are base64url-encoded

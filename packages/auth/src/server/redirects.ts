@@ -2,24 +2,9 @@ import { GenericActionCtx, GenericDataModel } from "convex/server";
 import { ConvexError } from "convex/values";
 
 import { ErrorCode } from "../shared/codes";
+import { describeUnknown } from "./errors";
 import { ConvexAuthMaterializedConfig } from "./types";
 import { appUrlFromEnv, normalizeUrl } from "./url";
-
-const describeUnknown = (value: unknown) => {
-  if (typeof value === "string") {
-    return JSON.stringify(value);
-  }
-  if (
-    typeof value === "number" ||
-    typeof value === "boolean" ||
-    typeof value === "bigint" ||
-    value === null
-  ) {
-    return String(value);
-  }
-  const json = JSON.stringify(value);
-  return json ?? Object.prototype.toString.call(value);
-};
 
 /**
  * Resolve a sign-in `redirectTo` param to an absolute URL.

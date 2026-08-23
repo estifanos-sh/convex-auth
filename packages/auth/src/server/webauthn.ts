@@ -52,10 +52,8 @@ import {
   MAX_WEBAUTHN_CREDENTIALS_PER_USER,
   type WebAuthnUserVerification,
 } from "../shared/webauthn";
-import { authFlowError } from "../shared/errors";
 import { requireAuthKey } from "./env";
-import type { AuthErrorData } from "./errors";
-import { toConvexError } from "./errors";
+import { asConvexError, convexError } from "./errors";
 import { queueAuthEvent } from "./events";
 import { coupleSecurityKeysOnly, decoupleSecurityKeysOnly } from "../shared/webauthn";
 import { getAuthenticatedUserIdOrNull } from "./identity/claims";
@@ -200,9 +198,6 @@ const requireStringParam = (value: unknown, name: string) => {
   return value;
 };
 
-const convexError = (code: ErrorCode, message: string) =>
-  toConvexError(authFlowError(code, message));
-
 const MAX_ENCODED_WEBAUTHN_CREDENTIAL_ID_LENGTH = Math.ceil(
   (MAX_WEBAUTHN_CREDENTIAL_ID_LENGTH * 4) / 3,
 );
@@ -243,17 +238,6 @@ export function validateCredentialId(value: unknown): string {
   }
   return credentialId;
 }
-
-const asConvexError = (
-  error: unknown,
-  code: ErrorCode,
-  message: string,
-): ConvexError<AuthErrorData> =>
-  error instanceof ConvexError
-    ? error
-    : error instanceof Error
-      ? toConvexError(authFlowError(code, error.message || message))
-      : convexError(code, message);
 
 const logPasskeyError = (err: unknown) =>
   log(LOG_LEVELS.ERROR, "passkey error:", err instanceof Error ? err.message : String(err));

@@ -9,6 +9,7 @@ import { ConvexError, type GenericId } from "convex/values";
 import { parse as parseCookies } from "cookie";
 
 import { ErrorCode } from "../shared/codes";
+import { notSignedInError } from "./errors";
 import {
   buildCorsHeaders,
   corsPreflightHandler,
@@ -162,13 +163,6 @@ export type HttpAuthContextConfig<
    */
   resource?: string;
 };
-
-function createNotSignedInError() {
-  return new ConvexError({
-    code: ErrorCode.NOT_SIGNED_IN,
-    message: "Authentication required.",
-  });
-}
 
 /** A `{ code, message }` error body for the non-OAuth JSON HTTP surface. */
 export type JsonErrorBody = { code: string; message: string };
@@ -347,7 +341,7 @@ async function resolveHttpContext(
 
   if (resolved === null) {
     if (!optional) {
-      throw createNotSignedInError();
+      throw notSignedInError();
     }
     return {
       ...createUnauthenticatedAuthContext(),

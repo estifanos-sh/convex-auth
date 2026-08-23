@@ -1,7 +1,7 @@
 import type { Auth } from "convex/server";
-import { ConvexError, type GenericId, type Value } from "convex/values";
+import type { GenericId, Value } from "convex/values";
 
-import { ErrorCode } from "../../shared/codes";
+import { notSignedInError } from "../errors";
 import type { ComponentCtx, ComponentReadCtx } from "../component/context";
 import { configDefaults } from "../config";
 import { getSessionUserId } from "../context";
@@ -159,10 +159,7 @@ export function createInviteDomain(deps: InviteDeps) {
       }> => {
         const acceptedByUserId = await getSessionUserId(ctx);
         if (acceptedByUserId === null) {
-          throw new ConvexError({
-            code: ErrorCode.NOT_SIGNED_IN,
-            message: "Authentication required.",
-          });
+          throw notSignedInError();
         }
         const tokenHash = await sha256(args.token);
         const result = (await ctx.runMutation(config.component.group.invite.accept, {
