@@ -1,5 +1,7 @@
 import {
   SHARED_COOKIE_OPTIONS,
+  decodeOAuthState,
+  encodeOAuthState,
   redirectToParamCookie,
 } from "@estifanos-sh/convex-auth/server/cookies";
 import { expect, test } from "vite-plus/test";
@@ -27,4 +29,35 @@ test("the cookie writer propagates the hardened flags to emitted cookies", () =>
   expect(cookie.options.path).toBe("/");
   // A finite lifetime is layered on top without clobbering the shared flags.
   expect(typeof cookie.options.maxAge).toBe("number");
+});
+
+// `redirectTo` rides inside the state parameter so it survives redirect chains
+// when cookies are blocked, and `decodeOAuthState` swallows every failure in a
+// bare `catch` — a decode that breaks does not raise, it silently drops the
+// user on the default page after sign-in. Pin the round trip across all three
+// base64 padding remainders so a stricter decoder cannot regress it quietly.
+test("OAuth state round-trips at every base64 padding length", () => {
+  for (const redirectTo of [
+    "/a",
+    "/ab",
+    "/abc",
+    "/abcd",
+    "/workbench/people?tab=all",
+    "https://app.example.com/deep/link/with/segments",
+  ]) {
+    const encoded = encodeOAuthState("state-token", redirectTo);
+    expect(encoded).not.toContain("=");
+    expect(decodeOAuthState(encoded)).toEqual({ state: "state-token", redirectTo });
+  }
+});
+
+test("OAuth state round-trips a null redirectTo", () => {
+  const encoded = encodeOAuthState("state-token", null);
+  expect(decodeOAuthState(encoded)).toEqual({ state: "state-token", redirectTo: null });
+});
+
+test("malformed OAuth state decodes to null rather than throwing", () => {
+  for (const value of ["", "!!!!", "bm90LWpzb24"]) {
+    expect(decodeOAuthState(value)).toBeNull();
+  }
 });

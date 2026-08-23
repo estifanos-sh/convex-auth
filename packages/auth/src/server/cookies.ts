@@ -38,7 +38,15 @@ export function decodeOAuthState(
   encoded: string,
 ): { state: string; redirectTo: string | null } | null {
   try {
-    const padded = encoded.replace(/-/g, "+").replace(/_/g, "/");
+    // `encodeOAuthState` strips the "=" run to produce base64url. Restoring it
+    // is not strictly required -- `atob` only rejects a length of 4n+1, which
+    // base64 never produces -- but the two sibling decoders in
+    // `connection/shared.ts` and `client/index.ts` both pad, and a decoder that
+    // does not is one swap away from breaking: `Buffer.from(s, "base64")` is
+    // lenient, a strict base64 library is not. Padding here keeps all three
+    // implementations interchangeable.
+    const normalized = encoded.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = normalized + "=".repeat((4 - (normalized.length % 4)) % 4);
     const value: unknown = JSON.parse(atob(padded));
     if (
       typeof value === "object" &&

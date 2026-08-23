@@ -1,4 +1,5 @@
 import type { GenericActionCtx, GenericDataModel } from "convex/server";
+import { jsonError } from "./response";
 
 import type { OAuthTokenEndpointAuthMethod } from "./client";
 
@@ -29,14 +30,6 @@ export interface OAuthRegisterDeps {
   allowedScopes: string[];
   /** Build the RFC 7592 `registration_client_uri` for a freshly-issued client id. */
   registrationClientUri: (clientId: string) => string;
-}
-
-/** @internal */
-export function jsonError(status: number, error: string, description: string): Response {
-  return new Response(JSON.stringify({ error, error_description: description }), {
-    status,
-    headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
-  });
 }
 
 /** @internal */
@@ -224,3 +217,5 @@ export function createRegisterHandler(deps: OAuthRegisterDeps) {
     );
   };
 }
+
+export { jsonError };
