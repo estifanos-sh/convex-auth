@@ -12,6 +12,7 @@ import type { UserIdentity } from "convex/server";
 import { ConvexError } from "convex/values";
 
 import { ErrorCode } from "../shared/codes";
+import { notSignedInError } from "./errors";
 import type { ComponentReadCtx } from "./component/context";
 import {
   createUnauthenticatedAuthContext,
@@ -125,13 +126,6 @@ async function resolveConfiguredAuthContext<
   return await getResolvedAuthContext(auth, ctx);
 }
 
-function createNotSignedInError() {
-  return new ConvexError({
-    code: ErrorCode.NOT_SIGNED_IN,
-    message: "Authentication required.",
-  });
-}
-
 /** @internal */
 export function assertAuthResolverContext<TCtx>(ctx: TCtx): asserts ctx is TCtx & AuthResolverCtx {
   const candidate = ctx as {
@@ -195,7 +189,7 @@ async function createPublicAuthContext<
 
   if (resolved === null) {
     if (!optional) {
-      throw createNotSignedInError();
+      throw notSignedInError();
     }
     return createUnauthenticatedAuthContext();
   }
@@ -230,7 +224,7 @@ function createAuthContextCustomization<
 
       if (resolved === null) {
         if (!optional) {
-          throw createNotSignedInError();
+          throw notSignedInError();
         }
         return {
           ctx: {

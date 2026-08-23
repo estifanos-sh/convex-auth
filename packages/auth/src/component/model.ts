@@ -1,5 +1,12 @@
 import { paginationResultValidator } from "convex/server";
-import { type GenericId, v, type Validator, type VId, type VLiteral } from "convex/values";
+import {
+  type GenericId,
+  type Infer,
+  v,
+  type Validator,
+  type VId,
+  type VLiteral,
+} from "convex/values";
 
 import { AUTH_EVENT_KINDS, EVENT_CATEGORIES } from "../shared/event/kinds";
 
@@ -15,6 +22,17 @@ function vLiteralUnion<T extends string>(values: readonly [T, ...T[]]) {
   } & [VLiteral<T>, ...VLiteral<T>[]];
   return v.union(...literals);
 }
+
+/**
+ * Sort direction accepted by every paginated component list query.
+ *
+ * Declared once so the seven component list validators and the server-side
+ * `order?:` parameters cannot disagree about the accepted directions.
+ */
+export const vSortOrder = v.union(v.literal("asc"), v.literal("desc"));
+
+/** Sort direction for paginated list queries. @see {@link vSortOrder} */
+export type SortOrder = Infer<typeof vSortOrder>;
 
 /** Table-name lookup map for the component's tables. */
 export const TABLES = {
@@ -99,7 +117,8 @@ const vGroupConnectionJitProvisioningMode = v.union(
   v.literal("createUserAndMembership"),
 );
 
-const vGroupConnectionDeprovisionMode = v.union(v.literal("soft"), v.literal("hard"));
+/** How SCIM deprovisioning removes an identity: soft-disable or hard-delete. */
+export const vGroupConnectionDeprovisionMode = v.union(v.literal("soft"), v.literal("hard"));
 
 /** When to refresh a user's profile fields from connection data on login. */
 export const vGroupConnectionProfileUpdateMode = v.union(
@@ -121,8 +140,21 @@ export const vGroupConnectionStatus = v.union(
   v.literal("disabled"),
 );
 
+/**
+ * Lifecycle status of a group SSO connection, derived from
+ * {@link vGroupConnectionStatus} so the TS union and the runtime validator
+ * cannot drift. Re-exported from `server/types.ts` for server-side consumers.
+ */
+export type ConnectionStatus = Infer<typeof vGroupConnectionStatus>;
+
 /** SSO protocol used by a group connection. */
 export const vGroupConnectionProtocol = v.union(v.literal("oidc"), v.literal("saml"));
+
+/**
+ * SSO protocol used by a group connection, derived from
+ * {@link vGroupConnectionProtocol}. Re-exported from `server/types.ts`.
+ */
+export type ConnectionProtocol = Infer<typeof vGroupConnectionProtocol>;
 
 /** Identity-linking and provisioning policy for a group connection. */
 export const vGroupConnectionPolicy = v.object({
@@ -165,11 +197,17 @@ export const vGroupConnectionPolicy = v.object({
 /** Lifecycle status of a SCIM provisioning configuration. */
 export const vScimStatus = v.union(v.literal("draft"), v.literal("active"), v.literal("disabled"));
 
+/** Lifecycle status of a SCIM provisioning configuration. @see {@link vScimStatus} */
+export type ScimStatus = Infer<typeof vScimStatus>;
+
 /** SCIM resource type being provisioned. */
 export const vScimResourceType = v.union(v.literal("user"), v.literal("group"));
 
 /** Whether a webhook endpoint is accepting deliveries. */
 export const vWebhookEndpointStatus = v.union(v.literal("active"), v.literal("disabled"));
+
+/** Whether a webhook endpoint is accepting deliveries. @see {@link vWebhookEndpointStatus} */
+export type WebhookEndpointStatus = Infer<typeof vWebhookEndpointStatus>;
 
 /** Delivery state of a queued webhook event. */
 export const vWebhookDeliveryStatus = v.union(
@@ -238,6 +276,9 @@ export const vAuthEventSubjectType = v.union(
 /** Whether the action behind an auth event succeeded or failed. */
 export const vAuthEventOutcome = v.union(v.literal("success"), v.literal("failure"));
 
+/** Whether the action behind an auth event succeeded or failed. @see {@link vAuthEventOutcome} */
+export type AuthEventOutcome = Infer<typeof vAuthEventOutcome>;
+
 const vAuthEventStringArray = v.array(v.string());
 const vAuthExternalObject = v.record(v.string(), v.any());
 
@@ -293,7 +334,7 @@ export const vAuthEventData = v.union(
     connectionId: v.optional(v.string()),
     changed: v.optional(vAuthEventStringArray),
     userId: v.optional(v.string()),
-    protocol: v.optional(v.union(v.literal("oidc"), v.literal("saml"))),
+    protocol: v.optional(vGroupConnectionProtocol),
     domain: v.optional(v.string()),
     recordName: v.optional(v.string()),
     expiresAt: v.optional(v.number()),
@@ -310,7 +351,7 @@ export const vAuthEventData = v.union(
   }),
   v.object({
     scimConfigId: v.optional(v.string()),
-    resourceType: v.optional(v.union(v.literal("user"), v.literal("group"))),
+    resourceType: v.optional(vScimResourceType),
     resourceId: v.optional(v.string()),
     operation: v.optional(v.string()),
     externalId: v.optional(v.string()),
@@ -535,6 +576,9 @@ export const vUserEmailSource = v.union(
   v.literal("saml"),
   v.literal("scim"),
 );
+
+/** Origin that contributed a user's email address. @see {@link vUserEmailSource} */
+export type UserEmailSource = Infer<typeof vUserEmailSource>;
 
 /** An email entry within a provider profile. */
 export const vProfileEmail = v.object({

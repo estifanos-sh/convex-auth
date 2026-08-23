@@ -14,7 +14,7 @@ import type {
 } from "../../shared/results";
 import { handleDevice } from "../device";
 import type { AuthErrorData } from "../errors";
-import { toConvexError } from "../errors";
+import { describeUnknown, toConvexError } from "../errors";
 import { log } from "../log";
 import {
   callCreateVerificationCode,
@@ -31,6 +31,7 @@ import { finalizeSessionIssuance } from "../session/lifecycle";
 import { handleTotp } from "../totp";
 import {
   AuthProviderMaterializedConfig,
+  type ConnectionProtocol,
   ConvexCredentialsConfig,
   EmailConfig,
   GenericActionCtxWithAuthConfig,
@@ -69,22 +70,6 @@ const normalizeVerificationParams = (params: SignInParams | undefined) => {
     protocol: value.protocol,
     code: value.code,
   };
-};
-
-const describeUnknown = (value: unknown) => {
-  if (typeof value === "string") {
-    return JSON.stringify(value);
-  }
-  if (
-    typeof value === "number" ||
-    typeof value === "boolean" ||
-    typeof value === "bigint" ||
-    value === null
-  ) {
-    return String(value);
-  }
-  const json = JSON.stringify(value);
-  return json ?? Object.prototype.toString.call(value);
 };
 
 const asConvexError = (
@@ -142,7 +127,7 @@ export async function signInImpl(
     resolveConnectionProtocol?: (
       ctx: EnrichedActionCtx,
       connectionId: string,
-    ) => Promise<"oidc" | "saml">;
+    ) => Promise<ConnectionProtocol>;
   },
 ): Promise<SignInResult> {
   return withSpan(
@@ -518,7 +503,7 @@ async function handleConnectionProvider(
     resolveConnectionProtocol?: (
       ctx: EnrichedActionCtx,
       connectionId: string,
-    ) => Promise<"oidc" | "saml">;
+    ) => Promise<ConnectionProtocol>;
     authSiteUrl?: string;
   },
 ): Promise<{ kind: "redirect"; redirect: string; verifier: string }> {
@@ -531,7 +516,7 @@ async function handleConnectionProvider(
       );
     }
 
-    let protocol: "oidc" | "saml" =
+    let protocol: ConnectionProtocol =
       (normalizedParams.protocol === "oidc" || normalizedParams.protocol === "saml"
         ? normalizedParams.protocol
         : undefined) ??

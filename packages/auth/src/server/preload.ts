@@ -1067,23 +1067,32 @@ export function server(options: ServerOptions) {
         return codeExchangeResult;
       }
 
+      /**
+       * The unauthenticated result that also clears every auth cookie. Both
+       * rejection paths below (malformed refresh cookie, issuer mismatch) end
+       * here; keeping one builder means a cookie added to
+       * `structuredAuthCookies` cannot be cleared by one path and left set by
+       * the other.
+       */
+      const clearedAuthCookiesResult = (): PreloadResult => ({
+        redirect: false,
+        cookies: structuredAuthCookies(
+          { token: null, refreshToken: null, verifier: null },
+          host,
+          cookieConfig,
+          cookieNamespace,
+        ),
+        token: null,
+        convex: null,
+        preloadQuery: buildPreloadQuery(null),
+      });
+
       const { token, refreshToken } = currentCookies;
       const isMalformedRefreshToken =
         refreshToken !== null && (refreshToken.trim().length === 0 || refreshToken === "dummy");
       if (isMalformedRefreshToken) {
         logVerbose("Refresh token cookie malformed, clearing auth cookies");
-        return {
-          redirect: false,
-          cookies: structuredAuthCookies(
-            { token: null, refreshToken: null, verifier: null },
-            host,
-            cookieConfig,
-            cookieNamespace,
-          ),
-          token: null,
-          convex: null,
-          preloadQuery: buildPreloadQuery(null),
-        } satisfies PreloadResult;
+        return clearedAuthCookiesResult();
       }
 
       const decodedToken = token === null ? null : decodeToken(token);
@@ -1092,18 +1101,7 @@ export function server(options: ServerOptions) {
         !acceptedIssuers.has(normalizeIssuer(decodedToken.iss))
       ) {
         logVerbose("Access token issuer mismatch, clearing auth cookies");
-        return {
-          redirect: false,
-          cookies: structuredAuthCookies(
-            { token: null, refreshToken: null, verifier: null },
-            host,
-            cookieConfig,
-            cookieNamespace,
-          ),
-          token: null,
-          convex: null,
-          preloadQuery: buildPreloadQuery(null),
-        } satisfies PreloadResult;
+        return clearedAuthCookiesResult();
       }
 
       let tokens: AuthTokens | null | undefined;

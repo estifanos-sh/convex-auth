@@ -1,3 +1,4 @@
+import type { PaginationResult } from "convex/server";
 import { ConvexError, type GenericId } from "convex/values";
 
 import { ErrorCode } from "../../shared/codes";
@@ -5,17 +6,9 @@ import type { ComponentCtx, ComponentReadCtx } from "../component/context";
 import { configDefaults } from "../config";
 import { emitAuthEvent } from "../events";
 import { createScopeChecker, generateApiKey, hashApiKey } from "../keys";
-import type { KeyDoc, KeyRecord, KeyScope, ScopeChecker } from "../types";
+import type { KeyDoc, KeyRecord, KeyScope, ScopeChecker, SortOrder } from "../types";
 
 /** Convex-native `PaginationResult<T>` shape returned by the `*List` component queries. */
-type Paginated<T> = {
-  page: T[];
-  isDone: boolean;
-  continueCursor: string;
-  splitCursor?: string | null;
-  pageStatus?: "SplitRecommended" | "SplitRequired" | null;
-};
-
 export type KeyDeps = {
   config: ReturnType<typeof configDefaults>;
 };
@@ -244,7 +237,7 @@ export function createKeyDomain(deps: KeyDeps) {
         };
         paginationOpts: { numItems: number; cursor: string | null };
         orderBy?: "_creationTime" | "name" | "lastUsedAt" | "expiresAt" | "revoked";
-        order?: "asc" | "desc";
+        order?: SortOrder;
       },
     ) => {
       const result = (await ctx.runQuery(config.component.user.key.list, {
@@ -252,7 +245,7 @@ export function createKeyDomain(deps: KeyDeps) {
         paginationOpts: opts?.paginationOpts ?? { numItems: 50, cursor: null },
         orderBy: opts?.orderBy,
         order: opts?.order,
-      })) as Paginated<KeyDoc>;
+      })) as PaginationResult<KeyDoc>;
       return { ...result, page: result.page.map(redactKeyRecord) };
     },
     /**

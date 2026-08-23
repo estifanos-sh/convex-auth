@@ -4,7 +4,7 @@ import { cached, invalidateCtxCache } from "./cache/context";
 import { single } from "./component/api";
 import type { ComponentCtx as ComponentWriteCtx, ComponentReadCtx } from "./component/context";
 import type { AuthEventKind } from "./events";
-import type { ConvexAuthMaterializedConfig } from "./types";
+import type { ConnectionStatus, ConvexAuthMaterializedConfig, SortOrder } from "./types";
 
 type ComponentConnection = ConvexAuthMaterializedConfig["component"]["connection"];
 type ComponentUser = ConvexAuthMaterializedConfig["component"]["user"];
@@ -94,11 +94,11 @@ export const listGroupConnections = (
     where?: {
       groupId?: string;
       slug?: string;
-      status?: "draft" | "active" | "disabled";
+      status?: ConnectionStatus;
     };
     paginationOpts: PaginationOpts;
     orderBy?: "_creationTime" | "name" | "slug" | "status";
-    order?: "asc" | "desc";
+    order?: SortOrder;
   },
 ) =>
   componentQuery<typeof args, PaginatedResult<GroupConnectionRecord>>(

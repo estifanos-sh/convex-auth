@@ -54,27 +54,6 @@ export type ComponentCallCtx = {
   auth: { config: { component: AuthComponentApi } };
 };
 
-/** Fetch a PKCE verifier by ID across the component boundary. */
-export async function queryVerifierById(
-  ctx: ComponentCallCtx,
-  verifierId: string,
-): Promise<VerifierDoc | null> {
-  return (await ctx.runQuery(ctx.auth.config.component.token.pkce.get, {
-    selector: { id: verifierId },
-    now: Date.now(),
-  })) as VerifierDoc | null;
-}
-
-/** Remove a PKCE verifier by ID across the component boundary. */
-export async function mutateVerifierRemove(
-  ctx: ComponentCallCtx,
-  verifierId: string,
-): Promise<void> {
-  await ctx.runMutation(ctx.auth.config.component.token.pkce.remove, {
-    id: verifierId,
-  });
-}
-
 /**
  * Atomically consume a PKCE verifier by ID across the component boundary,
  * returning the consumed doc to the single winner and `null` otherwise (unknown
@@ -167,16 +146,6 @@ export async function mutateCredentialEnrollmentCreate(
   return (await ctx.runMutation(ctx.auth.config.component.token.enrollment.create, args)) as string;
 }
 
-/** Fetch a TOTP factor by ID across the component boundary. */
-export async function queryTotpById(
-  ctx: ComponentCallCtx,
-  totpId: string,
-): Promise<TotpDoc | null> {
-  return (await ctx.runQuery(ctx.auth.config.component.factor.totp.get, {
-    id: totpId,
-  })) as TotpDoc | null;
-}
-
 /** Fetch a user's verified TOTP factor across the component boundary. */
 export async function queryTotpVerifiedByUserId(
   ctx: ComponentCallCtx,
@@ -185,56 +154,6 @@ export async function queryTotpVerifiedByUserId(
   return (await ctx.runQuery(ctx.auth.config.component.factor.totp.get, {
     verifiedForUserId: userId,
   })) as TotpDoc | null;
-}
-
-/** Insert a TOTP factor across the component boundary; returns its ID. */
-export async function mutateTotpInsert(
-  ctx: ComponentCallCtx,
-  args: {
-    userId: string;
-    secret: ArrayBuffer;
-    digits: number;
-    period: number;
-    verified: boolean;
-    name?: string;
-    createdAt: number;
-  },
-): Promise<string> {
-  return (await ctx.runMutation(ctx.auth.config.component.factor.totp.create, args)) as string;
-}
-
-/** Mark a TOTP factor verified across the component boundary. */
-export async function mutateTotpMarkVerified(
-  ctx: ComponentCallCtx,
-  totpId: string,
-  lastUsedAt: number,
-): Promise<void> {
-  await ctx.runMutation(ctx.auth.config.component.factor.totp.update, {
-    id: totpId,
-    patch: { verified: true, lastUsedAt },
-  });
-}
-
-/** Update a TOTP factor's `lastUsedAt` across the component boundary. */
-export async function mutateTotpUpdateLastUsed(
-  ctx: ComponentCallCtx,
-  totpId: string,
-  lastUsedAt: number,
-): Promise<void> {
-  await ctx.runMutation(ctx.auth.config.component.factor.totp.update, {
-    id: totpId,
-    patch: { lastUsedAt },
-  });
-}
-
-/** Fetch a passkey by credential ID across the component boundary. */
-export async function queryPasskeyByCredentialId(
-  ctx: ComponentCallCtx,
-  credentialId: string,
-): Promise<PasskeyDoc | null> {
-  return (await ctx.runQuery(ctx.auth.config.component.factor.passkey.get, {
-    credentialId,
-  })) as PasskeyDoc | null;
 }
 
 /** Create a registration challenge and load registration context in one component transaction. */
@@ -421,25 +340,6 @@ export async function mutatePasskeyCompleteRotation(
         revokedSessions: number;
         passwordChanged: boolean;
       };
-}
-
-/**
- * Atomically accept a passkey signature counter (anti-cloning) and update
- * `lastUsedAt` across the component boundary.
- */
-export async function mutatePasskeyUpdateCounter(
-  ctx: ComponentCallCtx,
-  passkeyId: string,
-  counter: number,
-  lastUsedAt: number,
-  backedUp: boolean,
-): Promise<boolean> {
-  return (await ctx.runMutation(ctx.auth.config.component.factor.passkey.acceptAssertion, {
-    id: passkeyId,
-    counter,
-    lastUsedAt,
-    backedUp,
-  })) as boolean;
 }
 
 /** Atomically accept a verified assertion and create its session. */

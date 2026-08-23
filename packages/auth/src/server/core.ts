@@ -2,6 +2,7 @@ import { Auth, GenericActionCtx, GenericDataModel } from "convex/server";
 import { ConvexError, GenericId } from "convex/values";
 
 import { ErrorCode } from "../shared/codes";
+import { notSignedInError } from "./errors";
 import type { ComponentCtx, ComponentReadCtx } from "./component/context";
 import { configDefaults } from "./config";
 import { createOAuthClientDomain } from "./oauth/client";
@@ -314,7 +315,7 @@ export function createCoreDomains(deps: CoreDeps) {
         verifier: ConvexCredentialsConfig;
         account: { id: string; secret?: string };
         profile: import("./payloads").AuthProfile;
-        match?: Array<"email" | "phone">;
+        match?: import("./payloads").AuthProfileMatchField[];
         operation: WebAuthnRotateOperation;
       },
     ) => {
@@ -411,10 +412,7 @@ export function createCoreDomains(deps: CoreDeps) {
     ): Promise<{ groupId: string }> => {
       const userId = args.userId ?? (await getSessionUserId(ctx));
       if (userId === null || userId === undefined) {
-        throw new ConvexError({
-          code: ErrorCode.NOT_SIGNED_IN,
-          message: "Authentication required.",
-        });
+        throw notSignedInError();
       }
       await ctx.runMutation(config.component.group.active.update, {
         userId,
@@ -435,10 +433,7 @@ export function createCoreDomains(deps: CoreDeps) {
     ): Promise<null> => {
       const userId = opts?.userId ?? (await getSessionUserId(ctx));
       if (userId === null || userId === undefined) {
-        throw new ConvexError({
-          code: ErrorCode.NOT_SIGNED_IN,
-          message: "Authentication required.",
-        });
+        throw notSignedInError();
       }
       await ctx.runMutation(config.component.group.active.reset, { userId });
       invalidateCtxCache(ctx, `user:${userId}`);

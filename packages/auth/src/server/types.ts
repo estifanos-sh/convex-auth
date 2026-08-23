@@ -6,28 +6,31 @@ import {
   GenericActionCtx,
   GenericDataModel,
   GenericMutationCtx,
+  PaginationResult,
   RegisteredAction,
   RegisteredMutation,
   RegisteredQuery,
   TableNamesInDataModel,
 } from "convex/server";
 import type { GenericValidator, Infer } from "convex/values";
-import type {
-  WebAuthnAttachment,
-  WebAuthnHintName,
-  WebAuthnResidentKey,
-  WebAuthnUserVerification,
-} from "../shared/webauthn";
 import { GenericId, Value } from "convex/values";
 
 import { vApiKeyDoc, vUserDoc } from "../component/documents";
+import type { ConnectionProtocol } from "../component/model";
 import schema from "../component/schema";
 import type { EmailParams, OAuthParams, PhoneParams, ProviderParams } from "../shared/params";
 import type { AuthComponentApi } from "./component/api";
 import type { CredentialsConfig } from "../providers/credentials";
 import type { AuthEventHandlerMap, OidcClaims, SamlClaims, ScimRawAttributes } from "./events";
 import type { AuthTokens, SignInFlowResult } from "../shared/results";
-import type { AuthProfile } from "./payloads";
+import type { AuthProfile, AuthProfileMatchField } from "./payloads";
+import type {
+  WebAuthnAlgorithm,
+  WebAuthnAttachment,
+  WebAuthnHint,
+  WebAuthnResidentKey,
+  WebAuthnUserVerification,
+} from "../shared/webauthn";
 
 /**
  * A value that is either `T` or a `PromiseLike<T>`.
@@ -150,7 +153,16 @@ export type Grant<TPermissions extends PermissionsConfig | undefined> =
             : never)
     : string;
 
-export type ConnectionHookProtocol = "oidc" | "saml" | "scim";
+export type {
+  ConnectionProtocol,
+  ConnectionStatus,
+  ScimStatus,
+  SortOrder,
+  UserEmailSource,
+  WebhookEndpointStatus,
+} from "../component/model";
+
+export type ConnectionHookProtocol = ConnectionProtocol | "scim";
 
 export type ConnectionHookProfile<
   TProtocol extends ConnectionHookProtocol = ConnectionHookProtocol,
@@ -751,16 +763,16 @@ export interface WebAuthnProviderConfig {
     /** Reject platform and synced passkeys at registration and sign-in. */
     securityKeysOnly?: boolean;
     registration: {
-      userVerification: "required" | "preferred" | "discouraged";
-      residentKey: "required" | "preferred" | "discouraged";
-      authenticatorAttachment?: "platform" | "cross-platform";
-      hints?: WebAuthnHintName[];
-      algorithms: Array<-7 | -257>;
+      userVerification: WebAuthnUserVerification;
+      residentKey: WebAuthnResidentKey;
+      authenticatorAttachment?: WebAuthnAttachment;
+      hints?: WebAuthnHint[];
+      algorithms: WebAuthnAlgorithm[];
       attestation?: WebAuthnAttestationPolicy;
     };
     authentication: {
-      userVerification: "required" | "preferred" | "discouraged";
-      hints?: WebAuthnHintName[];
+      userVerification: WebAuthnUserVerification;
+      hints?: WebAuthnHint[];
     };
   };
 }
@@ -785,11 +797,11 @@ export type WebAuthnCeremonyPolicy = {
     authenticatorAttachment?: WebAuthnAttachment;
     residentKey?: WebAuthnResidentKey;
     userVerification?: WebAuthnUserVerification;
-    hints?: WebAuthnHintName[];
+    hints?: WebAuthnHint[];
   };
   authentication?: {
     userVerification?: WebAuthnUserVerification;
-    hints?: WebAuthnHintName[];
+    hints?: WebAuthnHint[];
   };
 };
 
@@ -1018,7 +1030,7 @@ type AuthCredentialsProvisionArgs = {
   /** User profile to create, or to use when safely linking an existing user. */
   profile: AuthProfile;
   /** Verified profile fields that may safely select an existing user. */
-  match?: Array<"email" | "phone">;
+  match?: AuthProfileMatchField[];
   /** Target ceremony, bound to the staged identity. */
   operation: WebAuthnRotateOperation;
 };
@@ -1382,15 +1394,6 @@ export type AuthProviderMaterializedConfig =
   | DeviceProviderConfig
   | ConnectionProviderConfig;
 
-export type HasWebAuthnProvider<P extends readonly AuthProviderConfig[]> =
-  Extract<P[number], { type: "webauthn" }> extends never ? false : true;
-
-export type HasTotpProvider<P extends readonly AuthProviderConfig[]> =
-  Extract<P[number], { type: "totp" }> extends never ? false : true;
-
-export type HasDeviceProvider<P extends readonly AuthProviderConfig[]> =
-  Extract<P[number], { type: "device" }> extends never ? false : true;
-
 type MaterializedProvider<P> = P extends () => infer Provider ? Provider : P;
 
 /** Parameters accepted by one configured provider at the public sign-in boundary. */
@@ -1661,7 +1664,7 @@ export type KeyDoc = Infer<typeof vApiKeyDoc>;
 
 export type {
   WebAuthnAttachment,
-  WebAuthnHintName,
+  WebAuthnHint,
   WebAuthnResidentKey,
   WebAuthnUserVerification,
 } from "../shared/webauthn";

@@ -16,7 +16,7 @@ import type { Id } from "../_generated/dataModel";
 import { vGroupInviteDoc } from "../documents";
 import { mutation, query } from "../_generated/server";
 import schema from "../schema";
-import { vInviteAcceptResult, vInviteStatus, vPaginated } from "../model";
+import { vInviteAcceptResult, vInviteStatus, vPaginated, vSortOrder } from "../model";
 
 const STALE_INVITE_EXPIRATION_BATCH = 32;
 
@@ -68,7 +68,7 @@ export const list = query({
         v.literal("acceptedTime"),
       ),
     ),
-    order: v.optional(v.union(v.literal("asc"), v.literal("desc"))),
+    order: v.optional(vSortOrder),
   },
   returns: vPaginated(vGroupInviteDoc),
   handler: async (ctx, args) => {

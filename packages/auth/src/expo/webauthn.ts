@@ -2,6 +2,11 @@ import { Passkey, type PasskeyCreateRequest, type PasskeyGetRequest } from "reac
 
 import type { FactorDeps, WebAuthnClient, WebAuthnRegisterOptions } from "../client/core/types";
 import { createWebAuthnClientCore, type WebAuthnCeremony } from "../client/factors/webauthn";
+import type {
+  WebAuthnAttachment,
+  WebAuthnResidentKey,
+  WebAuthnUserVerification,
+} from "../shared/webauthn";
 
 type PasskeyCredentialDescriptor = {
   type?: string;
@@ -24,10 +29,10 @@ type PasskeyRegistrationOptions = {
   timeout?: number;
   attestation?: "none" | "indirect" | "direct" | "enterprise";
   authenticatorSelection?: {
-    authenticatorAttachment?: "platform" | "cross-platform";
+    authenticatorAttachment?: WebAuthnAttachment;
     requireResidentKey?: boolean;
-    residentKey?: "discouraged" | "preferred" | "required";
-    userVerification?: "discouraged" | "preferred" | "required";
+    residentKey?: WebAuthnResidentKey;
+    userVerification?: WebAuthnUserVerification;
   };
   excludeCredentials?: PasskeyCredentialDescriptor[];
 };
@@ -36,7 +41,7 @@ type PasskeyAuthenticationOptions = {
   challenge: string;
   timeout?: number;
   rpId?: string;
-  userVerification?: "discouraged" | "preferred" | "required";
+  userVerification?: WebAuthnUserVerification;
   allowCredentials?: PasskeyCredentialDescriptor[];
 };
 

@@ -1,21 +1,14 @@
+import type { PaginationResult } from "convex/server";
 import type { GenericId } from "convex/values";
 
 import type { ComponentCtx, ComponentReadCtx } from "../component/context";
 import { configDefaults } from "../config";
 import { cached, ctxCacheHas, invalidateCtxCache } from "../cache/context";
-import type { Doc } from "../types";
+import type { Doc, SortOrder } from "../types";
 
 type GroupDocLike = Doc<"Group"> | null;
 
 /** Convex-native `PaginationResult<T>` shape returned by the `*List` component queries. */
-type Paginated<T> = {
-  page: T[];
-  isDone: boolean;
-  continueCursor: string;
-  splitCursor?: string | null;
-  pageStatus?: "SplitRecommended" | "SplitRequired" | null;
-};
-
 export type GroupDeps = {
   config: ReturnType<typeof configDefaults>;
 };
@@ -207,7 +200,7 @@ export function createGroupDomain(deps: GroupDeps) {
         };
         paginationOpts: { numItems: number; cursor: string | null };
         orderBy?: "_creationTime" | "name" | "slug" | "type";
-        order?: "asc" | "desc";
+        order?: SortOrder;
       },
     ) => {
       return (await ctx.runQuery(config.component.group.list, {
@@ -215,7 +208,7 @@ export function createGroupDomain(deps: GroupDeps) {
         paginationOpts: opts?.paginationOpts ?? { numItems: 50, cursor: null },
         orderBy: opts?.orderBy,
         order: opts?.order,
-      })) as Paginated<Doc<"Group">>;
+      })) as PaginationResult<Doc<"Group">>;
     },
     /**
      * Patch a group document.

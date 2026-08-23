@@ -1,3 +1,5 @@
+import type { BindingKind } from "./saml/constants";
+
 /** @internal */
 export type ParsedSamlMetadata = {
   entityId: string;
@@ -47,7 +49,7 @@ export type GroupSamlHttpRequest = {
   url: URL;
   body: Record<string, string>;
   query: Record<string, string>;
-  binding: "redirect" | "post";
+  binding: BindingKind;
   relayState?: string;
   hasSamlRequest: boolean;
   hasSamlResponse: boolean;

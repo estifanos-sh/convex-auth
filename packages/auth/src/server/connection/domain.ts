@@ -24,11 +24,15 @@ import {
   verifyConnectionDomain,
 } from "../contract";
 import { log } from "../log";
+import type { OidcClientAuthMethod } from "./oidc";
 import type { EmitGroupAuthEventInput } from "./group/service";
 import type {
+  ConnectionProtocol,
+  ConnectionStatus,
   ConvexAuthMaterializedConfig,
   OIDCClaimMapping,
   GroupConnectionPolicy,
+  SortOrder,
 } from "../types";
 import {
   getOidcConfig,
@@ -78,8 +82,8 @@ type DomainDeps = {
   ) => Promise<{
     _id: string;
     groupId: string;
-    protocol: "oidc" | "saml";
-    status: "draft" | "active" | "disabled";
+    protocol: ConnectionProtocol;
+    status: ConnectionStatus;
     config?: unknown;
   }>;
   validateGroupConnectionPolicy: (
@@ -153,11 +157,33 @@ export function createGroupConnectionDomain<TDeps extends DomainDeps>(deps: TDep
     emitGroupAuthEvent,
   });
 
+  /**
+   * Load a group connection by id, mapping a failed component call to
+   * `INTERNAL_ERROR` and a missing row to `INVALID_PARAMETERS`.
+   *
+   * Six admin entry points below open-coded this identical eleven-line
+   * prologue. Two of them had already been given the try/catch and four
+   * matched only by convention — which is exactly the kind of divergence that
+   * turns one endpoint's transient component failure into a "not found".
+   */
+  const loadGroupConnectionByIdOrThrow = async (ctx: ComponentReadCtx, connectionId: string) => {
+    let connection;
+    try {
+      connection = await getGroupConnection(ctx, config.component.connection, connectionId);
+    } catch {
+      throw convexError(ErrorCode.INTERNAL_ERROR, "Failed to load connection.");
+    }
+    if (connection === null) {
+      throw convexError(ErrorCode.INVALID_PARAMETERS, connectionNotFoundError);
+    }
+    return connection;
+  };
+
   const resolveGroupConnectionProtocol = (connection: {
     _id: string;
     protocol?: unknown;
     config?: unknown;
-  }): "oidc" | "saml" => {
+  }): ConnectionProtocol => {
     if (connection.protocol === "oidc") {
       return "oidc";
     }
@@ -269,10 +295,10 @@ export function createGroupConnectionDomain<TDeps extends DomainDeps>(deps: TDep
         ctx: ComponentCtx,
         data: {
           groupId: string;
-          protocol: "oidc" | "saml";
+          protocol: ConnectionProtocol;
           slug?: string;
           name?: string;
-          status?: "draft" | "active" | "disabled";
+          status?: ConnectionStatus;
           config?: Record<string, unknown>;
           extend?: Record<string, unknown>;
         },
@@ -300,11 +326,11 @@ export function createGroupConnectionDomain<TDeps extends DomainDeps>(deps: TDep
           where?: {
             groupId?: string;
             slug?: string;
-            status?: "draft" | "active" | "disabled";
+            status?: ConnectionStatus;
           };
           paginationOpts: { numItems: number; cursor: string | null };
           orderBy?: "_creationTime" | "name" | "slug" | "status";
-          order?: "asc" | "desc";
+          order?: SortOrder;
         },
       ) => {
         const result = await listGroupConnections(ctx, config.component.connection, {
@@ -840,19 +866,7 @@ export function createGroupConnectionDomain<TDeps extends DomainDeps>(deps: TDep
           };
         },
       ) => {
-        let connection;
-        try {
-          connection = await getGroupConnection(
-            ctx,
-            config.component.connection,
-            data.connectionId,
-          );
-        } catch {
-          throw convexError(ErrorCode.INTERNAL_ERROR, "Failed to load connection.");
-        }
-        if (connection === null) {
-          throw convexError(ErrorCode.INVALID_PARAMETERS, connectionNotFoundError);
-        }
+        const connection = await loadGroupConnectionByIdOrThrow(ctx, data.connectionId);
         if (connection.protocol !== "saml") {
           throw convexError(
             ErrorCode.INVALID_PARAMETERS,
@@ -1008,19 +1022,7 @@ export function createGroupConnectionDomain<TDeps extends DomainDeps>(deps: TDep
         };
       },
       refresh: async (ctx: ComponentActionCtx, data: { connectionId: string }) => {
-        let connection;
-        try {
-          connection = await getGroupConnection(
-            ctx,
-            config.component.connection,
-            data.connectionId,
-          );
-        } catch {
-          throw convexError(ErrorCode.INTERNAL_ERROR, "Failed to load connection.");
-        }
-        if (connection === null) {
-          throw convexError(ErrorCode.INVALID_PARAMETERS, connectionNotFoundError);
-        }
+        const connection = await loadGroupConnectionByIdOrThrow(ctx, data.connectionId);
         const samlConfig = (connection.config as { protocols?: { saml?: SamlConfigShape } })
           ?.protocols?.saml;
         if (connection.protocol !== "saml") {
@@ -1122,15 +1124,7 @@ export function createGroupConnectionDomain<TDeps extends DomainDeps>(deps: TDep
       },
       get: async (ctx: ComponentReadCtx, args: { connectionId: string }) => {
         const { connectionId } = args;
-        let connection;
-        try {
-          connection = await getGroupConnection(ctx, config.component.connection, connectionId);
-        } catch {
-          throw convexError(ErrorCode.INTERNAL_ERROR, "Failed to load connection.");
-        }
-        if (connection === null) {
-          throw convexError(ErrorCode.INVALID_PARAMETERS, connectionNotFoundError);
-        }
+        const connection = await loadGroupConnectionByIdOrThrow(ctx, connectionId);
         return getPublicSamlConfig(connection.config);
       },
       status: (ctx: ComponentReadCtx, args: { connectionId: string }) => {
@@ -1361,7 +1355,7 @@ export function createGroupConnectionDomain<TDeps extends DomainDeps>(deps: TDep
           client: {
             id: string;
             secret?: string;
-            authMethod?: "client_secret_post" | "client_secret_basic";
+            authMethod?: OidcClientAuthMethod;
           };
           request?: {
             scopes?: string[];
@@ -1384,19 +1378,7 @@ export function createGroupConnectionDomain<TDeps extends DomainDeps>(deps: TDep
           );
         }
 
-        let connection;
-        try {
-          connection = await getGroupConnection(
-            ctx,
-            config.component.connection,
-            data.connectionId,
-          );
-        } catch {
-          throw convexError(ErrorCode.INTERNAL_ERROR, "Failed to load connection.");
-        }
-        if (connection === null) {
-          throw convexError(ErrorCode.INVALID_PARAMETERS, connectionNotFoundError);
-        }
+        const connection = await loadGroupConnectionByIdOrThrow(ctx, data.connectionId);
         if (connection.protocol !== "oidc") {
           throw convexError(
             ErrorCode.INVALID_PARAMETERS,
@@ -1499,15 +1481,7 @@ export function createGroupConnectionDomain<TDeps extends DomainDeps>(deps: TDep
        */
       get: async (ctx: ComponentReadCtx, args: { connectionId: string }) => {
         const { connectionId } = args;
-        let connection;
-        try {
-          connection = await getGroupConnection(ctx, config.component.connection, connectionId);
-        } catch {
-          throw convexError(ErrorCode.INTERNAL_ERROR, "Failed to load connection.");
-        }
-        if (connection === null) {
-          throw convexError(ErrorCode.INVALID_PARAMETERS, connectionNotFoundError);
-        }
+        const connection = await loadGroupConnectionByIdOrThrow(ctx, connectionId);
 
         let secret;
         try {
@@ -1582,18 +1556,7 @@ export function createGroupConnectionDomain<TDeps extends DomainDeps>(deps: TDep
 
         let connection;
         if (data.connectionId !== undefined) {
-          try {
-            connection = await getGroupConnection(
-              ctx,
-              config.component.connection,
-              data.connectionId!,
-            );
-          } catch {
-            throw convexError(ErrorCode.INTERNAL_ERROR, "Failed to load connection.");
-          }
-          if (connection === null) {
-            throw convexError(ErrorCode.INVALID_PARAMETERS, connectionNotFoundError);
-          }
+          connection = await loadGroupConnectionByIdOrThrow(ctx, data.connectionId);
         } else if (data.domain !== undefined || data.email !== undefined) {
           let result;
           try {

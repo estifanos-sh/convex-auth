@@ -23,7 +23,12 @@ import {
   query,
 } from "../../_generated/server";
 import { unsafeFetchUrlReason } from "../../../shared/fetch/guard";
-import { vAuthEventKind, vGroupWebhookDeliveryPublicDoc, vPaginated } from "../../model";
+import {
+  vAuthEventKind,
+  vAuthEventOutcome,
+  vGroupWebhookDeliveryPublicDoc,
+  vPaginated,
+} from "../../model";
 import schema from "../../schema";
 import { appendDeliveryEvent } from "./events";
 
@@ -155,7 +160,7 @@ export const settle = internalMutation({
   args: {
     id: v.id("GroupWebhookDelivery"),
     occurredAt: v.number(),
-    outcome: v.union(v.literal("success"), v.literal("failure")),
+    outcome: vAuthEventOutcome,
     retry: v.boolean(),
     responseStatus: v.optional(v.number()),
     error: v.optional(v.string()),

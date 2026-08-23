@@ -1,11 +1,19 @@
 /**
- * WebAuthn policy vocabulary shared by the provider factory and the
- * per-ceremony override path.
+ * WebAuthn vocabulary and policy shared by the provider config, the server
+ * ceremony runtime, and the Expo native bridge.
  *
- * Both need to agree on which fields `securityKeysOnly` implies and what it
- * sets them to. Stating that once here is the point of the module: a second
- * copy drifts, and a half-applied policy is a security bug rather than a
+ * The unions mirror the WebAuthn Level 3 enumerations. They are declared here
+ * rather than pulled from `lib.dom` because the server and component tsconfigs
+ * do not include the DOM library, and re-spelling them at each layer let the
+ * registration and authentication options drift apart.
+ *
+ * The `securityKeysOnly` coupling lives here for the same reason: the provider
+ * factory and the per-ceremony override path both need to agree on which fields
+ * it implies and what it sets them to, and a second copy of that definition
+ * drifts into a half-applied policy, which is a security bug rather than a
  * cosmetic one.
+ *
+ * This module holds no imports, so every layer can depend on it.
  *
  * @module
  */
@@ -16,27 +24,30 @@ export const MAX_WEBAUTHN_CREDENTIALS_PER_USER = 16;
 /** Maximum credential ID length accepted by WebAuthn Level 3. */
 export const MAX_WEBAUTHN_CREDENTIAL_ID_LENGTH = 1023;
 
-/** WebAuthn Level 3 hints a browser may use to guide authenticator selection. */
-export type WebAuthnHintName = "security-key" | "client-device" | "hybrid";
+/** User verification requirement for a WebAuthn ceremony. */
+export type WebAuthnUserVerification = "required" | "preferred" | "discouraged";
 
-/** Authenticator attachment values. */
+/** Discoverable (resident) credential preference for a registration ceremony. */
+export type WebAuthnResidentKey = "required" | "preferred" | "discouraged";
+
+/** Authenticator attachment modality: built-in platform vs. roaming authenticator. */
 export type WebAuthnAttachment = "platform" | "cross-platform";
 
-/** Resident-key (discoverable credential) preference. */
-export type WebAuthnResidentKey = "discouraged" | "preferred" | "required";
+/** WebAuthn Level 3 hints that browsers may use to guide authenticator selection. */
+export type WebAuthnHint = "security-key" | "client-device" | "hybrid";
 
-/** User-verification preference. */
-export type WebAuthnUserVerification = "discouraged" | "preferred" | "required";
+/** COSE algorithms supported by the WebAuthn verifier. */
+export type WebAuthnAlgorithm = -7 | -257;
 
 /** The registration fields `securityKeysOnly` governs. */
 type CoupledRegistration = {
   authenticatorAttachment?: WebAuthnAttachment;
-  hints?: WebAuthnHintName[];
+  hints?: WebAuthnHint[];
 };
 
 /** The authentication fields `securityKeysOnly` governs. */
 type CoupledAuthentication = {
-  hints?: WebAuthnHintName[];
+  hints?: WebAuthnHint[];
 };
 
 /**

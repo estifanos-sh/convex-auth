@@ -2,6 +2,7 @@ import type { UserIdentity } from "convex/server";
 import { ConvexError, type GenericId } from "convex/values";
 
 import { ErrorCode } from "../shared/codes";
+import { notSignedInError } from "./errors";
 import type { ComponentReadCtx as AuthQueryCtx } from "./component/context";
 import type { Doc } from "./types";
 import {
@@ -192,6 +193,21 @@ export async function getSessionUserId(ctx: AuthIdentityCtx): Promise<GenericId<
 }
 
 /**
+ * {@link getSessionUserId}, but throws the canonical `NOT_SIGNED_IN` error
+ * instead of returning `null`. The domain helpers that only operate on the
+ * current user each carried their own copy of this two-line guard.
+ *
+ * @internal
+ */
+export async function requireSessionUserId(ctx: AuthIdentityCtx): Promise<GenericId<"User">> {
+  const userId = await getSessionUserId(ctx);
+  if (userId === null) {
+    throw notSignedInError();
+  }
+  return userId;
+}
+
+/**
  * Build the `ctx.auth.assert` grant guard from the resolved grants and
  * active group. `assert(grant)` throws when a grant is missing;
  * `assert(grant, doc)` additionally asserts the group-owned `doc` belongs
@@ -236,10 +252,7 @@ function authContextFromSnapshot(
 ): AuthContext {
   const { user, active } = snapshot;
   if (user === null) {
-    throw new ConvexError({
-      code: ErrorCode.NOT_SIGNED_IN,
-      message: "The authenticated user no longer exists.",
-    });
+    throw notSignedInError("The authenticated user no longer exists.");
   }
   const groupId = (active?.groupId as GenericId<"Group"> | undefined) ?? null;
   const role = active?.roleIds[0] ?? null;

@@ -1,10 +1,9 @@
 import type { Auth } from "convex/server";
-import { ConvexError, type GenericId } from "convex/values";
+import type { GenericId } from "convex/values";
 
-import { ErrorCode } from "../../shared/codes";
 import type { ComponentCtx, ComponentReadCtx } from "../component/context";
 import { configDefaults } from "../config";
-import { getSessionUserId } from "../context";
+import { requireSessionUserId as currentUserId } from "../context";
 import { emitAuthEvent } from "../events";
 import type { Doc } from "../types";
 
@@ -35,17 +34,6 @@ type FactorReadCtx = ComponentReadCtx & { auth: Auth };
 type FactorWriteCtx = ComponentCtx & { auth: Auth };
 
 export type FactorDeps = { config: ReturnType<typeof configDefaults> };
-
-async function currentUserId(ctx: FactorReadCtx): Promise<GenericId<"User">> {
-  const userId = await getSessionUserId(ctx);
-  if (userId === null) {
-    throw new ConvexError({
-      code: ErrorCode.NOT_SIGNED_IN,
-      message: "Authentication required.",
-    });
-  }
-  return userId as GenericId<"User">;
-}
 
 /** Build the safe, current-user factor-management surface. */
 export function createFactorDomain({ config }: FactorDeps) {

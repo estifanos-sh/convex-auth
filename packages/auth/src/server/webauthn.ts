@@ -50,12 +50,11 @@ import { ErrorCode } from "../shared/codes";
 import {
   MAX_WEBAUTHN_CREDENTIAL_ID_LENGTH,
   MAX_WEBAUTHN_CREDENTIALS_PER_USER,
+  type WebAuthnUserVerification,
 } from "../shared/webauthn";
-import { authFlowError } from "../shared/errors";
 import { requireAuthKey } from "./env";
-import type { AuthErrorData } from "./errors";
-import { toConvexError } from "./errors";
-import { queueAuthEvent } from "./events";
+import { asConvexError, convexError } from "./errors";
+import { queueAuthEvent, queueSessionReplacedEvent, queueSignedInEvent } from "./events";
 import { coupleSecurityKeysOnly, decoupleSecurityKeysOnly } from "../shared/webauthn";
 import { getAuthenticatedUserIdOrNull } from "./identity/claims";
 import { LOG_LEVELS, log } from "./log";
@@ -199,9 +198,6 @@ const requireStringParam = (value: unknown, name: string) => {
   return value;
 };
 
-const convexError = (code: ErrorCode, message: string) =>
-  toConvexError(authFlowError(code, message));
-
 const MAX_ENCODED_WEBAUTHN_CREDENTIAL_ID_LENGTH = Math.ceil(
   (MAX_WEBAUTHN_CREDENTIAL_ID_LENGTH * 4) / 3,
 );
@@ -242,17 +238,6 @@ export function validateCredentialId(value: unknown): string {
   }
   return credentialId;
 }
-
-const asConvexError = (
-  error: unknown,
-  code: ErrorCode,
-  message: string,
-): ConvexError<AuthErrorData> =>
-  error instanceof ConvexError
-    ? error
-    : error instanceof Error
-      ? toConvexError(authFlowError(code, error.message || message))
-      : convexError(code, message);
 
 const logPasskeyError = (err: unknown) =>
   log(LOG_LEVELS.ERROR, "passkey error:", err instanceof Error ? err.message : String(err));
@@ -438,7 +423,7 @@ function verifyRpId<T extends { verifyRelyingPartyIdHash: (id: string) => boolea
 
 function verifyUserFlags<T extends { userPresent: boolean; userVerified: boolean }>(
   authData: T,
-  userVerification: "required" | "preferred" | "discouraged",
+  userVerification: WebAuthnUserVerification,
 ): T {
   if (!authData.userPresent) {
     throw convexError(ErrorCode.PASSKEY_USER_PRESENCE, "User presence flag not set.");
@@ -669,28 +654,14 @@ async function finalizePasskeySession(
     ),
   });
   if (completed.replacedSessionId !== undefined) {
-    const replacedSessionId = completed.replacedSessionId as GenericId<"Session">;
-    await queueAuthEvent(ctx, ctx.auth.config, {
-      kind: "session.invalidated",
-      actor: { type: "system" },
-      subject: { type: "session", id: replacedSessionId },
-      targets: [
-        { kind: "user", id: userId },
-        { kind: "session", id: replacedSessionId },
-      ],
-      outcome: "success",
-      data: { userId, reason: "replaced" },
+    await queueSessionReplacedEvent(ctx, ctx.auth.config, {
+      userId,
+      replacedSessionId: completed.replacedSessionId as GenericId<"Session">,
     });
   }
-  await queueAuthEvent(ctx, ctx.auth.config, {
-    kind: "session.signed_in",
-    actor: { type: "user", id: userId },
-    subject: { type: "session", id: sessionId },
-    targets: [
-      { kind: "user", id: userId },
-      { kind: "session", id: sessionId },
-    ],
-    outcome: "success",
+  await queueSignedInEvent(ctx, ctx.auth.config, {
+    userId,
+    sessionId,
     data: { provider: "session" },
   });
   const session = await finalizeSessionIssuance(ctx.auth.config, {

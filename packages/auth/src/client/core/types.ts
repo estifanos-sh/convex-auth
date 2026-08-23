@@ -677,15 +677,6 @@ export type SignInOverloads<Api extends AuthApiRefs = AuthApiRefs> = <
   ...args: SignInArgs<Api, P>
 ) => Promise<SignInResult>;
 
-/**
- * Internal-only loose signature for the `signIn` value. Use this when
- * forwarding through wrappers where TypeScript cannot select an overload
- * from the wrapper's union-typed `provider` argument.
- *
- * @internal
- */
-export type SignInImpl = (provider?: string, params?: AuthParameters) => Promise<SignInResult>;
-
 /** Base auth client — always present. */
 interface AuthClientBase<Api extends AuthApiRefs> {
   /** Restore initial auth state for the current runtime. */

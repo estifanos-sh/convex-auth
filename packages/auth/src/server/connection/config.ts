@@ -1,8 +1,9 @@
 import type { OidcConfigShape } from "./oidc";
 import type { SamlConfigShape } from "./saml";
 import { asRecord } from "./shared";
+import type { ConnectionProtocol } from "../types";
 
-const getProtocolConfig = (config: unknown, protocol: "oidc" | "saml") => {
+const getProtocolConfig = (config: unknown, protocol: ConnectionProtocol) => {
   const base = asRecord(config);
   const direct = base?.[protocol];
   const viaProtocols = asRecord(base?.protocols)?.[protocol];
@@ -88,7 +89,7 @@ export function getPublicConnectionConfig(config: unknown) {
 /** @internal */
 export function upsertProtocolConfig(
   config: unknown,
-  protocol: "oidc" | "saml",
+  protocol: ConnectionProtocol,
   protocolConfig: Record<string, unknown>,
 ) {
   const base = asRecord(config) ?? {};

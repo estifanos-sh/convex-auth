@@ -30,6 +30,7 @@ import { getSamlConfig, getOidcConfig } from "../config";
 import { normalizeGroupConnectionPolicy } from "../policy";
 import { parseScimPath } from "../scim";
 import { isGroupSamlSourceActive } from "../shared";
+import type { ConnectionProtocol, ConnectionStatus } from "../../types";
 
 /**
  * Intentional minimal read-lens — this path only needs `idp.metadataXml`.
@@ -43,15 +44,15 @@ type RuntimeSamlConfig = {
 type RuntimeGroupConnection = {
   _id: string;
   groupId: string;
-  protocol: "oidc" | "saml";
-  status: "draft" | "active" | "disabled";
+  protocol: ConnectionProtocol;
+  status: ConnectionStatus;
   config?: unknown;
 };
 
 type RuntimeSamlLoaded = {
   source: { kind: "connection"; id: string };
   config: Record<string, unknown>;
-  status: "draft" | "active" | "disabled";
+  status: ConnectionStatus;
   connection: RuntimeGroupConnection;
 };
 
@@ -199,7 +200,7 @@ export function createGroupService(deps: {
   const resolveGroupConnectionConnectionProtocolOrThrow = async (
     ctx: ComponentReadCtx,
     connectionId: string,
-  ): Promise<"oidc" | "saml"> => {
+  ): Promise<ConnectionProtocol> => {
     const connection = await loadActiveGroupConnectionOrThrow(ctx, connectionId);
     if (connection.protocol === "oidc") {
       return "oidc";

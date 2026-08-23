@@ -2,13 +2,14 @@ import type {
   FunctionArgs,
   FunctionReference,
   FunctionReturnType,
+  FunctionVisibility,
   GenericActionCtx,
   GenericDataModel,
 } from "convex/server";
 import type { GenericId } from "convex/values";
 
 import type { AuthComponentApi } from "./component/api";
-import type { Doc } from "./types";
+import type { Doc, UserEmailSource } from "./types";
 
 type RunCtx = GenericActionCtx<GenericDataModel>;
 type ComponentRunContext = {
@@ -20,7 +21,7 @@ type ComponentRunContext = {
 /** @internal */
 export type AuthComponentBoundaryConfig = { component: AuthComponentApi };
 
-function runQuery<Ref extends FunctionReference<"query", "public" | "internal">>(
+function runQuery<Ref extends FunctionReference<"query", FunctionVisibility>>(
   ctx: ComponentRunContext,
   ref: Ref,
   args: FunctionArgs<Ref>,
@@ -28,7 +29,7 @@ function runQuery<Ref extends FunctionReference<"query", "public" | "internal">>
   return ctx.runQuery(ref, args) as Promise<FunctionReturnType<Ref>>;
 }
 
-function runMutation<Ref extends FunctionReference<"mutation", "public" | "internal">>(
+function runMutation<Ref extends FunctionReference<"mutation", FunctionVisibility>>(
   ctx: ComponentRunContext,
   ref: Ref,
   args: FunctionArgs<Ref>,
@@ -65,7 +66,7 @@ export function authDb(ctx: ComponentRunContext, config: AuthComponentBoundaryCo
         email: string;
         verified?: boolean;
         isPrimary?: boolean;
-        source: "password" | "oauth" | "oidc" | "saml" | "scim";
+        source: UserEmailSource;
         accountId?: string;
         provider?: string;
         connectionId?: string;

@@ -1,25 +1,18 @@
 import { Auth } from "convex/server";
-import { ConvexError, GenericId } from "convex/values";
+import type { PaginationResult } from "convex/server";
+import type { GenericId } from "convex/values";
 
-import { ErrorCode } from "../../shared/codes";
+import { notSignedInError } from "../errors";
 import type { ComponentCtx, ComponentReadCtx } from "../component/context";
 import { configDefaults } from "../config";
 import { getSessionUserId } from "../context";
 import { cached, ctxCacheHas, invalidateCtxCache } from "../cache/context";
-import type { Doc, UserOrderBy, UserWhere } from "../types";
+import type { Doc, SortOrder, UserOrderBy, UserWhere } from "../types";
 
 type ComponentAuthReadCtx = ComponentReadCtx & { auth: Auth };
 type UserDocLike = Doc<"User"> | null;
 
 /** Convex-native `PaginationResult<T>` shape returned by the `*List` component queries. */
-type Paginated<T> = {
-  page: T[];
-  isDone: boolean;
-  continueCursor: string;
-  splitCursor?: string | null;
-  pageStatus?: "SplitRecommended" | "SplitRequired" | null;
-};
-
 export type UserDeps = {
   config: ReturnType<typeof configDefaults>;
 };
@@ -88,10 +81,7 @@ export function createUserDomain(deps: UserDeps) {
     const userId = opts?.userId ?? (await getSessionUserId(ctx));
     if (userId === null || userId === undefined) {
       if (setting) {
-        throw new ConvexError({
-          code: ErrorCode.NOT_SIGNED_IN,
-          message: "Authentication required.",
-        });
+        throw notSignedInError();
       }
       return null;
     }
@@ -166,7 +156,7 @@ export function createUserDomain(deps: UserDeps) {
         where?: UserWhere;
         paginationOpts: { numItems: number; cursor: string | null };
         orderBy?: UserOrderBy;
-        order?: "asc" | "desc";
+        order?: SortOrder;
       },
     ) => {
       return (await ctx.runQuery(config.component.user.list, {
@@ -174,7 +164,7 @@ export function createUserDomain(deps: UserDeps) {
         paginationOpts: opts.paginationOpts,
         orderBy: opts.orderBy,
         order: opts.order,
-      })) as Paginated<Doc<"User">>;
+      })) as PaginationResult<Doc<"User">>;
     },
     /**
      * Convenience method: resolve the current session user and fetch their
@@ -229,10 +219,7 @@ export function createUserDomain(deps: UserDeps) {
       ): Promise<{ email: string }> => {
         const userId = args.userId ?? (await getSessionUserId(ctx));
         if (userId === null || userId === undefined) {
-          throw new ConvexError({
-            code: ErrorCode.NOT_SIGNED_IN,
-            message: "Authentication required.",
-          });
+          throw notSignedInError();
         }
         const addr = args.email.toLowerCase();
         await ctx.runMutation(config.component.user.email.upsert, {
@@ -250,10 +237,7 @@ export function createUserDomain(deps: UserDeps) {
       ): Promise<{ email: string }> => {
         const userId = args.userId ?? (await getSessionUserId(ctx));
         if (userId === null || userId === undefined) {
-          throw new ConvexError({
-            code: ErrorCode.NOT_SIGNED_IN,
-            message: "Authentication required.",
-          });
+          throw notSignedInError();
         }
         const addr = args.email.toLowerCase();
         await ctx.runMutation(config.component.user.email.remove, {

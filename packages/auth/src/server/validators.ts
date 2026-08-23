@@ -29,6 +29,7 @@ import {
   memberFields,
   TABLES,
   userFields,
+  vGroupConnectionDeprovisionMode,
   vGroupConnectionPolicy,
   vGroupConnectionProtocol,
   vGroupConnectionStatus,
@@ -227,7 +228,7 @@ const vConnectionStatus = v.object({
       configured: v.boolean(),
       ready: v.boolean(),
       basePath: vNullableString,
-      deprovisionMode: v.union(v.literal("soft"), v.literal("hard")),
+      deprovisionMode: vGroupConnectionDeprovisionMode,
     }),
   }),
 });
@@ -280,7 +281,7 @@ const vConnectionScimValidation = v.object({
   ok: v.boolean(),
   connectionId: vIdString("GroupConnection"),
   basePath: v.optional(v.string()),
-  deprovisionMode: v.optional(v.union(v.literal("soft"), v.literal("hard"))),
+  deprovisionMode: v.optional(vGroupConnectionDeprovisionMode),
   capabilities: v.optional(
     v.object({
       users: v.boolean(),

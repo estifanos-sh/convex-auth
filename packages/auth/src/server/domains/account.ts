@@ -4,7 +4,7 @@ import { ConvexError, type GenericId } from "convex/values";
 import { ErrorCode } from "../../shared/codes";
 import type { ComponentCtx, ComponentReadCtx } from "../component/context";
 import { configDefaults } from "../config";
-import { getSessionUserId } from "../context";
+import { requireSessionUserId as currentUserId } from "../context";
 import { emitAuthEvent } from "../events";
 import type { AuthProfile } from "../payloads";
 import type { Doc } from "../types";
@@ -188,17 +188,6 @@ function toAccountSummary(account: Doc<"Account">): AccountSummary {
 
 /** Build the safe, current-user account-management surface. */
 export function createAccountManagementDomain({ config }: Pick<AccountDeps, "config">) {
-  const currentUserId = async (ctx: ComponentReadCtx & { auth: Auth }) => {
-    const userId = await getSessionUserId(ctx);
-    if (userId === null) {
-      throw new ConvexError({
-        code: ErrorCode.NOT_SIGNED_IN,
-        message: "Authentication required.",
-      });
-    }
-    return userId;
-  };
-
   return {
     /**
      * List safe linked-account capabilities for the current user or a bounded

@@ -24,9 +24,9 @@ import { log } from "../log";
 import { createOAuthAuthorizationURL, handleOAuthCallback } from "../oauth/runtime";
 import type { AuthAccountExtend, AuthProfile } from "../payloads";
 import { redirectAbsoluteUrl, setURLSearchParam } from "../redirects";
-import type { AuthEventKind, AuthEventObject, AuthEventSubject } from "../events";
+import type { AuthEventKind, AuthEventObject, AuthEventOutcome, AuthEventSubject } from "../events";
 import type { EmitGroupAuthEventInput } from "./group/service";
-import type { GroupConnectionPolicy } from "../types";
+import type { ConnectionProtocol, GroupConnectionPolicy } from "../types";
 import { createGroupConnectionOidcRuntime } from "./oidc";
 import { resolveProvisionedRoleIds } from "./policy";
 import { finalizeNormalizedProfile, normalizeStringArray } from "./profile";
@@ -110,7 +110,7 @@ type ScimContext = {
     resource: string;
     resourceId?: string;
   };
-  connection: { _id: string; groupId: string; protocol: "oidc" | "saml" };
+  connection: { _id: string; groupId: string; protocol: ConnectionProtocol };
   scimConfig: {
     _id: string;
     connectionId: string;
@@ -286,13 +286,71 @@ export function addGroupHttpRuntime(deps: GroupHttpRuntimeDeps) {
     policy: GroupPolicy;
     recordScimEvent: (
       kind: AuthEventKind,
-      outcome: "success" | "failure",
+      outcome: AuthEventOutcome,
       subject: AuthEventSubject,
       data?: Record<string, unknown>,
     ) => Promise<void>;
   };
 
   type ScimHandler = (state: ScimState) => Promise<Response>;
+
+  /**
+   * Resolve the `/Groups/:id` path parameter and assert the group is mapped to
+   * *this* connection's SCIM identity, returning the SCIM error response to
+   * send when either check fails. PATCH and DELETE both gate on exactly this,
+   * and a 404 that leaks whether some other tenant owns the group would be a
+   * cross-connection disclosure — so the check lives in one place.
+   */
+  const requireScimMappedGroupId = async (
+    state: Pick<ScimState, "ctx" | "parsedPath" | "connection">,
+  ): Promise<
+    | { error: Response; groupId?: undefined; identity?: undefined }
+    | {
+        error?: undefined;
+        groupId: string;
+        identity: NonNullable<Awaited<ReturnType<typeof getScimIdentityByMappedGroup>>>;
+      }
+  > => {
+    const missing = requireScimResourceId(state.parsedPath.resourceId, "Group");
+    if (missing) return { error: missing };
+    const groupId = state.parsedPath.resourceId!;
+    const identity = await getScimIdentityByMappedGroup(
+      state.ctx,
+      config.component.connection,
+      groupId,
+    );
+    if (!identity || identity.connectionId !== state.connection._id) {
+      return { error: scimError(404, "notFound", "Group not found.") };
+    }
+    return { groupId, identity };
+  };
+
+  /**
+   * Extract a SCIM user profile from the request body and run it through the
+   * `profileResolved` then `beforeProvision` application hooks. Both the
+   * create (`POST /Users`) and update (`PUT`/`PATCH /Users/:id`) paths need
+   * exactly this chain, and these are the only two call sites of either hook —
+   * so a hook added to one copy would silently not fire on the other.
+   */
+  const resolveScimProvisionProfile = async (
+    state: Pick<ScimState, "scimConfig" | "connection">,
+    body: ScimBody,
+  ) => {
+    const extractedBase = extractScimProfile(state.scimConfig, body);
+    const extracted =
+      ((await config.connection?.hooks?.profileResolved?.({
+        protocol: "scim",
+        connectionId: state.connection._id,
+        profile: extractedBase as Record<string, unknown>,
+      })) as typeof extractedBase | undefined) ?? extractedBase;
+    return (
+      ((await config.connection?.hooks?.beforeProvision?.({
+        protocol: "scim",
+        connectionId: state.connection._id,
+        profile: extracted as Record<string, unknown>,
+      })) as typeof extracted | undefined) ?? extracted
+    );
+  };
 
   const errorCodeForEvent = (error: unknown, fallback: string) => {
     if (
@@ -311,8 +369,8 @@ export function addGroupHttpRuntime(deps: GroupHttpRuntimeDeps) {
     ctx: GenericActionCtx<GenericDataModel>,
     args: {
       connection: { _id: string; groupId: string };
-      protocol: "oidc" | "saml";
-      outcome: "success" | "failure";
+      protocol: ConnectionProtocol;
+      outcome: AuthEventOutcome;
       userId?: string;
       error?: unknown;
     },
@@ -1143,19 +1201,7 @@ export function addGroupHttpRuntime(deps: GroupHttpRuntimeDeps) {
 
       const handleUsersPost: ScimHandler = async (state) => {
         const body = (await readScimJson(state.request)) as ScimBody;
-        const extractedBase = extractScimProfile(state.scimConfig, body);
-        const extracted =
-          ((await config.connection?.hooks?.profileResolved?.({
-            protocol: "scim",
-            connectionId: state.connection._id,
-            profile: extractedBase as Record<string, unknown>,
-          })) as typeof extractedBase | undefined) ?? extractedBase;
-        const provisionProfile =
-          ((await config.connection?.hooks?.beforeProvision?.({
-            protocol: "scim",
-            connectionId: state.connection._id,
-            profile: extracted as Record<string, unknown>,
-          })) as typeof extracted | undefined) ?? extracted;
+        const provisionProfile = await resolveScimProvisionProfile(state, body);
         const externalId = provisionProfile.externalId;
         const provisionedRoleIds = resolveProvisionedRoleIds({
           policy: state.policy,
@@ -1239,19 +1285,7 @@ export function addGroupHttpRuntime(deps: GroupHttpRuntimeDeps) {
           return scimError(404, "notFound", "User not found.");
         }
         const body = (await readScimJson(state.request)) as ScimBody;
-        const extractedBase = extractScimProfile(state.scimConfig, body);
-        const extracted =
-          ((await config.connection?.hooks?.profileResolved?.({
-            protocol: "scim",
-            connectionId: state.connection._id,
-            profile: extractedBase as Record<string, unknown>,
-          })) as typeof extractedBase | undefined) ?? extractedBase;
-        const provisionProfile =
-          ((await config.connection?.hooks?.beforeProvision?.({
-            protocol: "scim",
-            connectionId: state.connection._id,
-            profile: extracted as Record<string, unknown>,
-          })) as typeof extracted | undefined) ?? extracted;
+        const provisionProfile = await resolveScimProvisionProfile(state, body);
         const externalId = provisionProfile.externalId;
         const patchData: Record<string, unknown> = {};
         let nextActive: boolean | undefined;
@@ -1555,17 +1589,9 @@ export function addGroupHttpRuntime(deps: GroupHttpRuntimeDeps) {
       };
 
       const handleGroupsPatch: ScimHandler = async (state) => {
-        const missing = requireScimResourceId(state.parsedPath.resourceId, "Group");
-        if (missing) return missing;
-        const groupId = state.parsedPath.resourceId!;
-        const identity = await getScimIdentityByMappedGroup(
-          state.ctx,
-          config.component.connection,
-          groupId,
-        );
-        if (!identity || identity.connectionId !== state.connection._id) {
-          return scimError(404, "notFound", "Group not found.");
-        }
+        const resolved = await requireScimMappedGroupId(state);
+        if (resolved.error) return resolved.error;
+        const { groupId, identity } = resolved;
         const group = await auth.group.get(state.ctx, { id: groupId });
         if (!group) return scimError(404, "notFound", "Group not found.");
         const currentMembers = await collectMembersForReplace(state.ctx, { groupId });
@@ -1662,17 +1688,9 @@ export function addGroupHttpRuntime(deps: GroupHttpRuntimeDeps) {
       };
 
       const handleGroupsDelete: ScimHandler = async (state) => {
-        const missing = requireScimResourceId(state.parsedPath.resourceId, "Group");
-        if (missing) return missing;
-        const groupId = state.parsedPath.resourceId!;
-        const identity = await getScimIdentityByMappedGroup(
-          state.ctx,
-          config.component.connection,
-          groupId,
-        );
-        if (!identity || identity.connectionId !== state.connection._id) {
-          return scimError(404, "notFound", "Group not found.");
-        }
+        const resolved = await requireScimMappedGroupId(state);
+        if (resolved.error) return resolved.error;
+        const { groupId } = resolved;
         let cursor: string | undefined;
         for (;;) {
           const result = await revokeScimGroup(state.ctx, config.component.connection, {

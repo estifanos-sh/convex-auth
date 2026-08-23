@@ -20,7 +20,7 @@ import { assertBatchSelectorSize } from "./batch";
 import { vGroupDoc } from "./documents";
 import { internalMutation, mutation, query } from "./_generated/server";
 import schema from "./schema";
-import { vGroupConnectionPolicy, vPaginated } from "./model";
+import { vGroupConnectionPolicy, vPaginated, vSortOrder } from "./model";
 
 /**
  * Read a group by `id`, or batch-read by `ids` (result aligned to input
@@ -113,7 +113,7 @@ export const list = query({
     orderBy: v.optional(
       v.union(v.literal("_creationTime"), v.literal("name"), v.literal("slug"), v.literal("type")),
     ),
-    order: v.optional(v.union(v.literal("asc"), v.literal("desc"))),
+    order: v.optional(vSortOrder),
   },
   returns: vPaginated(vGroupDoc),
   handler: async (ctx, args) => {
