@@ -1,4 +1,5 @@
 import { sha256 } from "@oslojs/crypto/sha2";
+import { jsonError as oauthJsonError } from "./response";
 import { decodeBase64, encodeBase64urlNoPadding } from "@oslojs/encoding";
 import type { GenericActionCtx, GenericDataModel } from "convex/server";
 
@@ -77,17 +78,14 @@ export interface OAuthTokenDeps {
  * a supported auth method).
  */
 function jsonError(status: number, error: string, description: string): Response {
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    "Cache-Control": "no-store",
-  };
-  if (status === 401 && error === "invalid_client") {
-    headers["WWW-Authenticate"] = 'Basic realm="token"';
-  }
-  return new Response(JSON.stringify({ error, error_description: description }), {
+  return oauthJsonError(
     status,
-    headers,
-  });
+    error,
+    description,
+    status === 401 && error === "invalid_client"
+      ? { "WWW-Authenticate": 'Basic realm="token"' }
+      : undefined,
+  );
 }
 
 function jsonOk(body: Record<string, unknown>): Response {

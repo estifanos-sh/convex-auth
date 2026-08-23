@@ -1,4 +1,5 @@
 import type { GenericActionCtx, GenericDataModel } from "convex/server";
+import { jsonError } from "./response";
 
 import type { OAuthClientDoc } from "./client";
 import { checkOAuthGrant } from "./grant";
@@ -13,13 +14,6 @@ export interface OAuthAuthorizeDeps {
   consentPage: string;
   /** Returns the auth site base URL (e.g. `https://example.com/auth`). */
   authSiteUrl: () => string;
-}
-
-function jsonError(status: number, error: string, description: string): Response {
-  return new Response(JSON.stringify({ error, error_description: description }), {
-    status,
-    headers: { "Content-Type": "application/json" },
-  });
 }
 
 /**
