@@ -13,12 +13,6 @@ import {
   TableNamesInDataModel,
 } from "convex/server";
 import type { GenericValidator, Infer } from "convex/values";
-import type {
-  WebAuthnAttachment,
-  WebAuthnHint,
-  WebAuthnResidentKey,
-  WebAuthnUserVerification,
-} from "../shared/webauthn";
 import { GenericId, Value } from "convex/values";
 
 import { vApiKeyDoc, vUserDoc } from "../component/documents";
