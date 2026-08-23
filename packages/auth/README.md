@@ -29,7 +29,8 @@ Then define your providers and permissions with `defineAuth`:
 
 ```ts
 import { definePermissions } from "@estifanos-sh/convex-auth/permissions";
-import { password, webauthn } from "@estifanos-sh/convex-auth/providers";
+import { password } from "@estifanos-sh/convex-auth/providers/password";
+import { webauthn } from "@estifanos-sh/convex-auth/providers/webauthn";
 import { defineAuth } from "@estifanos-sh/convex-auth/server";
 import { components } from "./_generated/api";
 

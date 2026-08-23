@@ -8,7 +8,6 @@
       "@estifanos-sh/convex-auth/permissions": ["./src/permissions/index"],
       "@estifanos-sh/convex-auth/component": ["./src/component/index"],
       "@estifanos-sh/convex-auth/convex.config": ["./src/component/convex.config"],
-      "@estifanos-sh/convex-auth/providers": ["./src/providers/index"],
       "@estifanos-sh/convex-auth/providers/*": ["./src/providers/*"],
       "@estifanos-sh/convex-auth/client": ["./src/client/index"],
       "@estifanos-sh/convex-auth/server": ["./src/server/index"]

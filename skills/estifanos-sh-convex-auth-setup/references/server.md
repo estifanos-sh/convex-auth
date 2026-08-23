@@ -25,7 +25,7 @@ values directly, declare only those application-owned values in `defineApp`.
 ```ts
 // convex/auth.ts
 import { defineAuth } from "@estifanos-sh/convex-auth/server";
-import { password } from "@estifanos-sh/convex-auth/providers";
+import { password } from "@estifanos-sh/convex-auth/providers/password";
 import { components } from "./_generated/api";
 
 const auth = defineAuth(components.auth, {

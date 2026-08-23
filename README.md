@@ -28,7 +28,9 @@ that returns a facade namespaced by domain:
 ```ts
 import { defineAuth } from "@estifanos-sh/convex-auth/server";
 import { definePermissions } from "@estifanos-sh/convex-auth/permissions";
-import { connection, google, password } from "@estifanos-sh/convex-auth/providers";
+import { connection } from "@estifanos-sh/convex-auth/providers/connection";
+import { google } from "@estifanos-sh/convex-auth/providers/google";
+import { password } from "@estifanos-sh/convex-auth/providers/password";
 import { components } from "./_generated/api";
 
 export const permissions = definePermissions({

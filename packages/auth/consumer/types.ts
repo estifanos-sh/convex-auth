@@ -3,7 +3,9 @@ import { client } from "@estifanos-sh/convex-auth/browser";
 import { useAuth as useReactAuth } from "@estifanos-sh/convex-auth/react";
 import { useConvexAuth as useSvelteAuth } from "@estifanos-sh/convex-auth/svelte";
 import { ErrorCode as ClientErrorCode, type ClientOptions } from "@estifanos-sh/convex-auth/client";
-import { credentials, email, password } from "@estifanos-sh/convex-auth/providers";
+import { credentials } from "@estifanos-sh/convex-auth/providers/credentials";
+import { email } from "@estifanos-sh/convex-auth/providers/email";
+import { password } from "@estifanos-sh/convex-auth/providers/password";
 import { webauthn } from "@estifanos-sh/convex-auth/providers/webauthn";
 // @ts-expect-error createAuth was hard-cut from the vNext public server API.
 import { createAuth } from "@estifanos-sh/convex-auth/server";
