@@ -12,10 +12,10 @@
  */
 
 import type { GenericActionCtx, GenericDataModel } from "convex/server";
-import { ConvexError, type Value } from "convex/values";
 import { serialize as serializeCookie } from "cookie";
 
 import { ErrorCode } from "../../shared/codes";
+import { convexError } from "../errors";
 import type { configDefaults } from "../config";
 import { decodeOAuthState, encodeOAuthState } from "../cookies";
 import { convertErrorsToResponse, getCookies } from "../http";
@@ -25,8 +25,6 @@ import type { AuthProfile } from "../payloads";
 import { redirectAbsoluteUrl, setURLSearchParam } from "../redirects";
 import type { OAuthMaterializedConfig } from "../types";
 import { createOAuthAuthorizationURL, handleOAuthCallback } from "./runtime";
-
-const convexError = (data: Record<string, Value>) => new ConvexError(data);
 
 function formDataEntries(formData: unknown): Iterable<[string, string | { name: string }]> {
   return formData as Iterable<[string, string | { name: string }]>;
@@ -54,17 +52,11 @@ export function createOAuthHttpHandlers(deps: OAuthHttpHandlerDeps) {
       const pathParts = url.pathname.split("/");
       const providerId = pathParts[pathParts.length - 1]!;
       if (providerId === null) {
-        throw convexError({
-          code: ErrorCode.OAUTH_MISSING_PROVIDER,
-          message: "Missing OAuth provider ID.",
-        });
+        throw convexError(ErrorCode.OAUTH_MISSING_PROVIDER, "Missing OAuth provider ID.");
       }
       const verifier = url.searchParams.get("code");
       if (verifier === null) {
-        throw convexError({
-          code: ErrorCode.OAUTH_MISSING_VERIFIER,
-          message: "Missing sign-in verifier.",
-        });
+        throw convexError(ErrorCode.OAUTH_MISSING_VERIFIER, "Missing sign-in verifier.");
       }
       const provider = getProviderOrThrow(providerId);
 
@@ -96,10 +88,7 @@ export function createOAuthHttpHandlers(deps: OAuthHttpHandlerDeps) {
       const callbackPathParts = new URL(request.url).pathname.split("/");
       const providerId = callbackPathParts[callbackPathParts.length - 1];
       if (!providerId) {
-        throw convexError({
-          code: ErrorCode.OAUTH_MISSING_PROVIDER,
-          message: "Missing OAuth provider ID.",
-        });
+        throw convexError(ErrorCode.OAUTH_MISSING_PROVIDER, "Missing OAuth provider ID.");
       }
       log(LOG_LEVELS.DEBUG, "Handling OAuth callback for provider:", providerId);
       const provider = getProviderOrThrow(providerId);
@@ -135,10 +124,10 @@ export function createOAuthHttpHandlers(deps: OAuthHttpHandlerDeps) {
         const { signature } = result;
         const decodedState = decodeOAuthState(params.get("state") ?? "");
         if (decodedState === null) {
-          throw convexError({
-            code: ErrorCode.INVALID_VERIFIER,
-            message: "Invalid OAuth state. Please try signing in again.",
-          });
+          throw convexError(
+            ErrorCode.INVALID_VERIFIER,
+            "Invalid OAuth state. Please try signing in again.",
+          );
         }
         const destinationUrl = await redirectAbsoluteUrl(ctx, config, {
           redirectTo: decodedState.redirectTo ?? undefined,

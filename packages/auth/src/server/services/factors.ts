@@ -11,14 +11,13 @@
  */
 
 import type { GenericActionCtx, GenericDataModel } from "convex/server";
-import { ConvexError, type GenericId, type Value } from "convex/values";
+import type { GenericId } from "convex/values";
 
 import { ErrorCode } from "../../shared/codes";
+import { convexError } from "../errors";
 import type { configDefaults } from "../config";
 import { authDb } from "../db";
 import { emitAuthEvent } from "../events";
-
-const convexError = (data: Record<string, Value>) => new ConvexError(data);
 
 /**
  * Build the account and factor management helpers bound to a resolved auth `config`.
@@ -33,10 +32,7 @@ export function createFactorManagementHelpers(config: ReturnType<typeof configDe
     const db = authDb(ctx, config);
     const accountDoc = await db.accounts.get({ id: args.accountId });
     if (accountDoc === null) {
-      throw convexError({
-        code: ErrorCode.ACCOUNT_NOT_FOUND,
-        message: "Account not found.",
-      });
+      throw convexError(ErrorCode.ACCOUNT_NOT_FOUND, "Account not found.");
     }
     await ctx.runMutation(config.component.account.remove, {
       id: args.accountId,
@@ -64,10 +60,7 @@ export function createFactorManagementHelpers(config: ReturnType<typeof configDe
     const db = authDb(ctx, config);
     const passkeyDoc = await db.factors.getPasskey(args.passkeyId);
     if (passkeyDoc === null) {
-      throw convexError({
-        code: ErrorCode.PASSKEY_NOT_FOUND,
-        message: "Passkey not found.",
-      });
+      throw convexError(ErrorCode.PASSKEY_NOT_FOUND, "Passkey not found.");
     }
     await ctx.runMutation(config.component.factor.passkey.remove, {
       id: args.passkeyId,
@@ -91,10 +84,7 @@ export function createFactorManagementHelpers(config: ReturnType<typeof configDe
     const db = authDb(ctx, config);
     const totpDoc = await db.factors.getTotp(args.totpId);
     if (totpDoc === null) {
-      throw convexError({
-        code: ErrorCode.TOTP_NOT_FOUND,
-        message: "TOTP factor not found.",
-      });
+      throw convexError(ErrorCode.TOTP_NOT_FOUND, "TOTP factor not found.");
     }
     await ctx.runMutation(config.component.factor.totp.remove, {
       id: args.totpId,
