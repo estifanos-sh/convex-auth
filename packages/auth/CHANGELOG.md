@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.0.8
+
+### Fixed
+
+- OAuth `authorize` error responses now carry `Cache-Control: no-store`. Three
+  endpoints built the RFC 6749 error response independently and `authorize`
+  omitted the header, leaving invalid-`redirect_uri`, unknown-client and
+  mismatch errors cacheable by a shared proxy. They now share one helper.
+- `WebAuthnCeremonyPolicy` and `WebAuthnOperationContext` are re-exported from
+  `providers`. They are the argument types for `signIn(context?)` and
+  `rotate(context?)`, but only the `providers/webauthn` subpath exported them,
+  so a consumer importing from `providers` could call the functions without
+  being able to name their argument.
+- The domain list signatures use Convex's `PaginationResult<T>` directly. The
+  internal alias they previously shared was stripped from the emitted
+  declarations while four public signatures still referenced it, so a consumer
+  with library checking enabled saw `TS2694` errors.
+
+### Changed
+
+- Auth events are returned as stored. The component previously narrowed every
+  event through a redaction allowlist that existed in two copies which had
+  drifted, so which fields a caller saw depended on which query it called.
+  Events carry identifiers and provider names; secrets live on `Account.secret`
+  and never enter an event. A consumer forwarding events to an untrusted client
+  should narrow them where it knows its audience.
+- Substantial internal deduplication: repeated literal unions are named types
+  derived from their validators, repeated error construction and lookup
+  prologues are shared, and provably unreachable exports are gone. No public
+  export was added, removed, or renamed.
+
 ## 0.0.7
 
 ### Added
