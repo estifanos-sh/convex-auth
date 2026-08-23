@@ -1,5 +1,44 @@
 # Changelog
 
+## 0.0.7
+
+### Added
+
+- `signIn(context?)` and `rotate(context?)` accept a per-ceremony
+  `{ email, policy }`.
+
+  `email` seeds `allowCredentials`. Flows that resolve the account
+  server-side — an account picker that never exposes addresses to an
+  unauthenticated client — had no address to put in the request params, so the
+  list came back empty. An empty list means a discoverable-credential prompt,
+  and a credential registered with `residentKey: "discouraged"` is invisible to
+  one: the authenticator can only offer it when the relying party names its id.
+  Affected deployments saw "no credentials found" and read it as a missing
+  security key.
+
+  `policy` narrows or widens one ceremony without a second provider, so a
+  deployment can register platform passkeys on a laptop and require portable
+  security keys on a shared tablet. Supply it from server-side code that has
+  decided the policy; map an untrusted client hint onto a policy on the server
+  rather than letting the client name one.
+
+### Changed
+
+- The `securityKeysOnly` coupling — cross-platform attachment plus security-key
+  hints on both halves of the ceremony — is defined once in `shared/webauthn`
+  and shared by the provider factory and the override path. Releasing the
+  constraint now clears every field it set; a partial release left a widened
+  ceremony still refusing platform authenticators.
+- The WebAuthn hint, attachment, resident-key and user-verification unions are
+  named types in `shared/webauthn`, replacing four inline copies.
+
+## 0.0.6
+
+### Changed
+
+- CLI only: the release runner executes the project-local Convex binary and
+  hardens command execution. No runtime, component, or client changes.
+
 ## 0.0.5
 
 ### Breaking
