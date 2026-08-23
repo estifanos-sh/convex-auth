@@ -26,9 +26,12 @@ import {
 import { log } from "../log";
 import type { EmitGroupAuthEventInput } from "./group/service";
 import type {
+  ConnectionProtocol,
+  ConnectionStatus,
   ConvexAuthMaterializedConfig,
   OIDCClaimMapping,
   GroupConnectionPolicy,
+  SortOrder,
 } from "../types";
 import {
   getOidcConfig,
@@ -78,8 +81,8 @@ type DomainDeps = {
   ) => Promise<{
     _id: string;
     groupId: string;
-    protocol: "oidc" | "saml";
-    status: "draft" | "active" | "disabled";
+    protocol: ConnectionProtocol;
+    status: ConnectionStatus;
     config?: unknown;
   }>;
   validateGroupConnectionPolicy: (
@@ -157,7 +160,7 @@ export function createGroupConnectionDomain<TDeps extends DomainDeps>(deps: TDep
     _id: string;
     protocol?: unknown;
     config?: unknown;
-  }): "oidc" | "saml" => {
+  }): ConnectionProtocol => {
     if (connection.protocol === "oidc") {
       return "oidc";
     }
@@ -269,10 +272,10 @@ export function createGroupConnectionDomain<TDeps extends DomainDeps>(deps: TDep
         ctx: ComponentCtx,
         data: {
           groupId: string;
-          protocol: "oidc" | "saml";
+          protocol: ConnectionProtocol;
           slug?: string;
           name?: string;
-          status?: "draft" | "active" | "disabled";
+          status?: ConnectionStatus;
           config?: Record<string, unknown>;
           extend?: Record<string, unknown>;
         },
@@ -300,11 +303,11 @@ export function createGroupConnectionDomain<TDeps extends DomainDeps>(deps: TDep
           where?: {
             groupId?: string;
             slug?: string;
-            status?: "draft" | "active" | "disabled";
+            status?: ConnectionStatus;
           };
           paginationOpts: { numItems: number; cursor: string | null };
           orderBy?: "_creationTime" | "name" | "slug" | "status";
-          order?: "asc" | "desc";
+          order?: SortOrder;
         },
       ) => {
         const result = await listGroupConnections(ctx, config.component.connection, {

@@ -5,7 +5,7 @@ import type { ComponentCtx, ComponentReadCtx } from "../component/context";
 import { configDefaults } from "../config";
 import { emitAuthEvent } from "../events";
 import { createScopeChecker, generateApiKey, hashApiKey } from "../keys";
-import type { KeyDoc, KeyRecord, KeyScope, ScopeChecker } from "../types";
+import type { KeyDoc, KeyRecord, KeyScope, ScopeChecker, SortOrder } from "../types";
 
 /** Convex-native `PaginationResult<T>` shape returned by the `*List` component queries. */
 type Paginated<T> = {
@@ -244,7 +244,7 @@ export function createKeyDomain(deps: KeyDeps) {
         };
         paginationOpts: { numItems: number; cursor: string | null };
         orderBy?: "_creationTime" | "name" | "lastUsedAt" | "expiresAt" | "revoked";
-        order?: "asc" | "desc";
+        order?: SortOrder;
       },
     ) => {
       const result = (await ctx.runQuery(config.component.user.key.list, {

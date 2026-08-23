@@ -21,7 +21,7 @@ import {
   GROUP_SAML_PROVIDER_PREFIX,
   isGroupProviderId,
 } from "../connection/shared";
-import type { ConnectionHookProtocol, Doc, MutationCtx } from "../types";
+import type { ConnectionHookProtocol, ConnectionProtocol, Doc, MutationCtx } from "../types";
 import { upsertUserAndAccount } from "../user/account";
 import { AUTH_STORE_REF } from "./store/refs";
 
@@ -225,7 +225,7 @@ export async function userOAuthImpl(
     : provider.startsWith(GROUP_SAML_PROVIDER_PREFIX)
       ? provider.slice(GROUP_SAML_PROVIDER_PREFIX.length)
       : null;
-  type OAuthConnectionProtocol = Extract<ConnectionHookProtocol, "oidc" | "saml">;
+  type OAuthConnectionProtocol = ConnectionProtocol;
   const connectionProtocol: OAuthConnectionProtocol | null = provider.startsWith(
     GROUP_OIDC_PROVIDER_PREFIX,
   )

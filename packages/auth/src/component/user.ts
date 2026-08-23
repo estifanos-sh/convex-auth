@@ -15,7 +15,7 @@ import { mutation, query } from "./_generated/server";
 import { assertBatchSelectorSize } from "./batch";
 import type { Doc } from "./_generated/dataModel";
 import { vUserDoc } from "./documents";
-import { vPaginated } from "./model";
+import { vPaginated, vSortOrder } from "./model";
 import schema from "./schema";
 
 const vUserInsertData = schema.tables.User.validator.omit("sessionEpoch");
@@ -117,7 +117,7 @@ export const list = query({
         v.literal("phone"),
       ),
     ),
-    order: v.optional(v.union(v.literal("asc"), v.literal("desc"))),
+    order: v.optional(vSortOrder),
   },
   returns: vPaginated(vUserDoc),
   handler: async (ctx, args) => {

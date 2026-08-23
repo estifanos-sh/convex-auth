@@ -27,7 +27,7 @@ import {
 } from "./context";
 import { logError } from "./log";
 import { verifyOAuthToken } from "./tokens";
-import type { CorsConfig, HttpKeyContext } from "./types";
+import type { ConnectionHookProtocol, CorsConfig, HttpKeyContext } from "./types";
 import { extractBearerToken } from "./utils/bearer";
 import type { WellKnownEndpoint, WellKnownResponse } from "./wellknown";
 
@@ -628,7 +628,7 @@ export function getCookies(request: Request): Record<string, string | undefined>
 export type ConnectionRuntimeRoute = {
   pathname?: string;
   connectionId: string;
-  protocol: "oidc" | "saml" | "scim";
+  protocol: ConnectionHookProtocol;
   rest: string[];
 };
 

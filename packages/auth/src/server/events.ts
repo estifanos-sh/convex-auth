@@ -12,6 +12,9 @@ import {
   type AuthEventCategory,
   type AuthEventKind,
 } from "../shared/event/kinds";
+// Imported from the component model rather than `./types` so the only edge
+// between this module and `server/types.ts` stays one-directional.
+import type { ConnectionProtocol, SortOrder } from "../component/model";
 import type { AuthComponentApi } from "./component/api";
 import type { ComponentCtx } from "./component/context";
 import { generateRandomString } from "./random";
@@ -168,17 +171,17 @@ export type AuthEventDataByKind<TExtend = {}> = {
   };
   "oauth.refresh.reuse_detected": { clientId: string; userId?: string };
   "oauth.refresh.revoked": { clientId: string; userId?: string };
-  "connection.created": { connectionId: string; protocol?: "oidc" | "saml"; domain?: string };
+  "connection.created": { connectionId: string; protocol?: ConnectionProtocol; domain?: string };
   "connection.updated": { connectionId: string; changed?: string[] };
   "connection.removed": { connectionId: string };
   "connection.login.succeeded": {
     connectionId: string;
-    protocol: "oidc" | "saml";
+    protocol: ConnectionProtocol;
     userId?: string;
   };
   "connection.login.failed": {
     connectionId?: string;
-    protocol?: "oidc" | "saml";
+    protocol?: ConnectionProtocol;
     errorCode?: string;
   };
   "connection.domain.verification_requested": {
@@ -701,7 +704,7 @@ export function createAuthEventDomain(config: EventConfig) {
       ctx: AuthEventCtx,
       args: {
         where: AuthEventWhereInput;
-        order?: "asc" | "desc";
+        order?: SortOrder;
         paginationOpts: PaginationOptions;
       },
     ) =>

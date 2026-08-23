@@ -8,7 +8,7 @@ import type {
 import type { GenericId } from "convex/values";
 
 import type { AuthComponentApi } from "./component/api";
-import type { Doc } from "./types";
+import type { Doc, UserEmailSource } from "./types";
 
 type RunCtx = GenericActionCtx<GenericDataModel>;
 type ComponentRunContext = {
@@ -65,7 +65,7 @@ export function authDb(ctx: ComponentRunContext, config: AuthComponentBoundaryCo
         email: string;
         verified?: boolean;
         isPrimary?: boolean;
-        source: "password" | "oauth" | "oidc" | "saml" | "scim";
+        source: UserEmailSource;
         accountId?: string;
         provider?: string;
         connectionId?: string;

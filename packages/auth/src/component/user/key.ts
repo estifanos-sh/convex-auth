@@ -15,7 +15,7 @@ import { ErrorCode } from "../../shared/codes";
 import { mutation, query } from "../_generated/server";
 import schema from "../schema";
 import { vApiKeyDoc } from "../documents";
-import { vApiKeyRateLimit, vApiKeyScope, vPaginated } from "../model";
+import { vApiKeyRateLimit, vApiKeyScope, vPaginated, vSortOrder } from "../model";
 
 type ApiKeyRateLimit = { maxRequests: number; windowMs: number };
 type ApiKeyUsePatch = {
@@ -85,7 +85,7 @@ export const list = query({
         v.literal("revoked"),
       ),
     ),
-    order: v.optional(v.union(v.literal("asc"), v.literal("desc"))),
+    order: v.optional(vSortOrder),
   },
   returns: vPaginated(vApiKeyDoc),
   handler: async (ctx, args) => {

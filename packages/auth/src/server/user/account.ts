@@ -10,8 +10,10 @@ import type {
   AuthProviderMaterializedConfig,
   ConvexAuthConfig,
   Doc,
+  ConnectionProtocol,
   GroupConnectionPolicy,
   MutationCtx,
+  UserEmailSource,
 } from "../types";
 
 type CreateOrUpdateUserArgs = {
@@ -43,7 +45,7 @@ function mergeExtend(
   return existing ? { ...existing, ...incoming } : incoming;
 }
 
-function isConnectionProtocol(value: unknown): value is "oidc" | "saml" {
+function isConnectionProtocol(value: unknown): value is ConnectionProtocol {
   return value === "oidc" || value === "saml";
 }
 
@@ -244,7 +246,7 @@ async function recordOwnedEmails(
 ): Promise<void> {
   const identity = args.accountExtend?.identity;
   const protocol = typeof identity?.protocol === "string" ? identity.protocol : undefined;
-  const source: "password" | "oauth" | "oidc" | "saml" | "scim" =
+  const source: UserEmailSource =
     protocol === "saml"
       ? "saml"
       : protocol === "oidc"

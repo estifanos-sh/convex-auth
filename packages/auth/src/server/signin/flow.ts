@@ -31,6 +31,7 @@ import { finalizeSessionIssuance } from "../session/lifecycle";
 import { handleTotp } from "../totp";
 import {
   AuthProviderMaterializedConfig,
+  type ConnectionProtocol,
   ConvexCredentialsConfig,
   EmailConfig,
   GenericActionCtxWithAuthConfig,
@@ -142,7 +143,7 @@ export async function signInImpl(
     resolveConnectionProtocol?: (
       ctx: EnrichedActionCtx,
       connectionId: string,
-    ) => Promise<"oidc" | "saml">;
+    ) => Promise<ConnectionProtocol>;
   },
 ): Promise<SignInResult> {
   return withSpan(
@@ -518,7 +519,7 @@ async function handleConnectionProvider(
     resolveConnectionProtocol?: (
       ctx: EnrichedActionCtx,
       connectionId: string,
-    ) => Promise<"oidc" | "saml">;
+    ) => Promise<ConnectionProtocol>;
     authSiteUrl?: string;
   },
 ): Promise<{ kind: "redirect"; redirect: string; verifier: string }> {
@@ -531,7 +532,7 @@ async function handleConnectionProvider(
       );
     }
 
-    let protocol: "oidc" | "saml" =
+    let protocol: ConnectionProtocol =
       (normalizedParams.protocol === "oidc" || normalizedParams.protocol === "saml"
         ? normalizedParams.protocol
         : undefined) ??

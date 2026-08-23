@@ -8,7 +8,7 @@ import {
 } from "../contract";
 import { convexError } from "../errors";
 import type { EmitGroupAuthEventInput } from "./group/service";
-import type { GroupConnectionPolicy, ConvexAuthMaterializedConfig } from "../types";
+import type { GroupConnectionPolicy, ConvexAuthMaterializedConfig, ScimStatus } from "../types";
 
 type DomainScimConfig = {
   security?: {
@@ -182,7 +182,7 @@ export function createGroupScimDomain(deps: ScimDeps) {
       ctx: ComponentCtx,
       data: {
         connectionId: string;
-        status?: "draft" | "active" | "disabled";
+        status?: ScimStatus;
         security?: {
           maxRequestSize?: number;
         };

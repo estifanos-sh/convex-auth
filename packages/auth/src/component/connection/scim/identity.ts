@@ -18,12 +18,16 @@ import type { MutationCtx } from "../../_generated/server";
 import { assertBatchSelectorSize } from "../../batch";
 import { mutation, query } from "../../_generated/server";
 import { vGroupConnectionScimIdentityDoc } from "../../documents";
-import { vPaginated, vScimResourceType } from "../../model";
+import {
+  vGroupConnectionDeprovisionMode,
+  vGroupConnectionProfileUpdateMode,
+  vPaginated,
+  vScimResourceType,
+} from "../../model";
 import schema from "../../schema";
 import { revokeSessionState } from "../../session";
 
 const vScimUserData = schema.tables.User.validator.omit("sessionEpoch");
-const vProfileUpdate = v.union(v.literal("never"), v.literal("missing"), v.literal("always"));
 
 /** Maximum memberships changed by one SCIM group mutation. */
 const SCIM_GROUP_MEMBERSHIP_BATCH_SIZE = 100;
@@ -43,7 +47,7 @@ function assertScimMembershipBatchSize(memberIds: Array<Id<"User">>) {
 }
 
 type ScimUserData = Infer<typeof vScimUserData>;
-type ProfileUpdate = Infer<typeof vProfileUpdate>;
+type ProfileUpdate = Infer<typeof vGroupConnectionProfileUpdateMode>;
 
 type ScimUserIdentity = Pick<
   Infer<typeof vGroupConnectionScimIdentityDoc>,
@@ -179,7 +183,7 @@ export const provision = mutation({
     connectionId: v.id("GroupConnection"),
     externalId: v.optional(v.string()),
     userData: vScimUserData,
-    profileUpdate: vProfileUpdate,
+    profileUpdate: vGroupConnectionProfileUpdateMode,
     roleIds: v.array(v.string()),
     lastProvisionedAt: v.optional(v.number()),
     active: v.optional(v.boolean()),
@@ -301,7 +305,7 @@ export const update = mutation({
     userId: v.id("User"),
     externalId: v.optional(v.string()),
     userData: vScimUserData,
-    profileUpdate: vProfileUpdate,
+    profileUpdate: vGroupConnectionProfileUpdateMode,
     roleIds: v.array(v.string()),
     active: v.boolean(),
     lastProvisionedAt: v.optional(v.number()),
@@ -440,7 +444,7 @@ export const revoke = mutation({
   args: {
     connectionId: v.id("GroupConnection"),
     userId: v.id("User"),
-    mode: v.union(v.literal("soft"), v.literal("hard")),
+    mode: vGroupConnectionDeprovisionMode,
   },
   returns: v.object({
     epoch: v.number(),

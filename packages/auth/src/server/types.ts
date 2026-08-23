@@ -21,6 +21,7 @@ import type {
 import { GenericId, Value } from "convex/values";
 
 import { vApiKeyDoc, vUserDoc } from "../component/documents";
+import type { ConnectionProtocol } from "../component/model";
 import schema from "../component/schema";
 import type { EmailParams, OAuthParams, PhoneParams, ProviderParams } from "../shared/params";
 import type { AuthComponentApi } from "./component/api";
@@ -150,7 +151,16 @@ export type Grant<TPermissions extends PermissionsConfig | undefined> =
             : never)
     : string;
 
-export type ConnectionHookProtocol = "oidc" | "saml" | "scim";
+export type {
+  ConnectionProtocol,
+  ConnectionStatus,
+  ScimStatus,
+  SortOrder,
+  UserEmailSource,
+  WebhookEndpointStatus,
+} from "../component/model";
+
+export type ConnectionHookProtocol = ConnectionProtocol | "scim";
 
 export type ConnectionHookProfile<
   TProtocol extends ConnectionHookProtocol = ConnectionHookProtocol,

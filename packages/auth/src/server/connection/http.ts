@@ -26,7 +26,7 @@ import type { AuthAccountExtend, AuthProfile } from "../payloads";
 import { redirectAbsoluteUrl, setURLSearchParam } from "../redirects";
 import type { AuthEventKind, AuthEventObject, AuthEventSubject } from "../events";
 import type { EmitGroupAuthEventInput } from "./group/service";
-import type { GroupConnectionPolicy } from "../types";
+import type { ConnectionProtocol, GroupConnectionPolicy } from "../types";
 import { createGroupConnectionOidcRuntime } from "./oidc";
 import { resolveProvisionedRoleIds } from "./policy";
 import { finalizeNormalizedProfile, normalizeStringArray } from "./profile";
@@ -110,7 +110,7 @@ type ScimContext = {
     resource: string;
     resourceId?: string;
   };
-  connection: { _id: string; groupId: string; protocol: "oidc" | "saml" };
+  connection: { _id: string; groupId: string; protocol: ConnectionProtocol };
   scimConfig: {
     _id: string;
     connectionId: string;
@@ -311,7 +311,7 @@ export function addGroupHttpRuntime(deps: GroupHttpRuntimeDeps) {
     ctx: GenericActionCtx<GenericDataModel>,
     args: {
       connection: { _id: string; groupId: string };
-      protocol: "oidc" | "saml";
+      protocol: ConnectionProtocol;
       outcome: "success" | "failure";
       userId?: string;
       error?: unknown;

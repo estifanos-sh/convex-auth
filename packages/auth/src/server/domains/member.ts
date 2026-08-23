@@ -4,7 +4,7 @@ import { ErrorCode } from "../../shared/codes";
 import type { ComponentCtx, ComponentReadCtx } from "../component/context";
 import { configDefaults } from "../config";
 import { cached, ctxCacheHas, invalidateCtxCache } from "../cache/context";
-import type { Doc } from "../types";
+import type { Doc, SortOrder } from "../types";
 import { capGrantsForCaller, resolveOAuthCaller } from "./access";
 
 /** Convex-native `PaginationResult<T>` shape returned by the `*List` component queries. */
@@ -23,7 +23,7 @@ type MemberListOpts = {
   where?: { groupId?: GenericId<"Group">; userId?: GenericId<"User">; status?: string };
   paginationOpts: { numItems: number; cursor: string | null };
   orderBy?: "_creationTime" | "status";
-  order?: "asc" | "desc";
+  order?: SortOrder;
 };
 
 type GetResult = {

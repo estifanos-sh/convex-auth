@@ -23,6 +23,7 @@ import {
   vAuthEventTarget,
   vAuthEventWhere,
   vPaginated,
+  vSortOrder,
 } from "./model";
 import schema from "./schema";
 
@@ -282,7 +283,7 @@ export const get = query({
 export const list = query({
   args: {
     where: vAuthEventWhere,
-    order: v.optional(v.union(v.literal("asc"), v.literal("desc"))),
+    order: v.optional(vSortOrder),
     paginationOpts: paginationOptsValidator,
   },
   returns: vPaginated(vAuthEventProjectionDoc),

@@ -6,7 +6,7 @@ import type { ComponentCtx, ComponentReadCtx } from "../component/context";
 import { configDefaults } from "../config";
 import { getSessionUserId } from "../context";
 import { generateRandomString, sha256 } from "../random";
-import type { Doc } from "../types";
+import type { Doc, SortOrder } from "../types";
 
 /** Convex-native `PaginationResult<T>` shape returned by the `*List` component queries. */
 type Paginated<T> = {
@@ -215,7 +215,7 @@ export function createInviteDomain(deps: InviteDeps) {
         };
         paginationOpts: { numItems: number; cursor: string | null };
         orderBy?: "_creationTime" | "status" | "email" | "expiresTime" | "acceptedTime";
-        order?: "asc" | "desc";
+        order?: SortOrder;
       },
     ) => {
       return (await ctx.runQuery(config.component.group.invite.list, {

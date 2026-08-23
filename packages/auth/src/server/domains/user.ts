@@ -6,7 +6,7 @@ import type { ComponentCtx, ComponentReadCtx } from "../component/context";
 import { configDefaults } from "../config";
 import { getSessionUserId } from "../context";
 import { cached, ctxCacheHas, invalidateCtxCache } from "../cache/context";
-import type { Doc, UserOrderBy, UserWhere } from "../types";
+import type { Doc, SortOrder, UserOrderBy, UserWhere } from "../types";
 
 type ComponentAuthReadCtx = ComponentReadCtx & { auth: Auth };
 type UserDocLike = Doc<"User"> | null;
@@ -166,7 +166,7 @@ export function createUserDomain(deps: UserDeps) {
         where?: UserWhere;
         paginationOpts: { numItems: number; cursor: string | null };
         orderBy?: UserOrderBy;
-        order?: "asc" | "desc";
+        order?: SortOrder;
       },
     ) => {
       return (await ctx.runQuery(config.component.user.list, {

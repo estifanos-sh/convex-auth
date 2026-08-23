@@ -3,7 +3,7 @@ import type { GenericId } from "convex/values";
 import type { ComponentCtx, ComponentReadCtx } from "../component/context";
 import { configDefaults } from "../config";
 import { cached, ctxCacheHas, invalidateCtxCache } from "../cache/context";
-import type { Doc } from "../types";
+import type { Doc, SortOrder } from "../types";
 
 type GroupDocLike = Doc<"Group"> | null;
 
@@ -207,7 +207,7 @@ export function createGroupDomain(deps: GroupDeps) {
         };
         paginationOpts: { numItems: number; cursor: string | null };
         orderBy?: "_creationTime" | "name" | "slug" | "type";
-        order?: "asc" | "desc";
+        order?: SortOrder;
       },
     ) => {
       return (await ctx.runQuery(config.component.group.list, {

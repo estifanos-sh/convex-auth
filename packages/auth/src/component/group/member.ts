@@ -17,7 +17,7 @@ import type { Id } from "../_generated/dataModel";
 import { assertBatchSelectorSize } from "../batch";
 import { vGroupMemberDoc } from "../documents";
 import { mutation, query } from "../_generated/server";
-import { vPaginated } from "../model";
+import { vPaginated, vSortOrder } from "../model";
 import schema from "../schema";
 
 /**
@@ -77,7 +77,7 @@ export const list = query({
     ),
     paginationOpts: paginationOptsValidator,
     orderBy: v.optional(v.union(v.literal("_creationTime"), v.literal("status"))),
-    order: v.optional(v.union(v.literal("asc"), v.literal("desc"))),
+    order: v.optional(vSortOrder),
   },
   returns: vPaginated(vGroupMemberDoc),
   handler: async (ctx, args) => {

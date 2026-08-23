@@ -18,7 +18,7 @@ import type { Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
 import { vGroupConnectionDoc, vGroupConnectionDomainDoc } from "./documents";
 import { internalMutation, mutation, query } from "./_generated/server";
-import { vGroupConnectionProtocol, vGroupConnectionStatus, vPaginated } from "./model";
+import { vGroupConnectionProtocol, vGroupConnectionStatus, vPaginated, vSortOrder } from "./model";
 import schema from "./schema";
 
 /**
@@ -84,7 +84,7 @@ export const list = query({
         v.literal("status"),
       ),
     ),
-    order: v.optional(v.union(v.literal("asc"), v.literal("desc"))),
+    order: v.optional(vSortOrder),
   },
   returns: vPaginated(vGroupConnectionDoc),
   handler: async (ctx, args) => {

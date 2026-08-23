@@ -12,7 +12,12 @@ import {
 import { convexError } from "../errors";
 import type { AuthEventKind } from "../events";
 import type { EmitGroupAuthEventInput } from "./group/service";
-import type { ConvexAuthMaterializedConfig } from "../types";
+import type {
+  ConnectionProtocol,
+  ConnectionStatus,
+  ConvexAuthMaterializedConfig,
+  WebhookEndpointStatus,
+} from "../types";
 
 /**
  * Validate an operator-supplied webhook target URL before it is persisted and
@@ -44,8 +49,8 @@ type WebhookDeps = {
   ) => Promise<{
     _id: string;
     groupId: string;
-    protocol: "oidc" | "saml";
-    status: "draft" | "active" | "disabled";
+    protocol: ConnectionProtocol;
+    status: ConnectionStatus;
     config?: unknown;
   }>;
   emitGroupAuthEvent: (ctx: ComponentCtx, data: EmitGroupAuthEventInput) => Promise<string>;
@@ -53,7 +58,7 @@ type WebhookDeps = {
 
 type WebhookEndpointPatch = {
   url?: string;
-  status?: "active" | "disabled";
+  status?: WebhookEndpointStatus;
   subscriptions?: AuthEventKind[];
   secretCiphertext?: EncryptedSecret;
 };
@@ -67,7 +72,7 @@ type WebhookEndpointPatch = {
 export function getPublicWebhookEndpoint<
   T extends {
     secretCiphertext: unknown;
-    status: "active" | "disabled";
+    status: WebhookEndpointStatus;
     subscriptions: AuthEventKind[];
   },
 >(endpoint: T | null | undefined): Omit<T, "secretCiphertext"> | null {
@@ -142,7 +147,7 @@ export function createGroupWebhookDomain(deps: WebhookDeps) {
           id: string;
           patch: {
             url?: string;
-            status?: "active" | "disabled";
+            status?: WebhookEndpointStatus;
             secret?: string;
             subscriptions?: AuthEventKind[];
           };
