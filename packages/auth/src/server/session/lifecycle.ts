@@ -3,7 +3,7 @@ import { GenericId } from "convex/values";
 
 import type { RefreshToken } from "../../shared/brand";
 import { authDb } from "../db";
-import { queueAuthEvent } from "../events";
+import { queueSessionReplacedEvent } from "../events";
 import {
   getAuthenticatedSessionIdOrNull,
   getUserIdentityOrNull,
@@ -172,17 +172,9 @@ export async function issueSession(
   });
   const { userId, sessionId, refreshTokenId } = issued;
   if (issued.replacedSessionId !== undefined) {
-    const replacedSessionId = issued.replacedSessionId;
-    await queueAuthEvent(ctx, config, {
-      kind: "session.invalidated",
-      actor: { type: "system" },
-      subject: { type: "session", id: replacedSessionId },
-      targets: [
-        { kind: "user", id: userId },
-        { kind: "session", id: replacedSessionId },
-      ],
-      outcome: "success",
-      data: { userId, reason: "replaced" },
+    await queueSessionReplacedEvent(ctx, config, {
+      userId,
+      replacedSessionId: issued.replacedSessionId,
     });
   }
   return {

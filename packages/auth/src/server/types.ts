@@ -6,6 +6,7 @@ import {
   GenericActionCtx,
   GenericDataModel,
   GenericMutationCtx,
+  PaginationResult,
   RegisteredAction,
   RegisteredMutation,
   RegisteredQuery,
@@ -168,6 +169,17 @@ export type {
 } from "../component/model";
 
 export type ConnectionHookProtocol = ConnectionProtocol | "scim";
+
+/**
+ * Convex's `PaginationResult<T>` under the name the domain list helpers use.
+ *
+ * Five domain modules each carried their own structurally identical copy of
+ * this shape; if Convex ever adds a field to the paginated envelope, only one
+ * of them would have been updated.
+ *
+ * @internal
+ */
+export type Paginated<T> = PaginationResult<T>;
 
 export type ConnectionHookProfile<
   TProtocol extends ConnectionHookProtocol = ConnectionHookProtocol,

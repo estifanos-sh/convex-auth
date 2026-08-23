@@ -684,6 +684,65 @@ export async function queueAuthEvent<K extends AuthEventKind>(
 }
 
 /**
+ * Emit the `session.invalidated` audit event for a session displaced by a
+ * newly issued one.
+ *
+ * Four sign-in completions — passkey, TOTP, credentials, and the generic
+ * `issueSession` path — end with this exact emission. An audit trail is only
+ * trustworthy if its writers cannot drift, so the shape lives here rather
+ * than being retyped at each completion.
+ *
+ * @internal
+ */
+export async function queueSessionReplacedEvent(
+  ctx: QueuedAuthEventCtx,
+  config: EventConfig,
+  args: { userId: GenericId<"User">; replacedSessionId: GenericId<"Session"> },
+): Promise<void> {
+  await queueAuthEvent(ctx, config, {
+    kind: "session.invalidated",
+    actor: { type: "system" },
+    subject: { type: "session", id: args.replacedSessionId },
+    targets: [
+      { kind: "user", id: args.userId },
+      { kind: "session", id: args.replacedSessionId },
+    ],
+    outcome: "success",
+    data: { userId: args.userId, reason: "replaced" },
+  });
+}
+
+/**
+ * Emit the `session.signed_in` audit event for a completed sign-in.
+ *
+ * Only `data` varies between the three ceremony completions that emit it, so
+ * that is the one thing callers pass.
+ *
+ * @internal
+ */
+export async function queueSignedInEvent(
+  ctx: QueuedAuthEventCtx,
+  config: EventConfig,
+  args: {
+    userId: GenericId<"User">;
+    sessionId: GenericId<"Session">;
+    data: AuthEventDataByKind["session.signed_in"];
+  },
+): Promise<void> {
+  await queueAuthEvent(ctx, config, {
+    kind: "session.signed_in",
+    actor: { type: "user", id: args.userId },
+    subject: { type: "session", id: args.sessionId },
+    targets: [
+      { kind: "user", id: args.userId },
+      { kind: "session", id: args.sessionId },
+    ],
+    outcome: "success",
+    data: args.data,
+  });
+}
+
+/**
  * Build the `auth.event` namespace for reading and emitting auth events.
  *
  * @param config - Component reference plus optional event handler map.

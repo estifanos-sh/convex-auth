@@ -6,20 +6,12 @@ import type { ComponentCtx, ComponentReadCtx } from "../component/context";
 import { configDefaults } from "../config";
 import { getSessionUserId } from "../context";
 import { cached, ctxCacheHas, invalidateCtxCache } from "../cache/context";
-import type { Doc, SortOrder, UserOrderBy, UserWhere } from "../types";
+import type { Doc, Paginated, SortOrder, UserOrderBy, UserWhere } from "../types";
 
 type ComponentAuthReadCtx = ComponentReadCtx & { auth: Auth };
 type UserDocLike = Doc<"User"> | null;
 
 /** Convex-native `PaginationResult<T>` shape returned by the `*List` component queries. */
-type Paginated<T> = {
-  page: T[];
-  isDone: boolean;
-  continueCursor: string;
-  splitCursor?: string | null;
-  pageStatus?: "SplitRecommended" | "SplitRequired" | null;
-};
-
 export type UserDeps = {
   config: ReturnType<typeof configDefaults>;
 };

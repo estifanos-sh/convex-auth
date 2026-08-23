@@ -54,7 +54,7 @@ import {
 } from "../shared/webauthn";
 import { requireAuthKey } from "./env";
 import { asConvexError, convexError } from "./errors";
-import { queueAuthEvent } from "./events";
+import { queueAuthEvent, queueSessionReplacedEvent, queueSignedInEvent } from "./events";
 import { coupleSecurityKeysOnly, decoupleSecurityKeysOnly } from "../shared/webauthn";
 import { getAuthenticatedUserIdOrNull } from "./identity/claims";
 import { LOG_LEVELS, log } from "./log";
@@ -654,28 +654,14 @@ async function finalizePasskeySession(
     ),
   });
   if (completed.replacedSessionId !== undefined) {
-    const replacedSessionId = completed.replacedSessionId as GenericId<"Session">;
-    await queueAuthEvent(ctx, ctx.auth.config, {
-      kind: "session.invalidated",
-      actor: { type: "system" },
-      subject: { type: "session", id: replacedSessionId },
-      targets: [
-        { kind: "user", id: userId },
-        { kind: "session", id: replacedSessionId },
-      ],
-      outcome: "success",
-      data: { userId, reason: "replaced" },
+    await queueSessionReplacedEvent(ctx, ctx.auth.config, {
+      userId,
+      replacedSessionId: completed.replacedSessionId as GenericId<"Session">,
     });
   }
-  await queueAuthEvent(ctx, ctx.auth.config, {
-    kind: "session.signed_in",
-    actor: { type: "user", id: userId },
-    subject: { type: "session", id: sessionId },
-    targets: [
-      { kind: "user", id: userId },
-      { kind: "session", id: sessionId },
-    ],
-    outcome: "success",
+  await queueSignedInEvent(ctx, ctx.auth.config, {
+    userId,
+    sessionId,
     data: { provider: "session" },
   });
   const session = await finalizeSessionIssuance(ctx.auth.config, {

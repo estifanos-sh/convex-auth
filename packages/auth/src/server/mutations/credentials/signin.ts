@@ -12,7 +12,7 @@ import { GenericId, Infer, v } from "convex/values";
 
 import * as Provider from "../../crypto";
 import type { Hashed } from "../../../shared/brand";
-import { queueAuthEvent } from "../../events";
+import { queueSessionReplacedEvent, queueSignedInEvent } from "../../events";
 import { credentialsSignInLimitIdentifier, maxSignInAttempts } from "../../limits";
 import { LOG_LEVELS, log, maybeRedact } from "../../log";
 import {
@@ -242,28 +242,14 @@ async function credentialsSignInInner(
     ...buildKnownSignInIdentityAttributes(config, { userId, sessionId }, completed.user.email),
   });
   if (completed.replacedSessionId !== undefined) {
-    const replacedSessionId = completed.replacedSessionId as GenericId<"Session">;
-    await queueAuthEvent(ctx, config, {
-      kind: "session.invalidated",
-      actor: { type: "system" },
-      subject: { type: "session", id: replacedSessionId },
-      targets: [
-        { kind: "user", id: userId },
-        { kind: "session", id: replacedSessionId },
-      ],
-      outcome: "success",
-      data: { userId, reason: "replaced" },
+    await queueSessionReplacedEvent(ctx, config, {
+      userId,
+      replacedSessionId: completed.replacedSessionId as GenericId<"Session">,
     });
   }
-  await queueAuthEvent(ctx, config, {
-    kind: "session.signed_in",
-    actor: { type: "user", id: userId },
-    subject: { type: "session", id: sessionId },
-    targets: [
-      { kind: "user", id: userId },
-      { kind: "session", id: sessionId },
-    ],
-    outcome: "success",
+  await queueSignedInEvent(ctx, config, {
+    userId,
+    sessionId,
     data: { provider: providerId },
   });
   const refreshTokenId = completed.refreshTokenId as GenericId<"RefreshToken"> | undefined;

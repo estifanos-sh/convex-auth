@@ -3,19 +3,11 @@ import type { GenericId } from "convex/values";
 import type { ComponentCtx, ComponentReadCtx } from "../component/context";
 import { configDefaults } from "../config";
 import { cached, ctxCacheHas, invalidateCtxCache } from "../cache/context";
-import type { Doc, SortOrder } from "../types";
+import type { Doc, Paginated, SortOrder } from "../types";
 
 type GroupDocLike = Doc<"Group"> | null;
 
 /** Convex-native `PaginationResult<T>` shape returned by the `*List` component queries. */
-type Paginated<T> = {
-  page: T[];
-  isDone: boolean;
-  continueCursor: string;
-  splitCursor?: string | null;
-  pageStatus?: "SplitRecommended" | "SplitRequired" | null;
-};
-
 export type GroupDeps = {
   config: ReturnType<typeof configDefaults>;
 };

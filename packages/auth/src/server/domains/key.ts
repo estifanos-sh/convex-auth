@@ -5,17 +5,9 @@ import type { ComponentCtx, ComponentReadCtx } from "../component/context";
 import { configDefaults } from "../config";
 import { emitAuthEvent } from "../events";
 import { createScopeChecker, generateApiKey, hashApiKey } from "../keys";
-import type { KeyDoc, KeyRecord, KeyScope, ScopeChecker, SortOrder } from "../types";
+import type { KeyDoc, KeyRecord, KeyScope, Paginated, ScopeChecker, SortOrder } from "../types";
 
 /** Convex-native `PaginationResult<T>` shape returned by the `*List` component queries. */
-type Paginated<T> = {
-  page: T[];
-  isDone: boolean;
-  continueCursor: string;
-  splitCursor?: string | null;
-  pageStatus?: "SplitRecommended" | "SplitRequired" | null;
-};
-
 export type KeyDeps = {
   config: ReturnType<typeof configDefaults>;
 };

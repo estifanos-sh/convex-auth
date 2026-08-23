@@ -6,17 +6,9 @@ import type { ComponentCtx, ComponentReadCtx } from "../component/context";
 import { configDefaults } from "../config";
 import { getSessionUserId } from "../context";
 import { generateRandomString, sha256 } from "../random";
-import type { Doc, SortOrder } from "../types";
+import type { Doc, Paginated, SortOrder } from "../types";
 
 /** Convex-native `PaginationResult<T>` shape returned by the `*List` component queries. */
-type Paginated<T> = {
-  page: T[];
-  isDone: boolean;
-  continueCursor: string;
-  splitCursor?: string | null;
-  pageStatus?: "SplitRecommended" | "SplitRequired" | null;
-};
-
 export type InviteDeps = {
   config: ReturnType<typeof configDefaults>;
   inviteTokenAlphabet: string;

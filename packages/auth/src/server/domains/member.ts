@@ -4,18 +4,10 @@ import { ErrorCode } from "../../shared/codes";
 import type { ComponentCtx, ComponentReadCtx } from "../component/context";
 import { configDefaults } from "../config";
 import { cached, ctxCacheHas, invalidateCtxCache } from "../cache/context";
-import type { Doc, SortOrder } from "../types";
+import type { Doc, Paginated, SortOrder } from "../types";
 import { capGrantsForCaller, resolveOAuthCaller } from "./access";
 
 /** Convex-native `PaginationResult<T>` shape returned by the `*List` component queries. */
-type Paginated<T> = {
-  page: T[];
-  isDone: boolean;
-  continueCursor: string;
-  splitCursor?: string | null;
-  pageStatus?: "SplitRecommended" | "SplitRequired" | null;
-};
-
 type MemberDocLike = Doc<"GroupMember"> | null;
 
 /** Options accepted by `member.list`. */
