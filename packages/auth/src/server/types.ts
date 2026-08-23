@@ -1399,15 +1399,6 @@ export type AuthProviderMaterializedConfig =
   | DeviceProviderConfig
   | ConnectionProviderConfig;
 
-export type HasWebAuthnProvider<P extends readonly AuthProviderConfig[]> =
-  Extract<P[number], { type: "webauthn" }> extends never ? false : true;
-
-export type HasTotpProvider<P extends readonly AuthProviderConfig[]> =
-  Extract<P[number], { type: "totp" }> extends never ? false : true;
-
-export type HasDeviceProvider<P extends readonly AuthProviderConfig[]> =
-  Extract<P[number], { type: "device" }> extends never ? false : true;
-
 type MaterializedProvider<P> = P extends () => infer Provider ? Provider : P;
 
 /** Parameters accepted by one configured provider at the public sign-in boundary. */

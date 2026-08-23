@@ -22,13 +22,6 @@ import { generateRandomString } from "./random";
 export type { AuthEventCategory, AuthEventKind };
 
 type Awaitable<T> = T | PromiseLike<T>;
-export type AuthEventJson =
-  | null
-  | boolean
-  | number
-  | string
-  | AuthEventJson[]
-  | { [key: string]: AuthEventJson };
 export type AuthEventObject = { [key: string]: unknown };
 export type AuthProfileSnapshot = AuthEventObject;
 export type OidcClaims = AuthEventObject;
