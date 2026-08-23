@@ -1,4 +1,4 @@
-import type { Auth } from "convex/server";
+import type { Auth, PaginationResult } from "convex/server";
 import type { GenericId, Value } from "convex/values";
 
 import { notSignedInError } from "../errors";
@@ -6,7 +6,7 @@ import type { ComponentCtx, ComponentReadCtx } from "../component/context";
 import { configDefaults } from "../config";
 import { getSessionUserId } from "../context";
 import { generateRandomString, sha256 } from "../random";
-import type { Doc, Paginated, SortOrder } from "../types";
+import type { Doc, SortOrder } from "../types";
 
 /** Convex-native `PaginationResult<T>` shape returned by the `*List` component queries. */
 export type InviteDeps = {
@@ -212,7 +212,7 @@ export function createInviteDomain(deps: InviteDeps) {
         paginationOpts: opts?.paginationOpts ?? { numItems: 50, cursor: null },
         orderBy: opts?.orderBy,
         order: opts?.order,
-      })) as Paginated<Doc<"GroupInvite">>;
+      })) as PaginationResult<Doc<"GroupInvite">>;
     },
     /**
      * Accept an invite by ID. Optionally specify who accepted it.

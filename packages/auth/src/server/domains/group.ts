@@ -1,9 +1,10 @@
+import type { PaginationResult } from "convex/server";
 import type { GenericId } from "convex/values";
 
 import type { ComponentCtx, ComponentReadCtx } from "../component/context";
 import { configDefaults } from "../config";
 import { cached, ctxCacheHas, invalidateCtxCache } from "../cache/context";
-import type { Doc, Paginated, SortOrder } from "../types";
+import type { Doc, SortOrder } from "../types";
 
 type GroupDocLike = Doc<"Group"> | null;
 
@@ -207,7 +208,7 @@ export function createGroupDomain(deps: GroupDeps) {
         paginationOpts: opts?.paginationOpts ?? { numItems: 50, cursor: null },
         orderBy: opts?.orderBy,
         order: opts?.order,
-      })) as Paginated<Doc<"Group">>;
+      })) as PaginationResult<Doc<"Group">>;
     },
     /**
      * Patch a group document.

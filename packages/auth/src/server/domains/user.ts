@@ -1,4 +1,5 @@
 import { Auth } from "convex/server";
+import type { PaginationResult } from "convex/server";
 import type { GenericId } from "convex/values";
 
 import { notSignedInError } from "../errors";
@@ -6,7 +7,7 @@ import type { ComponentCtx, ComponentReadCtx } from "../component/context";
 import { configDefaults } from "../config";
 import { getSessionUserId } from "../context";
 import { cached, ctxCacheHas, invalidateCtxCache } from "../cache/context";
-import type { Doc, Paginated, SortOrder, UserOrderBy, UserWhere } from "../types";
+import type { Doc, SortOrder, UserOrderBy, UserWhere } from "../types";
 
 type ComponentAuthReadCtx = ComponentReadCtx & { auth: Auth };
 type UserDocLike = Doc<"User"> | null;
@@ -163,7 +164,7 @@ export function createUserDomain(deps: UserDeps) {
         paginationOpts: opts.paginationOpts,
         orderBy: opts.orderBy,
         order: opts.order,
-      })) as Paginated<Doc<"User">>;
+      })) as PaginationResult<Doc<"User">>;
     },
     /**
      * Convenience method: resolve the current session user and fetch their

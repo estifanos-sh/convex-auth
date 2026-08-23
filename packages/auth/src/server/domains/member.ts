@@ -1,10 +1,11 @@
+import type { PaginationResult } from "convex/server";
 import { ConvexError, type GenericId } from "convex/values";
 
 import { ErrorCode } from "../../shared/codes";
 import type { ComponentCtx, ComponentReadCtx } from "../component/context";
 import { configDefaults } from "../config";
 import { cached, ctxCacheHas, invalidateCtxCache } from "../cache/context";
-import type { Doc, Paginated, SortOrder } from "../types";
+import type { Doc, SortOrder } from "../types";
 import { capGrantsForCaller, resolveOAuthCaller } from "./access";
 
 /** Convex-native `PaginationResult<T>` shape returned by the `*List` component queries. */
@@ -219,13 +220,13 @@ export function createMemberDomain(deps: MemberDeps) {
     list: async (
       ctx: ComponentReadCtx,
       opts?: MemberListOpts,
-    ): Promise<Paginated<Doc<"GroupMember">>> => {
+    ): Promise<PaginationResult<Doc<"GroupMember">>> => {
       return (await ctx.runQuery(config.component.group.member.list, {
         where: opts?.where,
         paginationOpts: opts?.paginationOpts ?? { numItems: 50, cursor: null },
         orderBy: opts?.orderBy,
         order: opts?.order,
-      })) as Paginated<Doc<"GroupMember">>;
+      })) as PaginationResult<Doc<"GroupMember">>;
     },
     /**
      * Remove a membership by its document ID.
