@@ -7,9 +7,10 @@
  * @module
  */
 
-import { ConvexError, v } from "convex/values";
+import { v } from "convex/values";
 
 import { ErrorCode } from "../../shared/codes";
+import { convexError } from "../../shared/errors";
 
 import type { Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
@@ -291,10 +292,7 @@ export const update = mutation({
     if (userId !== undefined) {
       const factor = await ctx.db.get("TotpFactor", totpId);
       if (factor === null || factor.userId !== userId) {
-        throw new ConvexError({
-          code: ErrorCode.TOTP_NOT_FOUND,
-          message: "TOTP factor not found.",
-        });
+        throw convexError(ErrorCode.TOTP_NOT_FOUND, "TOTP factor not found.");
       }
     }
     await ctx.db.patch("TotpFactor", totpId, patch);
@@ -310,10 +308,7 @@ const remove = mutation({
     if (userId !== undefined) {
       const factor = await ctx.db.get("TotpFactor", totpId);
       if (factor === null || factor.userId !== userId) {
-        throw new ConvexError({
-          code: ErrorCode.TOTP_NOT_FOUND,
-          message: "TOTP factor not found.",
-        });
+        throw convexError(ErrorCode.TOTP_NOT_FOUND, "TOTP factor not found.");
       }
     }
     await ctx.db.delete("TotpFactor", totpId);

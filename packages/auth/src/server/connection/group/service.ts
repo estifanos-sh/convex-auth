@@ -13,6 +13,7 @@ import {
   getScimConfigByConnection,
   listWebhookEndpoints,
 } from "../../contract";
+import { check, type ConnectionCheck } from "../checks";
 import { convexError } from "../../errors";
 import {
   emitAuthEvent,
@@ -219,59 +220,46 @@ export function createGroupService(deps: {
   ) => {
     const configuredRoleIds = Object.keys(config.permissions.roles);
     const hasConfiguredRoles = configuredRoleIds.length > 0;
-    const checks: Array<{
-      name: string;
-      ok: boolean;
-      message?: string;
-    }> = [];
+    const checks: ConnectionCheck[] = [];
 
-    checks.push({ name: "policy_version", ok: policy.version === 1 });
+    checks.push(check("policy_version", policy.version === 1));
     const directoryManaged = policy.provisioning.user.authority === "scim";
-    checks.push({
-      name: "scim_managed_sign_in_provisioning_disabled",
-      ok:
+    checks.push(
+      check(
+        "scim_managed_sign_in_provisioning_disabled",
         !directoryManaged ||
-        (!policy.provisioning.user.createOnSignIn && policy.provisioning.jit.mode === "off"),
-      message:
-        !directoryManaged ||
-        (!policy.provisioning.user.createOnSignIn && policy.provisioning.jit.mode === "off")
-          ? undefined
-          : "SCIM-managed connections cannot create users or memberships during sign-in.",
-    });
+          (!policy.provisioning.user.createOnSignIn && policy.provisioning.jit.mode === "off"),
+        "SCIM-managed connections cannot create users or memberships during sign-in.",
+      ),
+    );
     if (hasConfiguredRoles) {
-      checks.push({
-        name: "jit_default_role_ids_known",
-        ok: policy.provisioning.jit.defaultRoleIds.every(
-          (roleId) => config.permissions.roles[roleId] !== undefined,
+      checks.push(
+        check(
+          "jit_default_role_ids_known",
+          policy.provisioning.jit.defaultRoleIds.every(
+            (roleId) => config.permissions.roles[roleId] !== undefined,
+          ),
+          "JIT defaultRoleIds contains unknown roleIds.",
         ),
-        message: policy.provisioning.jit.defaultRoleIds.every(
-          (roleId) => config.permissions.roles[roleId] !== undefined,
-        )
-          ? undefined
-          : "JIT defaultRoleIds contains unknown roleIds.",
-      });
-      checks.push({
-        name: "provisioning_role_mapping_targets_known",
-        ok: Object.values(policy.provisioning.roles.mapping ?? {}).every((roleIds) =>
-          roleIds.every((roleId) => config.permissions.roles[roleId] !== undefined),
+      );
+      checks.push(
+        check(
+          "provisioning_role_mapping_targets_known",
+          Object.values(policy.provisioning.roles.mapping ?? {}).every((roleIds) =>
+            roleIds.every((roleId) => config.permissions.roles[roleId] !== undefined),
+          ),
+          "Provisioning role mappings contain unknown roleIds.",
         ),
-        message: Object.values(policy.provisioning.roles.mapping ?? {}).every((roleIds) =>
-          roleIds.every((roleId) => config.permissions.roles[roleId] !== undefined),
-        )
-          ? undefined
-          : "Provisioning role mappings contain unknown roleIds.",
-      });
-      checks.push({
-        name: "provisioning_group_mapping_targets_known",
-        ok: Object.values(policy.provisioning.groups.mapping ?? {}).every((roleIds) =>
-          roleIds.every((roleId) => config.permissions.roles[roleId] !== undefined),
+      );
+      checks.push(
+        check(
+          "provisioning_group_mapping_targets_known",
+          Object.values(policy.provisioning.groups.mapping ?? {}).every((roleIds) =>
+            roleIds.every((roleId) => config.permissions.roles[roleId] !== undefined),
+          ),
+          "Provisioning group mappings contain unknown roleIds.",
         ),
-        message: Object.values(policy.provisioning.groups.mapping ?? {}).every((roleIds) =>
-          roleIds.every((roleId) => config.permissions.roles[roleId] !== undefined),
-        )
-          ? undefined
-          : "Provisioning group mappings contain unknown roleIds.",
-      });
+      );
     }
     return checks;
   };

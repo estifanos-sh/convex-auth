@@ -4,6 +4,7 @@ import type { DeviceClient, DevicePollParams, FactorDeps, SignInActionResult } f
 import type { AuthTokens } from "../../shared/results";
 import type { AuthParameters } from "../../shared/results";
 import { ErrorCode } from "../../shared/codes";
+import { convexError } from "../../shared/errors";
 
 function isSignedInResult(
   result: SignInActionResult,
@@ -91,10 +92,10 @@ export function createDeviceClient(deps: FactorDeps): DeviceClient {
         }
       }
 
-      throw new ConvexError({
-        code: ErrorCode.DEVICE_CODE_EXPIRED,
-        message: "Device code expired before authorization was completed.",
-      });
+      throw convexError(
+        ErrorCode.DEVICE_CODE_EXPIRED,
+        "Device code expired before authorization was completed.",
+      );
     },
 
     verify: async (opts: { code: string }): Promise<void> => {
@@ -106,10 +107,10 @@ export function createDeviceClient(deps: FactorDeps): DeviceClient {
       try {
         await requestDeviceSignIn(params);
       } catch (error) {
-        throw new ConvexError({
-          code: ErrorCode.DEVICE_AUTHORIZATION_FAILED,
-          message: error instanceof Error ? error.message : "Invalid or expired code.",
-        });
+        throw convexError(
+          ErrorCode.DEVICE_AUTHORIZATION_FAILED,
+          error instanceof Error ? error.message : "Invalid or expired code.",
+        );
       }
     },
   };

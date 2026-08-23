@@ -9,7 +9,7 @@ import { ConvexError, type GenericId } from "convex/values";
 import { parse as parseCookies } from "cookie";
 
 import { ErrorCode } from "../shared/codes";
-import { notSignedInError } from "./errors";
+import { convexError, notSignedInError } from "./errors";
 import {
   buildCorsHeaders,
   corsPreflightHandler,
@@ -994,10 +994,7 @@ export function addConnectionRoutes(
         const route = parseConnectionRuntimeRoute(new URL(request.url).pathname, deps.routeBase);
         const handler = matchConnectionRoute(route, handlers);
         if (!handler || !route) {
-          throw new ConvexError({
-            code: ErrorCode.INVALID_PARAMETERS,
-            message: "Invalid connection runtime path.",
-          });
+          throw convexError(ErrorCode.INVALID_PARAMETERS, "Invalid connection runtime path.");
         }
         return await handler(ctx, request, route);
       }),

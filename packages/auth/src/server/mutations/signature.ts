@@ -1,7 +1,8 @@
 import type { GenericActionCtx, GenericDataModel } from "convex/server";
-import { ConvexError, GenericId, Infer, v } from "convex/values";
+import { GenericId, Infer, v } from "convex/values";
 
 import { ErrorCode } from "../../shared/codes";
+import { convexError } from "../errors";
 import * as Provider from "../crypto";
 import { authDb } from "../db";
 import { MutationCtx } from "../types";
@@ -21,10 +22,10 @@ export async function verifierSignatureImpl(
 ): Promise<ReturnType> {
   const { verifier, signature } = args;
   const db = authDb(ctx, config);
-  const invalidVerifierError = new ConvexError({
-    code: ErrorCode.INVALID_VERIFIER,
-    message: "Invalid or expired verifier.",
-  });
+  const invalidVerifierError = convexError(
+    ErrorCode.INVALID_VERIFIER,
+    "Invalid or expired verifier.",
+  );
 
   let verifierDoc;
   try {

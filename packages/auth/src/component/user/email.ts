@@ -7,9 +7,10 @@
  * @module
  */
 
-import { ConvexError, v } from "convex/values";
+import { v } from "convex/values";
 
 import { ErrorCode } from "../../shared/codes";
+import { convexError } from "../../shared/errors";
 import type { Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import { mutation, query } from "../_generated/server";
@@ -29,10 +30,10 @@ async function listOwnedEmails(ctx: Pick<QueryCtx | MutationCtx, "db">, userId: 
     .withIndex("user_id", (q) => q.eq("userId", userId))
     .take(USER_EMAIL_BATCH + 1);
   if (owned.length > USER_EMAIL_BATCH) {
-    throw new ConvexError({
-      code: ErrorCode.INVALID_PARAMETERS,
-      message: `User has more than ${USER_EMAIL_BATCH} emails; operation is not safe in one mutation.`,
-    });
+    throw convexError(
+      ErrorCode.INVALID_PARAMETERS,
+      `User has more than ${USER_EMAIL_BATCH} emails; operation is not safe in one mutation.`,
+    );
   }
   return owned;
 }
@@ -137,16 +138,10 @@ export const promote = mutation({
         .first(),
     ]);
     if (target === null) {
-      throw new ConvexError({
-        code: ErrorCode.INVALID_PARAMETERS,
-        message: "Email is not owned by this user.",
-      });
+      throw convexError(ErrorCode.INVALID_PARAMETERS, "Email is not owned by this user.");
     }
     if (target.verificationTime === undefined) {
-      throw new ConvexError({
-        code: ErrorCode.INVALID_PARAMETERS,
-        message: "Cannot make an unverified email primary.",
-      });
+      throw convexError(ErrorCode.INVALID_PARAMETERS, "Cannot make an unverified email primary.");
     }
     await Promise.all(
       owned
@@ -178,32 +173,26 @@ const remove = mutation({
         .first(),
     ]);
     if (target === null) {
-      throw new ConvexError({
-        code: ErrorCode.INVALID_PARAMETERS,
-        message: "Email is not owned by this user.",
-      });
+      throw convexError(ErrorCode.INVALID_PARAMETERS, "Email is not owned by this user.");
     }
     if (target.isPrimary) {
-      throw new ConvexError({
-        code: ErrorCode.INVALID_PARAMETERS,
-        message: "Cannot remove the primary email; set another primary first.",
-      });
+      throw convexError(
+        ErrorCode.INVALID_PARAMETERS,
+        "Cannot remove the primary email; set another primary first.",
+      );
     }
     if (
       target.connectionId !== undefined &&
       (target.source === "saml" || target.source === "oidc" || target.source === "scim")
     ) {
-      throw new ConvexError({
-        code: ErrorCode.INVALID_PARAMETERS,
-        message: "This email is managed by an Connection/SCIM connection.",
-      });
+      throw convexError(
+        ErrorCode.INVALID_PARAMETERS,
+        "This email is managed by an Connection/SCIM connection.",
+      );
     }
     const verifiedCount = owned.filter((e) => e.verificationTime !== undefined).length;
     if (target.verificationTime !== undefined && verifiedCount <= 1) {
-      throw new ConvexError({
-        code: ErrorCode.INVALID_PARAMETERS,
-        message: "Cannot remove the only verified email.",
-      });
+      throw convexError(ErrorCode.INVALID_PARAMETERS, "Cannot remove the only verified email.");
     }
     await ctx.db.delete("UserEmail", target._id);
     return null;

@@ -1,6 +1,7 @@
-import { ConvexError, GenericId } from "convex/values";
+import { GenericId } from "convex/values";
 
 import { ErrorCode } from "../../shared/codes";
+import { convexError } from "../errors";
 import { authDb } from "../db";
 import { queueAuthEvent } from "../events";
 import { LOG_LEVELS } from "../log";
@@ -175,10 +176,10 @@ async function resolveUserIdByLinking(
       log(LOG_LEVELS.DEBUG, `Email and phone resolve to same user, linking: ${emailUserId}`);
       return emailUserId;
     }
-    throw new ConvexError({
-      code: ErrorCode.AMBIGUOUS_USER_LINK,
-      message: "Verified email and phone resolve to different users; cannot safely link.",
-    });
+    throw convexError(
+      ErrorCode.AMBIGUOUS_USER_LINK,
+      "Verified email and phone resolve to different users; cannot safely link.",
+    );
   }
   if (emailUserId !== null) {
     log(LOG_LEVELS.DEBUG, `Found existing email verified user, linking: ${emailUserId}`);
@@ -304,14 +305,13 @@ async function updateExistingUser(
   try {
     await db.users.update(userId, patchData);
   } catch (error) {
-    throw new ConvexError({
-      code: ErrorCode.USER_UPDATE_FAILED,
-      message:
-        `Could not update user document with ID \`${userId}\`, ` +
+    throw convexError(
+      ErrorCode.USER_UPDATE_FAILED,
+      `Could not update user document with ID \`${userId}\`, ` +
         `either the user has been deleted but their account has not, ` +
         `or the profile data doesn't match the \`users\` table schema: ` +
         `${error instanceof Error ? error.message : String(error)}`,
-    });
+    );
   }
 }
 
@@ -406,10 +406,10 @@ async function defaultCreateOrUpdateUser(
     );
   } else {
     if (source === "login" && provisioningUser?.createOnSignIn === false) {
-      throw new ConvexError({
-        code: ErrorCode.NOT_AUTHORIZED,
-        message: "This Connection connection does not allow creating users on sign-in.",
-      });
+      throw convexError(
+        ErrorCode.NOT_AUTHORIZED,
+        "This Connection connection does not allow creating users on sign-in.",
+      );
     }
     userId = (await db.users.create(userData)) as GenericId<"User">;
   }

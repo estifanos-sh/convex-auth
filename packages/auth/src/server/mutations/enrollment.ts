@@ -5,10 +5,10 @@
  */
 
 import type { GenericActionCtx, GenericDataModel } from "convex/server";
-import { ConvexError, type Infer, v } from "convex/values";
+import { type Infer, v } from "convex/values";
 
 import { ErrorCode } from "../../shared/codes";
-import type { AuthErrorData } from "../errors";
+import { convexError } from "../errors";
 import type { ServerServices } from "../services/resolve";
 import type { CrossComponentUserDoc, MutationCtx } from "../types";
 import { createAccountFromHashedCredentialsImpl } from "./register";
@@ -111,10 +111,10 @@ export async function completeCredentialEnrollmentImpl(
     },
   )) as CredentialEnrollmentCompletion;
   if (completed.status === "rejected") {
-    throw new ConvexError<AuthErrorData>({
-      code: ErrorCode.CONTINUATION_INVALID,
-      message: "Invalid or expired credentials enrollment continuation.",
-    });
+    throw convexError(
+      ErrorCode.CONTINUATION_INVALID,
+      "Invalid or expired credentials enrollment continuation.",
+    );
   }
   return completed;
 }

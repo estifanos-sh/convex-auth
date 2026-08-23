@@ -1,8 +1,8 @@
 import type { FunctionReturnType, GenericActionCtx, GenericDataModel } from "convex/server";
-import { ConvexError } from "convex/values";
 import { validate } from "convex-helpers/validators";
 
 import { ErrorCode } from "../../shared/codes";
+import { convexError } from "../errors";
 import { Infer, v } from "convex/values";
 
 import { getGroup, getGroupConnection } from "../contract";
@@ -92,10 +92,10 @@ function readStringArrayClaim(profile: AuthProfile, key: string): string[] | und
 
 function toAuthProfile(profile: unknown): AuthProfile {
   if (validate(vPayloadRecord, profile)) return profile;
-  throw new ConvexError({
-    code: ErrorCode.OAUTH_INVALID_PROFILE,
-    message: "OAuth profile must contain only supported payload values.",
-  });
+  throw convexError(
+    ErrorCode.OAUTH_INVALID_PROFILE,
+    "OAuth profile must contain only supported payload values.",
+  );
 }
 
 /** Lowercased registrable domain of an email address, or `null` when unparseable. */
@@ -261,16 +261,16 @@ export async function userOAuthImpl(
     verifier = await db.verifiers.get({ signature });
   } catch (err) {
     console.error("[auth] OAuth verifier lookup failed", { err });
-    throw new ConvexError({
-      code: ErrorCode.OAUTH_INVALID_STATE,
-      message: "Invalid OAuth state. Please try signing in again.",
-    });
+    throw convexError(
+      ErrorCode.OAUTH_INVALID_STATE,
+      "Invalid OAuth state. Please try signing in again.",
+    );
   }
   if (verifier === null) {
-    throw new ConvexError({
-      code: ErrorCode.OAUTH_INVALID_STATE,
-      message: "Invalid OAuth state. Please try signing in again.",
-    });
+    throw convexError(
+      ErrorCode.OAUTH_INVALID_STATE,
+      "Invalid OAuth state. Please try signing in again.",
+    );
   }
 
   const profileResolved = toAuthProfile(

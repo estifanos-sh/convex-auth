@@ -1,11 +1,11 @@
 import type { GenericActionCtx, GenericDataModel } from "convex/server";
-import { ConvexError, type Infer, v } from "convex/values";
+import { type Infer, v } from "convex/values";
 
 import type { Hashed } from "../../shared/brand";
 import { ErrorCode } from "../../shared/codes";
+import { convexError } from "../errors";
 import * as Provider from "../crypto";
 import { authDb } from "../db";
-import type { AuthErrorData } from "../errors";
 import { LOG_LEVELS, log, maybeRedact } from "../log";
 import type { AuthProfile } from "../payloads";
 import { vPayloadRecord } from "../payloads";
@@ -53,16 +53,10 @@ async function materializeCredentialsAccount(
     db.users.get({ id: result.userId }) as Promise<Doc<"User"> | null>,
   ]);
   if (createdAccount === null) {
-    throw new ConvexError<AuthErrorData>({
-      code: ErrorCode.ACCOUNT_NOT_FOUND,
-      message: "Created account was not found.",
-    });
+    throw convexError(ErrorCode.ACCOUNT_NOT_FOUND, "Created account was not found.");
   }
   if (createdUser === null) {
-    throw new ConvexError<AuthErrorData>({
-      code: ErrorCode.USER_UPDATE_FAILED,
-      message: "Created user was not found.",
-    });
+    throw convexError(ErrorCode.USER_UPDATE_FAILED, "Created user was not found.");
   }
   return { account: createdAccount, user: createdUser };
 }
@@ -86,10 +80,10 @@ export async function createAccountFromHashedCredentialsImpl(
     providerAccountId: args.account.id,
   });
   if (existing !== null) {
-    throw new ConvexError<AuthErrorData>({
-      code: ErrorCode.ACCOUNT_ALREADY_LINKED,
-      message: "This credentials account was linked while enrollment was in progress.",
-    });
+    throw convexError(
+      ErrorCode.ACCOUNT_ALREADY_LINKED,
+      "This credentials account was linked while enrollment was in progress.",
+    );
   }
   return await materializeCredentialsAccount(ctx, args, provider, config);
 }
@@ -144,19 +138,16 @@ export async function createAccountFromCredentialsImpl(
         (existingAccount.secret ?? "") as Hashed<"Password">,
       );
       if (!valid) {
-        throw new ConvexError<AuthErrorData>({
-          code: ErrorCode.INVALID_CREDENTIALS,
-          message: "Invalid credentials.",
-        });
+        throw convexError(ErrorCode.INVALID_CREDENTIALS, "Invalid credentials.");
       }
     }
 
     const user = (await db.users.get({ id: existingAccount.userId })) as Doc<"User"> | null;
     if (user === null) {
-      throw new ConvexError<AuthErrorData>({
-        code: ErrorCode.ACCOUNT_NOT_FOUND,
-        message: `Linked user for account ${account.id} was not found.`,
-      });
+      throw convexError(
+        ErrorCode.ACCOUNT_NOT_FOUND,
+        `Linked user for account ${account.id} was not found.`,
+      );
     }
 
     return { account: existingAccount, user };

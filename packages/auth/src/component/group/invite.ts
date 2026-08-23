@@ -8,10 +8,11 @@
  */
 
 import { paginationOptsValidator } from "convex/server";
-import { ConvexError, v } from "convex/values";
+import { v } from "convex/values";
 import { stream } from "convex-helpers/server/stream";
 
 import { ErrorCode } from "../../shared/codes";
+import { convexError } from "../../shared/errors";
 import type { Id } from "../_generated/dataModel";
 import { vGroupInviteDoc } from "../documents";
 import { mutation, query } from "../_generated/server";
@@ -158,13 +159,11 @@ export const create = mutation({
             });
             continue;
           }
-          throw new ConvexError({
-            code: ErrorCode.DUPLICATE_INVITE,
-            message: "A pending invite already exists for this email in this group",
-            email: args.email,
-            groupId: args.groupId,
-            existingInviteId: existingGroupInvite._id,
-          });
+          throw convexError(
+            ErrorCode.DUPLICATE_INVITE,
+            "A pending invite already exists for this email in this group",
+            { email: args.email, groupId: args.groupId, existingInviteId: existingGroupInvite._id },
+          );
         }
         const remainingGroupInvite = await ctx.db
           .query("GroupInvite")
@@ -173,13 +172,15 @@ export const create = mutation({
           )
           .first();
         if (remainingGroupInvite !== null) {
-          throw new ConvexError({
-            code: ErrorCode.DUPLICATE_INVITE,
-            message: "Too many stale pending invites for this email in this group",
-            email: args.email,
-            groupId: args.groupId,
-            existingInviteId: remainingGroupInvite._id,
-          });
+          throw convexError(
+            ErrorCode.DUPLICATE_INVITE,
+            "Too many stale pending invites for this email in this group",
+            {
+              email: args.email,
+              groupId: args.groupId,
+              existingInviteId: remainingGroupInvite._id,
+            },
+          );
         }
       } else {
         for (let checked = 0; checked < STALE_INVITE_EXPIRATION_BATCH; checked += 1) {
@@ -204,12 +205,11 @@ export const create = mutation({
             });
             continue;
           }
-          throw new ConvexError({
-            code: ErrorCode.DUPLICATE_INVITE,
-            message: "A pending platform invite already exists for this email",
-            email: args.email,
-            existingInviteId: existingPlatformInvite._id,
-          });
+          throw convexError(
+            ErrorCode.DUPLICATE_INVITE,
+            "A pending platform invite already exists for this email",
+            { email: args.email, existingInviteId: existingPlatformInvite._id },
+          );
         }
         const remainingPlatformInvite = await ctx.db
           .query("GroupInvite")
@@ -218,12 +218,11 @@ export const create = mutation({
           )
           .first();
         if (remainingPlatformInvite !== null) {
-          throw new ConvexError({
-            code: ErrorCode.DUPLICATE_INVITE,
-            message: "Too many stale pending platform invites for this email",
-            email: args.email,
-            existingInviteId: remainingPlatformInvite._id,
-          });
+          throw convexError(
+            ErrorCode.DUPLICATE_INVITE,
+            "Too many stale pending platform invites for this email",
+            { email: args.email, existingInviteId: remainingPlatformInvite._id },
+          );
         }
       }
     }
@@ -257,10 +256,10 @@ export const accept = mutation({
   handler: async (ctx, { id, tokenHash, acceptedByUserId }) => {
     if (tokenHash !== undefined) {
       if (acceptedByUserId === undefined) {
-        throw new ConvexError({
-          code: ErrorCode.INVALID_PARAMETERS,
-          message: "acceptedByUserId is required when accepting by token.",
-        });
+        throw convexError(
+          ErrorCode.INVALID_PARAMETERS,
+          "acceptedByUserId is required when accepting by token.",
+        );
       }
       const invite = await ctx.db
         .query("GroupInvite")
@@ -268,10 +267,7 @@ export const accept = mutation({
         .first();
 
       if (invite === null) {
-        throw new ConvexError({
-          code: ErrorCode.INVITE_NOT_FOUND,
-          message: "Invite not found",
-        });
+        throw convexError(ErrorCode.INVITE_NOT_FOUND, "Invite not found");
       }
 
       const now = Date.now();
@@ -283,27 +279,24 @@ export const accept = mutation({
             status: "expired",
             expiresTime: undefined,
           });
-          throw new ConvexError({
-            code: ErrorCode.INVITE_EXPIRED,
-            message: "Invite has expired",
+          throw convexError(ErrorCode.INVITE_EXPIRED, "Invite has expired", {
             inviteId: invite._id,
           });
         }
       } else if (invite.status === "accepted") {
         if (invite.acceptedByUserId !== acceptedByUserId) {
-          throw new ConvexError({
-            code: ErrorCode.INVITE_ALREADY_ACCEPTED,
-            message: "Invite already accepted by another user",
-            inviteId: invite._id,
-          });
+          throw convexError(
+            ErrorCode.INVITE_ALREADY_ACCEPTED,
+            "Invite already accepted by another user",
+            { inviteId: invite._id },
+          );
         }
       } else {
-        throw new ConvexError({
-          code: ErrorCode.INVITE_NOT_PENDING,
-          message: `Cannot accept invite with status "${invite.status}"`,
-          inviteId: invite._id,
-          currentStatus: invite.status,
-        });
+        throw convexError(
+          ErrorCode.INVITE_NOT_PENDING,
+          `Cannot accept invite with status "${invite.status}"`,
+          { inviteId: invite._id, currentStatus: invite.status },
+        );
       }
 
       if (invite.email !== undefined) {
@@ -312,11 +305,11 @@ export const accept = mutation({
         const normalizedUserEmail = user?.email?.trim().toLowerCase();
 
         if (normalizedUserEmail === undefined || normalizedUserEmail !== normalizedInviteEmail) {
-          throw new ConvexError({
-            code: ErrorCode.INVITE_EMAIL_MISMATCH,
-            message: "Invite email does not match accepting user's email",
-            inviteId: invite._id,
-          });
+          throw convexError(
+            ErrorCode.INVITE_EMAIL_MISMATCH,
+            "Invite email does not match accepting user's email",
+            { inviteId: invite._id },
+          );
         }
       }
 
@@ -366,27 +359,22 @@ export const accept = mutation({
     }
 
     if (id === undefined) {
-      throw new ConvexError({
-        code: ErrorCode.INVALID_PARAMETERS,
-        message: "accept requires either an `id` or a `tokenHash`.",
-      });
+      throw convexError(
+        ErrorCode.INVALID_PARAMETERS,
+        "accept requires either an `id` or a `tokenHash`.",
+      );
     }
 
     const invite = await ctx.db.get("GroupInvite", id);
     if (invite === null) {
-      throw new ConvexError({
-        code: ErrorCode.INVITE_NOT_FOUND,
-        message: "Invite not found",
-        inviteId: id,
-      });
+      throw convexError(ErrorCode.INVITE_NOT_FOUND, "Invite not found", { inviteId: id });
     }
     if (invite.status !== "pending") {
-      throw new ConvexError({
-        code: ErrorCode.INVITE_NOT_PENDING,
-        message: `Cannot accept invite with status "${invite.status}"`,
-        inviteId: id,
-        currentStatus: invite.status,
-      });
+      throw convexError(
+        ErrorCode.INVITE_NOT_PENDING,
+        `Cannot accept invite with status "${invite.status}"`,
+        { inviteId: id, currentStatus: invite.status },
+      );
     }
     if (invite.expiresTime !== undefined && invite.expiresTime <= Date.now()) {
       // Clear `expiresTime` on the terminal transition (reclaimed by age in
@@ -395,11 +383,7 @@ export const accept = mutation({
         status: "expired",
         expiresTime: undefined,
       });
-      throw new ConvexError({
-        code: ErrorCode.INVITE_EXPIRED,
-        message: "Invite has expired",
-        inviteId: id,
-      });
+      throw convexError(ErrorCode.INVITE_EXPIRED, "Invite has expired", { inviteId: id });
     }
     const patch: InviteAcceptancePatch = {
       status: "accepted",
@@ -418,19 +402,14 @@ export const revoke = mutation({
   handler: async (ctx, { id: inviteId }) => {
     const invite = await ctx.db.get("GroupInvite", inviteId);
     if (invite === null) {
-      throw new ConvexError({
-        code: ErrorCode.INVITE_NOT_FOUND,
-        message: "Invite not found",
-        inviteId,
-      });
+      throw convexError(ErrorCode.INVITE_NOT_FOUND, "Invite not found", { inviteId });
     }
     if (invite.status !== "pending") {
-      throw new ConvexError({
-        code: ErrorCode.INVITE_NOT_PENDING,
-        message: `Cannot revoke invite with status "${invite.status}"`,
-        inviteId,
-        currentStatus: invite.status,
-      });
+      throw convexError(
+        ErrorCode.INVITE_NOT_PENDING,
+        `Cannot revoke invite with status "${invite.status}"`,
+        { inviteId, currentStatus: invite.status },
+      );
     }
     // Clear `expiresTime` on the terminal transition so the row leaves the
     // `expires_time` retention index; `maintenance.pruneExpired` reclaims

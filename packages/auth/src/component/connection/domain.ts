@@ -8,8 +8,9 @@
  * @module
  */
 
-import { ConvexError, v } from "convex/values";
+import { v } from "convex/values";
 import { ErrorCode } from "../../shared/codes";
+import { convexError } from "../../shared/errors";
 
 import { mutation, query } from "../_generated/server";
 import { vGroupConnectionDomainDoc } from "../documents";
@@ -53,10 +54,10 @@ export const create = mutation({
       .withIndex("domain", (idx) => idx.eq("domain", args.domain))
       .first();
     if (existingByDomain && existingByDomain.connectionId !== connectionId) {
-      throw new ConvexError({
-        code: ErrorCode.GROUP_CONNECTION_DOMAIN_TAKEN,
-        message: "That domain is already attached to another connection.",
-      });
+      throw convexError(
+        ErrorCode.GROUP_CONNECTION_DOMAIN_TAKEN,
+        "That domain is already attached to another connection.",
+      );
     }
 
     const existingForConnection = await ctx.db
@@ -64,10 +65,10 @@ export const create = mutation({
       .withIndex("connection_id", (q) => q.eq("connectionId", connectionId))
       .take(CONNECTION_DOMAIN_BATCH + 1);
     if (existingForConnection.length > CONNECTION_DOMAIN_BATCH) {
-      throw new ConvexError({
-        code: ErrorCode.CASCADE_TOO_LARGE,
-        message: `Connection has more than ${CONNECTION_DOMAIN_BATCH} domains; update is not safe in one mutation.`,
-      });
+      throw convexError(
+        ErrorCode.CASCADE_TOO_LARGE,
+        `Connection has more than ${CONNECTION_DOMAIN_BATCH} domains; update is not safe in one mutation.`,
+      );
     }
 
     for (const row of existingForConnection) {
@@ -135,10 +136,7 @@ export const verify = mutation({
     await ctx.db.patch("GroupConnectionDomain", domainId, { verifiedAt });
     const domain = await ctx.db.get("GroupConnectionDomain", domainId);
     if (!domain) {
-      throw new ConvexError({
-        code: ErrorCode.INVALID_PARAMETERS,
-        message: "Group Connection domain not found.",
-      });
+      throw convexError(ErrorCode.INVALID_PARAMETERS, "Group Connection domain not found.");
     }
     const verification = await ctx.db
       .query("GroupConnectionDomainVerification")

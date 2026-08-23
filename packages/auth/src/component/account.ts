@@ -7,8 +7,9 @@
  * @module
  */
 
-import { ConvexError, v } from "convex/values";
+import { v } from "convex/values";
 import { ErrorCode } from "../shared/codes";
+import { convexError } from "../shared/errors";
 
 import { recordSignInLimit, resetSignInLimit } from "./limits";
 import { mutation, query } from "./_generated/server";
@@ -175,10 +176,10 @@ export const list = query({
     const uniqueUserIds = Array.from(new Set(userIds));
     const provider = args.provider;
     if (uniqueUserIds.length > ACCOUNT_LIST_USER_BATCH) {
-      throw new ConvexError({
-        code: ErrorCode.INVALID_PARAMETERS,
-        message: `At most ${ACCOUNT_LIST_USER_BATCH} users can be read at once.`,
-      });
+      throw convexError(
+        ErrorCode.INVALID_PARAMETERS,
+        `At most ${ACCOUNT_LIST_USER_BATCH} users can be read at once.`,
+      );
     }
     const accounts = await Promise.all(
       uniqueUserIds.map(async (userId) =>
@@ -226,10 +227,10 @@ export const create = mutation({
         // Already linked to a different user — reject rather than silently
         // attribute the identity (e.g. an attacker registering a passkey
         // credentialId that already belongs to a victim).
-        throw new ConvexError({
-          code: ErrorCode.ACCOUNT_ALREADY_LINKED,
-          message: "This account is already linked to another user.",
-        });
+        throw convexError(
+          ErrorCode.ACCOUNT_ALREADY_LINKED,
+          "This account is already linked to another user.",
+        );
       }
       return existing._id;
     }
@@ -272,10 +273,7 @@ const remove = mutation({
   handler: async (ctx, { id: accountId, userId, requireOtherAccount }) => {
     const doc = await ctx.db.get("Account", accountId);
     if (doc === null || (userId !== undefined && doc.userId !== userId)) {
-      throw new ConvexError({
-        code: ErrorCode.ACCOUNT_NOT_FOUND,
-        message: "Account not found.",
-      });
+      throw convexError(ErrorCode.ACCOUNT_NOT_FOUND, "Account not found.");
     }
     if (requireOtherAccount === true) {
       let otherFound = false;
@@ -288,10 +286,7 @@ const remove = mutation({
         }
       }
       if (!otherFound) {
-        throw new ConvexError({
-          code: ErrorCode.INVALID_PARAMETERS,
-          message: "The provided parameters are invalid.",
-        });
+        throw convexError(ErrorCode.INVALID_PARAMETERS, "The provided parameters are invalid.");
       }
     }
     await ctx.db.delete("Account", accountId);

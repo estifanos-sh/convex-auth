@@ -1,7 +1,8 @@
 import { Auth, GenericActionCtx, GenericDataModel } from "convex/server";
-import { ConvexError, type GenericId } from "convex/values";
+import type { GenericId } from "convex/values";
 
 import { ErrorCode } from "../../shared/codes";
+import { convexError } from "../errors";
 import type { ComponentCtx, ComponentReadCtx } from "../component/context";
 import { configDefaults } from "../config";
 import { requireSessionUserId as currentUserId } from "../context";
@@ -240,16 +241,13 @@ export function createAccountManagementDomain({ config }: Pick<AccountDeps, "con
         id: args.id,
       })) as Doc<"Account"> | null;
       if (account === null || account.userId !== userId) {
-        throw new ConvexError({
-          code: ErrorCode.ACCOUNT_NOT_FOUND,
-          message: "Account not found.",
-        });
+        throw convexError(ErrorCode.ACCOUNT_NOT_FOUND, "Account not found.");
       }
       if (isFactorAccount(account)) {
-        throw new ConvexError({
-          code: ErrorCode.INVALID_PARAMETERS,
-          message: "Manage WebAuthn credentials with auth.factor.remove().",
-        });
+        throw convexError(
+          ErrorCode.INVALID_PARAMETERS,
+          "Manage WebAuthn credentials with auth.factor.remove().",
+        );
       }
       await ctx.runMutation(config.component.account.remove, {
         id: args.id,

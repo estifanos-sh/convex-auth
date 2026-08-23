@@ -1,8 +1,7 @@
 import { GenericActionCtx, GenericDataModel } from "convex/server";
-import { ConvexError } from "convex/values";
 
 import { ErrorCode } from "../shared/codes";
-import { describeUnknown } from "./errors";
+import { convexError, describeUnknown } from "./errors";
 import { ConvexAuthMaterializedConfig } from "./types";
 import { appUrlFromEnv, normalizeUrl } from "./url";
 
@@ -27,19 +26,16 @@ export async function redirectAbsoluteUrl(
     return normalizeUrl(appUrlFromEnv());
   }
   if (typeof params.redirectTo !== "string") {
-    throw new ConvexError({
-      code: ErrorCode.INVALID_REDIRECT,
-      message: `Expected \`redirectTo\` to be a string, got ${describeUnknown(params.redirectTo)}`,
-    });
+    throw convexError(
+      ErrorCode.INVALID_REDIRECT,
+      `Expected \`redirectTo\` to be a string, got ${describeUnknown(params.redirectTo)}`,
+    );
   }
   const redirectTo = params.redirectTo;
   try {
     return defaultRedirectCallback({ redirectTo });
   } catch {
-    throw new ConvexError({
-      code: ErrorCode.INTERNAL_ERROR,
-      message: "An unexpected error occurred.",
-    });
+    throw convexError(ErrorCode.INTERNAL_ERROR, "An unexpected error occurred.");
   }
 }
 
@@ -78,10 +74,7 @@ export function setURLSearchParam(absoluteUrl: string, param: string, value: str
   const pattern = /([^:]+):(.*)/;
   const schemeMatch = absoluteUrl.match(pattern);
   if (!schemeMatch) {
-    throw new ConvexError({
-      code: ErrorCode.INVALID_REDIRECT,
-      message: "Redirect URL is missing a scheme.",
-    });
+    throw convexError(ErrorCode.INVALID_REDIRECT, "Redirect URL is missing a scheme.");
   }
   const [, scheme, rest] = schemeMatch;
   const hasNoDomain = /^\/\/(?:\/|$|\?)/.test(rest);
@@ -90,10 +83,10 @@ export function setURLSearchParam(absoluteUrl: string, param: string, value: str
   url.searchParams.set(param, value);
   const withParamMatch = url.toString().match(pattern);
   if (!withParamMatch) {
-    throw new ConvexError({
-      code: ErrorCode.INVALID_REDIRECT,
-      message: "Internal URL serialization produced a malformed result.",
-    });
+    throw convexError(
+      ErrorCode.INVALID_REDIRECT,
+      "Internal URL serialization produced a malformed result.",
+    );
   }
   const [, , withParam] = withParamMatch;
   return `${scheme}:${hasNoDomain ? (startsWithPath ? "/" : "") + "//" + withParam.slice(13) : withParam}`;

@@ -4,9 +4,10 @@
  * @module
  */
 
-import { ConvexError, v } from "convex/values";
+import { v } from "convex/values";
 
 import { ErrorCode } from "../../shared/codes";
+import { convexError } from "../../shared/errors";
 import type { Id } from "../_generated/dataModel";
 import type { QueryCtx } from "../_generated/server";
 import { mutation, query } from "../_generated/server";
@@ -73,11 +74,7 @@ export const update = mutation({
       .withIndex("group_id_user_id", (q) => q.eq("groupId", groupId).eq("userId", userId))
       .unique();
     if (membership === null) {
-      throw new ConvexError({
-        code: ErrorCode.NOT_A_MEMBER,
-        message: "User is not a member of this group.",
-        groupId,
-      });
+      throw convexError(ErrorCode.NOT_A_MEMBER, "User is not a member of this group.", { groupId });
     }
     await ctx.db.patch("User", userId, { lastActiveGroup: groupId });
     return null;

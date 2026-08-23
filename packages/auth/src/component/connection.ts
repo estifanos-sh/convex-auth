@@ -9,10 +9,11 @@
  */
 
 import { paginationOptsValidator } from "convex/server";
-import { ConvexError, v } from "convex/values";
+import { v } from "convex/values";
 import { stream } from "convex-helpers/server/stream";
 
 import { ErrorCode } from "../shared/codes";
+import { convexError } from "../shared/errors";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
@@ -270,10 +271,10 @@ const remove = mutation({
       .withIndex("group_connection_id", (q) => q.eq("connectionId", connectionId))
       .take(SCIM_CONFIG_DELETE_BATCH + 1);
     if (scimConfigs.length > SCIM_CONFIG_DELETE_BATCH) {
-      throw new ConvexError({
-        code: ErrorCode.CASCADE_TOO_LARGE,
-        message: `Connection has more than ${SCIM_CONFIG_DELETE_BATCH} SCIM config rows; delete is not safe.`,
-      });
+      throw convexError(
+        ErrorCode.CASCADE_TOO_LARGE,
+        `Connection has more than ${SCIM_CONFIG_DELETE_BATCH} SCIM config rows; delete is not safe.`,
+      );
     }
     for (const scimConfig of scimConfigs) {
       await ctx.db.delete("GroupConnectionScimConfig", scimConfig._id);
@@ -283,10 +284,10 @@ const remove = mutation({
       .withIndex("connection_id", (q) => q.eq("connectionId", connectionId))
       .take(CONNECTION_SECRET_DELETE_BATCH + 1);
     if (secrets.length > CONNECTION_SECRET_DELETE_BATCH) {
-      throw new ConvexError({
-        code: ErrorCode.CASCADE_TOO_LARGE,
-        message: `Connection has more than ${CONNECTION_SECRET_DELETE_BATCH} secret rows; delete is not safe.`,
-      });
+      throw convexError(
+        ErrorCode.CASCADE_TOO_LARGE,
+        `Connection has more than ${CONNECTION_SECRET_DELETE_BATCH} secret rows; delete is not safe.`,
+      );
     }
     for (const secret of secrets) {
       await ctx.db.delete("GroupConnectionSecret", secret._id);

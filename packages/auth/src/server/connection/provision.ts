@@ -6,6 +6,7 @@ import {
   getScimConfigByTokenHash,
   upsertScimConfig,
 } from "../contract";
+import { check, checkWithMessage, connectionNotFound, type ConnectionCheck } from "./checks";
 import { convexError } from "../errors";
 import type { EmitGroupAuthEventInput } from "./group/service";
 import type { GroupConnectionPolicy, ConvexAuthMaterializedConfig, ScimStatus } from "../types";
@@ -87,26 +88,12 @@ export function createGroupScimDomain(deps: ScimDeps) {
     `${requireEnv("CONVEX_SITE_URL")}/connections/${connectionId}/scim/v2`;
 
   const validateScim = async (ctx: ComponentReadCtx, connectionId: string) => {
-    const checks: Array<{
-      name: string;
-      ok: boolean;
-      message?: string;
-    }> = [];
+    const checks: ConnectionCheck[] = [];
 
     const connection = await getGroupConnection(ctx, config.component.connection, connectionId);
 
     if (!connection) {
-      return {
-        ok: false,
-        connectionId,
-        checks: [
-          {
-            name: "group_connection_exists",
-            ok: false,
-            message: "Connection not found.",
-          },
-        ],
-      };
+      return connectionNotFound(connectionId);
     }
 
     const policy = await loadGroupPolicyOrThrow(ctx, connection.groupId);
@@ -117,47 +104,40 @@ export function createGroupScimDomain(deps: ScimDeps) {
     );
 
     const hasConfig = scimConfig !== null && scimConfig !== undefined;
-    checks.push({
-      name: "scim_config_exists",
-      ok: hasConfig,
-      message: hasConfig ? undefined : "SCIM has not been configured.",
-    });
+    checks.push(check("scim_config_exists", hasConfig, "SCIM has not been configured."));
 
     const isActive = scimConfig?.status === "active";
-    checks.push({
-      name: "scim_config_active",
-      ok: isActive,
-      message: isActive
-        ? undefined
-        : `SCIM config status is ${hasConfig ? scimConfig?.status : "unknown"}.`,
-    });
+    checks.push(
+      check(
+        "scim_config_active",
+        isActive,
+        `SCIM config status is ${hasConfig ? scimConfig?.status : "unknown"}.`,
+      ),
+    );
 
     const hasToken = typeof scimConfig?.tokenHash === "string" && scimConfig.tokenHash.length > 0;
-    checks.push({
-      name: "token_hash_set",
-      ok: hasToken,
-      message: hasToken ? undefined : "SCIM bearer token has not been set.",
-    });
+    checks.push(check("token_hash_set", hasToken, "SCIM bearer token has not been set."));
 
     const hasBasePath =
       typeof scimConfig?.basePath === "string" &&
       scimConfig.basePath === getScimBasePath(connection._id);
-    checks.push({
-      name: "base_path_matches_route",
-      ok: hasBasePath,
-      message: hasBasePath ? undefined : "SCIM basePath does not match the derived route.",
-    });
+    checks.push(
+      check(
+        "base_path_matches_route",
+        hasBasePath,
+        "SCIM basePath does not match the derived route.",
+      ),
+    );
 
-    checks.push({
-      name: "filter_subset_supported",
-      ok: true,
-      message: "Supported filters: eq, co, sw, ew, pr on common user/group fields.",
-    });
+    checks.push(
+      checkWithMessage(
+        "filter_subset_supported",
+        true,
+        "Supported filters: eq, co, sw, ew, pr on common user/group fields.",
+      ),
+    );
 
-    checks.push({
-      name: "protocol_capabilities_declared",
-      ok: true,
-    });
+    checks.push(check("protocol_capabilities_declared", true));
 
     return {
       ok: checks.every((c) => c.ok),

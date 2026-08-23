@@ -9,9 +9,10 @@
  */
 
 import { paginationOptsValidator } from "convex/server";
-import { ConvexError, v } from "convex/values";
+import { v } from "convex/values";
 import { stream } from "convex-helpers/server/stream";
 import { ErrorCode } from "../../shared/codes";
+import { convexError } from "../../shared/errors";
 
 import type { Id } from "../_generated/dataModel";
 import { assertBatchSelectorSize } from "../batch";
@@ -148,9 +149,7 @@ export const create = mutation({
       .withIndex("group_id_user_id", (q) => q.eq("groupId", args.groupId).eq("userId", args.userId))
       .unique();
     if (existingMembership !== null) {
-      throw new ConvexError({
-        code: ErrorCode.DUPLICATE_MEMBERSHIP,
-        message: "User is already a member of this group",
+      throw convexError(ErrorCode.DUPLICATE_MEMBERSHIP, "User is already a member of this group", {
         groupId: args.groupId,
         userId: args.userId,
         existingMemberId: existingMembership._id,

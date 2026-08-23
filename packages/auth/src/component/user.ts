@@ -8,8 +8,9 @@
 
 import { stream } from "convex-helpers/server/stream";
 import { paginationOptsValidator } from "convex/server";
-import { ConvexError, v } from "convex/values";
+import { v } from "convex/values";
 import { ErrorCode } from "../shared/codes";
+import { convexError } from "../shared/errors";
 
 import { mutation, query } from "./_generated/server";
 import { assertBatchSelectorSize } from "./batch";
@@ -29,10 +30,10 @@ const CASCADE_MAX = 100;
 
 function assertCascadeSize(count: number) {
   if (count > CASCADE_MAX) {
-    throw new ConvexError({
-      code: ErrorCode.CASCADE_TOO_LARGE,
-      message: `User cascade has more than ${CASCADE_MAX} dependent rows; delete child rows in bounded batches, then retry.`,
-    });
+    throw convexError(
+      ErrorCode.CASCADE_TOO_LARGE,
+      `User cascade has more than ${CASCADE_MAX} dependent rows; delete child rows in bounded batches, then retry.`,
+    );
   }
 }
 

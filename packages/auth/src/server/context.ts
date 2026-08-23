@@ -1,8 +1,8 @@
 import type { UserIdentity } from "convex/server";
-import { ConvexError, type GenericId } from "convex/values";
+import type { GenericId } from "convex/values";
 
 import { ErrorCode } from "../shared/codes";
-import { notSignedInError } from "./errors";
+import { convexError, notSignedInError } from "./errors";
 import type { ComponentReadCtx as AuthQueryCtx } from "./component/context";
 import type { Doc } from "./types";
 import {
@@ -220,18 +220,12 @@ function makeAssert(groupId: string | null, grants: readonly string[]): AuthCont
     const needed = Array.isArray(grant) ? grant : [grant as string];
     const missing = needed.filter((g) => !grants.includes(g));
     if (missing.length > 0) {
-      throw new ConvexError({
-        code: ErrorCode.MISSING_GRANTS,
-        message: "User is missing required grants.",
-      });
+      throw convexError(ErrorCode.MISSING_GRANTS, "User is missing required grants.");
     }
     if (doc !== undefined) {
       const docGroupId = (doc as { groupId?: unknown }).groupId;
       if (groupId === null || String(docGroupId) !== groupId) {
-        throw new ConvexError({
-          code: ErrorCode.FORBIDDEN,
-          message: "Record is not in the active group.",
-        });
+        throw convexError(ErrorCode.FORBIDDEN, "Record is not in the active group.");
       }
     }
   };

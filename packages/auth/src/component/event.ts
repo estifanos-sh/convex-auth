@@ -6,9 +6,10 @@
 
 import { paginator } from "convex-helpers/server/pagination";
 import { paginationOptsValidator } from "convex/server";
-import { ConvexError, v, type Infer } from "convex/values";
+import { v, type Infer } from "convex/values";
 
 import { ErrorCode } from "../shared/codes";
+import { convexError } from "../shared/errors";
 import { EVENT_KIND_CATEGORY } from "../shared/event/kinds";
 import type { MutationCtx } from "./_generated/server";
 import { vAuthEventProjectionDoc } from "./documents";
@@ -82,11 +83,10 @@ function projectionQuery(ctx: any, where: AuthEventWhere) {
         (selector) => selector === "target" || selector === "kind" || selector === "outcome",
       ));
   if (!supported) {
-    throw new ConvexError({
-      code: ErrorCode.INVALID_PARAMETERS,
-      message:
-        "event.list filters must match an event projection index: target, target+kind, target+outcome, target+kind+outcome, or one of kind/category/outcome/actor/subject/requestId.",
-    });
+    throw convexError(
+      ErrorCode.INVALID_PARAMETERS,
+      "event.list filters must match an event projection index: target, target+kind, target+outcome, target+kind+outcome, or one of kind/category/outcome/actor/subject/requestId.",
+    );
   }
   const db = paginator(ctx, schema).query("AuthEventProjection");
   if (where.target !== undefined) {
@@ -162,11 +162,10 @@ function projectionQuery(ctx: any, where: AuthEventWhere) {
       applyTimeBounds(q.eq("requestId", where.requestId!), where),
     );
   }
-  throw new ConvexError({
-    code: ErrorCode.INVALID_PARAMETERS,
-    message:
-      "event.list requires an indexed filter: target, kind, category, outcome, actor, subject, or requestId.",
-  });
+  throw convexError(
+    ErrorCode.INVALID_PARAMETERS,
+    "event.list requires an indexed filter: target, kind, category, outcome, actor, subject, or requestId.",
+  );
 }
 
 /** Read a single event projection by id, redacted to its public shape. */
@@ -239,10 +238,10 @@ export async function appendAuthEventProjection(
   };
   const scopes = args.targets ?? args.event.targets;
   if (scopes.length > MAX_EVENT_TARGETS) {
-    throw new ConvexError({
-      code: ErrorCode.INVALID_PARAMETERS,
-      message: `Auth events support at most ${MAX_EVENT_TARGETS} targets`,
-    });
+    throw convexError(
+      ErrorCode.INVALID_PARAMETERS,
+      `Auth events support at most ${MAX_EVENT_TARGETS} targets`,
+    );
   }
   const seenScopes = new Set<string>();
   const createdTargets: AuthEventTarget[] = [];

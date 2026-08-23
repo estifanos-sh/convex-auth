@@ -2,6 +2,7 @@ import type { GenericActionCtx, GenericDataModel } from "convex/server";
 
 import { ErrorCode } from "../../shared/codes";
 import { assertSafeIdpFetchUrl } from "../../shared/fetch/guard";
+import { check, checkWithMessage, connectionNotFound, type ConnectionCheck } from "./checks";
 import { convexError } from "../errors";
 import type { ComponentActionCtx, ComponentCtx, ComponentReadCtx } from "../component/context";
 import { retryWithBackoff } from "../utils/retry";
@@ -724,13 +725,15 @@ export function createGroupConnectionDomain<TDeps extends DomainDeps>(deps: TDep
             config.component.connection,
             domain._id,
           );
-          const checks: Array<{ name: string; ok: boolean; message?: string }> = [];
+          const checks: ConnectionCheck[] = [];
           if (!verification) {
-            checks.push({
-              name: "verification_requested",
-              ok: false,
-              message: "No active domain verification challenge exists.",
-            });
+            checks.push(
+              check(
+                "verification_requested",
+                false,
+                "No active domain verification challenge exists.",
+              ),
+            );
             return {
               connectionId: connection._id,
               domain: normalizedDomain,
@@ -738,15 +741,17 @@ export function createGroupConnectionDomain<TDeps extends DomainDeps>(deps: TDep
             };
           }
 
-          checks.push({ name: "verification_requested", ok: true });
+          checks.push(check("verification_requested", true));
 
           if (verification.expiresAt < Date.now()) {
             await removeConnectionDomainVerification(ctx, config.component.connection, domain._id);
-            checks.push({
-              name: "challenge_active",
-              ok: false,
-              message: "The verification challenge expired. Request a new one.",
-            });
+            checks.push(
+              check(
+                "challenge_active",
+                false,
+                "The verification challenge expired. Request a new one.",
+              ),
+            );
             return {
               connectionId: connection._id,
               domain: normalizedDomain,
@@ -754,7 +759,7 @@ export function createGroupConnectionDomain<TDeps extends DomainDeps>(deps: TDep
             };
           }
 
-          checks.push({ name: "challenge_active", ok: true });
+          checks.push(check("challenge_active", true));
 
           let txtValues: string[];
           try {
@@ -766,25 +771,24 @@ export function createGroupConnectionDomain<TDeps extends DomainDeps>(deps: TDep
             );
           }
 
-          checks.push({
-            name: "dns_record_present",
-            ok: txtValues.length > 0,
-            message:
-              txtValues.length > 0
-                ? undefined
-                : `No TXT records found at ${verification.recordName}.`,
-          });
+          checks.push(
+            check(
+              "dns_record_present",
+              txtValues.length > 0,
+              `No TXT records found at ${verification.recordName}.`,
+            ),
+          );
 
           const matches = txtValues.includes(verification.token);
-          checks.push({
-            name: "dns_record_matches",
-            ok: matches,
-            message: matches
-              ? undefined
-              : `TXT record at ${verification.recordName} does not match the expected value.`,
-          });
+          checks.push(
+            check(
+              "dns_record_matches",
+              matches,
+              `TXT record at ${verification.recordName} does not match the expected value.`,
+            ),
+          );
 
-          if (!checks.every((check) => check.ok)) {
+          if (!checks.every((c) => c.ok)) {
             return {
               connectionId: connection._id,
               domain: normalizedDomain,
@@ -1196,26 +1200,12 @@ export function createGroupConnectionDomain<TDeps extends DomainDeps>(deps: TDep
        */
       validate: async (ctx: ComponentReadCtx, args: { connectionId: string }) => {
         const { connectionId } = args;
-        const checks: Array<{
-          name: string;
-          ok: boolean;
-          message?: string;
-        }> = [];
+        const checks: ConnectionCheck[] = [];
 
         const connection = await getGroupConnection(ctx, config.component.connection, connectionId);
 
         if (!connection) {
-          return {
-            ok: false,
-            connectionId,
-            checks: [
-              {
-                name: "group_connection_exists",
-                ok: false,
-                message: "Connection not found.",
-              },
-            ],
-          };
+          return connectionNotFound(connectionId);
         }
 
         const samlConfig = (connection.config as { protocols?: { saml?: SamlConfigShape } })
@@ -1223,19 +1213,11 @@ export function createGroupConnectionDomain<TDeps extends DomainDeps>(deps: TDep
         const samlConfigured =
           samlConfig?.enabled === true && typeof samlConfig?.idp?.metadataXml === "string";
 
-        checks.push({
-          name: "saml_configured",
-          ok: samlConfigured,
-          message: samlConfigured ? undefined : "SAML is not configured.",
-        });
+        checks.push(check("saml_configured", samlConfigured, "SAML is not configured."));
 
         const hasIdpMetadata =
           typeof samlConfig?.idp?.metadataXml === "string" && samlConfig.idp.metadataXml.length > 0;
-        checks.push({
-          name: "idp_metadata_present",
-          ok: hasIdpMetadata,
-          message: hasIdpMetadata ? undefined : "IdP metadata XML is missing.",
-        });
+        checks.push(check("idp_metadata_present", hasIdpMetadata, "IdP metadata XML is missing."));
 
         const reparsedIdp =
           hasIdpMetadata && typeof samlConfig?.idp?.metadataXml === "string"
@@ -1263,11 +1245,9 @@ export function createGroupConnectionDomain<TDeps extends DomainDeps>(deps: TDep
           (typeof samlConfig?.idp?.issuer === "string" && samlConfig.idp.issuer.length > 0) ||
           (typeof reparsedIdp?.entityId === "string" && reparsedIdp.entityId.length > 0) ||
           (typeof reparsedIdp?.issuer === "string" && reparsedIdp.issuer.length > 0);
-        checks.push({
-          name: "idp_entity_id",
-          ok: hasEntityId,
-          message: hasEntityId ? undefined : "IdP entityId could not be parsed from metadata.",
-        });
+        checks.push(
+          check("idp_entity_id", hasEntityId, "IdP entityId could not be parsed from metadata."),
+        );
 
         let spMetadataOk = false;
         let spMetadataMessage: string | undefined;
@@ -1288,44 +1268,39 @@ export function createGroupConnectionDomain<TDeps extends DomainDeps>(deps: TDep
         } else {
           spMetadataMessage = "Skipped — SAML not configured.";
         }
-        checks.push({
-          name: "sp_metadata_generates",
-          ok: spMetadataOk,
-          message: spMetadataMessage,
-        });
+        checks.push(checkWithMessage("sp_metadata_generates", spMetadataOk, spMetadataMessage));
 
         const requiresSignedAssertions = samlConfig?.security?.requireSignedAssertions === true;
         const hasSigningCert = reparsedIdp?.signingCert !== null;
-        checks.push({
-          name: "signed_assertions_compatible",
-          ok: !requiresSignedAssertions || hasSigningCert,
-          message:
-            !requiresSignedAssertions || hasSigningCert
-              ? undefined
-              : "Signed assertions are required but the IdP metadata has no signing certificate.",
-        });
+        checks.push(
+          check(
+            "signed_assertions_compatible",
+            !requiresSignedAssertions || hasSigningCert,
+            "Signed assertions are required but the IdP metadata has no signing certificate.",
+          ),
+        );
 
         const signAuthnRequests = samlConfig?.request?.signAuthnRequests === true;
         const hasSpPrivateKey =
           typeof (samlConfig as { serviceProvider?: { privateKey?: string } } | undefined)
             ?.serviceProvider?.privateKey === "string";
-        checks.push({
-          name: "authn_request_signing_compatible",
-          ok: !signAuthnRequests || hasSpPrivateKey,
-          message:
-            !signAuthnRequests || hasSpPrivateKey
-              ? undefined
-              : "signAuthnRequests is enabled but no SP privateKey is configured.",
-        });
+        checks.push(
+          check(
+            "authn_request_signing_compatible",
+            !signAuthnRequests || hasSpPrivateKey,
+            "signAuthnRequests is enabled but no SP privateKey is configured.",
+          ),
+        );
 
-        checks.push({
-          name: "timestamp_validation_configured",
-          ok: true,
-          message:
+        checks.push(
+          checkWithMessage(
+            "timestamp_validation_configured",
+            true,
             samlConfig?.security?.requireTimestamps === true
               ? `Timestamp validation enabled with clock skew ${samlConfig.security.clockSkewSeconds ?? 300} seconds.`
               : "Timestamp validation uses compatibility defaults.",
-        });
+          ),
+        );
 
         return {
           ok: checks.every((c) => c.ok),
@@ -1649,26 +1624,12 @@ export function createGroupConnectionDomain<TDeps extends DomainDeps>(deps: TDep
        */
       validate: async (ctx: ComponentReadCtx, args: { connectionId: string }) => {
         const { connectionId } = args;
-        const checks: Array<{
-          name: string;
-          ok: boolean;
-          message?: string;
-        }> = [];
+        const checks: ConnectionCheck[] = [];
 
         const connection = await getGroupConnection(ctx, config.component.connection, connectionId);
 
         if (!connection) {
-          return {
-            ok: false,
-            connectionId,
-            checks: [
-              {
-                name: "group_connection_exists",
-                ok: false,
-                message: "Connection not found.",
-              },
-            ],
-          };
+          return connectionNotFound(connectionId);
         }
 
         const oidc = getOidcConfig(connection.config);
@@ -1680,24 +1641,14 @@ export function createGroupConnectionDomain<TDeps extends DomainDeps>(deps: TDep
         const oidcConfigured =
           oidc.enabled === true && typeof oidc.client?.id === "string" && oidc.client.id.length > 0;
 
-        checks.push({
-          name: "oidc_configured",
-          ok: oidcConfigured,
-          message: oidcConfigured ? undefined : "OIDC is not configured.",
-        });
+        checks.push(check("oidc_configured", oidcConfigured, "OIDC is not configured."));
 
         const hasClientId = typeof oidc.client?.id === "string" && oidc.client.id.length > 0;
-        checks.push({
-          name: "client_id_present",
-          ok: hasClientId,
-          message: hasClientId ? undefined : "clientId is missing.",
-        });
+        checks.push(check("client_id_present", hasClientId, "clientId is missing."));
 
-        checks.push({
-          name: "client_secret_stored",
-          ok: secret !== null,
-          message: secret !== null ? undefined : "OIDC client secret is missing.",
-        });
+        checks.push(
+          check("client_secret_stored", secret !== null, "OIDC client secret is missing."),
+        );
 
         const discoveryConfig =
           typeof oidc.discovery === "object" && oidc.discovery !== null
@@ -1711,11 +1662,13 @@ export function createGroupConnectionDomain<TDeps extends DomainDeps>(deps: TDep
           (discoveryConfig.discoveryUrl as string | undefined) ??
           (discoveryConfig.issuer as string | undefined);
         const hasDiscovery = typeof discoveryTarget === "string" && discoveryTarget.length > 0;
-        checks.push({
-          name: "issuer_or_discovery_url_present",
-          ok: hasDiscovery,
-          message: hasDiscovery ? undefined : "issuer or discoveryUrl is missing.",
-        });
+        checks.push(
+          check(
+            "issuer_or_discovery_url_present",
+            hasDiscovery,
+            "issuer or discoveryUrl is missing.",
+          ),
+        );
 
         let discoveryOk = false;
         let discoveryMessage: string | undefined;
@@ -1766,43 +1719,33 @@ export function createGroupConnectionDomain<TDeps extends DomainDeps>(deps: TDep
         } else {
           discoveryMessage = "Skipped — issuer or discoveryUrl not set.";
         }
-        checks.push({
-          name: "discovery_reachable",
-          ok: discoveryOk,
-          message: discoveryMessage,
-        });
+        checks.push(checkWithMessage("discovery_reachable", discoveryOk, discoveryMessage));
 
         const hasValidTokenAuthMethod =
           clientConfig.authMethod === undefined ||
           clientConfig.authMethod === "client_secret_post" ||
           clientConfig.authMethod === "client_secret_basic";
-        checks.push({
-          name: "token_endpoint_auth_method_supported",
-          ok: hasValidTokenAuthMethod,
-          message: hasValidTokenAuthMethod
-            ? undefined
-            : "tokenEndpointAuthMethod must be client_secret_post or client_secret_basic.",
-        });
+        checks.push(
+          check(
+            "token_endpoint_auth_method_supported",
+            hasValidTokenAuthMethod,
+            "tokenEndpointAuthMethod must be client_secret_post or client_secret_basic.",
+          ),
+        );
 
         const hasJwksUri =
           discoveryConfig.jwksUri === undefined ||
           (typeof discoveryConfig.jwksUri === "string" && discoveryConfig.jwksUri.length > 0);
-        checks.push({
-          name: "jwks_uri_present",
-          ok: hasJwksUri,
-          message: hasJwksUri ? undefined : "jwksUri is empty.",
-        });
+        checks.push(check("jwks_uri_present", hasJwksUri, "jwksUri is empty."));
 
         const hasAudience =
           discoveryConfig.audience === undefined ||
           typeof discoveryConfig.audience === "string" ||
           (Array.isArray(discoveryConfig.audience) &&
             discoveryConfig.audience.every((value) => typeof value === "string"));
-        checks.push({
-          name: "audience_valid",
-          ok: hasAudience,
-          message: hasAudience ? undefined : "audience must be a string or string array.",
-        });
+        checks.push(
+          check("audience_valid", hasAudience, "audience must be a string or string array."),
+        );
 
         return {
           ok: checks.every((c) => c.ok),

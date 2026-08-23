@@ -5,10 +5,10 @@
  */
 
 import type { HttpRouter, RegisteredAction } from "convex/server";
-import { ConvexError } from "convex/values";
 import type { GenericId, GenericValidator, Infer } from "convex/values";
 
 import { ErrorCode } from "../shared/codes";
+import { convexError } from "./errors";
 import type { AuthTokens, SignInFlowResult } from "../shared/results";
 import { createAuthContextFacade } from "./facade";
 import type { McpToolDef } from "./mcp";
@@ -764,10 +764,7 @@ export function defineAuth<
     const domains: GroupConnectionDomainInput = args.domains;
     const connection = await connectionApi.get(ctx, { id: connectionId });
     if (connection === null) {
-      throw new ConvexError({
-        code: ErrorCode.INVALID_PARAMETERS,
-        message: "Connection not found.",
-      });
+      throw convexError(ErrorCode.INVALID_PARAMETERS, "Connection not found.");
     }
 
     const normalized = domains.map((entry: (typeof domains)[number]) => ({
@@ -777,16 +774,10 @@ export function defineAuth<
     const deduped = new Map<string, (typeof normalized)[number]>();
     for (const entry of normalized) {
       if (entry.domain.length === 0) {
-        throw new ConvexError({
-          code: ErrorCode.INVALID_PARAMETERS,
-          message: "Domain must not be empty.",
-        });
+        throw convexError(ErrorCode.INVALID_PARAMETERS, "Domain must not be empty.");
       }
       if (deduped.has(entry.domain)) {
-        throw new ConvexError({
-          code: ErrorCode.INVALID_PARAMETERS,
-          message: `Duplicate domain: ${entry.domain}`,
-        });
+        throw convexError(ErrorCode.INVALID_PARAMETERS, `Duplicate domain: ${entry.domain}`);
       }
       deduped.set(entry.domain, entry);
     }
@@ -794,10 +785,7 @@ export function defineAuth<
     const nextDomains = [...deduped.values()];
     const primaryCount = nextDomains.filter((entry) => entry.isPrimary).length;
     if (primaryCount > 1) {
-      throw new ConvexError({
-        code: ErrorCode.INVALID_PARAMETERS,
-        message: "Only one primary domain may be set.",
-      });
+      throw convexError(ErrorCode.INVALID_PARAMETERS, "Only one primary domain may be set.");
     }
     if (nextDomains.length > 0 && primaryCount === 0) {
       nextDomains[0] = { ...nextDomains[0], isPrimary: true };

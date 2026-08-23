@@ -1,7 +1,8 @@
 import type { PaginationResult } from "convex/server";
-import { ConvexError, type GenericId } from "convex/values";
+import type { GenericId } from "convex/values";
 
 import { ErrorCode } from "../../shared/codes";
+import { convexError } from "../errors";
 import type { ComponentCtx, ComponentReadCtx } from "../component/context";
 import { configDefaults } from "../config";
 import { cached, ctxCacheHas, invalidateCtxCache } from "../cache/context";
@@ -356,24 +357,18 @@ export function createMemberDomain(deps: MemberDeps) {
         groupId: opts.groupId,
       });
       if (result.membership === null) {
-        throw new ConvexError({
-          code: ErrorCode.NOT_A_MEMBER,
-          message: "User is not a member of this group.",
+        throw convexError(ErrorCode.NOT_A_MEMBER, "User is not a member of this group.", {
           groupId: opts.groupId,
         });
       }
       if (roleFilter !== null && !result.roleIds.some((roleId: string) => roleFilter.has(roleId))) {
-        throw new ConvexError({
-          code: ErrorCode.NOT_A_MEMBER,
-          message: "User is not a member of this group.",
+        throw convexError(ErrorCode.NOT_A_MEMBER, "User is not a member of this group.", {
           groupId: opts.groupId,
         });
       }
       const missingGrants = requiredGrants.filter((grant) => !result.grants.includes(grant));
       if (missingGrants.length > 0) {
-        throw new ConvexError({
-          code: ErrorCode.MISSING_GRANTS,
-          message: "User is missing required grants.",
+        throw convexError(ErrorCode.MISSING_GRANTS, "User is missing required grants.", {
           groupId: opts.groupId,
           missingGrants,
         });

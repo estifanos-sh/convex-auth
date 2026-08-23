@@ -9,10 +9,9 @@
  */
 
 import type { UserIdentity } from "convex/server";
-import { ConvexError } from "convex/values";
 
 import { ErrorCode } from "../shared/codes";
-import { notSignedInError } from "./errors";
+import { convexError, notSignedInError } from "./errors";
 import type { ComponentReadCtx } from "./component/context";
 import {
   createUnauthenticatedAuthContext,
@@ -162,10 +161,7 @@ function enforceAuthRequirements(
   config?: { assert?: string | readonly string[]; active?: true },
 ) {
   if (config?.active === true && resolved.groupId === null) {
-    throw new ConvexError({
-      code: ErrorCode.NO_ACTIVE_GROUP,
-      message: "An active group is required.",
-    });
+    throw convexError(ErrorCode.NO_ACTIVE_GROUP, "An active group is required.");
   }
   if (config?.assert !== undefined) {
     resolved.assert(config.assert);

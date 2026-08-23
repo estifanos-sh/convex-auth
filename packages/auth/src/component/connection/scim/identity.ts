@@ -9,10 +9,11 @@
  */
 
 import { paginationOptsValidator } from "convex/server";
-import { ConvexError, type Infer, v } from "convex/values";
+import { type Infer, v } from "convex/values";
 import { paginator } from "convex-helpers/server/pagination";
 
 import { ErrorCode } from "../../../shared/codes";
+import { convexError } from "../../../shared/errors";
 import type { Id } from "../../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../../_generated/server";
 import { assertBatchSelectorSize } from "../../batch";
@@ -48,17 +49,17 @@ async function requireScimUserIdentity(
     )
     .unique();
   if (identity === null || identity.resourceType !== "user" || identity.groupId !== args.groupId)
-    throw new ConvexError({ code: ErrorCode.ACCOUNT_NOT_FOUND, message: "SCIM user not found." });
+    throw convexError(ErrorCode.ACCOUNT_NOT_FOUND, "SCIM user not found.");
   const conflictingIdentity = await ctx.db
     .query("GroupConnectionScimIdentity")
     .withIndex("user_id", (idx) => idx.eq("userId", args.userId))
     .filter((query) => query.neq(query.field("connectionId"), args.connectionId))
     .first();
   if (conflictingIdentity !== null) {
-    throw new ConvexError({
-      code: ErrorCode.ACCOUNT_ALREADY_LINKED,
-      message: "User is managed by another SCIM connection.",
-    });
+    throw convexError(
+      ErrorCode.ACCOUNT_ALREADY_LINKED,
+      "User is managed by another SCIM connection.",
+    );
   }
   return identity;
 }
@@ -87,10 +88,10 @@ const vScimMembershipProgress = v.object({
 
 function assertScimMembershipBatchSize(memberIds: Array<Id<"User">>) {
   if (memberIds.length > SCIM_GROUP_MEMBERSHIP_BATCH_SIZE) {
-    throw new ConvexError({
-      code: ErrorCode.INVALID_PARAMETERS,
-      message: `SCIM group membership batches are limited to ${SCIM_GROUP_MEMBERSHIP_BATCH_SIZE} members.`,
-    });
+    throw convexError(
+      ErrorCode.INVALID_PARAMETERS,
+      `SCIM group membership batches are limited to ${SCIM_GROUP_MEMBERSHIP_BATCH_SIZE} members.`,
+    );
   }
 }
 
@@ -202,10 +203,7 @@ export const list = query({
 function providerForConnection(connection: { _id: string; protocol: string }) {
   if (connection.protocol === "oidc") return `oidc:${connection._id}`;
   if (connection.protocol === "saml") return `saml:${connection._id}`;
-  throw new ConvexError({
-    code: ErrorCode.PROVIDER_NOT_CONFIGURED,
-    message: "SCIM requires an OIDC or SAML connection.",
-  });
+  throw convexError(ErrorCode.PROVIDER_NOT_CONFIGURED, "SCIM requires an OIDC or SAML connection.");
 }
 
 function patchProfile(current: Record<string, unknown>, next: ScimUserData, mode: ProfileUpdate) {
@@ -256,10 +254,7 @@ export const provision = mutation({
             .unique();
     const account = await scimAccountByExternalId(ctx, provider, externalId);
     if (identity?.userId !== undefined && account !== null && identity.userId !== account.userId) {
-      throw new ConvexError({
-        code: ErrorCode.ACCOUNT_ALREADY_LINKED,
-        message: "SCIM account ownership conflicts.",
-      });
+      throw convexError(ErrorCode.ACCOUNT_ALREADY_LINKED, "SCIM account ownership conflicts.");
     }
     let userId = identity?.userId ?? account?.userId;
     let created = false;
@@ -271,21 +266,17 @@ export const provision = mutation({
       created = true;
     } else {
       const user = await ctx.db.get("User", userId);
-      if (user === null)
-        throw new ConvexError({
-          code: ErrorCode.ACCOUNT_NOT_FOUND,
-          message: "SCIM user not found.",
-        });
+      if (user === null) throw convexError(ErrorCode.ACCOUNT_NOT_FOUND, "SCIM user not found.");
       const conflictingIdentity = await ctx.db
         .query("GroupConnectionScimIdentity")
         .withIndex("user_id", (idx) => idx.eq("userId", userId))
         .filter((query) => query.neq(query.field("connectionId"), args.connectionId))
         .first();
       if (conflictingIdentity !== null) {
-        throw new ConvexError({
-          code: ErrorCode.ACCOUNT_ALREADY_LINKED,
-          message: "User is managed by another SCIM connection.",
-        });
+        throw convexError(
+          ErrorCode.ACCOUNT_ALREADY_LINKED,
+          "User is managed by another SCIM connection.",
+        );
       }
       const patch = patchProfile(
         user as Record<string, unknown>,
@@ -311,10 +302,7 @@ export const provision = mutation({
     if (identity === null) await ctx.db.insert("GroupConnectionScimIdentity", identityData);
     else {
       if (identity.groupId !== connection.groupId)
-        throw new ConvexError({
-          code: ErrorCode.INVALID_PARAMETERS,
-          message: "SCIM identity group mismatch.",
-        });
+        throw convexError(ErrorCode.INVALID_PARAMETERS, "SCIM identity group mismatch.");
       await ctx.db.patch("GroupConnectionScimIdentity", identity._id, identityData);
     }
     const membership = await ctx.db
@@ -373,13 +361,9 @@ export const update = mutation({
             )
             .unique();
     if (conflicting !== null && conflicting._id !== identity._id)
-      throw new ConvexError({
-        code: ErrorCode.ACCOUNT_ALREADY_LINKED,
-        message: "SCIM external id is already linked.",
-      });
+      throw convexError(ErrorCode.ACCOUNT_ALREADY_LINKED, "SCIM external id is already linked.");
     const user = await ctx.db.get("User", args.userId);
-    if (user === null)
-      throw new ConvexError({ code: ErrorCode.ACCOUNT_NOT_FOUND, message: "User not found." });
+    if (user === null) throw convexError(ErrorCode.ACCOUNT_NOT_FOUND, "User not found.");
     const provider = providerForConnection(connection);
     const currentExternalId = identity.externalId;
     const [currentAccount, nextAccount] = await Promise.all([
@@ -389,16 +373,16 @@ export const update = mutation({
         : scimAccountByExternalId(ctx, provider, externalId),
     ]);
     if (nextAccount !== null && nextAccount.userId !== args.userId) {
-      throw new ConvexError({
-        code: ErrorCode.ACCOUNT_ALREADY_LINKED,
-        message: "The replacement SCIM external id is already linked.",
-      });
+      throw convexError(
+        ErrorCode.ACCOUNT_ALREADY_LINKED,
+        "The replacement SCIM external id is already linked.",
+      );
     }
     if (currentAccount !== null && currentAccount.userId !== args.userId) {
-      throw new ConvexError({
-        code: ErrorCode.ACCOUNT_ALREADY_LINKED,
-        message: "The SCIM account belongs to another user.",
-      });
+      throw convexError(
+        ErrorCode.ACCOUNT_ALREADY_LINKED,
+        "The SCIM account belongs to another user.",
+      );
     }
     const patch = patchProfile(user as Record<string, unknown>, args.userData, args.profileUpdate);
     if (Object.keys(patch).length > 0) await ctx.db.patch("User", args.userId, patch);
@@ -472,10 +456,10 @@ export const revoke = mutation({
     const externalId = identity.externalId;
     const account = await scimAccountByExternalId(ctx, provider, externalId);
     if (account !== null && account.userId !== args.userId) {
-      throw new ConvexError({
-        code: ErrorCode.ACCOUNT_ALREADY_LINKED,
-        message: "The SCIM account belongs to another user.",
-      });
+      throw convexError(
+        ErrorCode.ACCOUNT_ALREADY_LINKED,
+        "The SCIM account belongs to another user.",
+      );
     }
     const membership = await ctx.db
       .query("GroupMember")
@@ -512,10 +496,7 @@ async function activeScimConnection(ctx: MutationCtx, connectionId: Id<"GroupCon
     scim.status !== "active" ||
     scim.groupId !== connection.groupId
   ) {
-    throw new ConvexError({
-      code: ErrorCode.INVALID_PARAMETERS,
-      message: "SCIM connection is not active.",
-    });
+    throw convexError(ErrorCode.INVALID_PARAMETERS, "SCIM connection is not active.");
   }
   return connection;
 }
@@ -542,10 +523,10 @@ async function assertScimMembers(
         .first(),
     ]);
     if (user === null || (identity === null && membership === null)) {
-      throw new ConvexError({
-        code: ErrorCode.ACCOUNT_NOT_FOUND,
-        message: "A SCIM group member is not available through this connection.",
-      });
+      throw convexError(
+        ErrorCode.ACCOUNT_NOT_FOUND,
+        "A SCIM group member is not available through this connection.",
+      );
     }
   }
 }
@@ -615,20 +596,14 @@ export const provisionGroup = mutation({
             )
             .unique();
     if (identity !== null && identity.groupId !== connection.groupId) {
-      throw new ConvexError({
-        code: ErrorCode.INVALID_PARAMETERS,
-        message: "SCIM identity group mismatch.",
-      });
+      throw convexError(ErrorCode.INVALID_PARAMETERS, "SCIM identity group mismatch.");
     }
     let groupId = identity?.mappedGroupId;
     let created = false;
     if (groupId === undefined) {
       const parent = await ctx.db.get("Group", connection.groupId);
       if (parent === null)
-        throw new ConvexError({
-          code: ErrorCode.INVALID_PARAMETERS,
-          message: "Connection group not found.",
-        });
+        throw convexError(ErrorCode.INVALID_PARAMETERS, "Connection group not found.");
       groupId = await ctx.db.insert("Group", {
         name: args.name,
         type: "organization",
@@ -640,10 +615,7 @@ export const provisionGroup = mutation({
     } else {
       const group = await ctx.db.get("Group", groupId);
       if (group === null || group.parentGroupId !== connection.groupId) {
-        throw new ConvexError({
-          code: ErrorCode.INVALID_PARAMETERS,
-          message: "SCIM group ownership mismatch.",
-        });
+        throw convexError(ErrorCode.INVALID_PARAMETERS, "SCIM group ownership mismatch.");
       }
       await ctx.db.patch("Group", groupId, { name: args.name });
     }
@@ -695,17 +667,11 @@ export const updateGroup = mutation({
       identity.groupId !== connection.groupId ||
       identity.resourceType !== "group"
     ) {
-      throw new ConvexError({
-        code: ErrorCode.ACCOUNT_NOT_FOUND,
-        message: "SCIM group not found.",
-      });
+      throw convexError(ErrorCode.ACCOUNT_NOT_FOUND, "SCIM group not found.");
     }
     const group = await ctx.db.get("Group", args.groupId);
     if (group === null || group.parentGroupId !== connection.groupId) {
-      throw new ConvexError({
-        code: ErrorCode.INVALID_PARAMETERS,
-        message: "SCIM group ownership mismatch.",
-      });
+      throw convexError(ErrorCode.INVALID_PARAMETERS, "SCIM group ownership mismatch.");
     }
     await assertScimMembers(ctx, connection, args.memberIds);
     if (args.name !== undefined) await ctx.db.patch("Group", args.groupId, { name: args.name });
@@ -747,17 +713,11 @@ export const revokeGroup = mutation({
       identity.groupId !== connection.groupId ||
       identity.resourceType !== "group"
     ) {
-      throw new ConvexError({
-        code: ErrorCode.ACCOUNT_NOT_FOUND,
-        message: "SCIM group not found.",
-      });
+      throw convexError(ErrorCode.ACCOUNT_NOT_FOUND, "SCIM group not found.");
     }
     const group = await ctx.db.get("Group", args.groupId);
     if (group === null || group.parentGroupId !== identity.groupId) {
-      throw new ConvexError({
-        code: ErrorCode.INVALID_PARAMETERS,
-        message: "SCIM group ownership mismatch.",
-      });
+      throw convexError(ErrorCode.INVALID_PARAMETERS, "SCIM group ownership mismatch.");
     }
     const members = await paginator(ctx.db, schema)
       .query("GroupMember")

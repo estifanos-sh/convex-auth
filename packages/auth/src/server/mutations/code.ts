@@ -1,8 +1,9 @@
 import type { GenericActionCtx, GenericDataModel } from "convex/server";
-import { ConvexError, GenericId, Infer, v } from "convex/values";
+import { GenericId, Infer, v } from "convex/values";
 
 import type { Hashed, VerificationCode } from "../../shared/brand";
 import { ErrorCode } from "../../shared/codes";
+import { convexError } from "../errors";
 import * as Provider from "../crypto";
 import { authDb } from "../db";
 import { LOG_LEVELS, log, maybeRedact } from "../log";
@@ -63,10 +64,10 @@ export async function createVerificationCodeImpl(
     typedExistingAccountId !== undefined
       ? ((await db.accounts.get({ id: typedExistingAccountId })) ??
         (() => {
-          throw new ConvexError({
-            code: ErrorCode.ACCOUNT_NOT_FOUND,
-            message: `Expected an account to exist for ID "${typedExistingAccountId}"`,
-          });
+          throw convexError(
+            ErrorCode.ACCOUNT_NOT_FOUND,
+            `Expected an account to exist for ID "${typedExistingAccountId}"`,
+          );
         })())
       : await db.accounts.get({ provider: providerId, providerAccountId: email ?? phone! });
 
@@ -121,10 +122,10 @@ async function generateUniqueVerificationCode(
   const hashedCode = (await sha256(code)) as Hashed<"VerificationCode">;
   const conflictingCode = await db.verificationCodes.get({ code: hashedCode });
   if (conflictingCode !== null && conflictingCode.accountId !== accountId) {
-    throw new ConvexError({
-      code: ErrorCode.VERIFICATION_CODE_COLLISION,
-      message: "Generated verification code conflicts with another pending sign-in.",
-    });
+    throw convexError(
+      ErrorCode.VERIFICATION_CODE_COLLISION,
+      "Generated verification code conflicts with another pending sign-in.",
+    );
   }
   await db.verificationCodes.create({
     accountId,
