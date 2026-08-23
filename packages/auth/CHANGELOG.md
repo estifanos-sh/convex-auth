@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.0.9
+
+### Breaking
+
+- Providers are imported from their own subpath. `providers/index.ts` and the
+  `./providers` export entry are gone, so there is exactly one path to any
+  symbol:
+
+  ```ts
+  // before
+  import { password, webauthn } from "@estifanos-sh/convex-auth/providers";
+
+  // after
+  import { password } from "@estifanos-sh/convex-auth/providers/password";
+  import { webauthn } from "@estifanos-sh/convex-auth/providers/webauthn";
+  ```
+
+  Every symbol keeps its name; only the path changes. `EmailConfig`,
+  `PhoneConfig`, `OAuthProfile` and `OAuthTokens` were reachable only through
+  the barrel and are now re-exported from `providers/email`, `providers/phone`
+  and `providers/custom` respectively.
+
 ## 0.0.8
 
 ### Fixed
