@@ -56,6 +56,7 @@ import { requireAuthKey } from "./env";
 import type { AuthErrorData } from "./errors";
 import { toConvexError } from "./errors";
 import { queueAuthEvent } from "./events";
+import { coupleSecurityKeysOnly, decoupleSecurityKeysOnly } from "../shared/webauthn";
 import { getAuthenticatedUserIdOrNull } from "./identity/claims";
 import { LOG_LEVELS, log } from "./log";
 import {
@@ -83,6 +84,7 @@ import {
   GenericActionCtxWithAuthConfig,
   WebAuthnAttestationEvidence,
   WebAuthnAttestationPolicy,
+  WebAuthnCeremonyPolicy,
   WebAuthnProviderConfig,
   SessionInfo,
 } from "./types";
@@ -254,6 +256,61 @@ const asConvexError = (
 
 const logPasskeyError = (err: unknown) =>
   log(LOG_LEVELS.ERROR, "passkey error:", err instanceof Error ? err.message : String(err));
+
+/**
+ * Apply a per-ceremony policy to a provider, returning a clone.
+ *
+ * Cloning rather than threading an extra argument keeps every downstream
+ * reader — `resolveRpOptions`, credential eligibility, hint derivation —
+ * unchanged: they already read policy off the provider. Undefined fields keep
+ * the provider's value, and `securityKeysOnly` re-derives the attachment and
+ * hints exactly as the provider factory does, so an override cannot leave a
+ * half-applied policy behind.
+ */
+export function applyCeremonyPolicy(
+  provider: WebAuthnProviderConfig,
+  policy: WebAuthnCeremonyPolicy | undefined,
+): WebAuthnProviderConfig {
+  if (policy === undefined) return provider;
+
+  const securityKeysOnly = policy.securityKeysOnly ?? provider.options.securityKeysOnly ?? false;
+  const registration = { ...provider.options.registration };
+  const authentication = { ...provider.options.authentication };
+
+  if (policy.securityKeysOnly !== undefined) {
+    // The flag is a policy in its own right, not just a filter: re-derive the
+    // fields the factory couples to it, so flipping it on or off is complete.
+    if (securityKeysOnly) {
+      coupleSecurityKeysOnly(registration, authentication);
+    } else {
+      decoupleSecurityKeysOnly(registration, authentication);
+    }
+  }
+
+  if (policy.registration?.authenticatorAttachment !== undefined) {
+    registration.authenticatorAttachment = policy.registration.authenticatorAttachment;
+  }
+  if (policy.registration?.residentKey !== undefined) {
+    registration.residentKey = policy.registration.residentKey;
+  }
+  if (policy.registration?.userVerification !== undefined) {
+    registration.userVerification = policy.registration.userVerification;
+  }
+  if (policy.registration?.hints !== undefined) {
+    registration.hints = [...policy.registration.hints];
+  }
+  if (policy.authentication?.userVerification !== undefined) {
+    authentication.userVerification = policy.authentication.userVerification;
+  }
+  if (policy.authentication?.hints !== undefined) {
+    authentication.hints = [...policy.authentication.hints];
+  }
+
+  return {
+    ...provider,
+    options: { ...provider.options, securityKeysOnly, registration, authentication },
+  };
+}
 
 function resolveRpOptions(provider: WebAuthnProviderConfig): RpOptions {
   try {

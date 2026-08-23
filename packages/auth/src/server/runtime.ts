@@ -14,6 +14,7 @@ import type { GenericValidator } from "convex/values";
 import type { AuthTokens, SignInFlowResult } from "../shared/results";
 import { ErrorCode } from "../shared/codes";
 import { createCoreDomains } from "./core";
+import { applyCeremonyPolicy } from "./webauthn";
 import { GetProviderOrThrowFunc, hash as hashCredentialSecret } from "./crypto";
 import { requireAuthKey, requireEnv } from "./env";
 import { createAuthEventDomain, emitAuthEvent } from "./events";
@@ -260,11 +261,25 @@ export function Auth(config_: ConvexAuthConfig<any>) {
     continuation: string,
   ) => {
     const enriched = bridgeRuntimeType<Parameters<typeof signInImpl>[0]>(enrichCtx(ctx));
+    const context = "context" in operation ? operation.context : undefined;
+    // The provider is the app's default policy; a ceremony may narrow or widen
+    // it for this call. Applying it here keeps every downstream reader working
+    // off one provider object.
+    const provider =
+      operation.provider.type === "webauthn"
+        ? applyCeremonyPolicy(operation.provider, context?.policy)
+        : operation.provider;
     const result = await signInImpl(
       enriched,
-      operation.provider,
+      provider,
       {
-        params: { flow: operation.operation === "rotate" ? "register" : "signIn" },
+        // `email` seeds allowCredentials. Flows that resolve the account
+        // server-side have no address in the request params, and without it a
+        // non-discoverable credential can never be offered.
+        params: {
+          flow: operation.operation === "rotate" ? "register" : "signIn",
+          ...(context?.email === undefined ? {} : { email: context.email }),
+        },
         continuation,
       },
       {

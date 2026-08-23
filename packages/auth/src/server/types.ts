@@ -12,6 +12,12 @@ import {
   TableNamesInDataModel,
 } from "convex/server";
 import type { GenericValidator, Infer } from "convex/values";
+import type {
+  WebAuthnAttachment,
+  WebAuthnHintName,
+  WebAuthnResidentKey,
+  WebAuthnUserVerification,
+} from "../shared/webauthn";
 import { GenericId, Value } from "convex/values";
 
 import { vApiKeyDoc, vUserDoc } from "../component/documents";
@@ -713,7 +719,7 @@ export interface WebAuthnProviderConfig {
    * password({ reset: recoveryEmail, afterReset: passkeys.rotate() });
    * ```
    */
-  rotate(): WebAuthnRotateOperation;
+  rotate(context?: WebAuthnOperationContext): WebAuthnRotateOperation;
   /**
    * Create a typed operation that requires one of a user's existing passkeys
    * during a provider continuation.
@@ -728,7 +734,7 @@ export interface WebAuthnProviderConfig {
    * });
    * ```
    */
-  signIn(): WebAuthnSignInOperation;
+  signIn(context?: WebAuthnOperationContext): WebAuthnSignInOperation;
   options: {
     /** Relying Party display name. Defaults to APP_URL hostname. */
     rpName?: string;
@@ -748,27 +754,76 @@ export interface WebAuthnProviderConfig {
       userVerification: "required" | "preferred" | "discouraged";
       residentKey: "required" | "preferred" | "discouraged";
       authenticatorAttachment?: "platform" | "cross-platform";
-      hints?: Array<"security-key" | "client-device" | "hybrid">;
+      hints?: WebAuthnHintName[];
       algorithms: Array<-7 | -257>;
       attestation?: WebAuthnAttestationPolicy;
     };
     authentication: {
       userVerification: "required" | "preferred" | "discouraged";
-      hints?: Array<"security-key" | "client-device" | "hybrid">;
+      hints?: WebAuthnHintName[];
     };
   };
 }
+
+/**
+ * Narrow or widen a single ceremony without changing the provider.
+ *
+ * The provider config is the app's default policy. This is the per-call
+ * escape hatch: one deployment can register platform passkeys on desktop and
+ * insist on cross-platform security keys on a shared tablet, from the same
+ * provider. Fields left undefined keep the provider's value.
+ *
+ * Supply these from server-side code that has already decided the policy.
+ * Anything a browser can choose, an attacker can choose too — map an untrusted
+ * client hint (a device class, say) onto a policy on the server rather than
+ * letting the client name the policy itself.
+ */
+export type WebAuthnCeremonyPolicy = {
+  /** Reject platform and synced passkeys for this ceremony. */
+  securityKeysOnly?: boolean;
+  registration?: {
+    authenticatorAttachment?: WebAuthnAttachment;
+    residentKey?: WebAuthnResidentKey;
+    userVerification?: WebAuthnUserVerification;
+    hints?: WebAuthnHintName[];
+  };
+  authentication?: {
+    userVerification?: WebAuthnUserVerification;
+    hints?: WebAuthnHintName[];
+  };
+};
+
+/** Server-supplied context for one WebAuthn ceremony. */
+export type WebAuthnOperationContext = {
+  /**
+   * Address whose credentials seed `allowCredentials`.
+   *
+   * Required for any credential registered with `residentKey: "discouraged"`:
+   * a non-discoverable credential is invisible to the authenticator unless the
+   * relying party names its id. Without this the browser falls back to a
+   * discoverable-credential prompt and reports that no credentials exist.
+   *
+   * Flows that identify the account server-side (an account picker that never
+   * exposes addresses to the browser) must pass it here; the browser has no
+   * address to send in the request params.
+   */
+  email?: string;
+  /** Per-call policy overrides. */
+  policy?: WebAuthnCeremonyPolicy;
+};
 
 /** A typed WebAuthn operation accepted by provider continuations. */
 export type WebAuthnRotateOperation = Readonly<{
   provider: WebAuthnProviderConfig;
   operation: "rotate";
+  context?: WebAuthnOperationContext;
 }>;
 
 /** A typed WebAuthn operation that verifies an existing passkey before session issuance. */
 export type WebAuthnSignInOperation = Readonly<{
   provider: WebAuthnProviderConfig;
   operation: "signIn";
+  context?: WebAuthnOperationContext;
 }>;
 
 /** A typed operation accepted by provider continuations. */
@@ -1603,3 +1658,10 @@ export type SessionTokenIdentityClaims = {
 export type CrossComponentUserDoc = Infer<typeof vUserDoc>;
 
 export type KeyDoc = Infer<typeof vApiKeyDoc>;
+
+export type {
+  WebAuthnAttachment,
+  WebAuthnHintName,
+  WebAuthnResidentKey,
+  WebAuthnUserVerification,
+} from "../shared/webauthn";
