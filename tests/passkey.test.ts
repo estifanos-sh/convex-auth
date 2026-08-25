@@ -52,7 +52,19 @@ test("strict security-key policy rejects platform, hybrid, and backed-up credent
       backedUp: true,
     }),
   ).toBe(false);
-  expect(isSecurityKeyCredential({ deviceType: "singleDevice", backedUp: false })).toBe(false);
+  // Safari reports no transports for keys Chrome reports as `usb`, so an absent
+  // list cannot disqualify a credential the signed flags already vouch for.
+  expect(isSecurityKeyCredential({ deviceType: "singleDevice", backedUp: false })).toBe(true);
+  expect(
+    isSecurityKeyCredential({ transports: [], deviceType: "singleDevice", backedUp: false }),
+  ).toBe(true);
+  expect(
+    isSecurityKeyCredential({
+      transports: ["smart-card"],
+      deviceType: "singleDevice",
+      backedUp: false,
+    }),
+  ).toBe(true);
 });
 
 test("strict security-key policy removes mixed password-manager credentials from sign-in", () => {
@@ -62,7 +74,10 @@ test("strict security-key policy removes mixed password-manager credentials from
     { id: "unknown-provider" },
   ];
 
-  expect(selectAuthenticationCredentials(credentials, true)).toEqual([credentials[0]]);
+  expect(selectAuthenticationCredentials(credentials, true)).toEqual([
+    credentials[0],
+    credentials[2],
+  ]);
   expect(selectAuthenticationCredentials(credentials, false)).toEqual(credentials);
 });
 
