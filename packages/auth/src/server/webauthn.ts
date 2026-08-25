@@ -795,6 +795,7 @@ type AllowCredential = { type: "public-key"; id: string; transports?: string[] }
 type StoredCredential = { id: string; transports?: string[] };
 
 const ROAMING_AUTHENTICATOR_TRANSPORTS = new Set(["usb", "nfc", "ble"]);
+const NON_ROAMING_AUTHENTICATOR_TRANSPORTS = new Set(["internal", "hybrid"]);
 const ROAMING_CEREMONY_TRANSPORTS = ["ble", "nfc", "usb"];
 
 type SecurityKeyCredential = {
@@ -813,10 +814,22 @@ function roamingTransports(transports: readonly string[] | undefined): string[] 
   return [...new Set(transports)].sort();
 }
 
+/**
+ * `getTransports()` is an unsigned client hint and browsers disagree on it:
+ * Safari reports an empty list for the same key Chrome reports as `usb`, and
+ * newer authenticators return values no allow-list anticipated. Absence is not
+ * evidence of a platform authenticator, so only a positively non-roaming
+ * transport disqualifies a credential. The signed backup-state flags below are
+ * what actually enforce the policy.
+ */
+function reportsNonRoamingTransport(transports: readonly string[] | undefined): boolean {
+  return transports?.some((value) => NON_ROAMING_AUTHENTICATOR_TRANSPORTS.has(value)) ?? false;
+}
+
 /** @internal */
 export function isSecurityKeyCredential(credential: SecurityKeyCredential): boolean {
   return (
-    roamingTransports(credential.transports) !== undefined &&
+    !reportsNonRoamingTransport(credential.transports) &&
     (credential.deviceType === undefined || credential.deviceType === "singleDevice") &&
     (credential.backedUp === undefined || credential.backedUp === false)
   );
