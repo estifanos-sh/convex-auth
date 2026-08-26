@@ -1383,10 +1383,17 @@ export async function handleWebAuthn(
           `A user can register at most ${MAX_WEBAUTHN_CREDENTIALS_PER_USER} WebAuthn credentials.`,
         );
       }
-      const excludeCredentials = existing.map((credential) => ({
-        id: credential.id,
-        transports: credential.transports,
-      }));
+      // Rotation deletes `existing` the moment the new credential registers
+      // (`component/factor/passkey.ts` `completeRotation`), so excluding them
+      // refuses the very authenticator the ceremony exists to replace. A user
+      // holding one security key could never complete a rotation.
+      const excludeCredentials =
+        args.continuation === undefined
+          ? existing.map((credential) => ({
+              id: credential.id,
+              transports: credential.transports,
+            }))
+          : [];
 
       const encodedUserHandle = encodeBase64urlNoPadding(new TextEncoder().encode(userHandle));
 
