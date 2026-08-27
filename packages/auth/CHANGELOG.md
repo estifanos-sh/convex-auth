@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.0.10
+
+### Fixed
+
+- Rotation no longer excludes the credential it replaces. `completeRotation`
+  deletes every existing passkey once the replacement registers, but those same
+  credentials were listed in `excludeCredentials`, so the ceremony refused the
+  one authenticator it existed to replace. A user holding a single security key
+  could never complete a rotation, which also left any account with a credential
+  and no password account unrecoverable: the only flow that creates that account
+  runs `rotate`.
+
+  `excludeCredentials` is now empty for rotation, matching the
+  maximum-credentials check that already skipped when `args.continuation` is
+  set. Plain registration is unchanged and still prevents re-enrolling a key the
+  user already holds.
+
+- The security-key predicate no longer treats an unreported transport list as
+  disqualifying. `getTransports()` is an unsigned client hint and browsers
+  disagree on it: an empty sequence is permitted by the spec, and `smart-card`
+  is a registered transport that a three-value allow-list never anticipated.
+  Requiring every reported transport to match rejected genuine hardware keys
+  _after_ the user had already touched them, while denying an attacker nothing
+  — the value is client-supplied. Only a positively non-roaming transport
+  (`internal`, `hybrid`) now disqualifies a credential; the signed backup-state
+  flags continue to carry the policy.
+
 ## 0.0.9
 
 ### Breaking
