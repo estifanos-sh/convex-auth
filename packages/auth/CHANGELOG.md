@@ -22,7 +22,7 @@
   disagree on it: an empty sequence is permitted by the spec, and `smart-card`
   is a registered transport that a three-value allow-list never anticipated.
   Requiring every reported transport to match rejected genuine hardware keys
-  *after* the user had already touched them, while denying an attacker nothing
+  _after_ the user had already touched them, while denying an attacker nothing
   — the value is client-supplied. Only a positively non-roaming transport
   (`internal`, `hybrid`) now disqualifies a credential; the signed backup-state
   flags continue to carry the policy.
