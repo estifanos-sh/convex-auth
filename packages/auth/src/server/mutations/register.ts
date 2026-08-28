@@ -20,6 +20,16 @@ export const vCreateAccountFromCredentialsArgs = v.object({
   profile: vPayloadRecord,
   shouldLinkViaEmail: v.optional(v.boolean()),
   shouldLinkViaPhone: v.optional(v.boolean()),
+  /**
+   * Whether `provider` may resolve against `config.extraProviders`.
+   *
+   * The action side knows this (a credentials provider delegating to one of its
+   * own extra providers), but `getProviderOrThrow` runs on the far side of the
+   * `auth:store` mutation, so the only way the answer reaches it is as an
+   * argument. Omitting it silently narrows the registry to top-level providers
+   * and an extra provider fails with `PROVIDER_NOT_CONFIGURED`.
+   */
+  allowExtraProviders: v.boolean(),
 });
 
 type ReturnType = { account: Doc<"Account">; user: Doc<"User"> };
@@ -74,7 +84,10 @@ export async function createAccountFromHashedCredentialsImpl(
   getProviderOrThrow: Provider.GetProviderOrThrowFunc,
   config: Provider.Config,
 ): Promise<ReturnType> {
-  const provider = getProviderOrThrow(args.provider) as ConvexCredentialsConfig;
+  const provider = getProviderOrThrow(
+    args.provider,
+    args.allowExtraProviders,
+  ) as ConvexCredentialsConfig;
   const existing = await authDb(ctx, config).accounts.get({
     provider: provider.id,
     providerAccountId: args.account.id,
@@ -102,9 +115,16 @@ export async function createAccountFromCredentialsImpl(
     },
   });
 
-  const { provider: providerId, account, profile, shouldLinkViaEmail, shouldLinkViaPhone } = args;
+  const {
+    provider: providerId,
+    account,
+    profile,
+    shouldLinkViaEmail,
+    shouldLinkViaPhone,
+    allowExtraProviders,
+  } = args;
   const db = authDb(ctx, config);
-  const provider = getProviderOrThrow(providerId) as ConvexCredentialsConfig;
+  const provider = getProviderOrThrow(providerId, allowExtraProviders) as ConvexCredentialsConfig;
   const typedProfile = profile as AuthProfile;
 
   const existingAccount = (await db.accounts.get({
@@ -125,6 +145,7 @@ export async function createAccountFromCredentialsImpl(
         profile: typedProfile,
         shouldLinkViaEmail,
         shouldLinkViaPhone,
+        allowExtraProviders,
       },
       provider,
       config,

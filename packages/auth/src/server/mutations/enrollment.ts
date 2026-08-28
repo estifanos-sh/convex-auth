@@ -82,6 +82,9 @@ export async function completeCredentialEnrollmentImpl(
       profile: enrollment.profile,
       shouldLinkViaEmail: enrollment.shouldLinkViaEmail,
       shouldLinkViaPhone: enrollment.shouldLinkViaPhone,
+      // The provider id comes from the staged enrollment record, not the
+      // caller, and staging already resolved it against the full registry.
+      allowExtraProviders: true,
     },
     services.providerRegistry.getProviderOrThrow,
     services.config,

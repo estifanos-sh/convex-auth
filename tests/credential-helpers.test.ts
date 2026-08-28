@@ -70,6 +70,7 @@ test("credentials.verify binds a verified credentials account to passkey sign-in
   expect(callGetAccountWithCredentials).toHaveBeenCalledWith(expect.anything(), {
     provider: "pin",
     account: { id: "member@example.com", secret: "1234" },
+    allowExtraProviders: true,
   });
   expect(continueWithProvider).toHaveBeenCalledWith(expect.anything(), {
     userId: "user",

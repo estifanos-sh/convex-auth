@@ -27,22 +27,34 @@ type CredentialsAccountResult = {
   account: { _id: string; userId: string; secret?: string | null };
   user: Record<string, unknown>;
 };
+/**
+ * Provider resolution happens inside the `auth:store` mutation, so every store
+ * call has to say whether the provider id may name one of a credentials
+ * provider's `extraProviders`. These entry points are server-only — an app or a
+ * provider's `authorize` names the provider directly and the store mutation is
+ * internal — so the whole configured registry is in scope and the answer is
+ * always `true`. The narrowing lookup belongs to the client-facing `signIn`
+ * action and the OAuth HTTP routes, which never route through here.
+ */
+export type ProviderScope = { allowExtraProviders: boolean };
+/** @internal */
+export const SERVER_TRUSTED_SCOPE: ProviderScope = { allowExtraProviders: true };
 
 export type AccountDeps = {
   config: ReturnType<typeof configDefaults>;
   callCreateAccountFromCredentials: <DataModel extends GenericDataModel>(
     ctx: GenericActionCtx<DataModel>,
-    args: CreateAccountArgs,
+    args: CreateAccountArgs & ProviderScope,
   ) => Promise<CredentialsAccountResult>;
   callGetAccountWithCredentials: <DataModel extends GenericDataModel>(
     ctx: GenericActionCtx<DataModel>,
-    args: GetAccountArgs,
+    args: GetAccountArgs & ProviderScope,
   ) => Promise<
     CredentialsAccountResult | "InvalidAccountId" | "InvalidSecret" | "TooManyFailedAttempts"
   >;
   callUpdateAccount: <DataModel extends GenericDataModel>(
     ctx: GenericActionCtx<DataModel>,
-    args: UpdateAccountCredentialsArgs,
+    args: UpdateAccountCredentialsArgs & ProviderScope,
   ) => Promise<void>;
 };
 
@@ -85,7 +97,10 @@ export function createAccountDomain(deps: AccountDeps) {
       ctx: GenericActionCtx<DataModel>,
       args: CreateAccountArgs,
     ) => {
-      const created = await callCreateAccountFromCredentials(ctx, args);
+      const created = await callCreateAccountFromCredentials(ctx, {
+        ...args,
+        ...SERVER_TRUSTED_SCOPE,
+      });
       return { ...created };
     },
     /**
@@ -117,7 +132,10 @@ export function createAccountDomain(deps: AccountDeps) {
       ctx: GenericActionCtx<DataModel>,
       args: GetAccountArgs,
     ) => {
-      const result = await callGetAccountWithCredentials(ctx, args);
+      const result = await callGetAccountWithCredentials(ctx, {
+        ...args,
+        ...SERVER_TRUSTED_SCOPE,
+      });
       if (typeof result === "string") {
         return null;
       }
@@ -149,7 +167,7 @@ export function createAccountDomain(deps: AccountDeps) {
       ctx: GenericActionCtx<DataModel>,
       args: UpdateAccountCredentialsArgs,
     ) => {
-      await callUpdateAccount(ctx, args);
+      await callUpdateAccount(ctx, { ...args, ...SERVER_TRUSTED_SCOPE });
       return { accountId: args.account.id };
     },
   };

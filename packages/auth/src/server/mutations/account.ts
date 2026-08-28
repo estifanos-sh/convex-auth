@@ -13,6 +13,11 @@ import { AUTH_STORE_REF } from "./store/refs";
 export const vUpdateAccountArgs = v.object({
   provider: v.string(),
   account: v.object({ id: v.string(), secret: v.string() }),
+  /**
+   * Whether `provider` may resolve against `config.extraProviders`; see
+   * `vCreateAccountFromCredentialsArgs` for why it has to cross the wire.
+   */
+  allowExtraProviders: v.boolean(),
 });
 
 export async function updateAccountImpl(
@@ -21,7 +26,7 @@ export async function updateAccountImpl(
   getProviderOrThrow: GetProviderOrThrowFunc,
   config: Provider.Config,
 ): Promise<void> {
-  const { provider, account } = args;
+  const { provider, account, allowExtraProviders } = args;
   const db = authDb(ctx, config);
 
   log(LOG_LEVELS.DEBUG, "updateAccountImpl args:", {
@@ -38,7 +43,10 @@ export async function updateAccountImpl(
     );
   }
 
-  const hashedSecret = await hash(getProviderOrThrow(provider), account.secret);
+  const hashedSecret = await hash(
+    getProviderOrThrow(provider, allowExtraProviders),
+    account.secret,
+  );
   await db.accounts.update(existingAccount._id, {
     secret: hashedSecret,
   });

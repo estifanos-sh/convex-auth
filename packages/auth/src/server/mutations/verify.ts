@@ -137,7 +137,7 @@ async function verifyCodeAndSignInImplInner(
 
     const methodProvider = isGroupProviderId(account.provider)
       ? createSyntheticOAuthMaterializedConfig(account.provider)
-      : getProviderOrThrow(account.provider);
+      : getProviderOrThrow(account.provider, allowExtraProviders);
 
     const replaceSession = await getAuthSessionReplacement(ctx);
     const replaceSessionId = replaceSession?.sessionId ?? null;

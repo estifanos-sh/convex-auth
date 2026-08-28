@@ -54,10 +54,15 @@ const DUMMY_PASSWORD_HASH =
 async function burnVerifyForTiming(
   getProviderOrThrow: Provider.GetProviderOrThrowFunc,
   providerId: string,
+  allowExtraProviders: boolean,
   secret: string,
 ): Promise<void> {
   try {
-    await Provider.verify(getProviderOrThrow(providerId), secret, DUMMY_PASSWORD_HASH);
+    await Provider.verify(
+      getProviderOrThrow(providerId, allowExtraProviders),
+      secret,
+      DUMMY_PASSWORD_HASH,
+    );
   } catch {
     // Intentionally ignored — this path exists only to equalize timing.
   }
@@ -70,6 +75,11 @@ export const vCredentialsSignInArgs = v.object({
   generateTokens: v.boolean(),
   requireVerifiedEmail: v.boolean(),
   enforceTotp: v.boolean(),
+  /**
+   * Whether `provider` may resolve against `config.extraProviders`; see
+   * `vCreateAccountFromCredentialsArgs` for why it has to cross the wire.
+   */
+  allowExtraProviders: v.boolean(),
 });
 
 type CredentialsSignInResult =
@@ -128,7 +138,14 @@ async function credentialsSignInInner(
   getProviderOrThrow: Provider.GetProviderOrThrowFunc,
   config: Provider.Config,
 ): Promise<CredentialsSignInResult> {
-  const { provider: providerId, account, generateTokens, requireVerifiedEmail, enforceTotp } = args;
+  const {
+    provider: providerId,
+    account,
+    generateTokens,
+    requireVerifiedEmail,
+    enforceTotp,
+    allowExtraProviders,
+  } = args;
   const limitIdentifier = credentialsSignInLimitIdentifier(providerId, account.id);
   log(LOG_LEVELS.DEBUG, "credentialsSignInImpl args:", {
     provider: providerId,
@@ -164,7 +181,7 @@ async function credentialsSignInInner(
     // the same cost here before returning the unified rejection. Without this a
     // missing account returns early and its faster response leaks (by timing)
     // that the account does not exist. Result intentionally ignored.
-    await burnVerifyForTiming(getProviderOrThrow, providerId, account.secret);
+    await burnVerifyForTiming(getProviderOrThrow, providerId, allowExtraProviders, account.secret);
     return { kind: "invalidAccount" };
   }
   if (begun.status === "limited") {
@@ -175,7 +192,7 @@ async function credentialsSignInInner(
 
   const verified = await withSpan("convex-auth.credentials.verify", { providerId }, () =>
     Provider.verify(
-      getProviderOrThrow(providerId),
+      getProviderOrThrow(providerId, allowExtraProviders),
       account.secret,
       (existingAccount.secret ?? "") as Hashed<"Password">,
     ),

@@ -1,5 +1,39 @@
 # Changelog
 
+## 0.0.12
+
+### Fixed
+
+- A provider reachable only through another provider's `extraProviders` can
+  create an account again. Delegating a sign-in to one — the shape a preview or
+  gateway provider uses when its `authorize` hands off to an `anonymous()` or
+  `password()` provider it registered privately — failed with
+  `PROVIDER_NOT_CONFIGURED`, naming only the top-level providers.
+
+  `allowExtraProviders` is established in the action that starts the sign-in,
+  but the account work runs inside the internal `auth:store` mutation, and the
+  flag had no way to get there: `createAccountFromCredentials` and its
+  neighbours never carried it, so `getProviderOrThrow` fell back to the
+  top-level registry and refused a provider the app had configured. The
+  verify-code and create-code paths already passed the flag across that
+  boundary; the account paths now do too.
+
+  Four store calls were losing it, and all four are fixed:
+  `createAccountFromCredentials` (`auth.account.create`),
+  `getAccountWithCredentials` (`auth.account.get`), `credentialsSignIn`
+  (password verification), and `updateAccount` (`auth.account.update`).
+  `auth.account.get` failed the most quietly of the four — its `catch` turned
+  the configuration error into `"InvalidAccountId"`, so a misconfigured lookup
+  read back as "invalid credentials". Passkey enrollment staged against an
+  extra credentials provider, and the account-provider lookup inside
+  verify-code sign-in, were losing it the same way and are fixed with it.
+
+  Client-facing entry points are unchanged: `api.auth.signIn` and the OAuth
+  HTTP routes still resolve only top-level providers, so an extra provider
+  remains unreachable except through the provider that registered it.
+
+  Broken since extra providers were introduced.
+
 ## 0.0.11
 
 ### Fixed
