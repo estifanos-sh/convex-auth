@@ -16,7 +16,12 @@ import { createContextDomain } from "./domains/context";
 import { createKeyDomain } from "./domains/key";
 import { createInviteDomain } from "./domains/invite";
 import { createMemberDomain } from "./domains/member";
-import { createAccountDomain, createAccountManagementDomain } from "./domains/account";
+import {
+  SERVER_TRUSTED_SCOPE,
+  createAccountDomain,
+  createAccountManagementDomain,
+} from "./domains/account";
+import type { ProviderScope } from "./domains/account";
 import { createUserDomain } from "./domains/user";
 import { createGroupDomain } from "./domains/group";
 import { capGrantsForCaller, resolveOAuthCaller } from "./domains/access";
@@ -62,17 +67,17 @@ type CoreDeps = {
   ) => Promise<void>;
   callCreateAccountFromCredentials: <DataModel extends GenericDataModel>(
     ctx: GenericActionCtx<DataModel>,
-    args: CreateAccountArgs,
+    args: CreateAccountArgs & ProviderScope,
   ) => Promise<CredentialsAccountResult>;
   callGetAccountWithCredentials: <DataModel extends GenericDataModel>(
     ctx: GenericActionCtx<DataModel>,
-    args: GetAccountArgs,
+    args: GetAccountArgs & ProviderScope,
   ) => Promise<
     CredentialsAccountResult | "InvalidAccountId" | "InvalidSecret" | "TooManyFailedAttempts"
   >;
   callUpdateAccount: <DataModel extends GenericDataModel>(
     ctx: GenericActionCtx<DataModel>,
-    args: UpdateAccountCredentialsArgs,
+    args: UpdateAccountCredentialsArgs & ProviderScope,
   ) => Promise<void>;
   getEnrichCtx: () => <DataModel extends GenericDataModel>(
     ctx: GenericActionCtx<DataModel>,
@@ -276,6 +281,7 @@ export function createCoreDomains(deps: CoreDeps) {
       const verified = await callGetAccountWithCredentials(ctx, {
         provider: args.verifier.id,
         account: args.account,
+        ...SERVER_TRUSTED_SCOPE,
       });
       if (typeof verified === "string") {
         throw convexError(
@@ -318,6 +324,7 @@ export function createCoreDomains(deps: CoreDeps) {
       const existing = await callGetAccountWithCredentials(ctx, {
         provider: args.verifier.id,
         account: args.account,
+        ...SERVER_TRUSTED_SCOPE,
       });
       if (typeof existing !== "string") {
         return await deps.continueWithProvider(ctx, {

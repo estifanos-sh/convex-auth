@@ -259,6 +259,9 @@ export function password<
             generateTokens: true,
             requireVerifiedEmail: verifyProvider !== undefined,
             enforceTotp: true,
+            // `password` itself may be registered as another credentials
+            // provider's extra provider, so the store lookup has to see them.
+            allowExtraProviders: true,
           });
           if (result.kind === "invalidAccount" || result.kind === "invalidSecret") {
             throw convexError(ErrorCode.INVALID_CREDENTIALS, "Invalid credentials");
@@ -435,6 +438,7 @@ export function password<
             generateTokens: true,
             requireVerifiedEmail: false,
             enforceTotp: false,
+            allowExtraProviders: true,
           });
           if (result.kind === "invalidAccount" || result.kind === "invalidSecret") {
             throw convexError(ErrorCode.INVALID_CREDENTIALS, "Invalid current password");

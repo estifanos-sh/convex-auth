@@ -327,7 +327,7 @@ export function Auth(config_: ConvexAuthConfig<any>) {
       operation: WebAuthnRotateOperation;
     },
   ) => {
-    const verifier = getProviderOrThrow(args.verifier.id) as ConvexCredentialsConfig;
+    const verifier = getProviderOrThrow(args.verifier.id, true) as ConvexCredentialsConfig;
     const expirationTime =
       Date.now() + (args.operation.provider.options.challengeExpirationMs ?? 300_000);
     const secret =

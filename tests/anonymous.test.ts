@@ -44,3 +44,25 @@ test("anonymous sign-in is not auto-converted during email sign-in", async () =>
   expect(viewer).toMatchObject({ email: "mike@gmail.com" });
   expect(viewer?.isAnonymous).not.toEqual(true);
 });
+
+test("a provider reachable only through `extraProviders` can create its account", async () => {
+  const t = convexTest(schema);
+  const tokens = expectSignInSession(
+    await t.action(api.auth.signIn, { request: { provider: "preview" } }),
+  );
+  expect(tokens).not.toBeNull();
+
+  const claims = decodeJwt(tokens!.token);
+  const viewer = await t.run(async (ctx) => {
+    return await auth.user.get(ctx as any, { id: subjectToUserId(claims.sub) });
+  });
+  expect(viewer?.isAnonymous).toEqual(true);
+});
+
+test("an extra provider is still not directly reachable from the client", async () => {
+  const t = convexTest(schema);
+
+  await expect(
+    t.action(api.auth.signIn, { request: { provider: "guest" } } as never),
+  ).rejects.toThrow(/literal|provider|argument/i);
+});

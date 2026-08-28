@@ -12,6 +12,11 @@ import { AUTH_STORE_REF } from "./store/refs";
 export const vGetAccountWithCredentialsArgs = v.object({
   provider: v.string(),
   account: v.object({ id: v.string(), secret: v.optional(v.string()) }),
+  /**
+   * Whether `provider` may resolve against `config.extraProviders`; see
+   * `vCreateAccountFromCredentialsArgs` for why it has to cross the wire.
+   */
+  allowExtraProviders: v.boolean(),
 });
 
 type ReturnType =
@@ -26,7 +31,7 @@ export async function getAccountWithCredentialsImpl(
   getProviderOrThrow: Provider.GetProviderOrThrowFunc,
   config: Provider.Config,
 ): Promise<ReturnType> {
-  const { provider: providerId, account } = args;
+  const { provider: providerId, account, allowExtraProviders } = args;
   const limitIdentifier = credentialsSignInLimitIdentifier(providerId, account.id);
   log(LOG_LEVELS.DEBUG, "getAccountWithCredentialsImpl args:", {
     provider: providerId,
@@ -55,7 +60,7 @@ export async function getAccountWithCredentialsImpl(
       const accountSecret = account.secret;
       const valid = await withSpan("convex-auth.credentials.verify", { providerId }, () =>
         Provider.verify(
-          getProviderOrThrow(providerId),
+          getProviderOrThrow(providerId, allowExtraProviders),
           accountSecret,
           (existingAccount.secret ?? "") as Hashed<"Password">,
         ),

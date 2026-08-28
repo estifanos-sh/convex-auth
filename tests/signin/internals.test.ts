@@ -192,6 +192,7 @@ test("credentialsSignIn skips session issuance when email verification is requir
       generateTokens: true,
       requireVerifiedEmail: true,
       enforceTotp: true,
+      allowExtraProviders: false,
     },
     () =>
       ({
@@ -239,6 +240,7 @@ test("credentialsSignIn resolves TOTP enrollment in the begin transaction", asyn
       generateTokens: true,
       requireVerifiedEmail: false,
       enforceTotp: true,
+      allowExtraProviders: false,
     },
     () =>
       ({
@@ -524,6 +526,7 @@ test("credentialsSignIn verifies against a dummy hash when the account is missin
       generateTokens: true,
       requireVerifiedEmail: false,
       enforceTotp: false,
+      allowExtraProviders: false,
     },
     () =>
       ({
