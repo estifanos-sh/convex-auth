@@ -146,7 +146,7 @@ export const list = query({
       .order(order)
       .filterWith(
         async (d) =>
-          (where.isAnonymous === undefined || d.isAnonymous === where.isAnonymous) &&
+          (where.isAnonymous === undefined || (d.isAnonymous ?? false) === where.isAnonymous) &&
           (where.name === undefined || d.name === where.name) &&
           (where.email === undefined || d.email === where.email) &&
           (where.phone === undefined || d.phone === where.phone),

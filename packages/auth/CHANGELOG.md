@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.0.11
+
+### Fixed
+
+- `user.list({ where: { isAnonymous: false } })` now returns non-anonymous
+  users instead of nothing. `isAnonymous` is only ever written by the anonymous
+  provider, which sets it to `true` — no code path writes `false` — so every
+  other user leaves the field absent. The filter compared that absent value
+  against `false` and rejected every row, which turned a "real accounts only"
+  roster into an empty list. The obvious workaround fails a second way: `list`
+  defaults to `order: "desc"` on `_creationTime`, so fetching everyone and
+  filtering client-side buries older non-anonymous users behind newer anonymous
+  ones.
+
+  An absent `isAnonymous` now reads as `false`. `where: { isAnonymous: true }`
+  is unchanged and omitting the key still applies no filter, so no caller that
+  worked before behaves differently — nothing could match `false` previously.
+  `numItems` counts matches rather than rows scanned, so a single page still
+  fills with non-anonymous users however many anonymous ones precede them.
+
 ## 0.0.10
 
 ### Fixed
