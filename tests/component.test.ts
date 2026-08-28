@@ -1010,6 +1010,76 @@ test("user.list honors a phone filter even when ordering by email", async () => 
   expect(filtered.page.map((user: any) => user.phone)).toEqual(["+15550001111"]);
 });
 
+test("user.list treats a missing isAnonymous as false", async () => {
+  const t = convexTest(schema);
+
+  await t.run(async (ctx) => {
+    await ctx.runMutation(components.auth.user.create, {
+      data: { email: "staff@example.com" },
+    });
+    await ctx.runMutation(components.auth.user.create, {
+      data: { email: "guest@example.com", isAnonymous: true },
+    });
+  });
+
+  // Regression: only the anonymous provider ever writes `isAnonymous`, so every
+  // other user leaves the field absent and `isAnonymous: false` matched nobody.
+  const real = await t.run(async (ctx) => {
+    return await ctx.runQuery(components.auth.user.list, {
+      where: { isAnonymous: false },
+      paginationOpts: { numItems: 10, cursor: null },
+    });
+  });
+
+  expect(real.page.map((user: any) => user.email)).toEqual(["staff@example.com"]);
+
+  const anonymous = await t.run(async (ctx) => {
+    return await ctx.runQuery(components.auth.user.list, {
+      where: { isAnonymous: true },
+      paginationOpts: { numItems: 10, cursor: null },
+    });
+  });
+
+  expect(anonymous.page.map((user: any) => user.email)).toEqual(["guest@example.com"]);
+
+  const everyone = await t.run(async (ctx) => {
+    return await ctx.runQuery(components.auth.user.list, {
+      paginationOpts: { numItems: 10, cursor: null },
+    });
+  });
+
+  expect(
+    everyone.page.map((user: any) => user.email).sort((a: string, b: string) => a.localeCompare(b)),
+  ).toEqual(["guest@example.com", "staff@example.com"]);
+});
+
+test("user.list fills a page with non-anonymous users past newer anonymous ones", async () => {
+  const t = convexTest(schema);
+
+  await t.run(async (ctx) => {
+    await ctx.runMutation(components.auth.user.create, {
+      data: { email: "oldest-staff@example.com" },
+    });
+    for (let index = 0; index < 20; index += 1) {
+      await ctx.runMutation(components.auth.user.create, {
+        data: { email: `guest-${index}@example.com`, isAnonymous: true },
+      });
+    }
+  });
+
+  // `numItems` counts matches, not rows scanned, so the default newest-first
+  // order cannot bury the only real user behind a page of anonymous ones.
+  const page = await t.run(async (ctx) => {
+    return await ctx.runQuery(components.auth.user.list, {
+      where: { isAnonymous: false },
+      paginationOpts: { numItems: 5, cursor: null },
+    });
+  });
+
+  expect(page.page.map((user: any) => user.email)).toEqual(["oldest-staff@example.com"]);
+  expect(page.isDone).toBe(true);
+});
+
 test("connection.update applies the patch and records a connection.updated audit event", async () => {
   const t = convexTest(schema);
 
