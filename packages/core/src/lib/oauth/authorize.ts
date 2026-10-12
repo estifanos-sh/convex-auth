@@ -64,6 +64,12 @@ export function buildStartSignIn(options: {
    */
   callbackMethod?: CallbackMethod;
   /**
+   * Parameters the provider's authorization endpoint needs beyond the
+   * standard ones, such as WorkOS's `provider=authkit`. They can't override a
+   * standard parameter.
+   */
+  authorizationParams?: Readonly<Record<string, string>>;
+  /**
    * Record the request in the provider's component, and return what the
    * authorization URL needs.
    *
@@ -113,6 +119,7 @@ export function buildStartSignIn(options: {
             );
 
       const params: Record<string, string> = {
+        ...options.authorizationParams,
         response_type: "code",
         client_id: clientId,
         redirect_uri: callbackUrl,

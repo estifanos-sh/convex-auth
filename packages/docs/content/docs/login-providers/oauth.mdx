@@ -1,5 +1,5 @@
 ---
-title: OAuth (Apple, Google, and GitHub)
+title: OAuth (Apple, Google, GitHub, and WorkOS)
 description: Allow users to sign-in with an account on a supported provider.
 ---
 
@@ -7,11 +7,13 @@ import { Step, Steps } from "fumadocs-ui/components/steps";
 import { Tab, Tabs } from "fumadocs-ui/components/tabs";
 
 The oauth components and supporting provider functions (`apple`,
-`google`, `github`) allow your users to login via their existing
-Apple, Google, or GitHub accounts.
+`google`, `github`, `workos`) allow your users to login via their existing
+Apple, Google, or GitHub accounts, or through WorkOS AuthKit, which signs them
+in with their organization's SSO or the methods your WorkOS environment
+enables.
 
-The steps below will guide you through configuring Apple, Google, and/or
-GitHub login. In the end, your Convex deployment will host HTTP routes for
+The steps below will guide you through configuring Apple, Google, GitHub,
+and/or WorkOS login. In the end, your Convex deployment will host HTTP routes for
 handling the OAuth callbacks and redirect back to your application for handling
 the result.
 
@@ -83,7 +85,7 @@ Pick the provider you want to wire up:
 
 {/* prettier-ignore-start */}
 
-<Tabs items={["Apple", "Google", "GitHub"]}>
+<Tabs items={["Apple", "Google", "GitHub", "WorkOS"]}>
 
 <Tab value="Apple">
 
@@ -442,6 +444,126 @@ Include an `App.tsx` like the following in your application:
 
 <include lang="tsx" meta='title="src/App.tsx"'>
   ../../../../../examples/react-github/src/App.tsx
+</include>
+
+</Step>
+
+</Steps>
+
+</Tab>
+
+<Tab value="WorkOS">
+
+<Steps>
+
+<Step>
+
+**Configure the WorkOS environment and its environment variables**
+
+To allow users to login to your app via WorkOS, you'll need a WorkOS
+environment with AuthKit enabled.
+
+<Callout type="info">
+Follow the [AuthKit
+instructions](https://workos.com/docs/authkit) to enable the sign-in methods
+and SSO connections your users need before proceeding.
+
+WorkOS will require you to add a redirect URI to the environment.
+
+The redirect URI will be based on your `CONVEX_SITE_URL`; something like
+`https://happy-animal-123.convex.site/oauth/workos/callback`. You can get your actual `CONVEX_SITE_URL` with this command:
+
+```sh
+npx convex env get CONVEX_SITE_URL
+```
+
+</Callout>
+
+The environment has a client ID and an API key. WorkOS authenticates the code
+exchange with the API key, so it takes the place of a client secret. You will
+store both values as [environment
+variables](https://docs.convex.dev/production/environment-variables#declaring)
+on your Convex deployment.
+
+Here are the Convex CLI commands to do that (you'll need to substitute your
+actual client ID and API key values):
+
+```sh
+npx convex env set AUTH_WORKOS_CLIENT_ID YOUR_WORKOS_CLIENT_ID
+npx convex env set AUTH_WORKOS_API_KEY YOUR_WORKOS_API_KEY
+```
+
+</Step>
+
+<Step>
+
+**Install the component**
+
+Register the WorkOS oauth component alongside the core in
+`convex/convex.config.ts`. You will declare the environment variables that you
+created above as part of your application's `env` and then pass those values to
+the component.
+
+<include
+  lang="ts"
+  meta='title="convex/convex.config.ts" highlight="import workos from" highlight="app.use(workos, {...});" highlight="AUTH_WORKOS_CLIENT_ID:" highlight="AUTH_WORKOS_API_KEY:"'
+>
+  ../../../../../examples/react-workos/convex/convex.config.ts
+</include>
+
+</Step>
+
+<Step>
+
+**Set up user creation**
+
+Write a `createUser` mutation that creates a row in your `users` table and
+returns its id. The provider calls it the first time it sees an account.
+
+The profile carries the organization the user signed in to, when the sign-in
+was scoped to one, and how they authenticated. A sign-in by a WorkOS admin
+impersonating a user is refused before your callbacks run, because the session
+would carry nothing that says who is acting.
+
+<include lang="ts" meta='title="convex/users.ts"'>
+  ../../../../../examples/react-workos/convex/users.ts
+</include>
+
+</Step>
+
+<Step>
+
+**Set up the public backend functions**
+
+Set up the WorkOS provider with `workos` and export the mutations for
+starting and completing OAuth login that it hands back once you attach the
+callback that creates your user rows, in `convex/auth.ts`:
+
+<include
+  lang="ts"
+  meta='title="convex/auth.ts" highlight="import { workos }" highlight="export const { startSignInWithWorkos...).attachUserCallbacks({ createUser: internal.users.createUser });"'
+>
+  ../../../../../examples/react-workos/convex/auth.ts
+</include>
+
+Just like `createUser` is attached here, you can also attach an optional
+`onSignIn` mutation, called with the resolved `userId` on every sign-in, the
+first one included. Anything you want to happen each time someone signs in
+belongs there, so `createUser` only has to handle what is true at creation
+time. This example doesn't use it, but it's available if you need it.
+
+</Step>
+
+<Step>
+
+**Set up the authentication UI**
+
+In your front-end, install hooks and attach listeners for initiating OAuth login.
+
+Include an `App.tsx` like the following in your application:
+
+<include lang="tsx" meta='title="src/App.tsx"'>
+  ../../../../../examples/react-workos/src/App.tsx
 </include>
 
 </Step>

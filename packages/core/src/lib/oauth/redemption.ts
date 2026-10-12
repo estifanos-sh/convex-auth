@@ -36,19 +36,22 @@ export type OidcClaims = {
  * - `claims`: validated id_token claims, for a provider that returns one.
  * - `userInfoResponses`: the responses from the configured userinfo
  *   endpoints, keyed as configured.
+ * - `tokenResponse`: the identity fields of the token response itself, for a
+ *   provider that returns the user alongside its tokens (WorkOS).
  * - `callbackParams`: extra data the provider sent to the callback itself
  *   as a query or form field rather than through a token, already sanitized
  *   by the component that accepted it. It is browser-relayed and therefore
  *   user-controlled, unlike the other two.
  *
- * At least one of `claims` and `userInfoResponses` is always present: the
- * callback refuses a flow that produced neither.
+ * At least one of `claims`, `userInfoResponses` and `tokenResponse` is always
+ * present: the callback refuses a flow that produced none of them.
  */
 export type TicketPayload<
   UserInfo extends Record<string, unknown> = Record<string, unknown>,
 > = {
   claims?: OidcClaims;
   userInfoResponses?: UserInfo;
+  tokenResponse?: Record<string, unknown>;
   callbackParams?: Record<string, unknown>;
 };
 

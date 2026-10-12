@@ -269,6 +269,8 @@ export function testAuthorizationUrl(
      * callback.
      */
     responseMode?: string;
+    /** Parameters the provider's endpoint needs beyond the standard ones. */
+    params?: Record<string, string>;
   },
 ): void {
   describe("authorization URL", () => {
@@ -296,6 +298,9 @@ export function testAuthorizationUrl(
       expect(params.get("state")).toBe(state);
       expect(params.get("scope")).toBe(expected.scope ?? null);
       expect(params.get("response_mode")).toBe(expected.responseMode ?? null);
+      for (const [name, value] of Object.entries(expected.params ?? {})) {
+        expect(params.get(name)).toBe(value);
+      }
 
       // The row is only there if startSignIn reached the component through the
       // mutation reference it was handed.

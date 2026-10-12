@@ -19,7 +19,7 @@ This is a pnpm monorepo:
 - `component/` — the core Convex component (`auth`): sessions, accounts, JWTs.
 - `components/<name>/` — the optional Convex components (`username`,
   `password`, `email`, `passkey`, `totp`, `anonymous`, `oauth`, `google`,
-  `apple`, `github`).
+  `apple`, `github`, `workos`).
 - `methods/<method>/` — the sign-in methods, which use one or more
   components: `server.ts` (Convex functions of the app), `react.tsx` (hooks),
   and the browser code.

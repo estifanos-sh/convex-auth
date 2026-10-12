@@ -125,17 +125,9 @@ export async function fetchRefusingRedirects(
  * endpoint. Credentials go in the POST body because HTTP Basic has a
  * form-urlencoding ambiguity many providers get wrong.
  */
-export async function exchangeCode(args: {
-  tokenEndpoint: string;
-  code: string;
-  callbackUrl: string;
-  codeVerifier: string;
-  clientId: string;
-  clientSecret: string;
-}): Promise<{
-  idToken: IssuerDeliveredJwt | undefined;
-  accessToken: string | undefined;
-}> {
+export async function exchangeCode(
+  args: CodeExchange,
+): Promise<ExchangedTokens> {
   const body = new URLSearchParams({
     grant_type: "authorization_code",
     code: args.code,
@@ -263,6 +255,28 @@ export type CallbackRequestParams = {
   errorDescription: string | null;
 };
 
+/** What a code exchange sends to the provider's token endpoint. */
+export type CodeExchange = {
+  tokenEndpoint: string;
+  code: string;
+  callbackUrl: string;
+  codeVerifier: string;
+  clientId: string;
+  clientSecret: string;
+};
+
+/**
+ * What a code exchange returns. A provider attests identity through an
+ * id_token, through userinfo endpoints called with the access token, or, for
+ * a provider that returns the user alongside its tokens, through the fields of
+ * the token response itself.
+ */
+export type ExchangedTokens = {
+  idToken: IssuerDeliveredJwt | undefined;
+  accessToken: string | undefined;
+  tokenResponse?: Record<string, unknown>;
+};
+
 /** What every component's claimed authorization request has in common. */
 export type ClaimedRequest = {
   stateHash: string;
@@ -300,6 +314,13 @@ export type ExchangeConfig = {
   issuers?: string[];
   /** Endpoints to fetch with the access token, keyed as the mapping reads them. */
   userInfoEndpoints?: Record<string, string>;
+  /**
+   * Exchange the code in place of {@link exchangeCode}, for a provider whose
+   * token endpoint doesn't take the standard form-encoded exchange. It runs
+   * inside the same try block, so a failure redirects back to the app with
+   * `oauth_error`.
+   */
+  exchange?: (args: CodeExchange) => Promise<ExchangedTokens>;
 };
 
 /**
@@ -396,7 +417,9 @@ export async function runCallback<Request extends ClaimedRequest>(options: {
   }
 
   try {
-    const { idToken, accessToken } = await exchangeCode({
+    const { idToken, accessToken, tokenResponse } = await (
+      config.exchange ?? exchangeCode
+    )({
       tokenEndpoint: config.tokenEndpoint,
       code: params.code,
       callbackUrl: authRequest.callbackUrl,
@@ -418,9 +441,14 @@ export async function runCallback<Request extends ClaimedRequest>(options: {
         ? undefined
         : await fetchUserInfo(config.userInfoEndpoints, accessToken);
 
-    // A provider that returns no id_token and has no configured userinfo
-    // endpoints gives us nothing to identify the user with.
-    if (claims === undefined && userInfoResponses === undefined) {
+    // A provider that returns no id_token, has no configured userinfo
+    // endpoints, and attests nothing in its token response gives us nothing
+    // to identify the user with.
+    if (
+      claims === undefined &&
+      userInfoResponses === undefined &&
+      tokenResponse === undefined
+    ) {
       throw new Error(
         "Token exchange returned no id_token and no userInfoEndpoints are configured",
       );
@@ -434,6 +462,7 @@ export async function runCallback<Request extends ClaimedRequest>(options: {
         JSON.stringify({
           claims,
           userInfoResponses,
+          tokenResponse,
           callbackParams: options.callbackParams,
         } satisfies TicketPayload),
       ),
