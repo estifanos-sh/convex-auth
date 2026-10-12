@@ -7,9 +7,11 @@ import {
   createFunctionHandle,
   type DefaultFunctionArgs,
   type FunctionReference,
+  type GenericActionCtx,
   type GenericDataModel,
   type GenericMutationCtx,
-  type GenericQueryCtx,
+  type FunctionReturnType,
+  type OptionalRestArgs,
   type PaginationOptions,
 } from "convex/server";
 import { Infer, ObjectType, v } from "convex/values";
@@ -18,6 +20,7 @@ import type { AuthCore } from "../../server/setup.ts";
 import { buildStartSignIn } from "../../lib/oauth/authorize.ts";
 import {
   buildCompleteSignIn,
+  parseUrl,
   validateAllowedRedirectOrigins,
 } from "../../lib/oauth/redemption.ts";
 import type { ComponentApi } from "../../components/workos/_generated/component.ts";
@@ -29,6 +32,7 @@ import {
   type WorkosAuthentication,
 } from "../../components/workos/constants.ts";
 
+import type { PortalIntent } from "../../components/workos/portal.ts";
 import type {
   ConnectionChange,
   DirectoryChange,
@@ -41,6 +45,10 @@ import type {
 } from "../../components/workos/changes.ts";
 
 export type { WorkosAuthentication };
+export {
+  type PortalIntent as WorkosPortalIntent,
+  vPortalIntent as vWorkosPortalIntent,
+} from "../../components/workos/portal.ts";
 export {
   vChangeKind as vWorkosChangeKind,
   vConnectionChange as vWorkosConnectionChange,
@@ -327,14 +335,31 @@ async function mint<Change extends DefaultFunctionArgs>(
     : await createFunctionHandle(handler);
 }
 
-type RunQueryCtx = Pick<GenericQueryCtx<GenericDataModel>, "runQuery">;
+/** A query, mutation or action context: anything that can run a query. */
+type RunQueryCtx = {
+  runQuery<Query extends FunctionReference<"query", "public" | "internal">>(
+    query: Query,
+    ...args: OptionalRestArgs<Query>
+  ): Promise<FunctionReturnType<Query>>;
+};
 type RunMutationCtx = Pick<GenericMutationCtx<GenericDataModel>, "runMutation">;
+type RunActionCtx = Pick<GenericActionCtx<GenericDataModel>, "runAction">;
+
+/** A domain to claim for an organization, verified or pending verification. */
+export type WorkosDomainData = {
+  domain: string;
+  state: "pending" | "verified";
+}[];
 
 /**
  * WorkOS beyond sign-in: the directory sync, which keeps a copy of the
  * WorkOS environment's organizations, users, memberships, SSO connections
  * and SCIM directories in the WorkOS component and hands every change to the
- * app's {@link WorkosHandlers}, and reads of that copy.
+ * app's {@link WorkosHandlers}; reads of that copy; the Admin Portal; ending a
+ * user's WorkOS sessions; and managing organizations and memberships.
+ *
+ * None of these checks who is calling. Call them from your own functions,
+ * internal or checking the caller, as for any admin operation.
  *
  * ```ts
  * export const enterprise = workosEnterprise(components.authWorkos, {
@@ -357,9 +382,30 @@ type RunMutationCtx = Pick<GenericMutationCtx<GenericDataModel>, "runMutation">;
  */
 export function workosEnterprise(
   component: ComponentApi,
-  options: { on?: WorkosHandlers } = {},
+  options: {
+    on?: WorkosHandlers;
+    /**
+     * Origins the Admin Portal may send an admin back to, e.g.
+     * `["https://app.example.com"]`. A portal link's `returnUrl` and
+     * `successUrl` must be on one of them; without this, they are refused and
+     * WorkOS uses the dashboard's defaults.
+     */
+    allowedRedirectOrigins?: string[];
+  } = {},
 ) {
   const on = options.on ?? {};
+  const allowedOrigins = validateAllowedRedirectOrigins(
+    options.allowedRedirectOrigins ?? [],
+  );
+  const allowed = (name: string, url: string | undefined) => {
+    if (url === undefined) return;
+    const parsed = parseUrl(url);
+    if (parsed === null || !allowedOrigins.includes(parsed.origin)) {
+      throw new Error(
+        `${name} must be an absolute URL on one of allowedRedirectOrigins`,
+      );
+    }
+  };
   for (const key of Object.keys(on)) {
     if (!(HANDLER_KINDS as readonly string[]).includes(key)) {
       throw new Error(`"${key}" is not a kind of WorkOS change`);
@@ -429,6 +475,122 @@ export function workosEnterprise(
      */
     async route(ctx: RunQueryCtx, args: { email: string }) {
       return await ctx.runQuery(component.directory.route, args);
+    },
+
+    /**
+     * A link to WorkOS's Admin Portal for one organization, where its IT
+     * admin sets up their SSO connection (`"sso"`), SCIM directory
+     * (`"dsync"`), domains (`"domain_verification"`) and the rest. The link
+     * expires after five minutes and isn't stored. Anyone holding it can
+     * change the organization's SSO, so check that the caller administers the
+     * organization before calling this.
+     */
+    async portal(
+      ctx: RunActionCtx,
+      args: {
+        organization: string;
+        intent: PortalIntent;
+        returnUrl?: string;
+        successUrl?: string;
+        /**
+         * Your id for the admin the link is for, so the link and the
+         * portal sessions it opens can be revoked from the WorkOS dashboard
+         * if they lose access.
+         */
+        externalUserId?: string;
+      },
+    ): Promise<{ link: string }> {
+      allowed("returnUrl", args.returnUrl);
+      allowed("successUrl", args.successUrl);
+      return await ctx.runAction(component.portal.link, args);
+    },
+
+    /**
+     * End every WorkOS session of a WorkOS user (`user_...`), on every
+     * device, so their next sign-in asks for their credentials again, and
+     * return how many there were. It returns once WorkOS has revoked them all
+     * and throws otherwise, so sign the user out only after it succeeds.
+     * Signing out of the app alone leaves the WorkOS session. Store the
+     * user's WorkOS id (`provider.accountId` in `createUser`) to find it here.
+     */
+    async revoke(ctx: RunActionCtx, args: { user: string }): Promise<number> {
+      return await ctx.runAction(component.sessions.revoke, args);
+    },
+
+    /**
+     * Create an organization at WorkOS. The copy and the handlers receive it
+     * through the sync, which this starts.
+     */
+    async createOrganization(
+      ctx: RunActionCtx,
+      args: { name: string; domains?: WorkosDomainData; externalId?: string },
+    ) {
+      return await ctx.runAction(component.admin.createOrganization, {
+        ...args,
+        handles: await handles(),
+      });
+    },
+
+    /** Rename an organization, or change its domains or external id. */
+    async updateOrganization(
+      ctx: RunActionCtx,
+      args: {
+        organization: string;
+        name?: string;
+        domains?: WorkosDomainData;
+        externalId?: string;
+      },
+    ) {
+      return await ctx.runAction(component.admin.updateOrganization, {
+        ...args,
+        handles: await handles(),
+      });
+    },
+
+    /** Add a WorkOS user to an organization, with a role slug. */
+    async createMembership(
+      ctx: RunActionCtx,
+      args: { user: string; organization: string; role?: string },
+    ) {
+      return await ctx.runAction(component.admin.createMembership, {
+        ...args,
+        handles: await handles(),
+      });
+    },
+
+    /** Change a membership's role. */
+    async updateMembership(
+      ctx: RunActionCtx,
+      args: { membership: string; role: string },
+    ) {
+      return await ctx.runAction(component.admin.updateMembership, {
+        ...args,
+        handles: await handles(),
+      });
+    },
+
+    /**
+     * A user's membership of an organization as WorkOS holds it right now,
+     * read from WorkOS rather than the copy, or null if they have none. The
+     * copy lags WorkOS by up to a sync; use this for an authorization that
+     * can't, like who may open the Admin Portal.
+     */
+    async fetchMembership(
+      ctx: RunActionCtx,
+      args: { user: string; organization: string },
+    ) {
+      return await ctx.runAction(component.admin.fetchMembership, args);
+    },
+
+    /** Remove a user from an organization. */
+    async deleteMembership(
+      ctx: RunActionCtx,
+      args: { membership: string },
+    ): Promise<null> {
+      return await ctx.runAction(component.admin.deleteMembership, {
+        ...args,
+        handles: await handles(),
+      });
     },
   };
 }

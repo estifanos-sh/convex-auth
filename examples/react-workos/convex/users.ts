@@ -4,8 +4,9 @@ import { internalMutation, query } from "./_generated/server";
 import { vWorkosProfile } from "@convex-dev/auth/methods/workos/server";
 
 /**
- * Create the user row for a new WorkOS account and return its id. This example
- * keeps no data in the row, but your app can put a profile here.
+ * Create the user row for a new WorkOS account and return its id. The row
+ * keeps the WorkOS user id, which revoking WorkOS sessions and the admin
+ * checks in workos.ts need.
  */
 export const createUser = internalMutation({
   args: {
@@ -16,8 +17,8 @@ export const createUser = internalMutation({
     }),
   },
   returns: v.id("users"),
-  handler: async (ctx) => {
-    return await ctx.db.insert("users", {});
+  handler: async (ctx, { provider }) => {
+    return await ctx.db.insert("users", { workosId: provider.accountId });
   },
 });
 

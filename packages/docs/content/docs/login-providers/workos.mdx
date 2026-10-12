@@ -1,5 +1,5 @@
 ---
-title: "WorkOS: enterprise SSO and SCIM"
+title: "WorkOS: enterprise SSO and SCIM for Convex Auth"
 description: Sign your customers in through their own identity provider, and keep their organizations, memberships and SCIM directories in your app.
 ---
 
@@ -151,3 +151,92 @@ The same object reads the component's copy, without calling WorkOS:
 - **An expired cursor**, when the sync hasn't run for longer than WorkOS
   keeps events, restarts from a fresh boundary and lists everything again,
   removing what was deleted in the gap.
+
+## The Admin Portal
+
+WorkOS's [Admin Portal](https://workos.com/docs/admin-portal) lets a
+customer's IT admin set up their own SSO connection, SCIM directory and
+domains, without your team in the loop. `enterprise.portal` returns a link
+to it for one organization:
+
+```ts title="convex/workos.ts"
+export const enterprise = workosEnterprise(components.authWorkos, {
+  // Where the portal may send the admin back to.
+  allowedRedirectOrigins: ["https://app.example.com"],
+  on: { membership: internal.workos.membership },
+});
+
+export const adminPortal = action({
+  args: { organization: v.string(), intent: vWorkosPortalIntent },
+  handler: async (ctx, args) => {
+    // Anyone holding the link can change the organization's SSO: check that
+    // the caller administers it, against WorkOS itself rather than the
+    // synced copy, which lags by up to a sync.
+    const workosId = await ctx.runQuery(internal.workos.callerWorkosId, {});
+    const membership =
+      workosId &&
+      (await enterprise.fetchMembership(ctx, {
+        user: workosId,
+        organization: args.organization,
+      }));
+    if (
+      !membership ||
+      membership.status !== "active" ||
+      membership.role !== "admin"
+    ) {
+      throw new ConvexError("Not an admin");
+    }
+    return await enterprise.portal(ctx, { ...args, externalUserId: workosId });
+  },
+});
+```
+
+- The intents are `"sso"`, `"dsync"`, `"domain_verification"`,
+  `"audit_logs"`, `"log_streams"`, `"certificate_renewal"` and
+  `"bring_your_own_key"`.
+- `returnUrl` and `successUrl` must be on one of `allowedRedirectOrigins`;
+  without them, WorkOS uses your dashboard's defaults.
+- `externalUserId` tags the link with the admin it is for, so you can revoke
+  it and the portal sessions it opened from the WorkOS dashboard if they lose
+  access.
+- The link expires after five minutes and isn't stored.
+
+`enterprise.fetchMembership` reads a membership from WorkOS itself. Use it for
+an authorization like this one, which can't wait for the next sync; the
+synced copy is for everything that can.
+
+## Signing out of WorkOS too
+
+`signOut` ends the user's Convex Auth session only. Their WorkOS session
+stays, so signing in again goes straight through. To end it too, revoke the
+user's WorkOS sessions, on every device, before `signOut`:
+
+```ts title="convex/workos.ts"
+export const signOutEverywhere = action({
+  args: {},
+  handler: async (ctx) => {
+    // `workosId` is the `provider.accountId` your `createUser` stored.
+    const workosId = await ctx.runQuery(internal.workos.callerWorkosId, {});
+    if (workosId !== null) await enterprise.revoke(ctx, { user: workosId });
+  },
+});
+```
+
+```tsx
+await signOutEverywhere(); // throws if WorkOS couldn't revoke the sessions
+await signOut();
+```
+
+`revoke` returns only once WorkOS has revoked every session, and throws if
+WorkOS refuses or can't be reached, so the user is never signed out of your
+app while their WorkOS session lives on unnoticed.
+
+## Managing organizations
+
+`enterprise.createOrganization`, `updateOrganization`, `createMembership`,
+`updateMembership` and `deleteMembership` change WorkOS and return what WorkOS
+returned. None of them writes the copy: each starts a sync, which applies
+WorkOS's own event for the change, so your handlers see it once and in order.
+
+Like `portal` and `revoke`, they don't check who is calling. Call them from
+internal functions, or from functions that check the caller is allowed.

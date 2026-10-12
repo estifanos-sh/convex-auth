@@ -2,7 +2,11 @@ import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
 export default defineSchema({
-  users: defineTable({}),
+  // `workosId` is the WorkOS user id (`provider.accountId` at sign-up), what
+  // revoking WorkOS sessions and the members table key on.
+  users: defineTable({ workosId: v.string() }).index("by_workosId", [
+    "workosId",
+  ]),
   // The app's own view of its customers' WorkOS organizations, kept by the
   // directory sync's handlers in workos.ts.
   organizations: defineTable({

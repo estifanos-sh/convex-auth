@@ -4,16 +4,24 @@
  * those their SCIM directories provision), and the functions an admin page
  * would call.
  */
-import { v } from "convex/values";
+import { getAuthUserId } from "@convex-dev/auth/server";
+import { ConvexError, v } from "convex/values";
 import {
   vWorkosMembershipChange,
   vWorkosOrganizationChange,
+  vWorkosPortalIntent,
   workosEnterprise,
 } from "@convex-dev/auth/methods/workos/server";
 import { components, internal } from "./_generated/api";
-import { internalMutation, internalQuery, query } from "./_generated/server";
+import {
+  action,
+  internalMutation,
+  internalQuery,
+  query,
+} from "./_generated/server";
 
 export const enterprise = workosEnterprise(components.authWorkos, {
+  allowedRedirectOrigins: ["http://localhost:5173"],
   on: {
     organization: internal.workos.organization,
     membership: internal.workos.membership,
@@ -89,5 +97,91 @@ export const membership = internalMutation({
       await ctx.db.patch("members", row._id, { role: after.role });
     }
     return null;
+  },
+});
+
+/** The caller's WorkOS user id, from their user row. */
+export const callerWorkosId = internalQuery({
+  args: {},
+  returns: v.union(v.string(), v.null()),
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (userId === null) return null;
+    const user = await ctx.db.get("users", userId);
+    return user?.workosId ?? null;
+  },
+});
+
+/**
+ * End the caller's WorkOS sessions on every device. It returns once WorkOS
+ * has revoked them, and throws otherwise; the client calls `signOut` only
+ * after it succeeds.
+ */
+export const signOutEverywhere = action({
+  args: {},
+  returns: v.null(),
+  handler: async (ctx) => {
+    const workosId: string | null = await ctx.runQuery(
+      internal.workos.callerWorkosId,
+      {},
+    );
+    if (workosId !== null) await enterprise.revoke(ctx, { user: workosId });
+    return null;
+  },
+});
+
+/**
+ * A link to WorkOS's Admin Portal, where the organization's IT admin sets up
+ * their SSO connection or SCIM directory. Anyone with the link can change the
+ * organization's SSO, so only its admins get one.
+ */
+export const adminPortal = action({
+  args: { organization: v.string(), intent: vWorkosPortalIntent },
+  returns: v.object({ link: v.string() }),
+  handler: async (ctx, args): Promise<{ link: string }> => {
+    const workosId: string | null = await ctx.runQuery(
+      internal.workos.callerWorkosId,
+      {},
+    );
+    // Checked against WorkOS itself, not the synced members: an admin removed
+    // a moment ago must not get a link before the next sync.
+    const membership =
+      workosId === null
+        ? null
+        : await enterprise.fetchMembership(ctx, {
+            user: workosId,
+            organization: args.organization,
+          });
+    if (
+      workosId === null ||
+      membership?.status !== "active" ||
+      membership.role !== "admin"
+    ) {
+      throw new ConvexError(
+        "Only an admin of the organization can open its portal.",
+      );
+    }
+    // Tagged with the admin, so their portal sessions can be revoked in
+    // WorkOS if they lose access.
+    return await enterprise.portal(ctx, { ...args, externalUserId: workosId });
+  },
+});
+
+/** The organizations the caller belongs to, from the synced members. */
+export const myOrganizations = query({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (userId === null) return [];
+    const user = await ctx.db.get("users", userId);
+    if (user === null) return [];
+    const memberships = await ctx.db
+      .query("members")
+      .withIndex("by_workosUser", (q) => q.eq("workosUser", user.workosId))
+      .take(100);
+    return memberships.map((row) => ({
+      organization: row.organization,
+      role: row.role,
+    }));
   },
 });

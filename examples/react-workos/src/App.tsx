@@ -1,5 +1,5 @@
 import { type ReactNode, useState } from "react";
-import { useConvex, useConvexAuth, useQuery } from "convex/react";
+import { useAction, useConvex, useConvexAuth, useQuery } from "convex/react";
 import { useAuthActions } from "@convex-dev/auth/react";
 import {
   useOauth,
@@ -113,12 +113,46 @@ function SignedOut(): ReactNode {
 function SignedIn(): ReactNode {
   const { signOut } = useAuthActions();
   const user = useQuery(api.users.getCurrentUser);
+  const organizations = useQuery(api.workos.myOrganizations);
+  const signOutEverywhere = useAction(api.workos.signOutEverywhere);
+  const adminPortal = useAction(api.workos.adminPortal);
   return (
     <>
       <h1>Signed in</h1>
       <p>{user?.id ?? "…"}</p>
+      {organizations?.map(({ organization, role }) => (
+        <p key={organization}>
+          {organization} ({role}){" "}
+          {role === "admin" && (
+            <button
+              type="button"
+              onClick={async () => {
+                // An IT admin sets up their organization's SSO themselves.
+                const { link } = await adminPortal({
+                  organization,
+                  intent: "sso",
+                });
+                window.location.href = link;
+              }}
+            >
+              Set up SSO
+            </button>
+          )}
+        </p>
+      ))}
       <button type="button" onClick={() => void signOut()}>
         Sign out
+      </button>
+      <button
+        type="button"
+        onClick={async () => {
+          // Ends the WorkOS sessions too, so the next sign-in asks again. If
+          // WorkOS can't revoke them, this throws and the user stays signed in.
+          await signOutEverywhere();
+          await signOut();
+        }}
+      >
+        Sign out everywhere
       </button>
     </>
   );

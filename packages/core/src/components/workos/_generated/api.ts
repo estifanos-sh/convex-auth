@@ -8,6 +8,7 @@
  * @module
  */
 
+import type * as admin from "../admin.js";
 import type * as backfill from "../backfill.js";
 import type * as changes from "../changes.js";
 import type * as constants from "../constants.js";
@@ -18,7 +19,9 @@ import type * as faults from "../faults.js";
 import type * as http from "../http.js";
 import type * as lane from "../lane.js";
 import type * as mirror from "../mirror.js";
+import type * as portal from "../portal.js";
 import type * as provider from "../provider.js";
+import type * as sessions from "../sessions.js";
 import type * as stream from "../stream.js";
 import type * as wire from "../wire.js";
 import type * as workosApi from "../workosApi.js";
@@ -31,6 +34,7 @@ import type {
 import { anyApi, componentsGeneric } from "convex/server";
 
 const fullApi: ApiFromModules<{
+  admin: typeof admin;
   backfill: typeof backfill;
   changes: typeof changes;
   constants: typeof constants;
@@ -41,7 +45,9 @@ const fullApi: ApiFromModules<{
   http: typeof http;
   lane: typeof lane;
   mirror: typeof mirror;
+  portal: typeof portal;
   provider: typeof provider;
+  sessions: typeof sessions;
   stream: typeof stream;
   wire: typeof wire;
   workosApi: typeof workosApi;

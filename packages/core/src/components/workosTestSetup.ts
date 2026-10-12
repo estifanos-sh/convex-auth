@@ -8,6 +8,7 @@ import {
   type GenericMutationCtx,
   internalMutationGeneric,
   anyApi,
+  internalActionGeneric,
   internalQueryGeneric,
   makeFunctionReference,
 } from "convex/server";
@@ -18,6 +19,7 @@ import { api } from "./workos/_generated/api.ts";
 import type { ComponentApi } from "./workos/_generated/component.ts";
 import schema from "./workos/schema.ts";
 import { matches } from "./workos/wire.ts";
+import { type PortalIntent, vPortalIntent } from "./workos/portal.ts";
 import {
   type ChangeKind,
   vChangeKind,
@@ -173,7 +175,12 @@ export class FakeWorkOS {
     { directory: string; group: string; user: string }
   >();
   readonly sessions = new Map<string, Session>();
-  readonly requests: { method: string; path: string; search: string }[] = [];
+  readonly requests: {
+    method: string;
+    path: string;
+    search: string;
+    body?: Json;
+  }[] = [];
 
   private events: Event[] = [];
   private readonly grants = new Map<string, Grant>();
@@ -639,6 +646,8 @@ export class FakeWorkOS {
       request.method === "GET"
         ? {}
         : record(await request.json().catch(() => null));
+    const logged = this.requests.at(-1);
+    if (logged !== undefined && request.method !== "GET") logged.body = body;
     if (url.pathname === "/user_management/authenticate")
       return await this.authenticate(body);
     if (request.headers.get("Authorization") !== `Bearer ${this.key}`) {
@@ -920,6 +929,7 @@ async function hold(
 }
 
 const enterprise = workosEnterprise(asComponentApi<ComponentApi>(api), {
+  allowedRedirectOrigins: ["https://app.example.com"],
   on: {
     organization: anyApi.testApp.organization,
     membership: anyApi.testApp.membership,
@@ -989,6 +999,31 @@ const testApp = {
     args: {},
     handler: (ctx) => enterprise.status(ctx),
   }),
+  portal: internalActionGeneric({
+    args: {
+      organization: v.string(),
+      intent: vPortalIntent,
+      returnUrl: v.optional(v.string()),
+      externalUserId: v.optional(v.string()),
+    },
+    handler: (ctx, args) => enterprise.portal(ctx, args),
+  }),
+  revoke: internalActionGeneric({
+    args: { user: v.string() },
+    handler: (ctx, args) => enterprise.revoke(ctx, args),
+  }),
+  createOrganization: internalActionGeneric({
+    args: { name: v.string() },
+    handler: (ctx, args) => enterprise.createOrganization(ctx, args),
+  }),
+  fetchMembership: internalActionGeneric({
+    args: { user: v.string(), organization: v.string() },
+    handler: (ctx, args) => enterprise.fetchMembership(ctx, args),
+  }),
+  createMembership: internalActionGeneric({
+    args: { user: v.string(), organization: v.string(), role: v.string() },
+    handler: (ctx, args) => enterprise.createMembership(ctx, args),
+  }),
 };
 
 export const testAppRef = {
@@ -1000,6 +1035,34 @@ export const testAppRef = {
     Record<string, never>,
     Awaited<ReturnType<typeof enterprise.status>>
   >("testApp:status"),
+  portal: makeFunctionReference<
+    "action",
+    {
+      organization: string;
+      intent: PortalIntent;
+      returnUrl?: string;
+      externalUserId?: string;
+    },
+    { link: string }
+  >("testApp:portal"),
+  revoke: makeFunctionReference<"action", { user: string }, number>(
+    "testApp:revoke",
+  ),
+  createOrganization: makeFunctionReference<
+    "action",
+    { name: string },
+    Awaited<ReturnType<typeof enterprise.createOrganization>>
+  >("testApp:createOrganization"),
+  fetchMembership: makeFunctionReference<
+    "action",
+    { user: string; organization: string },
+    Awaited<ReturnType<typeof enterprise.fetchMembership>>
+  >("testApp:fetchMembership"),
+  createMembership: makeFunctionReference<
+    "action",
+    { user: string; organization: string; role: string },
+    Awaited<ReturnType<typeof enterprise.createMembership>>
+  >("testApp:createMembership"),
 };
 
 const modules = import.meta.glob("./workos/**/*.ts");
@@ -1326,9 +1389,10 @@ async function step(
       await settle(t);
       break;
     case "write":
-      // An organization created at WorkOS, then a sync, as an admin write does.
-      fake.organization(`w${String(n)}`, []);
-      await t.mutation(testAppRef.sync, {});
+      // A write the injected faults refuse is a write that did not happen.
+      await t
+        .action(testAppRef.createOrganization, { name: `w${String(n)}` })
+        .catch(() => null);
       break;
     case "expire":
       // The jump stands for 91 idle days; a jump under in-flight lane timers would
