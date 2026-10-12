@@ -36,6 +36,7 @@
     "src/components/passkeyTestSetup.ts",
     "src/components/emailTestSetup.ts",
     "src/components/totpTestSetup.ts",
+    "src/components/workosTestSetup.ts",
     "src/methods/oauth/testFlow.ts",
     "src/react/testSignInApi.ts"
   ]

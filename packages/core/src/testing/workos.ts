@@ -9,12 +9,14 @@
 // set `allowImportingTsExtensions`. If it is not set, TypeScript gives the
 // error TS5097.
 import type { TestConvex } from "convex-test";
+import { register as registerWorkpool } from "@convex-dev/workpool/test";
 import type { GenericSchema, SchemaDefinition } from "convex/server";
 import schema from "../components/workos/schema.ts";
 const modules = import.meta.glob("../components/workos/**/*.ts");
 
 /**
- * Register the WorkOS OAuth component with a `convex-test` instance.
+ * Register the WorkOS component, and the workpool it mounts as the directory
+ * sync's lane, with a `convex-test` instance.
  *
  * @param t - The test convex instance, e.g. from calling `convexTest`.
  * @param name - The mount name of this component instance, as registered in
@@ -25,5 +27,6 @@ export function registerWorkosOauth(
   name = "authWorkos",
 ) {
   t.registerComponent(name, schema, modules);
+  registerWorkpool(t, `${name}/lane`);
 }
 export default { registerWorkosOauth, schema, modules };

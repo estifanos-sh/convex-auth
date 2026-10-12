@@ -1,0 +1,153 @@
+---
+title: "WorkOS: enterprise SSO and SCIM"
+description: Sign your customers in through their own identity provider, and keep their organizations, memberships and SCIM directories in your app.
+---
+
+import { Step, Steps } from "fumadocs-ui/components/steps";
+
+When your customers are companies, they want their people to sign in through
+their own identity provider (SSO), and to add and remove those people from
+your app through their directory (SCIM). [WorkOS](https://workos.com) handles
+both, and the WorkOS component brings them to Convex Auth:
+
+- **Sign-in** through WorkOS AuthKit, routed straight to a customer's SSO
+  connection when you know their organization.
+- **Directory sync**: a copy of your WorkOS environment's organizations,
+  users, memberships, SSO connections and SCIM directories, kept current from
+  WorkOS's event stream, with every change handed to your own handlers.
+
+Set up WorkOS sign-in first, as the [OAuth guide](/login-providers/oauth)
+describes under its WorkOS tab. Everything below builds on that setup: the
+same component instance, the same `AUTH_WORKOS_CLIENT_ID` and
+`AUTH_WORKOS_API_KEY`.
+
+## Routing sign-in to a customer's SSO
+
+`startSignInWithWorkos`, and the `signIn` that `useSignInWithWorkos` returns,
+take where the sign-in should go:
+
+| Option           | Sends the user to                                                                    |
+| ---------------- | ------------------------------------------------------------------------------------ |
+| `organizationId` | That organization's SSO connection (`org_...`), skipping AuthKit's own page.         |
+| `connectionId`   | That SSO connection (`conn_...`).                                                    |
+| `loginHint`      | Pre-fills the email or username at the identity provider.                            |
+| `domainHint`     | Pre-fills the domain, for Microsoft OAuth and Google SAML.                           |
+| `screenHint`     | AuthKit's `"sign-up"` or `"sign-in"` screen. Not with an organization or connection. |
+
+Without an organization or connection, the sign-in opens AuthKit. A
+malformed id or hint, or an organization together with a connection, is
+refused before anything is recorded.
+
+```tsx
+const { signIn } = useSignInWithWorkos(api.auth);
+
+// Straight to Acme's SSO.
+await signIn({ organizationId: "org_01H..." });
+
+// AuthKit, with the email filled in.
+await signIn({ loginHint: "ada@acme.com" });
+```
+
+The profile your `createUser` and `onSignIn` callbacks receive carries the
+`organizationId` the user signed in to, when there was one, and the
+`authenticationMethod` (for example `"SSO"`).
+
+## Directory sync
+
+<Steps>
+
+<Step>
+
+### Create the sync with your handlers
+
+`workosEnterprise` takes the WorkOS component and a handler for each kind of
+WorkOS object your app keeps: `organization`, `membership`, `user`,
+`connection`, `directory`, `directoryUser`, `directoryGroup` and
+`directoryMember`. Leave out the kinds you don't need.
+
+```ts title="convex/workos.ts"
+import { v } from "convex/values";
+import {
+  vWorkosMembershipChange,
+  workosEnterprise,
+} from "@convex-dev/auth/methods/workos/server";
+import { components, internal } from "./_generated/api";
+import { internalMutation } from "./_generated/server";
+
+export const enterprise = workosEnterprise(components.authWorkos, {
+  on: { membership: internal.workos.membership },
+});
+
+export const sync = internalMutation({
+  args: {},
+  handler: async (ctx) => await enterprise.sync(ctx),
+});
+
+export const membership = internalMutation({
+  args: vWorkosMembershipChange,
+  returns: v.null(),
+  handler: async (ctx, { kind, after }) => {
+    // `kind` is "upsert" or "remove"; `after` is the membership after the
+    // change, with `deleted: true` when it was removed.
+    return null;
+  },
+});
+```
+
+Each handler runs inside the mutation that applies the change, once per
+change, alongside up to a page of others. Keep it to a constant amount of
+work per change, and schedule anything that fans out. A handler that throws
+rolls its page back and stops the sync on that event until you fix it; the
+sync then resumes where it stopped.
+
+</Step>
+
+<Step>
+
+### Run it from a cron
+
+```ts title="convex/crons.ts"
+import { cronJobs } from "convex/server";
+import { internal } from "./_generated/api";
+
+const crons = cronJobs();
+crons.interval(
+  "workos directory sync",
+  { minutes: 1 },
+  internal.workos.sync,
+  {},
+);
+export default crons;
+```
+
+The first sync fixes a boundary in WorkOS's event stream and lists everything
+as of then; each later one reads the events since. A sync with nothing new
+reads one row and makes one WorkOS call, so it can run often.
+
+</Step>
+
+</Steps>
+
+### Reading the copy
+
+The same object reads the component's copy, without calling WorkOS:
+
+- `enterprise.organization(ctx, { workosId })`
+- `enterprise.memberships(ctx, { of: { user } | { organization }, paginationOpts })`
+- `enterprise.members(ctx, { group, paginationOpts })`, a directory group's members
+- `enterprise.route(ctx, { email })`: the organization whose verified domain
+  the email is in, and its SSO connection when it has exactly one active.
+  Pass the result to `signIn`.
+- `enterprise.status(ctx)`: whether a pass is pending, how many listings are
+  open, the failure the sync stopped on, and the credentials it is bound to,
+  by fingerprint.
+
+### When things go wrong
+
+- **5xx and 429** are retried with backoff.
+- **A refused API key** stops the sync without losing its place. It resumes
+  on its own once a new key is set.
+- **A refused listing** stops that listing and removes nothing from the copy.
+- **An expired cursor**, when the sync hasn't run for longer than WorkOS
+  keeps events, restarts from a fresh boundary and lists everything again,
+  removing what was deleted in the gap.

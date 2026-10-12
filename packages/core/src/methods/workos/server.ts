@@ -3,6 +3,15 @@
  *
  * @module
  */
+import {
+  createFunctionHandle,
+  type DefaultFunctionArgs,
+  type FunctionReference,
+  type GenericDataModel,
+  type GenericMutationCtx,
+  type GenericQueryCtx,
+  type PaginationOptions,
+} from "convex/server";
 import { Infer, ObjectType, v } from "convex/values";
 import type { UserCallbacks } from "../../lib/types.ts";
 import type { AuthCore } from "../../server/setup.ts";
@@ -20,7 +29,40 @@ import {
   type WorkosAuthentication,
 } from "../../components/workos/constants.ts";
 
+import type {
+  ConnectionChange,
+  DirectoryChange,
+  DirectoryGroupChange,
+  DirectoryMemberChange,
+  DirectoryUserChange,
+  MembershipChange,
+  OrganizationChange,
+  UserChange,
+} from "../../components/workos/changes.ts";
+
 export type { WorkosAuthentication };
+export {
+  vChangeKind as vWorkosChangeKind,
+  vConnectionChange as vWorkosConnectionChange,
+  vDirectoryChange as vWorkosDirectoryChange,
+  vDirectoryGroupChange as vWorkosDirectoryGroupChange,
+  vDirectoryMemberChange as vWorkosDirectoryMemberChange,
+  vDirectoryUserChange as vWorkosDirectoryUserChange,
+  vMembershipChange as vWorkosMembershipChange,
+  vOrganizationChange as vWorkosOrganizationChange,
+  vUserChange as vWorkosUserChange,
+} from "../../components/workos/changes.ts";
+export type {
+  ChangeKind as WorkosChangeKind,
+  ConnectionChange as WorkosConnectionChange,
+  DirectoryChange as WorkosDirectoryChange,
+  DirectoryGroupChange as WorkosDirectoryGroupChange,
+  DirectoryMemberChange as WorkosDirectoryMemberChange,
+  DirectoryUserChange as WorkosDirectoryUserChange,
+  MembershipChange as WorkosMembershipChange,
+  OrganizationChange as WorkosOrganizationChange,
+  UserChange as WorkosUserChange,
+} from "../../components/workos/changes.ts";
 
 /**
  * The account profile the WorkOS provider produces. WorkOS returns the user
@@ -240,6 +282,153 @@ export function workos<UsersTable extends string>(
         startSignInWithWorkos: startSignIn,
         completeSignInWithWorkos: completeSignIn,
       };
+    },
+  };
+}
+
+/** A handler the directory sync calls with each change of one kind. */
+export type WorkosChangeHandler<Change extends DefaultFunctionArgs> =
+  FunctionReference<"mutation", "internal", Change>;
+
+/**
+ * The app's handlers, one per kind of WorkOS object it keeps a copy of. Each
+ * runs inside the mutation that applies the change, once per change, along
+ * with up to a page of others, so it must do a constant amount of work per
+ * change and schedule any fan-out. A handler that throws rolls its page back
+ * and stops the sync on that event until the handler is fixed.
+ */
+export type WorkosHandlers = {
+  organization?: WorkosChangeHandler<OrganizationChange>;
+  membership?: WorkosChangeHandler<MembershipChange>;
+  user?: WorkosChangeHandler<UserChange>;
+  connection?: WorkosChangeHandler<ConnectionChange>;
+  directory?: WorkosChangeHandler<DirectoryChange>;
+  directoryUser?: WorkosChangeHandler<DirectoryUserChange>;
+  directoryGroup?: WorkosChangeHandler<DirectoryGroupChange>;
+  directoryMember?: WorkosChangeHandler<DirectoryMemberChange>;
+};
+
+const HANDLER_KINDS = [
+  "organization",
+  "membership",
+  "user",
+  "connection",
+  "directory",
+  "directoryUser",
+  "directoryGroup",
+  "directoryMember",
+] as const;
+
+async function mint<Change extends DefaultFunctionArgs>(
+  handler: WorkosChangeHandler<Change> | undefined,
+): Promise<string | undefined> {
+  return handler === undefined
+    ? undefined
+    : await createFunctionHandle(handler);
+}
+
+type RunQueryCtx = Pick<GenericQueryCtx<GenericDataModel>, "runQuery">;
+type RunMutationCtx = Pick<GenericMutationCtx<GenericDataModel>, "runMutation">;
+
+/**
+ * WorkOS beyond sign-in: the directory sync, which keeps a copy of the
+ * WorkOS environment's organizations, users, memberships, SSO connections
+ * and SCIM directories in the WorkOS component and hands every change to the
+ * app's {@link WorkosHandlers}, and reads of that copy.
+ *
+ * ```ts
+ * export const enterprise = workosEnterprise(components.authWorkos, {
+ *   on: {
+ *     membership: internal.workos.membership,
+ *     directoryUser: internal.workos.directoryUser,
+ *   },
+ * });
+ *
+ * // A cron runs it: crons.interval("workos", { minutes: 1 }, internal.workos.sync);
+ * export const sync = internalMutation({
+ *   args: {},
+ *   handler: (ctx) => enterprise.sync(ctx),
+ * });
+ * ```
+ *
+ * The first sync fixes a boundary in WorkOS's event stream and lists
+ * everything as of then; each later one reads the events since. Run it often:
+ * a sync with nothing new reads one row and makes one WorkOS call.
+ */
+export function workosEnterprise(
+  component: ComponentApi,
+  options: { on?: WorkosHandlers } = {},
+) {
+  const on = options.on ?? {};
+  for (const key of Object.keys(on)) {
+    if (!(HANDLER_KINDS as readonly string[]).includes(key)) {
+      throw new Error(`"${key}" is not a kind of WorkOS change`);
+    }
+  }
+  // Only app code can mint a function handle, so every call that may write
+  // the copy mints them here and carries them in.
+  const handles = async () => ({
+    organization: await mint(on.organization),
+    membership: await mint(on.membership),
+    user: await mint(on.user),
+    connection: await mint(on.connection),
+    directory: await mint(on.directory),
+    directoryUser: await mint(on.directoryUser),
+    directoryGroup: await mint(on.directoryGroup),
+    directoryMember: await mint(on.directoryMember),
+  });
+
+  return {
+    /**
+     * Start a pass over WorkOS's event stream, unless one is running. Returns
+     * whether it started one. Call it from a cron.
+     */
+    async sync(ctx: RunMutationCtx): Promise<boolean> {
+      return await ctx.runMutation(component.stream.sweep, {
+        handles: await handles(),
+      });
+    },
+
+    /**
+     * How the sync is doing: whether a pass is pending, how many backfills
+     * are open, the failure it stopped on, and the credentials it is bound to,
+     * by fingerprint.
+     */
+    async status(ctx: RunQueryCtx) {
+      return await ctx.runQuery(component.directory.status, {});
+    },
+
+    /** An organization from the copy, or null if WorkOS has none. */
+    async organization(ctx: RunQueryCtx, args: { workosId: string }) {
+      return await ctx.runQuery(component.directory.organization, args);
+    },
+
+    /** One page of a user's, or an organization's, memberships. */
+    async memberships(
+      ctx: RunQueryCtx,
+      args: {
+        of: { user: string } | { organization: string };
+        paginationOpts: PaginationOptions;
+      },
+    ) {
+      return await ctx.runQuery(component.directory.memberships, args);
+    },
+
+    /** One page of a directory group's members. */
+    async members(
+      ctx: RunQueryCtx,
+      args: { group: string; paginationOpts: PaginationOptions },
+    ) {
+      return await ctx.runQuery(component.directory.members, args);
+    },
+
+    /**
+     * Where an email signs in: the organization whose verified domain it is
+     * in, and its SSO connection when it has exactly one active. Pass the
+     * result to `startSignInWithWorkos`.
+     */
+    async route(ctx: RunQueryCtx, args: { email: string }) {
+      return await ctx.runQuery(component.directory.route, args);
     },
   };
 }

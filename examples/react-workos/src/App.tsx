@@ -1,5 +1,5 @@
 import { type ReactNode, useState } from "react";
-import { useConvexAuth, useQuery } from "convex/react";
+import { useConvex, useConvexAuth, useQuery } from "convex/react";
 import { useAuthActions } from "@convex-dev/auth/react";
 import {
   useOauth,
@@ -15,7 +15,34 @@ import { api } from "../convex/_generated/api";
 function SignedOut(): ReactNode {
   const { signIn } = useSignInWithWorkos(api.auth);
   const { flowError } = useOauth();
+  const convex = useConvex();
   const [startError, setStartError] = useState<string | null>(null);
+  const [email, setEmail] = useState("");
+
+  /**
+   * Start the sign-in, and report a failure to start. With a work email, an
+   * organization that signs in through SSO goes straight to its identity
+   * provider; any other email opens AuthKit with the email filled in.
+   */
+  const start = async (routing: Parameters<typeof signIn>[0]) => {
+    setStartError(null);
+    const result = await signIn(routing);
+    if (result.status === "redirect") return;
+    switch (result.userError.error) {
+      case "OTHER_ERROR":
+        // The flow couldn't start, e.g. the deployment was unreachable or
+        // the routing was refused. The original error is on `cause`.
+        console.error(
+          "WorkOS sign-in failed to start:",
+          result.userError.cause,
+        );
+        setStartError("Couldn't start WorkOS sign-in. Please try again.");
+        return;
+      default:
+        result.userError.error satisfies never;
+        setStartError(`Unknown error: ` + result.userError.error);
+    }
+  };
   return (
     <>
       <h1>Sign in</h1>
@@ -54,29 +81,29 @@ function SignedOut(): ReactNode {
           <strong>{startError}</strong>
         </p>
       )}
-      <button
-        type="button"
-        onClick={async () => {
-          setStartError(null);
-          const result = await signIn();
-          if (result.status === "redirect") return;
-          switch (result.userError.error) {
-            case "OTHER_ERROR":
-              // The flow couldn't start, e.g. the deployment was
-              // unreachable. The original error is on `cause` if you want
-              // to log or inspect it.
-              console.error(
-                "WorkOS sign-in failed to start:",
-                result.userError.cause,
-              );
-              setStartError("Couldn't start WorkOS sign-in. Please try again.");
-              return;
-            default:
-              result.userError.error satisfies never;
-              setStartError(`Unknown error: ` + result.userError.error);
-          }
+      <form
+        onSubmit={async (event) => {
+          event.preventDefault();
+          const route = await convex.query(api.workos.route, { email });
+          await start(
+            route === null
+              ? { loginHint: email }
+              : route.connection !== undefined
+                ? { connectionId: route.connection }
+                : { organizationId: route.organization },
+          );
         }}
       >
+        <input
+          type="email"
+          placeholder="you@company.com"
+          value={email}
+          onChange={(event) => setEmail(event.target.value)}
+          required
+        />
+        <button type="submit">Continue with SSO</button>
+      </form>
+      <button type="button" onClick={() => void start(undefined)}>
         Continue with WorkOS
       </button>
     </>
