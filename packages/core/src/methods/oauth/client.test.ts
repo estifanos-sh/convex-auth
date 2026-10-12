@@ -182,6 +182,57 @@ describe("OAuth client", () => {
     await vi.waitFor(() => expect(readFlow(storage)).toBeNull());
   });
 
+  test("a sign-in started while an error load still removes the old flow keeps its new flow", async () => {
+    window.history.replaceState(null, "", "/?convexAuthError=access_denied");
+    stubReactNative();
+    // Storage that writes asynchronously, with the old flow's removal held
+    // until the new flow is ready to be saved.
+    let release = () => {};
+    const removed = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    class Held extends InMemoryStorage {
+      override removeItem(key: string) {
+        return removed.then(() => super.removeItem(key)) as unknown as void;
+      }
+    }
+    const storage = new Held();
+    seedPendingFlow(storage);
+    const { client, convexMutation, actions } = setupOAuth({ storage });
+    await client.init();
+    convexMutation.mockResolvedValueOnce({
+      redirect: "https://provider.example/auth",
+      state: "state-new",
+    });
+
+    const started = actions.signIn(acmeRefs, {
+      redirectTo: "http://localhost/app",
+    });
+    release();
+    await started;
+
+    expect(readFlow(storage)?.state).toBe("state-new");
+  });
+
+  test("signIn passes a provider's start arguments to its startSignIn", async () => {
+    stubReactNative();
+    const { convexMutation, actions } = setupOAuth();
+    convexMutation.mockResolvedValueOnce({
+      redirect: "https://provider.example/auth",
+      state: "state-1",
+    });
+
+    await actions.signIn(acmeRefs, {
+      redirectTo: "http://localhost/app",
+      startArgs: { organizationId: "org_1" },
+    });
+
+    expect(convexMutation).toHaveBeenCalledExactlyOnceWith(
+      acmeRefs.startSignIn,
+      { organizationId: "org_1", redirectTo: "http://localhost/app" },
+    );
+  });
+
   test("an expired error param sets EXPIRED", async () => {
     window.history.replaceState(null, "", "/?convexAuthError=expired");
     const { client, flowError } = setupOAuth();

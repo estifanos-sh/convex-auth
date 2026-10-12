@@ -13,8 +13,10 @@ import type {
   FunctionReference,
   GenericDataModel,
   GenericMutationCtx,
+  RegisteredMutation,
 } from "convex/server";
 import { v } from "convex/values";
+import type { ObjectType, PropertyValidators } from "convex/values";
 import { sha256Hex } from "../crypto.ts";
 import { generateRandomToken, sha256Base64Url } from "./crypto.ts";
 import type { CallbackMethod } from "./http.ts";
@@ -51,7 +53,9 @@ type CreateAuthorizationRequestRef = FunctionReference<
  * errors, such as a `redirectTo` origin that isn't allowed, so there is
  * nothing for the user to correct.
  */
-export function buildStartSignIn(options: {
+export function buildStartSignIn<
+  StartArgs extends PropertyValidators = Record<never, never>,
+>(options: {
   /** Origins `redirectTo` may point at, already validated and normalized. */
   allowedOrigins: string[];
   /** The provider's authorization endpoint (a full URL). */
@@ -64,11 +68,22 @@ export function buildStartSignIn(options: {
    */
   callbackMethod?: CallbackMethod;
   /**
+   * Arguments the provider's `startSignIn` takes beyond `redirectTo`, such as
+   * the organization a WorkOS sign-in is routed to. Only
+   * `authorizationParams` reads them.
+   */
+  startArgs?: StartArgs;
+  /**
    * Parameters the provider's authorization endpoint needs beyond the
    * standard ones, such as WorkOS's `provider=authkit`. They can't override a
-   * standard parameter.
+   * standard parameter. A function builds them from the `startArgs`, and
+   * throws to refuse them.
    */
-  authorizationParams?: Readonly<Record<string, string>>;
+  authorizationParams?:
+    | Readonly<Record<string, string>>
+    | ((
+        args: { redirectTo: string } & ObjectType<StartArgs>,
+      ) => Readonly<Record<string, string>>);
   /**
    * Record the request in the provider's component, and return what the
    * authorization URL needs.
@@ -84,13 +99,27 @@ export function buildStartSignIn(options: {
         ctx: MutationCtx,
         args: CreateAuthorizationRequestArgs,
       ) => Promise<CreateAuthorizationRequestResult>);
-}) {
+}): RegisteredMutation<
+  "public",
+  { redirectTo: string } & ObjectType<StartArgs>,
+  Promise<{ redirect: string; state: string }>
+> {
   return mutationGeneric({
     args: {
+      ...options.startArgs,
       redirectTo: v.string(),
     },
     returns: v.object({ redirect: v.string(), state: v.string() }),
-    handler: async (ctx, args) => {
+    handler: async (
+      ctx,
+      args: { redirectTo: string } & ObjectType<StartArgs>,
+    ) => {
+      // Refused before anything is written, so a bad routing argument leaves
+      // no authorization request behind.
+      const authorizationParams =
+        typeof options.authorizationParams === "function"
+          ? options.authorizationParams(args)
+          : options.authorizationParams;
       const redirectTo = parseUrl(args.redirectTo);
       if (redirectTo === null) {
         throw new Error("redirectTo must be an absolute URL");
@@ -119,7 +148,7 @@ export function buildStartSignIn(options: {
             );
 
       const params: Record<string, string> = {
-        ...options.authorizationParams,
+        ...authorizationParams,
         response_type: "code",
         client_id: clientId,
         redirect_uri: callbackUrl,

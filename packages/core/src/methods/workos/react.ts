@@ -9,14 +9,26 @@
  * ```tsx
  * const { signIn } = useSignInWithWorkos(api.auth);
  * const { flowError } = useOauth();
+ *
+ * // Straight to a customer's SSO, skipping AuthKit's own page:
+ * await signIn({ organizationId: "org_..." });
  * ```
  *
  * @module
  */
 "use client";
 
-import type { OauthProviderApi } from "../oauth/client.ts";
-import { useOauthSignIn, type UseOauthSignInReturn } from "../oauth/react.ts";
+import { useMemo } from "react";
+import type {
+  OauthCompleteResult,
+  OauthProviderApi,
+  OauthStartResult,
+  SignInOptions,
+} from "../oauth/client.ts";
+import { useOauthSignIn } from "../oauth/react.ts";
+import type { WorkosRouting } from "./server.ts";
+
+export type { WorkosRouting };
 
 export { useOauth, type UseOauthReturn } from "../oauth/react.ts";
 export type {
@@ -28,8 +40,18 @@ export type {
 
 /** What {@link useSignInWithWorkos} returns. */
 export type UseSignInWithWorkosReturn = {
-  /** Start WorkOS's OAuth flow. See {@link UseOauthSignInReturn.signIn}. */
-  signIn: UseOauthSignInReturn["signIn"];
+  /**
+   * Start WorkOS's OAuth flow, routed by the {@link WorkosRouting} fields, or
+   * with `code`, finish one started elsewhere. See
+   * `useOauthSignIn`.
+   */
+  signIn: {
+    (options: SignInOptions & { code: string }): Promise<OauthCompleteResult>;
+    (
+      options?: Omit<SignInOptions, "code" | "startArgs"> &
+        WorkosRouting & { code?: undefined },
+    ): Promise<OauthStartResult>;
+  };
 };
 
 /**
@@ -41,10 +63,42 @@ export function useSignInWithWorkos(api: {
   startSignInWithWorkos: OauthProviderApi["startSignIn"];
   completeSignInWithWorkos: OauthProviderApi["completeSignIn"];
 }): UseSignInWithWorkosReturn {
-  const { signIn } = useOauthSignIn({
+  const { signIn: oauthSignIn } = useOauthSignIn({
     providerName: "workos",
     startSignIn: api.startSignInWithWorkos,
     completeSignIn: api.completeSignInWithWorkos,
   });
+  const signIn = useMemo(
+    () =>
+      ((
+        options: SignInOptions &
+          WorkosRouting & { code?: string | undefined } = {},
+      ) => {
+        const {
+          organizationId,
+          connectionId,
+          loginHint,
+          domainHint,
+          screenHint,
+          ...rest
+        } = options;
+        const routing = {
+          organizationId,
+          connectionId,
+          loginHint,
+          domainHint,
+          screenHint,
+        };
+        // Only the fields the caller set: an `undefined` would fail the
+        // start mutation's validator.
+        const startArgs = Object.fromEntries(
+          Object.entries(routing).filter(([, value]) => value !== undefined),
+        ) as Record<string, string>;
+        return oauthSignIn({ ...rest, startArgs } as SignInOptions & {
+          code: string;
+        });
+      }) as UseSignInWithWorkosReturn["signIn"],
+    [oauthSignIn],
+  );
   return { signIn };
 }

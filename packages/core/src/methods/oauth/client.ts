@@ -108,6 +108,12 @@ export type SignInOptions = {
   redirectTo?: string;
   /** A callback `code` to finish a saved flow instead of starting a new one. */
   code?: string;
+  /**
+   * Arguments the provider's `startSignIn` takes beyond `redirectTo`, such as
+   * the organization a WorkOS sign-in is routed to. Per-provider hooks fill
+   * this from their own options; the server validates them.
+   */
+  startArgs?: Readonly<Record<string, string>>;
 };
 
 /** The sign-in actions {@link oauthClient} publishes for its hooks to read. */
@@ -262,6 +268,14 @@ export function oauthClient(): AmbientSignInClient {
     convex,
     replaceUrl,
   }) => {
+    /**
+     * The removal of a flow an `?error=` load ended. Storage may write
+     * asynchronously, so a sign-in started before the removal settles waits
+     * for it; otherwise the removal could land after the new flow is saved
+     * and delete it.
+     */
+    let dropping: Promise<void> = Promise.resolve();
+
     /** Set or clear the flow error apps read for sign-in feedback. */
     const setFlowError = (flowError: OauthFlowError | null): void => {
       values.set(OAUTH_FLOW_ERROR_KEY, flowError);
@@ -328,7 +342,7 @@ export function oauthClient(): AmbientSignInClient {
         // The server ended the flow with an error, so the saved state can
         // never be used. Drop it now so a stray code arriving later still
         // reports `INVALID_FLOW`.
-        void dropPendingFlow(storage);
+        dropping = dropPendingFlow(storage);
         setFlowError(callbackFlowError(errorParam));
         return;
       }
@@ -367,8 +381,10 @@ export function oauthClient(): AmbientSignInClient {
       setFlowError(null);
       try {
         const { redirect, state } = await convex.mutation(refs.startSignIn, {
+          ...options?.startArgs,
           redirectTo,
         });
+        await dropping;
         await storage.set(
           OAUTH_FLOW_STORAGE_KEY,
           JSON.stringify({

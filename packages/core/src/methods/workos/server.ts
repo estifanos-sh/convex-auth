@@ -3,7 +3,7 @@
  *
  * @module
  */
-import { Infer, v } from "convex/values";
+import { Infer, ObjectType, v } from "convex/values";
 import type { UserCallbacks } from "../../lib/types.ts";
 import type { AuthCore } from "../../server/setup.ts";
 import { buildStartSignIn } from "../../lib/oauth/authorize.ts";
@@ -13,8 +13,8 @@ import {
 } from "../../lib/oauth/redemption.ts";
 import type { ComponentApi } from "../../components/workos/_generated/component.ts";
 import {
+  AUTHKIT_PROVIDER,
   AUTHORIZATION_ENDPOINT,
-  AUTHORIZATION_PARAMS,
   PROVIDER_NAME,
   SCOPES,
   type WorkosAuthentication,
@@ -79,6 +79,86 @@ export function normalizeWorkosProfile(
   };
 }
 
+/**
+ * Where a WorkOS sign-in goes, the arguments `startSignInWithWorkos` takes
+ * beyond `redirectTo`:
+ *
+ * - `organizationId` (`org_...`): straight to that organization's SSO
+ *   connection, skipping AuthKit's own sign-in page.
+ * - `connectionId` (`conn_...`): straight to that SSO connection.
+ * - `loginHint`: pre-fills the email or username at the identity provider.
+ * - `domainHint`: pre-fills the domain for Microsoft OAuth and Google SAML.
+ * - `screenHint`: `"sign-up"` or `"sign-in"`, the AuthKit screen to open.
+ *   AuthKit only, so it can't be combined with an organization or connection.
+ *
+ * Without an organization or connection the sign-in goes to AuthKit.
+ */
+export const vWorkosRouting = {
+  organizationId: v.optional(v.string()),
+  connectionId: v.optional(v.string()),
+  loginHint: v.optional(v.string()),
+  domainHint: v.optional(v.string()),
+  screenHint: v.optional(v.union(v.literal("sign-up"), v.literal("sign-in"))),
+};
+
+export type WorkosRouting = ObjectType<typeof vWorkosRouting>;
+
+// WorkOS ids are a prefix and a 26-character ULID. Anything else is refused
+// rather than sent on, so a caller can't smuggle other parameters in.
+const ORGANIZATION_ID = /^org_[0-9A-Z]{26}$/;
+const CONNECTION_ID = /^conn_[0-9A-Z]{26}$/;
+const DOMAIN =
+  /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i;
+// An email or a username: printable, no whitespace, at most an email's length.
+const LOGIN_HINT = /^[^\s\p{Cc}]{1,320}$/u;
+
+/**
+ * The WorkOS authorization parameters for a routing. Throws on a malformed
+ * id or hint, and on a combination WorkOS refuses: an organization with a
+ * connection, or a `screenHint` outside AuthKit.
+ */
+export function workosAuthorizationParams(
+  routing: WorkosRouting,
+): Record<string, string> {
+  const { organizationId, connectionId, loginHint, domainHint, screenHint } =
+    routing;
+  if (organizationId !== undefined && !ORGANIZATION_ID.test(organizationId)) {
+    throw new Error(
+      "organizationId must be a WorkOS organization id (org_...)",
+    );
+  }
+  if (connectionId !== undefined && !CONNECTION_ID.test(connectionId)) {
+    throw new Error("connectionId must be a WorkOS connection id (conn_...)");
+  }
+  if (organizationId !== undefined && connectionId !== undefined) {
+    throw new Error(
+      "Route a WorkOS sign-in by organizationId or connectionId, not both",
+    );
+  }
+  if (loginHint !== undefined && !LOGIN_HINT.test(loginHint)) {
+    throw new Error("loginHint must be an email or a username");
+  }
+  if (domainHint !== undefined && !DOMAIN.test(domainHint)) {
+    throw new Error("domainHint must be a domain name");
+  }
+  const routed = organizationId !== undefined || connectionId !== undefined;
+  if (screenHint !== undefined && routed) {
+    throw new Error(
+      "screenHint applies only to AuthKit, not to a routed sign-in",
+    );
+  }
+  const params: Record<string, string> = {};
+  // WorkOS takes exactly one selector: the organization, the connection, or
+  // the AuthKit provider.
+  if (organizationId !== undefined) params.organization_id = organizationId;
+  else if (connectionId !== undefined) params.connection_id = connectionId;
+  else params.provider = AUTHKIT_PROVIDER;
+  if (loginHint !== undefined) params.login_hint = loginHint;
+  if (domainHint !== undefined) params.domain_hint = domainHint.toLowerCase();
+  if (screenHint !== undefined) params.screen_hint = screenHint;
+  return params;
+}
+
 /** App-defined config for setting up the WorkOS provider. */
 export type WorkosProviderOptions = {
   /** The WorkOS oauth component instance, i.e. `components.authWorkos`. */
@@ -139,7 +219,8 @@ export function workos<UsersTable extends string>(
         allowedOrigins,
         authorizationEndpoint: AUTHORIZATION_ENDPOINT,
         scopes: SCOPES,
-        authorizationParams: AUTHORIZATION_PARAMS,
+        startArgs: vWorkosRouting,
+        authorizationParams: workosAuthorizationParams,
         createAuthorizationRequest:
           options.component.provider.createAuthorizationRequest,
       });

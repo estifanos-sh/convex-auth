@@ -19,12 +19,11 @@ export const TOKEN_ENDPOINT =
   "https://api.workos.com/user_management/authenticate";
 
 /**
- * What the authorization request asks for beyond the standard parameters.
- * `provider=authkit` sends the user to the hosted AuthKit sign-in, which
- * routes them to the environment's methods and to their organization's SSO
- * connection.
+ * The WorkOS selector for an unrouted sign-in. `provider=authkit` sends the
+ * user to the hosted AuthKit sign-in, which routes them to the environment's
+ * methods and to their organization's SSO connection.
  */
-export const AUTHORIZATION_PARAMS = { provider: "authkit" };
+export const AUTHKIT_PROVIDER = "authkit";
 
 /**
  * AuthKit takes no scopes: what the sign-in returns is fixed by the
