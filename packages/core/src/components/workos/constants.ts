@@ -1,6 +1,7 @@
 /**
- * Everything about WorkOS that never varies between apps: the SSO endpoints
- * and the shape of the SSO profile.
+ * Everything about WorkOS that never varies between apps: the SSO endpoints,
+ * the shape of the SSO profile, the REST API's base URL, and the events the
+ * directory sync reads.
  *
  * Sign-in goes through WorkOS's standalone SSO API, not AuthKit (User
  * Management). The SSO API creates no WorkOS users and no WorkOS sessions, so
@@ -47,3 +48,37 @@ type WorkosSsoProfile = {
  * return; the mapping checks the fields it relies on.
  */
 export type WorkosUserInfo = { profile: WorkosSsoProfile };
+
+/** The base URL of WorkOS's REST API, for the directory sync and the portal. */
+export const API_BASE = "https://api.workos.com";
+
+/** The events the directory sync applies, in the order WorkOS emits them. */
+export const EVENTS = [
+  "organization.created",
+  "organization.updated",
+  "organization.deleted",
+  "organization_domain.created",
+  "organization_domain.updated",
+  "organization_domain.verified",
+  "organization_domain.verification_failed",
+  "organization_domain.deleted",
+  "connection.activated",
+  "connection.deactivated",
+  "connection.deleted",
+  "dsync.activated",
+  "dsync.deleted",
+  "dsync.user.created",
+  "dsync.user.updated",
+  "dsync.user.deleted",
+  "dsync.group.created",
+  "dsync.group.updated",
+  "dsync.group.deleted",
+  "dsync.group.user_added",
+  "dsync.group.user_removed",
+] as const;
+
+/**
+ * How many WorkOS objects one page holds. A page is applied in one mutation,
+ * and each change in it may run the app's handler in that transaction.
+ */
+export const PAGE_SIZE = 50;

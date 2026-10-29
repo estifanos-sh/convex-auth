@@ -41,6 +41,7 @@ type Env = {
   readonly CONVEX_SITE_URL: string;
   readonly CLIENT_ID: string;
   readonly CLIENT_SECRET: string;
+  readonly WEBHOOK_SECRET: string | undefined;
 };
 
 /**

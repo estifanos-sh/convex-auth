@@ -8,7 +8,8 @@ import { sha256Hex } from "../../lib/crypto.ts";
 import { OAUTH_CODE_PARAM, OAUTH_ERROR_PARAM } from "../../lib/oauthParams.ts";
 
 /**
- * These tests cover WorkOS's token exchange and its profile request. Everything the callback shares with the other methods is covered
+ * These tests cover WorkOS's token exchange, its profile request and its
+ * webhook. Everything the callback shares with the other methods is covered
  * by the custom OAuth component's suite.
  */
 const modules = import.meta.glob("./**/*.ts");
@@ -16,11 +17,13 @@ const modules = import.meta.glob("./**/*.ts");
 const REDIRECT_TO = "https://app.example.com/after";
 const TOKEN_ENDPOINT = "https://api.workos.com/sso/token";
 const PROFILE_ENDPOINT = "https://api.workos.com/sso/profile";
+const WEBHOOK_SECRET = "webhook-secret";
 
-function setup() {
+function setup(env: Record<string, string> = {}) {
   vi.stubEnv("CLIENT_ID", "client_1");
   vi.stubEnv("CLIENT_SECRET", "sk_test_1");
   vi.stubEnv("CONVEX_SITE_URL", "https://test.convex.site/workos");
+  for (const [name, value] of Object.entries(env)) vi.stubEnv(name, value);
   return convexTest(schema, modules);
 }
 
@@ -150,3 +153,84 @@ describe("workos callback", () => {
 });
 
 testCallbackMethods(schema, modules);
+
+async function sign(body: string, timestamp: number, secret = WEBHOOK_SECRET) {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const digest = await crypto.subtle.sign(
+    "HMAC",
+    key,
+    new TextEncoder().encode(`${timestamp}.${body}`),
+  );
+  const hex = Array.from(new Uint8Array(digest), (byte) =>
+    byte.toString(16).padStart(2, "0"),
+  ).join("");
+  return `t=${timestamp}, v1=${hex}`;
+}
+
+describe("workos webhook", () => {
+  const body = JSON.stringify({ id: "event_1", event: "dsync.user.updated" });
+
+  async function seedSync(t: ReturnType<typeof setup>) {
+    await t.run(async (ctx) => {
+      await ctx.db.insert("sync", {
+        onChange: "function://handler",
+        again: false,
+        generation: 1,
+        phase: "events",
+      });
+    });
+  }
+
+  async function syncRow(t: ReturnType<typeof setup>) {
+    return await t.run(async (ctx) => await ctx.db.query("sync").first());
+  }
+
+  test("a signed delivery starts a sync run", async () => {
+    vi.useFakeTimers();
+    try {
+      const t = setup({ WEBHOOK_SECRET });
+      await seedSync(t);
+      const response = await t.fetch("/webhook", {
+        method: "POST",
+        headers: { "WorkOS-Signature": await sign(body, Date.now()) },
+        body,
+      });
+      expect(response.status).toBe(200);
+      expect((await syncRow(t))?.run).toBeDefined();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test.each([
+    ["no signature", async () => undefined],
+    ["a wrong secret", async () => await sign(body, Date.now(), "other")],
+    [
+      "a stale timestamp",
+      async () => await sign(body, Date.now() - 10 * 60 * 1000),
+    ],
+  ])("refuses a delivery with %s", async (_name, signature) => {
+    const t = setup({ WEBHOOK_SECRET });
+    await seedSync(t);
+    const header = await signature();
+    const response = await t.fetch("/webhook", {
+      method: "POST",
+      headers: header === undefined ? {} : { "WorkOS-Signature": header },
+      body,
+    });
+    expect(response.status).toBe(401);
+    expect((await syncRow(t))?.run).toBeUndefined();
+  });
+
+  test("is not served without a webhook secret", async () => {
+    const t = setup();
+    const response = await t.fetch("/webhook", { method: "POST", body });
+    expect(response.status).toBe(404);
+  });
+});
