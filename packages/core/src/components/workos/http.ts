@@ -1,9 +1,10 @@
 /**
- * WorkOS's SSO callback.
+ * WorkOS's routes: the SSO callback, and the webhook that rings the
+ * directory sync.
  *
  * @module
  */
-import type { HttpRouter } from "convex/server";
+import { httpActionGeneric, type HttpRouter } from "convex/server";
 import { internal } from "./_generated/api.ts";
 import { env } from "./_generated/server.ts";
 import type { ClaimedRequest } from "../../lib/oauth/callback.ts";
@@ -13,6 +14,7 @@ import {
   TOKEN_ENDPOINT,
   USER_INFO_ENDPOINTS,
 } from "./constants.ts";
+import { verifyWebhookSignature } from "./webhook.ts";
 
 const http: HttpRouter = buildCallbackRouter<ClaimedRequest>({
   claim: (ctx, stateHash) =>
@@ -28,6 +30,33 @@ const http: HttpRouter = buildCallbackRouter<ClaimedRequest>({
     clientId: env.CLIENT_ID,
     clientSecret: () => env.CLIENT_SECRET,
     userInfoEndpoints: USER_INFO_ENDPOINTS,
+  }),
+});
+
+/**
+ * A webhook only starts a sync run: its payload is never applied, so a
+ * dropped, repeated or reordered delivery changes nothing, and the event
+ * stream stays the one source of truth.
+ */
+http.route({
+  path: "/webhook",
+  method: "POST",
+  handler: httpActionGeneric(async (ctx, request) => {
+    const secret = env.WEBHOOK_SECRET;
+    if (secret === undefined || secret === "") {
+      return new Response("Webhooks are not configured.", { status: 404 });
+    }
+    const verified = await verifyWebhookSignature({
+      header: request.headers.get("WorkOS-Signature"),
+      body: await request.text(),
+      secret,
+      now: Date.now(),
+    });
+    if (!verified) {
+      return new Response("Invalid signature.", { status: 401 });
+    }
+    await ctx.runMutation(internal.sync.doorbell, {});
+    return new Response(null, { status: 200 });
   }),
 });
 

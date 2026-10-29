@@ -23,6 +23,7 @@ const app = defineApp({
     AUTH_GITHUB_CLIENT_SECRET: v.string(),
     AUTH_WORKOS_CLIENT_ID: v.string(),
     AUTH_WORKOS_API_KEY: v.string(),
+    AUTH_WORKOS_WEBHOOK_SECRET: v.optional(v.string()),
     RESEND_API_KEY: v.string(),
     // Defaults in auth.ts.
     SITE_URL: v.optional(v.string()),
@@ -64,6 +65,7 @@ app.use(authWorkos, {
   env: {
     CLIENT_ID: app.env.AUTH_WORKOS_CLIENT_ID,
     CLIENT_SECRET: app.env.AUTH_WORKOS_API_KEY,
+    WEBHOOK_SECRET: app.env.AUTH_WORKOS_WEBHOOK_SECRET,
   },
 });
 app.use(resend);

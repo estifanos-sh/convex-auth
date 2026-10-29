@@ -1,9 +1,15 @@
 /**
  * The `workos` sign-in method, exported at
- * `@convex-dev/auth/methods/workos/server`: enterprise SSO through WorkOS.
+ * `@convex-dev/auth/methods/workos/server`: enterprise SSO through WorkOS,
+ * and the directory sync that mirrors the customers' SCIM directories.
  *
  * @module
  */
+import {
+  createFunctionHandle,
+  internalMutationGeneric,
+  type FunctionReference,
+} from "convex/server";
 import { Infer, v } from "convex/values";
 import type { UserCallbacks } from "../../lib/types.ts";
 import type { AuthCore } from "../../server/setup.ts";
@@ -19,8 +25,28 @@ import {
   SCOPES,
   type WorkosUserInfo,
 } from "../../components/workos/constants.ts";
+import type { WorkosDirectoryChange } from "../../components/workos/schema.ts";
 
 export type { WorkosUserInfo };
+export {
+  vWorkosConnection,
+  vWorkosDirectory,
+  vWorkosDirectoryChange,
+  vWorkosDirectoryGroup,
+  vWorkosDirectoryMember,
+  vWorkosDirectoryUser,
+  vWorkosDomain,
+  vWorkosOrganization,
+  type WorkosConnection,
+  type WorkosDirectory,
+  type WorkosDirectoryChange,
+  type WorkosDirectoryGroup,
+  type WorkosDirectoryMember,
+  type WorkosDirectoryUser,
+  type WorkosDomain,
+  type WorkosOrganization,
+} from "../../components/workos/schema.ts";
+
 /**
  * The account profile that the `workos` method produces, from WorkOS's SSO
  * profile. This is the exact shape the mapping emits, so the app can validate
@@ -38,7 +64,7 @@ export const vWorkosProfile = v.object({
   /**
    * Lowercased. The customer's identity provider asserts it; WorkOS does not
    * verify it. Trust it for account linking only when the email's domain is
-   * one the organization verified.
+   * one the organization verified (see `directory.route`).
    */
   email: v.string(),
   firstName: v.optional(v.string()),
@@ -80,7 +106,7 @@ export function normalizeWorkosProfile(
  * organization's active connection, or uses the one given.
  */
 export const vWorkosRouting = {
-  /** A WorkOS organization id (`org_...`). */
+  /** A WorkOS organization id (`org_...`), e.g. from `directory.route`. */
   organizationId: v.optional(v.string()),
   /** A WorkOS connection id (`conn_...`). */
   connectionId: v.optional(v.string()),
@@ -210,5 +236,52 @@ export function setupWorkos<UsersTable extends string>(
         completeSignInWithWorkos: completeSignIn,
       };
     },
+  };
+}
+
+/** The app's handler for directory changes. */
+export type WorkosChangeHandler = FunctionReference<
+  "mutation",
+  "internal",
+  { change: WorkosDirectoryChange },
+  null
+>;
+
+/**
+ * Keep the WorkOS component's copy of the directories current, and run
+ * `onChange` for each change, in WorkOS's order, in the transaction that
+ * makes it. The handler maps directory users and groups onto the app's own
+ * users and roles; a `user` change with `deprovisioned: true` is the signal
+ * to revoke the app user's sessions.
+ *
+ * ```ts
+ * export const { syncWorkosDirectory } = setupWorkosDirectory({
+ *   component: components.authWorkos,
+ *   onChange: internal.workos.onDirectoryChange,
+ * });
+ * ```
+ *
+ * Run `syncWorkosDirectory` from a cron (every few minutes is plenty with the
+ * webhook bound, which starts a sync as soon as WorkOS has a change). The
+ * handler must not throw for a change it doesn't care about: a throw stops
+ * the sync at that change until the next run.
+ */
+export function setupWorkosDirectory(options: {
+  /** The WorkOS component instance, i.e. `components.authWorkos`. */
+  component: ComponentApi;
+  /** An internal mutation taking `{ change: vWorkosDirectoryChange }`. */
+  onChange: WorkosChangeHandler;
+}) {
+  return {
+    syncWorkosDirectory: internalMutationGeneric({
+      args: {},
+      returns: v.null(),
+      handler: async (ctx) => {
+        await ctx.runMutation(options.component.sync.start, {
+          onChange: await createFunctionHandle(options.onChange),
+        });
+        return null;
+      },
+    }),
   };
 }

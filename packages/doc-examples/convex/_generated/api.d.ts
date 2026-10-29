@@ -10,6 +10,7 @@
 
 import type * as auth from "../auth.js";
 import type * as users from "../users.js";
+import type * as workos from "../workos.js";
 
 import type {
   ApiFromModules,
@@ -20,6 +21,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   auth: typeof auth;
   users: typeof users;
+  workos: typeof workos;
 }>;
 
 /**
