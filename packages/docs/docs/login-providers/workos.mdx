@@ -1,0 +1,142 @@
+---
+sidebar_position: 6
+title: Enterprise SSO and SCIM (WorkOS)
+description: Sign your customers' employees in with their company's identity provider, and keep their directories in sync.
+---
+
+The WorkOS component and the `workos` sign-in method let your customers'
+employees sign in with their company's identity provider (Okta, Entra ID,
+Google Workspace, any SAML or OIDC IdP) through
+[WorkOS](https://workos.com), and keep a copy of each customer's SCIM
+directory (users, groups and memberships) in your deployment.
+
+WorkOS only does SSO and Directory Sync here. Sign-in goes through WorkOS's
+standalone SSO API, not AuthKit: WorkOS creates no users and no sessions of
+its own, and the session is Convex Auth's like with every other method.
+
+## Setup
+
+<StepByStep>
+
+<Step title="Follow the “Getting Started” guide">
+
+Install Convex Auth and run its setup command as described in the
+[Getting Started](../getting-started.mdx) guide.
+
+</Step>
+
+<Step title="Configure WorkOS">
+
+In the [WorkOS dashboard](https://dashboard.workos.com):
+
+1. Under **Redirects**, add `https://<your deployment>.convex.site/workos/callback`.
+2. Note the environment's **client ID** and an **API key**.
+3. Optionally, under **Webhooks**, add an endpoint at
+   `https://<your deployment>.convex.site/workos/webhook` for the `dsync.*`,
+   `connection.*`, `organization.*` and `organization_domain.*` events, and
+   note its signing secret.
+
+```sh
+npx convex env set AUTH_WORKOS_CLIENT_ID client_...
+npx convex env set AUTH_WORKOS_API_KEY sk_...
+npx convex env set AUTH_WORKOS_WEBHOOK_SECRET ...
+```
+
+</Step>
+
+<Step title="Install the component">
+
+```ts file="examples/react-workos/convex/convex.config.ts" title="convex/convex.config.ts"
+
+```
+
+</Step>
+
+<Step title="Set up the method">
+
+```ts file="examples/react-workos/convex/auth.ts" title="convex/auth.ts"
+
+```
+
+The profile passed to `createUser` and `onSignIn` is `vWorkosProfile`: the
+WorkOS profile id (the account id), the `organizationId`, the `connectionId`,
+the `idpId` and the email. The email is asserted by the customer's identity
+provider and not verified by WorkOS, so don't use it to link to an existing
+account unless its domain is one the organization verified.
+
+</Step>
+
+<Step title="Sign in">
+
+A sign-in is routed to exactly one `organizationId` or `connectionId`, and
+takes an optional `loginHint` and `domainHint`. To route by the email the
+user typed, look its domain up with the component's `directory.route` query,
+which returns the organization that verified the domain and has an active
+connection:
+
+```tsx file="examples/react-workos/src/App.tsx" title="src/App.tsx"
+
+```
+
+In a native iOS app, open the `redirect` URL in an
+`ASWebAuthenticationSession`, not a web view: Google and Microsoft identity
+providers refuse to sign in inside an embedded web view.
+
+</Step>
+
+</StepByStep>
+
+## Directory Sync (SCIM)
+
+The component keeps a copy of the environment's organizations, verified
+domains, SSO connections and directories. It reads WorkOS's
+[Events API](https://workos.com/docs/events): the first sync lists
+everything, then each sync applies the events since the last one, in order.
+The webhook only starts a sync, so a missed or repeated delivery changes
+nothing, and the cron is the backstop.
+
+`setupWorkosDirectory` takes your handler, an internal mutation that runs
+for each change in the same transaction that applies it. Map directory users
+and groups onto your own users and roles there. A `user` change with
+`deprovisioned: true` means the directory deleted the user or marked them
+inactive: revoke their sessions.
+
+```ts file="examples/react-workos/convex/workos.ts" title="convex/workos.ts"
+
+```
+
+```ts file="examples/react-workos/convex/crons.ts" title="convex/crons.ts"
+
+```
+
+A handler that throws stops the sync at that change, and the next sync tries
+it again. The component's `sync.status` query shows where the sync is and why
+it last stopped.
+
+The component's `directory` queries read the copy: `route`,
+`getOrganization`, `listDirectories`, `getUser`, `findUsers` (by
+`organizationId` and `idpId`, which an SSO profile carries too), `listUsers`,
+`listGroups`, `listUserGroups` and `listMembers`.
+
+## Admin Portal
+
+Your customer's IT admin sets up their SSO connection, their SCIM directory
+and their domain in WorkOS's Admin Portal. The component's
+`portal.generateLink` action returns a short-lived link for one organization
+and an intent (`sso`, `dsync`, `domain_verification` or
+`certificate_renewal`). It does no authorization: check that the caller
+administers that organization first.
+
+```ts
+export const adminPortal = action({
+  args: { organizationId: v.string() },
+  handler: async (ctx, { organizationId }) => {
+    // Check that the caller administers `organizationId` here.
+    return await ctx.runAction(components.authWorkos.portal.generateLink, {
+      organizationId,
+      intent: "sso",
+      returnUrl: "https://app.example.com/settings",
+    });
+  },
+});
+```
