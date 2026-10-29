@@ -7,6 +7,7 @@ import { setupGoogle } from "@convex-dev/auth/methods/google/server";
 import { setupOauth } from "@convex-dev/auth/methods/oauth/server";
 import { setupUsernamePasskey } from "@convex-dev/auth/methods/username-passkey/server";
 import { setupUsernamePassword } from "@convex-dev/auth/methods/username-password/server";
+import { setupWorkos } from "@convex-dev/auth/methods/workos/server";
 import { makeFunctionReference, type FunctionReference } from "convex/server";
 import { components, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
@@ -94,6 +95,11 @@ export const { startSignInWithGithub, completeSignInWithGithub } = setupGithub(
   auth,
   { component: components.authGithub, allowedRedirectOrigins },
 ).attachUserCallbacks({ createUser: internal.users.createUserGithub });
+
+export const { startSignInWithWorkos, completeSignInWithWorkos } = setupWorkos(
+  auth,
+  { component: components.authWorkos, allowedRedirectOrigins },
+).attachUserCallbacks({ createUser: internal.users.createUserWorkos });
 
 // `setupOauth` takes the callbacks as an argument, thus a reference from
 // `internal` makes the type of `api` depend on itself (TS7022). A reference
