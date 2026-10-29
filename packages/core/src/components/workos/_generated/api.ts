@@ -12,6 +12,7 @@ import type * as constants from "../constants.js";
 import type * as directory from "../directory.js";
 import type * as http from "../http.js";
 import type * as mirror from "../mirror.js";
+import type * as portal from "../portal.js";
 import type * as provider from "../provider.js";
 import type * as rest from "../rest.js";
 import type * as sync from "../sync.js";
@@ -30,6 +31,7 @@ const fullApi: ApiFromModules<{
   directory: typeof directory;
   http: typeof http;
   mirror: typeof mirror;
+  portal: typeof portal;
   provider: typeof provider;
   rest: typeof rest;
   sync: typeof sync;

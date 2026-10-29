@@ -179,6 +179,21 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         Name
       >;
     };
+    portal: {
+      generateLink: FunctionReference<
+        "action",
+        "internal",
+        {
+          intent:
+            "sso" | "dsync" | "domain_verification" | "certificate_renewal";
+          organizationId: string;
+          returnUrl?: string;
+          successUrl?: string;
+        },
+        { link: string },
+        Name
+      >;
+    };
     provider: {
       claimTicket: FunctionReference<
         "mutation",
