@@ -5,6 +5,7 @@ import { setupGithub } from "@convex-dev/auth/methods/github/server";
 import { setupGoogle } from "@convex-dev/auth/methods/google/server";
 import { setupUsernamePasskey } from "@convex-dev/auth/methods/username-passkey/server";
 import { setupUsernamePassword } from "@convex-dev/auth/methods/username-password/server";
+import { setupWorkos } from "@convex-dev/auth/methods/workos/server";
 import { components, internal } from "./_generated/api";
 import { env } from "./_generated/server";
 
@@ -90,3 +91,8 @@ export const { startSignInWithGithub, completeSignInWithGithub } = setupGithub(
   auth,
   { component: components.authGithub, allowedRedirectOrigins },
 ).attachUserCallbacks({ createUser: internal.users.createUserGithub });
+
+export const { startSignInWithWorkos, completeSignInWithWorkos } = setupWorkos(
+  auth,
+  { component: components.authWorkos, allowedRedirectOrigins },
+).attachUserCallbacks({ createUser: internal.users.createUserWorkos });
