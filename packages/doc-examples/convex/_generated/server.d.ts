@@ -42,7 +42,6 @@ type Env = {
   readonly AUTH_GOOGLE_CLIENT_SECRET: string;
   readonly AUTH_WORKOS_API_KEY: string;
   readonly AUTH_WORKOS_CLIENT_ID: string;
-  readonly AUTH_WORKOS_WEBHOOK_SECRET: string | undefined;
   readonly RESEND_API_KEY: string;
   readonly SITE_URL: string;
 };

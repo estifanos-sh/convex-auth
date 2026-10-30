@@ -31,16 +31,14 @@ In the [WorkOS dashboard](https://dashboard.workos.com):
 
 1. Under **Redirects**, add `https://<your deployment>.convex.site/workos/callback`.
 2. Note the environment's **client ID** and an **API key**.
-3. Optionally, under **Webhooks**, add an endpoint at
-   `https://<your deployment>.convex.site/workos/webhook` for the `dsync.*`,
-   `connection.*`, `organization.*` and `organization_domain.*` events, and
-   note its signing secret.
 
 ```sh
 npx convex env set AUTH_WORKOS_CLIENT_ID client_...
 npx convex env set AUTH_WORKOS_API_KEY sk_...
-npx convex env set AUTH_WORKOS_WEBHOOK_SECRET ...
 ```
+
+You don't add the webhook in the dashboard: the deployment registers its own
+endpoint (see [Directory Sync](#directory-sync-scim)).
 
 </Step>
 
@@ -63,6 +61,13 @@ WorkOS profile id (the account id), the `organizationId`, the `connectionId`,
 the `idpId` and the email. The email is asserted by the customer's identity
 provider and not verified by WorkOS, so don't use it to link to an existing
 account unless its domain is one the organization verified.
+
+To serve the callback from your app's own domain (e.g. a proxy that forwards
+`https://app.example.com/workos/*` to the deployment's site URL), pass
+`callbackUrl: () => "https://app.example.com/workos/callback"` and add that
+URL as the redirect URI instead. `callbackUrl` and `allowedRedirectOrigins`
+can both be functions, read when sign-in starts, so they can come from the
+deployment's environment.
 
 </Step>
 
@@ -108,6 +113,20 @@ inactive: revoke their sessions.
 ```ts file="examples/react-workos/convex/crons.ts" title="convex/crons.ts"
 
 ```
+
+`registerWorkosWebhook` registers the deployment's webhook endpoint,
+`<site-url>/workos/webhook`, at WorkOS through the
+[Webhooks API](https://workos.com/docs/reference/webhooks), subscribed to the
+events the sync reads, and keeps the secret WorkOS signs its deliveries with
+in the component. Run it after every deploy:
+
+```sh
+npx convex run workos:registerWorkosWebhook
+```
+
+It finds the endpoint by its URL, so it never creates a second one, and it
+enables the endpoint again if WorkOS disabled it. Until it has run, the
+webhook refuses every delivery, and the cron alone keeps the copy current.
 
 A handler that throws stops the sync at that change, and the next sync tries
 it again. The component's `sync.status` query shows where the sync is and why

@@ -205,7 +205,12 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       createAuthorizationRequest: FunctionReference<
         "mutation",
         "internal",
-        { codeVerifier: string; redirectTo: string; stateHash: string },
+        {
+          callbackUrl?: string;
+          codeVerifier: string;
+          redirectTo: string;
+          stateHash: string;
+        },
         { callbackUrl: string; clientId: string },
         Name
       >;
@@ -227,6 +232,15 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           phase: "idle" | "backfill" | "prune" | "events";
           running: boolean;
         },
+        Name
+      >;
+    };
+    webhook: {
+      register: FunctionReference<
+        "action",
+        "internal",
+        {},
+        { created: boolean; endpointId: string },
         Name
       >;
     };

@@ -47,7 +47,8 @@ export const onDirectoryChange = internalMutation({
   },
 });
 
-export const { syncWorkosDirectory } = setupWorkosDirectory({
-  component: components.authWorkos,
-  onChange: internal.workos.onDirectoryChange,
-});
+export const { registerWorkosWebhook, syncWorkosDirectory } =
+  setupWorkosDirectory({
+    component: components.authWorkos,
+    onChange: internal.workos.onDirectoryChange,
+  });

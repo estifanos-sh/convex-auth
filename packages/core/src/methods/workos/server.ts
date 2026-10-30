@@ -7,6 +7,7 @@
  */
 import {
   createFunctionHandle,
+  internalActionGeneric,
   internalMutationGeneric,
   type FunctionReference,
 } from "convex/server";
@@ -158,9 +159,18 @@ export type WorkosMethodOptions = {
   component: ComponentApi;
   /**
    * Origins `redirectTo` may point at, e.g. `["https://app.example.com"]`
-   * for open-redirect prevention.
+   * for open-redirect prevention. Pass a function to read them when sign-in
+   * starts, e.g. from the deployment's environment, instead of when the
+   * module loads.
    */
-  allowedRedirectOrigins: string[];
+  allowedRedirectOrigins: string[] | (() => string[]);
+  /**
+   * The `redirect_uri` WorkOS sends the user back to, read when sign-in
+   * starts. It must reach the component's `<httpPrefix>/callback` route, e.g.
+   * through a proxy on the app's own domain, and be a redirect URI of the
+   * WorkOS environment. Defaults to `<CONVEX_SITE_URL><httpPrefix>/callback`.
+   */
+  callbackUrl?: () => string;
 };
 
 /**
@@ -182,8 +192,8 @@ export type WorkosMethodOptions = {
  * 1. Install the component in convex.config.ts under
  *    `httpPrefix: "/workos"`, binding the WorkOS environment's `CLIENT_ID`
  *    and its API key as `CLIENT_SECRET`.
- * 2. Add `<site-url>/workos/callback` as a redirect URI in the WorkOS
- *    dashboard.
+ * 2. Add `<site-url>/workos/callback`, or the `callbackUrl` you pass, as a
+ *    redirect URI in the WorkOS dashboard.
  *
  * It uses WorkOS's SSO API, not AuthKit: WorkOS creates no users and no
  * sessions of its own, and the session is Convex Auth's.
@@ -192,9 +202,15 @@ export function setupWorkos<UsersTable extends string>(
   core: AuthCore<UsersTable>,
   options: WorkosMethodOptions,
 ) {
-  const allowedOrigins = validateAllowedRedirectOrigins(
-    options.allowedRedirectOrigins,
-  );
+  const origins = options.allowedRedirectOrigins;
+  let allowedOrigins: () => string[];
+  if (typeof origins === "function") {
+    allowedOrigins = () => validateAllowedRedirectOrigins(origins());
+  } else {
+    const validated = validateAllowedRedirectOrigins(origins);
+    allowedOrigins = () => validated;
+  }
+  const callbackUrl = options.callbackUrl;
 
   return {
     /**
@@ -217,7 +233,13 @@ export function setupWorkos<UsersTable extends string>(
         startArgs: vWorkosRouting,
         authorizationParams,
         createAuthorizationRequest:
-          options.component.provider.createAuthorizationRequest,
+          callbackUrl === undefined
+            ? options.component.provider.createAuthorizationRequest
+            : (ctx, args) =>
+                ctx.runMutation(
+                  options.component.provider.createAuthorizationRequest,
+                  { ...args, callbackUrl: callbackUrl() },
+                ),
       });
 
       const completeSignIn = buildCompleteSignIn<
@@ -255,14 +277,17 @@ export type WorkosChangeHandler = FunctionReference<
  * to revoke the app user's sessions.
  *
  * ```ts
- * export const { syncWorkosDirectory } = setupWorkosDirectory({
+ * export const { registerWorkosWebhook, syncWorkosDirectory } = setupWorkosDirectory({
  *   component: components.authWorkos,
  *   onChange: internal.workos.onDirectoryChange,
  * });
  * ```
  *
- * Run `syncWorkosDirectory` from a cron (every few minutes is plenty with the
- * webhook bound, which starts a sync as soon as WorkOS has a change). The
+ * Run `registerWorkosWebhook` on every deploy: it creates this deployment's
+ * webhook endpoint at WorkOS once, and keeps the secret its deliveries are
+ * signed with. Run `syncWorkosDirectory` from a cron (every few minutes is
+ * plenty with the webhook registered, which starts a sync as soon as WorkOS
+ * has a change). The
  * handler must not throw for a change it doesn't care about: a throw stops
  * the sync at that change until the next run.
  */
@@ -273,6 +298,12 @@ export function setupWorkosDirectory(options: {
   onChange: WorkosChangeHandler;
 }) {
   return {
+    registerWorkosWebhook: internalActionGeneric({
+      args: {},
+      returns: v.object({ endpointId: v.string(), created: v.boolean() }),
+      handler: async (ctx) =>
+        await ctx.runAction(options.component.webhook.register, {}),
+    }),
     syncWorkosDirectory: internalMutationGeneric({
       args: {},
       returns: v.null(),

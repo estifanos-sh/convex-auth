@@ -56,8 +56,12 @@ type CreateAuthorizationRequestRef = FunctionReference<
 export function buildStartSignIn<
   StartArgs extends PropertyValidators = Record<never, never>,
 >(options: {
-  /** Origins `redirectTo` may point at, already validated and normalized. */
-  allowedOrigins: string[];
+  /**
+   * The origins `redirectTo` may point at, validated and normalized. It is a
+   * function so an app can read them when the mutation runs, not when the
+   * module loads.
+   */
+  allowedOrigins: () => string[];
   /** The provider's authorization endpoint (a full URL). */
   authorizationEndpoint: string;
   /** Scopes to request. Left off the URL entirely when empty. */
@@ -116,7 +120,7 @@ export function buildStartSignIn<
       if (redirectTo === null) {
         throw new Error("redirectTo must be an absolute URL");
       }
-      if (!options.allowedOrigins.includes(redirectTo.origin)) {
+      if (!options.allowedOrigins().includes(redirectTo.origin)) {
         throw new Error(
           `redirectTo origin "${redirectTo.origin}" is not in allowedRedirectOrigins`,
         );

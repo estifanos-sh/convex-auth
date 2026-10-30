@@ -14,22 +14,21 @@ import { v } from "convex/values";
  *   env: {
  *     CLIENT_ID: app.env.AUTH_WORKOS_CLIENT_ID,
  *     CLIENT_SECRET: app.env.AUTH_WORKOS_API_KEY,
- *     WEBHOOK_SECRET: app.env.AUTH_WORKOS_WEBHOOK_SECRET,
  *   },
  * });
  * ```
  *
  * WorkOS authenticates the code exchange and every API call with the
- * environment's API key, which is why it is bound as `CLIENT_SECRET`.
- * `WEBHOOK_SECRET` is optional: with it, the component serves a webhook at
- * `<httpPrefix>/webhook` that starts a directory sync as soon as WorkOS has a
- * change.
+ * environment's API key, which is why it is bound as `CLIENT_SECRET`. The
+ * component also serves a webhook at `<httpPrefix>/webhook` that starts a
+ * directory sync as soon as WorkOS has a change. `webhook.register` creates
+ * that endpoint at WorkOS and keeps its signing secret, so there is no
+ * webhook secret to bind.
  */
 const component = defineComponent("authWorkos", {
   env: {
     CLIENT_ID: v.string(),
     CLIENT_SECRET: v.string(),
-    WEBHOOK_SECRET: v.optional(v.string()),
   },
 });
 
