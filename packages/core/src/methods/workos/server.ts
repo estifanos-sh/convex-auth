@@ -9,7 +9,9 @@ import {
   createFunctionHandle,
   internalActionGeneric,
   internalMutationGeneric,
-  type FunctionReference,
+  makeFunctionReference,
+  type GenericDataModel,
+  type GenericMutationCtx,
 } from "convex/server";
 import { Infer, v } from "convex/values";
 import type { UserCallbacks } from "../../lib/types.ts";
@@ -26,26 +28,29 @@ import {
   SCOPES,
   type WorkosUserInfo,
 } from "../../components/workos/constants.ts";
-import type { WorkosDirectoryChange } from "../../components/workos/schema.ts";
+import {
+  vWorkosEvent,
+  type WorkosEvent,
+  type WorkosEvents,
+} from "../../components/workos/schema.ts";
 
 export type { WorkosUserInfo };
 export {
-  vWorkosConnection,
-  vWorkosDirectory,
-  vWorkosDirectoryChange,
-  vWorkosDirectoryGroup,
-  vWorkosDirectoryMember,
-  vWorkosDirectoryUser,
-  vWorkosDomain,
-  vWorkosOrganization,
-  type WorkosConnection,
-  type WorkosDirectory,
-  type WorkosDirectoryChange,
-  type WorkosDirectoryGroup,
-  type WorkosDirectoryMember,
-  type WorkosDirectoryUser,
-  type WorkosDomain,
-  type WorkosOrganization,
+  vConnection as vWorkosConnection,
+  vDirectory as vWorkosDirectory,
+  vDirectoryGroup as vWorkosDirectoryGroup,
+  vDirectoryUser as vWorkosDirectoryUser,
+  vOrganization as vWorkosOrganization,
+  vOrganizationDomain as vWorkosOrganizationDomain,
+  vWorkosEvent,
+  type Connection as WorkosConnection,
+  type Directory as WorkosDirectory,
+  type DirectoryGroup as WorkosDirectoryGroup,
+  type DirectoryUser as WorkosDirectoryUser,
+  type Organization as WorkosOrganization,
+  type OrganizationDomain as WorkosOrganizationDomain,
+  type WorkosEvent,
+  type WorkosEvents,
 } from "../../components/workos/schema.ts";
 
 /**
@@ -65,7 +70,7 @@ export const vWorkosProfile = v.object({
   /**
    * Lowercased. The customer's identity provider asserts it; WorkOS does not
    * verify it. Trust it for account linking only when the email's domain is
-   * one the organization verified (see `directory.route`).
+   * one the organization verified (see `organizationDomains.get`).
    */
   email: v.string(),
   firstName: v.optional(v.string()),
@@ -107,7 +112,7 @@ export function normalizeWorkosProfile(
  * organization's active connection, or uses the one given.
  */
 export const vWorkosRouting = {
-  /** A WorkOS organization id (`org_...`), e.g. from `directory.route`. */
+  /** A WorkOS organization id (`org_...`), e.g. from `organizationDomains.get`. */
   organizationId: v.optional(v.string()),
   /** A WorkOS connection id (`conn_...`). */
   connectionId: v.optional(v.string()),
@@ -158,6 +163,14 @@ export type WorkosMethodOptions = {
   /** The WorkOS component instance, i.e. `components.authWorkos`. */
   component: ComponentApi;
   /**
+   * The path of the module that exports what `attachDirectoryCallbacks`
+   * returns, e.g. `"auth"` for `convex/auth.ts`. The component calls its
+   * `onWorkosEvent` for every change to its copy. Required with
+   * `attachDirectoryCallbacks`. It is a path, not `internal.auth`, because a
+   * reference to the module from inside it makes its types circular.
+   */
+  module?: string;
+  /**
    * Origins `redirectTo` may point at, e.g. `["https://app.example.com"]`
    * for open-redirect prevention. Pass a function to read them when sign-in
    * starts, e.g. from the deployment's environment, instead of when the
@@ -178,13 +191,26 @@ export type WorkosMethodOptions = {
  * the WorkOS component:
  *
  * ```ts
+ * import type { DataModel } from "./_generated/dataModel";
+ *
  * const auth = setupConvexAuth({ component: components.auth });
  * export const { signOut, refreshSession, isAuthenticated } = auth;
  *
- * export const { startSignInWithWorkos, completeSignInWithWorkos } = setupWorkos(auth, {
+ * const workos = setupWorkos(auth, {
  *   component: components.authWorkos,
+ *   module: "auth",
  *   allowedRedirectOrigins: ["https://app.example.com", "http://localhost:5173"],
- * }).attachUserCallbacks({ createUser: internal.users.createUserWorkos });
+ * });
+ *
+ * export const { startSignInWithWorkos, completeSignInWithWorkos } =
+ *   workos.attachUserCallbacks({ createUser: internal.users.createUserWorkos });
+ *
+ * export const { syncWorkos, unregisterWorkos, onWorkosEvent } =
+ *   workos.attachDirectoryCallbacks<DataModel>({
+ *     "dsync.user.updated": async (ctx, user) => {
+ *       // Map the directory user onto the app's user and roles.
+ *     },
+ *   });
  * ```
  *
  * Setup:
@@ -258,74 +284,85 @@ export function setupWorkos<UsersTable extends string>(
         completeSignInWithWorkos: completeSignIn,
       };
     },
+
+    /**
+     * Supply the app's handlers for WorkOS's events, keyed by event name, and
+     * get the functions to export from the module `module` names. The
+     * component runs the handler for each change to its copy, in the
+     * transaction that makes it, with the object as WorkOS holds it now: a
+     * webhook delivery reads its object again, so deliveries can arrive in
+     * any order, and `syncWorkos`'s listing makes the same changes and runs
+     * the same handlers. A throw refuses the delivery, which WorkOS retries,
+     * and stops a sync.
+     *
+     * Run `syncWorkos` on every deploy: it registers this deployment's
+     * webhook endpoint at WorkOS once and keeps its signing secret, then lists
+     * everything in the background and repairs what the webhook missed. Run
+     * `unregisterWorkos` before the deployment is deleted.
+     */
+    attachDirectoryCallbacks<DataModel extends GenericDataModel>(
+      callbacks: WorkosCallbacks<DataModel>,
+    ) {
+      if (options.module === undefined) {
+        throw new Error(
+          "Pass `module` to setupWorkos: the path of the module that exports onWorkosEvent",
+        );
+      }
+      const onEvent = makeFunctionReference<
+        "mutation",
+        { event: WorkosEvent },
+        null
+      >(`${options.module}:onWorkosEvent`);
+      return {
+        syncWorkos: internalActionGeneric({
+          args: {},
+          returns: v.null(),
+          handler: async (ctx) => {
+            await ctx.runAction(options.component.webhook.register, {
+              onEvent: await createFunctionHandle(onEvent),
+            });
+            await ctx.runMutation(options.component.reconcile.start, {});
+            return null;
+          },
+        }),
+        unregisterWorkos: internalActionGeneric({
+          args: {},
+          returns: v.object({ deleted: v.boolean() }),
+          handler: async (ctx) =>
+            await ctx.runAction(options.component.webhook.unregister, {}),
+        }),
+        onWorkosEvent: internalMutationGeneric({
+          args: { event: vWorkosEvent },
+          returns: v.null(),
+          handler: async (ctx: GenericMutationCtx<DataModel>, { event }) => {
+            await dispatch(ctx, callbacks, event);
+            return null;
+          },
+        }),
+      };
+    },
   };
 }
 
-/** The app's handler for directory changes. */
-export type WorkosChangeHandler = FunctionReference<
-  "mutation",
-  "internal",
-  { change: WorkosDirectoryChange },
-  null
->;
-
 /**
- * Keep the WorkOS component's copy of the directories current, and run
- * `onChange` for each change, in the transaction that makes it. The handler
- * maps directory users and groups onto the app's own users and roles; a
- * `user` change with `deprovisioned: true` is the signal to revoke the app
- * user's sessions.
- *
- * ```ts
- * export const {
- *   registerWorkosWebhook,
- *   reconcileWorkosDirectory,
- *   unregisterWorkosWebhook,
- * } = setupWorkosDirectory({
- *   component: components.authWorkos,
- *   onChange: internal.workos.onDirectoryChange,
- * });
- * ```
- *
- * On every deploy, run `registerWorkosWebhook`, which creates this
- * deployment's webhook endpoint at WorkOS once and keeps its signing secret
- * and the handler, then `reconcileWorkosDirectory`, which lists everything
- * in the background and repairs what the webhook missed. Run
- * `unregisterWorkosWebhook` before you delete the deployment.
- *
- * WorkOS delivers changes in no guaranteed order, so each delivery reads its
- * object again and the copy holds what WorkOS holds now. The handler must not throw for a change it doesn't
- * care about: a throw refuses the delivery, which WorkOS retries, and stops
- * a reconcile.
+ * The app's handlers, by WorkOS event name, each given the event's object.
+ * An event without a handler is ignored.
  */
-export function setupWorkosDirectory(options: {
-  /** The WorkOS component instance, i.e. `components.authWorkos`. */
-  component: ComponentApi;
-  /** An internal mutation taking `{ change: vWorkosDirectoryChange }`. */
-  onChange: WorkosChangeHandler;
-}) {
-  return {
-    registerWorkosWebhook: internalActionGeneric({
-      args: {},
-      returns: v.object({ endpointId: v.string(), created: v.boolean() }),
-      handler: async (ctx) =>
-        await ctx.runAction(options.component.webhook.register, {
-          onChange: await createFunctionHandle(options.onChange),
-        }),
-    }),
-    reconcileWorkosDirectory: internalMutationGeneric({
-      args: {},
-      returns: v.null(),
-      handler: async (ctx) => {
-        await ctx.runMutation(options.component.reconcile.start, {});
-        return null;
-      },
-    }),
-    unregisterWorkosWebhook: internalActionGeneric({
-      args: {},
-      returns: v.object({ deleted: v.boolean() }),
-      handler: async (ctx) =>
-        await ctx.runAction(options.component.webhook.unregister, {}),
-    }),
-  };
+export type WorkosCallbacks<DataModel extends GenericDataModel> = {
+  [Name in keyof WorkosEvents]?: (
+    ctx: GenericMutationCtx<DataModel>,
+    data: WorkosEvents[Name],
+  ) => Promise<void>;
+};
+
+async function dispatch<
+  DataModel extends GenericDataModel,
+  Name extends keyof WorkosEvents,
+>(
+  ctx: GenericMutationCtx<DataModel>,
+  callbacks: WorkosCallbacks<DataModel>,
+  event: { event: Name; data: WorkosEvents[Name] },
+) {
+  const handler: WorkosCallbacks<DataModel>[Name] = callbacks[event.event];
+  if (handler !== undefined) await handler(ctx, event.data);
 }

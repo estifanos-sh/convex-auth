@@ -5,9 +5,8 @@
  * delivery for a few minutes in staging, and for up to 3 days in production.
  *
  * A reconcile that starts at time T stamps every row it lists with T. Each
- * page is fetched in an action and written in one mutation. Once a group's
- * members are listed, its memberships older than T go. Once every listing is
- * done, each row older than T is read again by id, and removed only if WorkOS
+ * page is fetched in an action and written in one mutation. Once every
+ * listing is done, each row older than T is read again by id, and removed only if WorkOS
  * answers 404, so a reconcile that overlaps another, or a webhook delivery,
  * never removes what WorkOS still has. A run hands over to a fresh action
  * before an action's time limit, and tries the same step again after
@@ -27,13 +26,11 @@ import {
   mutation,
 } from "./_generated/server.ts";
 import { BATCH, PAGE_SIZE } from "./constants.ts";
-import { changeHandler, Mirror } from "./mirror.ts";
+import { eventHandler, Mirror } from "./mirror.ts";
 import { callWorkos, WorkosApiError } from "./rest.ts";
 import { type BackfillPosition, vBackfillPosition } from "./schema.ts";
 import {
   decodeList,
-  decodeListed,
-  decodeMember,
   decodeObject,
   type Kind,
   objectPath,
@@ -47,22 +44,24 @@ const PAGES_PER_RUN = 100;
 
 /** The order rows older than a reconcile are read again: children first. */
 const PRUNED: Kind[] = [
-  "user",
-  "group",
+  "directoryUser",
+  "directoryGroup",
   "directory",
   "connection",
-  "domain",
+  "organizationDomain",
   "organization",
 ];
 
-const vTrim = v.object({
-  stage: v.literal("trim"),
-  directoryId: v.string(),
-  groupId: v.string(),
-});
+const LISTED = {
+  organizations: "organization",
+  connections: "connection",
+  directories: "directory",
+  directoryUsers: "directoryUser",
+  directoryGroups: "directoryGroup",
+} as const satisfies Record<BackfillPosition["stage"], Kind>;
+
 const vStep = v.union(
   vBackfillPosition,
-  vTrim,
   v.object({ stage: v.literal("prune"), kind: vKind }),
 );
 type Step = Infer<typeof vStep>;
@@ -73,7 +72,7 @@ async function mirror(ctx: MutationCtx, generation: number): Promise<Mirror> {
   if (webhook === null) {
     throw new Error("Register the webhook (webhook.register) before this");
   }
-  return new Mirror(ctx, generation, changeHandler(webhook.onChange));
+  return new Mirror(ctx, generation, eventHandler(webhook.onEvent));
 }
 
 /**
@@ -94,7 +93,7 @@ export async function read(kind: Kind, id: string): Promise<Update | null> {
 
 /**
  * Start a reconcile. It runs in the background, and the app's handler runs
- * for every change it makes. Run it on every deploy, after
+ * for every change it makes. `syncWorkos` starts it on every deploy, after
  * `webhook.register`, which records the handler.
  */
 export const start = mutation({
@@ -123,22 +122,6 @@ async function nextDirectory(ctx: MutationCtx, afterId: string | undefined) {
   return undefined;
 }
 
-async function nextGroup(
-  ctx: MutationCtx,
-  directoryId: string,
-  afterId: string | undefined,
-) {
-  const next = await ctx.db
-    .query("directoryGroups")
-    .withIndex("directoryId_id", (q) =>
-      afterId === undefined
-        ? q.eq("directoryId", directoryId)
-        : q.eq("directoryId", directoryId).gt("id", afterId),
-    )
-    .first();
-  return next?.id;
-}
-
 /** Where reconcile goes once the listing at `position` is done. */
 async function advance(
   ctx: MutationCtx,
@@ -152,25 +135,16 @@ async function advance(
     case "directories": {
       const directoryId = await nextDirectory(ctx, undefined);
       return directoryId === undefined
-        ? { stage: "prune", kind: "user" }
-        : { stage: "users", directoryId };
+        ? { stage: "prune", kind: "directoryUser" }
+        : { stage: "directoryUsers", directoryId };
     }
-    case "users":
-      return { stage: "groups", directoryId: position.directoryId };
-    case "groups":
-    case "members": {
-      const groupId = await nextGroup(
-        ctx,
-        position.directoryId,
-        position.stage === "members" ? position.groupId : undefined,
-      );
-      if (groupId !== undefined) {
-        return { stage: "members", directoryId: position.directoryId, groupId };
-      }
+    case "directoryUsers":
+      return { stage: "directoryGroups", directoryId: position.directoryId };
+    case "directoryGroups": {
       const directoryId = await nextDirectory(ctx, position.directoryId);
       return directoryId === undefined
-        ? { stage: "prune", kind: "user" }
-        : { stage: "users", directoryId };
+        ? { stage: "prune", kind: "directoryUser" }
+        : { stage: "directoryUsers", directoryId };
     }
   }
 }
@@ -189,35 +163,7 @@ export const page = internalMutation({
     for (const update of args.updates) await copy.write(update);
     const position = args.position;
     if (args.after !== undefined) return { ...position, after: args.after };
-    if (position.stage === "members") {
-      return {
-        stage: "trim" as const,
-        directoryId: position.directoryId,
-        groupId: position.groupId,
-      };
-    }
     return await advance(ctx, position);
-  },
-});
-
-/**
- * Remove a batch of the group's memberships that no listing since
- * `generation` showed, and say where to go next.
- */
-export const trim = internalMutation({
-  args: { generation: v.number(), step: vTrim },
-  returns: vStep,
-  handler: async (ctx, { generation, step }) => {
-    const copy = await mirror(ctx, generation);
-    const stale = await ctx.db
-      .query("directoryMembers")
-      .withIndex("groupId_generation", (q) =>
-        q.eq("groupId", step.groupId).lt("generation", generation),
-      )
-      .take(BATCH);
-    for (const member of stale) await copy.removeMember(member);
-    if (stale.length === BATCH) return step;
-    return await advance(ctx, { ...step, stage: "members" });
   },
 });
 
@@ -228,11 +174,11 @@ export const stale = internalQuery({
   handler: async (ctx, { kind, generation }) => {
     const table = {
       organization: "organizations",
-      domain: "domains",
+      organizationDomain: "organizationDomains",
       connection: "connections",
       directory: "directories",
-      user: "directoryUsers",
-      group: "directoryGroups",
+      directoryUser: "directoryUsers",
+      directoryGroup: "directoryGroups",
     } as const;
     const rows = await ctx.db
       .query(table[kind])
@@ -257,35 +203,15 @@ export const settle = internalMutation({
   },
 });
 
-/** Remove the next batch of a deleted user's or group's memberships. */
-export const drop = internalMutation({
-  args: {
-    kind: v.union(v.literal("user"), v.literal("group")),
-    id: v.string(),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const copy = await mirror(ctx, Date.now());
-    await copy.remove(args.kind, args.id);
-    return null;
-  },
-});
-
 async function removeContents(
   ctx: MutationCtx,
   copy: Mirror,
   directory: Doc<"directories">,
 ): Promise<boolean> {
   const db = ctx.db;
-  const members = await db
-    .query("directoryMembers")
-    .withIndex("directoryId", (q) => q.eq("directoryId", directory.id))
-    .take(BATCH);
-  for (const member of members) await copy.removeMember(member);
-  if (members.length > 0) return true;
   const users = await db
     .query("directoryUsers")
-    .withIndex("directoryId", (q) => q.eq("directoryId", directory.id))
+    .withIndex("directoryId_id", (q) => q.eq("directoryId", directory.id))
     .take(BATCH);
   for (const user of users) await copy.removeUser(user);
   if (users.length > 0) return true;
@@ -328,33 +254,25 @@ function listing(position: BackfillPosition) {
       return { path: "/connections", query };
     case "directories":
       return { path: "/directories", query };
-    case "users":
+    case "directoryUsers":
       return {
         path: "/directory_users",
         query: { ...query, directory: position.directoryId },
       };
-    case "groups":
+    case "directoryGroups":
       return {
         path: "/directory_groups",
         query: { ...query, directory: position.directoryId },
       };
-    case "members":
-      return {
-        path: "/directory_users",
-        query: { ...query, group: position.groupId },
-      };
   }
 }
 
-/** Take one step: a page, a trim batch or a batch of reads by id. */
+/** Take one step: a page, or a batch of reads by id. */
 async function take(
   ctx: ActionCtx,
   generation: number,
   step: Step,
 ): Promise<Step | null> {
-  if (step.stage === "trim") {
-    return await ctx.runMutation(internal.reconcile.trim, { generation, step });
-  }
   if (step.stage === "prune") {
     const ids: string[] = await ctx.runQuery(internal.reconcile.stale, {
       kind: step.kind,
@@ -384,11 +302,8 @@ async function take(
     ...listing(position),
   });
   const listed = decodeList(reply.body);
-  const updates = listed.items.map((item) =>
-    position.stage === "members"
-      ? decodeMember(item, position.groupId)
-      : decodeListed(position.stage, item),
-  );
+  const kind = LISTED[position.stage];
+  const updates = listed.items.map((item) => decodeObject(kind, item));
   return await ctx.runMutation(internal.reconcile.page, {
     generation,
     position,
@@ -398,7 +313,7 @@ async function take(
 }
 
 /**
- * Take steps from `step` while `more` holds, for up to a budget of steps.
+ * Take steps from `step`, for up to a budget of steps.
  * Returns the step to continue from, if any, and how long to wait first:
  * when WorkOS refuses with a `Retry-After`, the same step goes again once it
  * has passed. Any other failure ends the run, and the next delivery, which
@@ -408,11 +323,10 @@ async function walk(
   ctx: ActionCtx,
   generation: number,
   step: Step,
-  more: (step: Step) => boolean,
 ): Promise<{ next: Step; pause: number } | null> {
   let current: Step | null = step;
   for (let taken = 0; taken < PAGES_PER_RUN; taken += 1) {
-    if (current === null || !more(current)) return null;
+    if (current === null) return null;
     const at: Step = current;
     try {
       current = await take(ctx, generation, at);
@@ -427,7 +341,7 @@ async function walk(
       throw error;
     }
   }
-  return current !== null && more(current) ? { next: current, pause: 0 } : null;
+  return current === null ? null : { next: current, pause: 0 };
 }
 
 /** Run reconcile from `step`, handing over to a fresh action as it goes. */
@@ -435,50 +349,9 @@ export const run = internalAction({
   args: { generation: v.number(), step: vStep },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const left = await walk(ctx, args.generation, args.step, () => true);
+    const left = await walk(ctx, args.generation, args.step);
     if (left !== null) {
       await ctx.scheduler.runAfter(left.pause, internal.reconcile.run, {
-        generation: args.generation,
-        step: left.next,
-      });
-    }
-    return null;
-  },
-});
-
-const vGroupStep = v.union(
-  vTrim,
-  v.object({
-    stage: v.literal("members"),
-    directoryId: v.string(),
-    groupId: v.string(),
-    after: v.optional(v.string()),
-  }),
-);
-
-/**
- * List one group's members as WorkOS holds them now, and remove the
- * memberships the listing did not show. A membership delivery runs this:
- * WorkOS reads memberships back only as a group's member list.
- */
-export const members = internalAction({
-  args: { generation: v.number(), step: vGroupStep },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const group = args.step.groupId;
-    const left = await walk(
-      ctx,
-      args.generation,
-      args.step,
-      (step) =>
-        (step.stage === "members" || step.stage === "trim") &&
-        step.groupId === group,
-    );
-    if (
-      left !== null &&
-      (left.next.stage === "members" || left.next.stage === "trim")
-    ) {
-      await ctx.scheduler.runAfter(left.pause, internal.reconcile.members, {
         generation: args.generation,
         step: left.next,
       });

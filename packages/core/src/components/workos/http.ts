@@ -1,6 +1,6 @@
 /**
  * WorkOS's routes: the SSO callback, and the webhook that keeps the copy of
- * the directories current.
+ * the environment current.
  *
  * @module
  */
@@ -38,8 +38,8 @@ const http: HttpRouter = buildCallbackRouter<ClaimedRequest>({
 /**
  * A verified delivery names an object, which is read again from WorkOS and
  * written as it is now, or removed if WorkOS answers 404, so deliveries can
- * arrive in any order. A membership delivery queues a listing of the group's
- * members, which can be long. A failure answers 500, and WorkOS retries.
+ * arrive in any order. A membership delivery reads the directory user again,
+ * whose roles it may move. A failure answers 500, and WorkOS retries.
  */
 http.route({
   path: "/webhook",
@@ -66,17 +66,6 @@ http.route({
       return new Response("Unreadable event.", { status: 400 });
     }
     if (target === null) return new Response(null, { status: 200 });
-    if (target.kind === "members") {
-      await ctx.scheduler.runAfter(0, internal.reconcile.members, {
-        generation: Date.now(),
-        step: {
-          stage: "members",
-          directoryId: target.directoryId,
-          groupId: target.groupId,
-        },
-      });
-      return new Response(null, { status: 200 });
-    }
     const update = await read(target.kind, target.id);
     await ctx.runMutation(internal.reconcile.settle, {
       kind: target.kind,

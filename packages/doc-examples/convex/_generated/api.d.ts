@@ -11,7 +11,6 @@
 import type * as acme from "../acme.js";
 import type * as auth from "../auth.js";
 import type * as users from "../users.js";
-import type * as workos from "../workos.js";
 
 import type {
   ApiFromModules,
@@ -23,7 +22,6 @@ declare const fullApi: ApiFromModules<{
   acme: typeof acme;
   auth: typeof auth;
   users: typeof users;
-  workos: typeof workos;
 }>;
 
 /**

@@ -8,14 +8,14 @@
  */
 import { Infer, v } from "convex/values";
 import {
-  vWorkosConnection,
-  vWorkosDirectory,
-  vWorkosDirectoryGroup,
-  vWorkosDirectoryMember,
-  vWorkosDirectoryUser,
-  vWorkosDomain,
-  vWorkosOrganization,
-  type WorkosDomain,
+  vConnection,
+  vDirectory,
+  vDirectoryGroup,
+  vDirectoryUser,
+  vOrganization,
+  vOrganizationDomain,
+  type DirectoryUser,
+  type OrganizationDomain,
 } from "./schema.ts";
 import { EVENTS } from "./constants.ts";
 
@@ -23,22 +23,32 @@ export class DecodeError extends Error {
   override readonly name = "DecodeError";
 }
 
+/** A kind of WorkOS object, each read by id from its own endpoint. */
+export const vKind = v.union(
+  v.literal("organization"),
+  v.literal("organizationDomain"),
+  v.literal("connection"),
+  v.literal("directory"),
+  v.literal("directoryUser"),
+  v.literal("directoryGroup"),
+);
+export type Kind = Infer<typeof vKind>;
+
 /**
  * One object as WorkOS holds it now, decoded from a listing or a read by id,
- * as the write it makes to the copy.
+ * as the write it makes to the copy. An organization carries its domains.
  */
 export const vUpdate = v.union(
   v.object({
     kind: v.literal("organization"),
-    row: vWorkosOrganization,
-    domains: v.array(vWorkosDomain),
+    row: vOrganization,
+    domains: v.array(vOrganizationDomain),
   }),
-  v.object({ kind: v.literal("domain"), row: vWorkosDomain }),
-  v.object({ kind: v.literal("connection"), row: vWorkosConnection }),
-  v.object({ kind: v.literal("directory"), row: vWorkosDirectory }),
-  v.object({ kind: v.literal("user"), row: vWorkosDirectoryUser }),
-  v.object({ kind: v.literal("group"), row: vWorkosDirectoryGroup }),
-  v.object({ kind: v.literal("member"), row: vWorkosDirectoryMember }),
+  v.object({ kind: v.literal("organizationDomain"), row: vOrganizationDomain }),
+  v.object({ kind: v.literal("connection"), row: vConnection }),
+  v.object({ kind: v.literal("directory"), row: vDirectory }),
+  v.object({ kind: v.literal("directoryUser"), row: vDirectoryUser }),
+  v.object({ kind: v.literal("directoryGroup"), row: vDirectoryGroup }),
 );
 export type Update = Infer<typeof vUpdate>;
 
@@ -64,16 +74,16 @@ function optionalText(object: Fields, name: string): string | undefined {
   return typeof value === "string" ? value : undefined;
 }
 
-function domain(value: unknown, organizationId?: string): WorkosDomain {
-  const raw = fields(value, "domain");
+function domain(value: unknown, organizationId?: string): OrganizationDomain {
+  const raw = fields(value, "organization domain");
   const owner = optionalText(raw, "organization_id") ?? organizationId;
   if (owner === undefined) {
     throw new DecodeError("WorkOS sent a domain with no organization");
   }
   return {
-    id: text(raw, "id", "domain"),
+    id: text(raw, "id", "organization domain"),
     organizationId: owner,
-    domain: text(raw, "domain", "domain").toLowerCase(),
+    domain: text(raw, "domain", "organization domain").toLowerCase(),
     state: optionalText(raw, "state") ?? "pending",
   };
 }
@@ -102,7 +112,8 @@ function connection(value: unknown): Update {
     row: {
       id: text(raw, "id", "connection"),
       organizationId: optionalText(raw, "organization_id"),
-      type: text(raw, "connection_type", "connection"),
+      connectionType: text(raw, "connection_type", "connection"),
+      name: optionalText(raw, "name"),
       state: text(raw, "state", "connection"),
     },
   };
@@ -122,31 +133,40 @@ function directory(value: unknown): Update {
   };
 }
 
+function role(value: unknown): { slug: string } | undefined {
+  if (typeof value !== "object" || value === null) return undefined;
+  const slug = optionalText(fields(value, "role"), "slug");
+  return slug === undefined ? undefined : { slug };
+}
+
 function user(value: unknown): Update {
   const raw = fields(value, "directory user");
-  return {
-    kind: "user",
-    row: {
-      id: text(raw, "id", "directory user"),
-      directoryId: text(raw, "directory_id", "directory user"),
-      organizationId: optionalText(raw, "organization_id"),
-      idpId: text(raw, "idp_id", "directory user"),
-      email: optionalText(raw, "email")?.toLowerCase(),
-      firstName: optionalText(raw, "first_name"),
-      lastName: optionalText(raw, "last_name"),
-      state: text(raw, "state", "directory user"),
-    },
+  const row: DirectoryUser = {
+    id: text(raw, "id", "directory user"),
+    directoryId: text(raw, "directory_id", "directory user"),
+    organizationId: optionalText(raw, "organization_id"),
+    idpId: text(raw, "idp_id", "directory user"),
+    email: optionalText(raw, "email")?.toLowerCase(),
+    firstName: optionalText(raw, "first_name"),
+    lastName: optionalText(raw, "last_name"),
+    state: text(raw, "state", "directory user"),
+    role: role(raw.role),
+    roles: Array.isArray(raw.roles)
+      ? raw.roles.flatMap((item) => role(item) ?? [])
+      : undefined,
   };
+  return { kind: "directoryUser", row };
 }
 
 function group(value: unknown): Update {
   const raw = fields(value, "directory group");
   return {
-    kind: "group",
+    kind: "directoryGroup",
     row: {
       id: text(raw, "id", "directory group"),
       directoryId: text(raw, "directory_id", "directory group"),
       organizationId: optionalText(raw, "organization_id"),
+      idpId: optionalText(raw, "idp_id"),
       name: text(raw, "name", "directory group"),
     },
   };
@@ -154,45 +174,36 @@ function group(value: unknown): Update {
 
 const HANDLED = new Set<string>(EVENTS);
 
-/** A kind of object WorkOS reads by id. */
-export const vKind = v.union(
-  v.literal("organization"),
-  v.literal("domain"),
-  v.literal("connection"),
-  v.literal("directory"),
-  v.literal("user"),
-  v.literal("group"),
-);
-export type Kind = Infer<typeof vKind>;
-
-/** An object a webhook delivery says changed, to be read again. */
-export type Target =
-  | { kind: Kind; id: string }
-  | { kind: "members"; directoryId: string; groupId: string };
+/** An object a webhook delivery says changed, to be read again by id. */
+export type Target = { kind: Kind; id: string };
 
 function target(name: string, data: unknown): Target {
   const raw = fields(data, "event object");
+  // WorkOS keeps no membership object: a membership change is a change to
+  // the directory user, whose roles it may move.
   if (
     name === "dsync.group.user_added" ||
     name === "dsync.group.user_removed"
   ) {
-    return {
-      kind: "members",
-      directoryId: text(raw, "directory_id", "group membership"),
-      groupId: text(fields(raw.group, "group"), "id", "group"),
-    };
+    const member = fields(raw.user, "directory user");
+    return { kind: "directoryUser", id: text(member, "id", "directory user") };
   }
   if (name === "organization_domain.verification_failed") {
-    const failed = fields(raw.organization_domain, "domain");
-    return { kind: "domain", id: text(failed, "id", "domain") };
+    const failed = fields(raw.organization_domain, "organization domain");
+    return {
+      kind: "organizationDomain",
+      id: text(failed, "id", "organization domain"),
+    };
   }
   const id = text(raw, "id", "event object");
   if (name === "dsync.activated" || name === "dsync.deleted") {
     return { kind: "directory", id };
   }
-  if (name.startsWith("dsync.user.")) return { kind: "user", id };
-  if (name.startsWith("dsync.group.")) return { kind: "group", id };
-  if (name.startsWith("organization_domain.")) return { kind: "domain", id };
+  if (name.startsWith("dsync.user.")) return { kind: "directoryUser", id };
+  if (name.startsWith("dsync.group.")) return { kind: "directoryGroup", id };
+  if (name.startsWith("organization_domain.")) {
+    return { kind: "organizationDomain", id };
+  }
   if (name.startsWith("organization.")) return { kind: "organization", id };
   return { kind: "connection", id };
 }
@@ -226,63 +237,31 @@ export function decodeEvent(value: unknown): Target | null {
 export function objectPath(kind: Kind, id: string): string {
   const collection = {
     organization: "organizations",
-    domain: "organization_domains",
+    organizationDomain: "organization_domains",
     connection: "connections",
     directory: "directories",
-    user: "directory_users",
-    group: "directory_groups",
+    directoryUser: "directory_users",
+    directoryGroup: "directory_groups",
   }[kind];
   return `/${collection}/${encodeURIComponent(id)}`;
 }
 
-/** One object read by id, decoded as the write it makes. */
+/** One object read by id or listed, decoded as the write it makes. */
 export function decodeObject(kind: Kind, value: unknown): Update {
   switch (kind) {
     case "organization":
       return organization(value);
-    case "domain":
-      return { kind: "domain", row: domain(value) };
+    case "organizationDomain":
+      return { kind: "organizationDomain", row: domain(value) };
     case "connection":
       return connection(value);
     case "directory":
       return directory(value);
-    case "user":
+    case "directoryUser":
       return user(value);
-    case "group":
+    case "directoryGroup":
       return group(value);
   }
-}
-
-/** What a reconcile listing holds, decoded as the write it makes. */
-export function decodeListed(
-  stage: "organizations" | "connections" | "directories" | "users" | "groups",
-  value: unknown,
-): Update {
-  switch (stage) {
-    case "organizations":
-      return organization(value);
-    case "connections":
-      return connection(value);
-    case "directories":
-      return directory(value);
-    case "users":
-      return user(value);
-    case "groups":
-      return group(value);
-  }
-}
-
-/** A directory user listed by group, decoded as the membership it shows. */
-export function decodeMember(value: unknown, groupId: string): Update {
-  const raw = fields(value, "directory user");
-  return {
-    kind: "member",
-    row: {
-      directoryId: text(raw, "directory_id", "directory user"),
-      groupId,
-      userId: text(raw, "id", "directory user"),
-    },
-  };
 }
 
 /** A webhook endpoint, from WorkOS's `/webhook_endpoints` API. */

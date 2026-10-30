@@ -15,7 +15,7 @@ import {
 } from "./_generated/server.ts";
 import { EVENTS } from "./constants.ts";
 import { callWorkos, WorkosApiError } from "./rest.ts";
-import { changeHandler } from "./mirror.ts";
+import { eventHandler } from "./mirror.ts";
 import { decodeEndpoint, decodeList } from "./wire.ts";
 
 /** How old a signed timestamp may be, against replays. */
@@ -149,17 +149,17 @@ async function enableEndpoint(endpoint: Endpoint): Promise<Endpoint> {
 
 /**
  * Register this deployment's webhook endpoint at WorkOS, subscribed to the
- * events the copy applies, and keep its signing secret and the app's change
- * handler, a function handle to a mutation taking `{ change }`. Run it on
+ * events the copy applies, and keep its signing secret and the app's event
+ * handler, a function handle to a mutation taking `{ event }`. Run it on
  * every deploy: it finds the endpoint by its URL, so it never creates a
  * second one, and it enables a disabled endpoint and subscribes it to any
  * event it is missing. Until it has run, the webhook refuses every delivery.
  */
 export const register = action({
-  args: { onChange: v.string() },
+  args: { onEvent: v.string() },
   returns: v.object({ endpointId: v.string(), created: v.boolean() }),
   handler: async (ctx, args) => {
-    changeHandler(args.onChange);
+    eventHandler(args.onEvent);
     const url = webhookUrl();
     const found = await findEndpoint(url);
     const endpoint =
@@ -168,7 +168,7 @@ export const register = action({
       endpointId: endpoint.id,
       url,
       secret: endpoint.secret,
-      onChange: args.onChange,
+      onEvent: args.onEvent,
     });
     return { endpointId: endpoint.id, created: found === null };
   },
@@ -210,7 +210,7 @@ export const keep = internalMutation({
     endpointId: v.string(),
     url: v.string(),
     secret: v.string(),
-    onChange: v.string(),
+    onEvent: v.string(),
   },
   returns: v.null(),
   handler: async (ctx, args) => {

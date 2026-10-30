@@ -7,7 +7,7 @@ import schema from "./schema.ts";
 const modules = import.meta.glob("./**/*.ts");
 
 const WEBHOOK_URL = "https://test.convex.site/workos/webhook";
-const REGISTER = { onChange: "function://onChange" };
+const REGISTER = { onEvent: "function://onEvent" };
 
 type Endpoint = {
   object: "webhook_endpoint";
@@ -124,18 +124,18 @@ describe("webhook.register", () => {
     expect(workos.endpoints[0]?.endpoint_url).toBe(WEBHOOK_URL);
     expect(workos.endpoints[0]?.events).toEqual([...EVENTS]);
     expect(
-      (await kept(t)).map(({ endpointId, url, secret, onChange }) => ({
+      (await kept(t)).map(({ endpointId, url, secret, onEvent }) => ({
         endpointId,
         url,
         secret,
-        onChange,
+        onEvent,
       })),
     ).toEqual([
       {
         endpointId: "we_1",
         url: WEBHOOK_URL,
         secret: "secret_1",
-        onChange: REGISTER.onChange,
+        onEvent: REGISTER.onEvent,
       },
     ]);
   });
@@ -186,10 +186,10 @@ describe("webhook.register", () => {
 });
 
 describe("webhook.unregister", () => {
-  test("refuses an onChange that is not a function handle", async () => {
+  test("refuses an onEvent that is not a function handle", async () => {
     const { t, workos } = setup();
     await expect(
-      t.action(api.webhook.register, { onChange: "testApp:onChange" }),
+      t.action(api.webhook.register, { onEvent: "testApp:onEvent" }),
     ).rejects.toThrow(/function handle/);
     expect(workos.endpoints).toEqual([]);
   });

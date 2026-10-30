@@ -8,7 +8,7 @@ The WorkOS component and the `workos` sign-in method let your customers'
 employees sign in with their company's identity provider (Okta, Entra ID,
 Google Workspace, any SAML or OIDC IdP) through
 [WorkOS](https://workos.com), and keep a copy of each customer's SCIM
-directory (users, groups and memberships) in your deployment.
+directory in your deployment, as WorkOS's own objects.
 
 WorkOS only does SSO and Directory Sync here. Sign-in goes through WorkOS's
 standalone SSO API, not AuthKit: WorkOS creates no users and no sessions of
@@ -75,9 +75,9 @@ deployment's environment.
 
 A sign-in is routed to exactly one `organizationId` or `connectionId`, and
 takes an optional `loginHint` and `domainHint`. To route by the email the
-user typed, look its domain up with the component's `directory.route` query,
-which returns the organization that verified the domain and has an active
-connection:
+user typed, look its domain up with the component's `organizationDomains.get`
+query, which returns the organization that verified the domain and its
+active connection:
 
 ```tsx file="examples/react-workos/src/App.tsx" title="src/App.tsx"
 
@@ -93,63 +93,75 @@ providers refuse to sign in inside an embedded web view.
 
 ## Directory Sync (SCIM)
 
-The component keeps a copy of the environment's organizations, verified
-domains, SSO connections, directories, directory users, groups and
-memberships. Webhook deliveries keep it current: a verified delivery names
-an object, which the webhook reads again from WorkOS and writes as it is
-now, or removes if WorkOS answers 404. WorkOS delivers in no guaranteed
-order, and reading the current state makes the order not matter. A
-membership delivery lists the group's members again in the background, and
-a deleted directory, user or group loses its contents a batch at a time.
+The component keeps a copy of the WorkOS environment, one table per WorkOS
+object: `organizations`, `organizationDomains`, `connections`,
+`directories`, `directoryUsers` and `directoryGroups`, with WorkOS's field
+names in camelCase. There is no membership table: a directory user's roles
+are its own `role` and `roles`, as WorkOS assigns them from the groups it is
+in.
 
-`setupWorkosDirectory` takes your handler, an internal mutation that runs
-for each change in the same transaction that applies it. Map directory users
-and groups onto your own users and roles there. A `user` change with
-`deprovisioned: true` means the directory deleted the user or marked them
-inactive: revoke their sessions.
+Webhook deliveries keep the copy current: a verified delivery names an
+object, which the webhook reads again from WorkOS and writes as it is now, or
+removes if WorkOS answers 404. WorkOS delivers in no guaranteed order, and
+reading the current state makes the order not matter. A
+`dsync.group.user_added` or `dsync.group.user_removed` delivery reads the
+directory user again, whose roles it may move. A deleted directory loses its
+users and groups a batch at a time.
 
-```ts file="examples/react-workos/convex/workos.ts" title="convex/workos.ts"
+`attachDirectoryCallbacks` takes your handlers, keyed by WorkOS event name,
+each given the object as WorkOS holds it now. A handler runs in the same
+transaction that writes the change to the copy, so your data and the copy
+never disagree. The example signs a user out everywhere when the directory
+deletes or deactivates them:
+
+```ts file="examples/react-workos/convex/users.ts" title="convex/users.ts"
 
 ```
 
-`registerWorkosWebhook` registers the deployment's webhook endpoint,
+`setupWorkos` takes `module`, the path of the module that exports what
+`attachDirectoryCallbacks` returns (`"auth"` for `convex/auth.ts`): the
+component calls its `onWorkosEvent` for every change.
+
+`syncWorkos` registers the deployment's webhook endpoint,
 `<site-url>/workos/webhook`, at WorkOS through the
 [Webhooks API](https://workos.com/docs/reference/webhooks), subscribed to the
-events the copy keeps, and keeps in the component the secret WorkOS signs
-its deliveries with and your handler. It finds the endpoint by its URL, so it
-never creates a second one, and it enables the endpoint again if WorkOS
-disabled it. Until it has run, the webhook refuses every delivery.
+events the copy keeps, and keeps the secret WorkOS signs its deliveries with.
+It finds the endpoint by its URL, so it never creates a second one, and it
+enables the endpoint again if WorkOS disabled it. Until it has run, the
+webhook refuses every delivery.
 
-`reconcileWorkosDirectory` lists everything WorkOS holds, a page per
-mutation in the background, and writes each object the same way. A row the
-listings no longer show is read again by id and removed only if WorkOS
-answers 404, so overlapping runs are harmless. A 429, a 5xx or a timeout
-makes it wait and try the same step again. It fills a new deployment's copy and
-repairs deliveries the webhook missed: WorkOS retries a failed delivery for
-a few minutes in staging and for up to 3 days in production. Run both after
-every deploy:
+Then it lists everything WorkOS holds, a page per mutation in the
+background, and writes each object the same way, running the same handlers.
+A row the listings no longer show is read again by id and removed only if
+WorkOS answers 404, so overlapping runs are harmless. When WorkOS answers
+with a `Retry-After`, it waits that long and tries the same step again; any
+other failure ends the run, and the next one picks the work up. It fills a
+new deployment's copy and repairs deliveries the webhook missed: WorkOS
+retries a failed delivery for a few minutes in staging and for up to 3 days
+in production. Run it after every deploy:
 
 ```sh
-npx convex run workos:registerWorkosWebhook
-npx convex run workos:reconcileWorkosDirectory
+npx convex run auth:syncWorkos
 ```
 
 Every deployment that shares a WorkOS environment, such as a preview
 deployment, registers its own endpoint, and WorkOS keeps an endpoint after
-its deployment is gone. Run `unregisterWorkosWebhook`, which deletes this
+its deployment is gone. Run `unregisterWorkos`, which deletes this
 deployment's endpoint and its secret, before you delete the deployment:
 
 ```sh
-npx convex run workos:unregisterWorkosWebhook
+npx convex run auth:unregisterWorkos
 ```
 
 A handler that throws refuses the delivery, and WorkOS retries it; in a
-reconcile, it stops the run at that step, and the next reconcile tries again.
+sync, it stops the run at that step, and the next sync tries again.
 
-The component's `directory` queries read the copy: `route`,
-`getOrganization`, `listDirectories`, `getUser`, `findUsers` (by
-`organizationId` and `idpId`, which an SSO profile carries too), `listUsers`,
-`listGroups`, `listUserGroups` and `listMembers`.
+The component's queries read the copy, one module per object:
+`organizations.get` and `list`, `organizationDomains.get` (by domain or
+email) and `list`, `connections.get` and `list`, `directories.get` and
+`list`, `directoryUsers.get` and `list` (by `directory`, `organization`,
+`organization` and `idpId`, which an SSO profile carries too, `idpId` or
+`email`), and `directoryGroups.get` and `list`.
 
 ## Admin Portal
 

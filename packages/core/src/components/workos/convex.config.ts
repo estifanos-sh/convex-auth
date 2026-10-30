@@ -4,7 +4,8 @@ import { v } from "convex/values";
 /**
  * The WorkOS component, for enterprise SSO and SCIM directory sync through
  * WorkOS. It serves the SSO callback, keeps a copy of the environment's
- * organizations, domains, SSO connections and directories, and generates
+ * organizations, organization domains, SSO connections, directories,
+ * directory users and directory groups, and generates
  * Admin Portal links. Install it once, with the `httpPrefix` its routes are
  * served under, and bind the environment's client ID and API key:
  *

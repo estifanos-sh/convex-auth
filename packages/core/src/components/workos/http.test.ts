@@ -182,7 +182,7 @@ describe("workos webhook", () => {
         endpointId: "we_1",
         url: "https://test.convex.site/workos/webhook",
         secret: WEBHOOK_SECRET,
-        onChange: "function://handler",
+        onEvent: "function://handler",
       });
     });
   }

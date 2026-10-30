@@ -6,37 +6,38 @@ import {
 } from "../../lib/oauth/schema.ts";
 
 /**
- * The shapes of the WorkOS objects the copy keeps, as the app reads
- * them and as its change handler receives them. `id` is WorkOS's id.
+ * The WorkOS objects the copy keeps, as WorkOS's API returns them, with their
+ * fields in camelCase and only the fields the copy reads. `id` is WorkOS's id.
  */
-export const vWorkosOrganization = v.object({
+export const vOrganization = v.object({
   id: v.string(),
   name: v.string(),
   externalId: v.optional(v.string()),
 });
-export type WorkosOrganization = Infer<typeof vWorkosOrganization>;
+export type Organization = Infer<typeof vOrganization>;
 
-export const vWorkosDomain = v.object({
+export const vOrganizationDomain = v.object({
   id: v.string(),
   organizationId: v.string(),
   /** Lowercased. */
   domain: v.string(),
-  /** WorkOS's state, e.g. `"verified"` or `"pending"`. */
+  /** e.g. `"verified"` or `"pending"`. */
   state: v.string(),
 });
-export type WorkosDomain = Infer<typeof vWorkosDomain>;
+export type OrganizationDomain = Infer<typeof vOrganizationDomain>;
 
-export const vWorkosConnection = v.object({
+export const vConnection = v.object({
   id: v.string(),
   organizationId: v.optional(v.string()),
   /** e.g. `"OktaSAML"`. */
-  type: v.string(),
+  connectionType: v.string(),
+  name: v.optional(v.string()),
   /** e.g. `"active"` or `"inactive"`. */
   state: v.string(),
 });
-export type WorkosConnection = Infer<typeof vWorkosConnection>;
+export type Connection = Infer<typeof vConnection>;
 
-export const vWorkosDirectory = v.object({
+export const vDirectory = v.object({
   id: v.string(),
   organizationId: v.optional(v.string()),
   name: v.string(),
@@ -45,9 +46,11 @@ export const vWorkosDirectory = v.object({
   /** e.g. `"linked"`. */
   state: v.string(),
 });
-export type WorkosDirectory = Infer<typeof vWorkosDirectory>;
+export type Directory = Infer<typeof vDirectory>;
 
-export const vWorkosDirectoryUser = v.object({
+const vRole = v.object({ slug: v.string() });
+
+export const vDirectoryUser = v.object({
   id: v.string(),
   directoryId: v.string(),
   organizationId: v.optional(v.string()),
@@ -59,78 +62,87 @@ export const vWorkosDirectoryUser = v.object({
   lastName: v.optional(v.string()),
   /** `"active"`, or `"inactive"` once the directory deprovisioned the user. */
   state: v.string(),
+  role: v.optional(vRole),
+  roles: v.optional(v.array(vRole)),
 });
-export type WorkosDirectoryUser = Infer<typeof vWorkosDirectoryUser>;
+export type DirectoryUser = Infer<typeof vDirectoryUser>;
 
-export const vWorkosDirectoryGroup = v.object({
+export const vDirectoryGroup = v.object({
   id: v.string(),
   directoryId: v.string(),
   organizationId: v.optional(v.string()),
+  idpId: v.optional(v.string()),
   name: v.string(),
 });
-export type WorkosDirectoryGroup = Infer<typeof vWorkosDirectoryGroup>;
-
-export const vWorkosDirectoryMember = v.object({
-  directoryId: v.string(),
-  groupId: v.string(),
-  userId: v.string(),
-});
-export type WorkosDirectoryMember = Infer<typeof vWorkosDirectoryMember>;
-
-const vWritten = v.union(v.literal("upserted"), v.literal("deleted"));
+export type DirectoryGroup = Infer<typeof vDirectoryGroup>;
 
 /**
- * One change to the copy, as the app's handler receives it. Each carries
- * the object as WorkOS held it when it was read, and a write that changes
- * nothing is not delivered.
- *
- * A `user` change carries `deprovisioned`: true when the directory deleted
- * the user or marked them inactive. That is the signal to revoke the app
- * user's sessions.
+ * A change to the copy, named with WorkOS's event for it, and carrying the
+ * object as WorkOS holds it now (or, for a deletion, as the copy last held
+ * it). A write that changes nothing has no event.
  */
-export const vWorkosDirectoryChange = v.union(
+export const vWorkosEvent = v.union(
   v.object({
-    kind: v.literal("organization"),
-    action: vWritten,
-    organization: vWorkosOrganization,
+    event: v.union(
+      v.literal("organization.created"),
+      v.literal("organization.updated"),
+      v.literal("organization.deleted"),
+    ),
+    data: vOrganization,
   }),
   v.object({
-    kind: v.literal("domain"),
-    action: vWritten,
-    domain: vWorkosDomain,
+    event: v.union(
+      v.literal("organization_domain.created"),
+      v.literal("organization_domain.updated"),
+      v.literal("organization_domain.deleted"),
+    ),
+    data: vOrganizationDomain,
   }),
   v.object({
-    kind: v.literal("connection"),
-    action: vWritten,
-    connection: vWorkosConnection,
+    event: v.union(
+      v.literal("connection.activated"),
+      v.literal("connection.deactivated"),
+      v.literal("connection.deleted"),
+    ),
+    data: vConnection,
   }),
   v.object({
-    kind: v.literal("directory"),
-    action: vWritten,
-    directory: vWorkosDirectory,
+    event: v.union(v.literal("dsync.activated"), v.literal("dsync.deleted")),
+    data: vDirectory,
   }),
   v.object({
-    kind: v.literal("user"),
-    action: vWritten,
-    user: vWorkosDirectoryUser,
-    deprovisioned: v.boolean(),
+    event: v.union(
+      v.literal("dsync.user.created"),
+      v.literal("dsync.user.updated"),
+      v.literal("dsync.user.deleted"),
+    ),
+    data: vDirectoryUser,
   }),
   v.object({
-    kind: v.literal("group"),
-    action: vWritten,
-    group: vWorkosDirectoryGroup,
-  }),
-  v.object({
-    kind: v.literal("member"),
-    action: v.union(v.literal("added"), v.literal("removed")),
-    member: vWorkosDirectoryMember,
+    event: v.union(
+      v.literal("dsync.group.created"),
+      v.literal("dsync.group.updated"),
+      v.literal("dsync.group.deleted"),
+    ),
+    data: vDirectoryGroup,
   }),
 );
-export type WorkosDirectoryChange = Infer<typeof vWorkosDirectoryChange>;
+export type WorkosEvent = Infer<typeof vWorkosEvent>;
+
+/** Each event's name, with the object it carries. */
+export type WorkosEvents = {
+  [Name in WorkosEvent["event"]]: WorkosEvent extends infer Each
+    ? Each extends { event: infer Names; data: infer Data }
+      ? Name extends Names
+        ? Data
+        : never
+      : never
+    : never;
+};
 
 /**
- * Where a reconcile is: the listing it is on, the directory and group the
- * listing is scoped to, and WorkOS's cursor within it.
+ * Where a reconcile is: the listing it is on, the directory the listing is
+ * scoped to, and WorkOS's cursor within it.
  */
 export const vBackfillPosition = v.union(
   v.object({
@@ -142,14 +154,8 @@ export const vBackfillPosition = v.union(
     after: v.optional(v.string()),
   }),
   v.object({
-    stage: v.union(v.literal("users"), v.literal("groups")),
+    stage: v.union(v.literal("directoryUsers"), v.literal("directoryGroups")),
     directoryId: v.string(),
-    after: v.optional(v.string()),
-  }),
-  v.object({
-    stage: v.literal("members"),
-    directoryId: v.string(),
-    groupId: v.string(),
     after: v.optional(v.string()),
   }),
 );
@@ -158,9 +164,7 @@ export type BackfillPosition = Infer<typeof vBackfillPosition>;
 /**
  * Every row carries the time it was last written or listed. A reconcile that
  * started at time T reads each row older than T again by id, and removes it
- * only if WorkOS no longer has it. A membership has no read by id: it carries
- * the time of the latest listing of its group that showed it, and a listing
- * that started at T removes the group's memberships older than T.
+ * only if WorkOS no longer has it.
  */
 const kept = {
   generation: v.number(),
@@ -170,27 +174,24 @@ export default defineSchema({
   authorizationRequests: authorizationRequestsTable,
   tickets: ticketsTable,
 
-  organizations: defineTable({
-    ...vWorkosOrganization.fields,
-    ...kept,
-  })
+  organizations: defineTable({ ...vOrganization.fields, ...kept })
     .index("id", ["id"])
     .index("generation", ["generation"]),
-  domains: defineTable({ ...vWorkosDomain.fields, ...kept })
+  organizationDomains: defineTable({ ...vOrganizationDomain.fields, ...kept })
     .index("id", ["id"])
     .index("domain", ["domain"])
     .index("organizationId", ["organizationId"])
     .index("generation", ["generation"]),
-  connections: defineTable({ ...vWorkosConnection.fields, ...kept })
+  connections: defineTable({ ...vConnection.fields, ...kept })
     .index("id", ["id"])
     .index("organizationId_state", ["organizationId", "state"])
     .index("generation", ["generation"]),
   directories: defineTable({
-    ...vWorkosDirectory.fields,
+    ...vDirectory.fields,
     ...kept,
     /**
      * Set when WorkOS deleted the directory. The row stays until `sweep` has
-     * removed its users, groups and members, a page at a time.
+     * removed its users and groups, a batch at a time.
      */
     deleted: v.optional(v.boolean()),
   })
@@ -198,33 +199,29 @@ export default defineSchema({
     .index("organizationId", ["organizationId"])
     .index("deleted", ["deleted"])
     .index("generation", ["generation"]),
-  directoryUsers: defineTable({ ...vWorkosDirectoryUser.fields, ...kept })
-    .index("id", ["id"])
-    .index("directoryId", ["directoryId"])
-    .index("organizationId_idpId", ["organizationId", "idpId"])
-    .index("generation", ["generation"]),
-  directoryGroups: defineTable({
-    ...vWorkosDirectoryGroup.fields,
-    ...kept,
-  })
+  directoryUsers: defineTable({ ...vDirectoryUser.fields, ...kept })
     .index("id", ["id"])
     .index("directoryId_id", ["directoryId", "id"])
+    .index("organizationId_id", ["organizationId", "id"])
+    .index("organizationId_idpId_id", ["organizationId", "idpId", "id"])
+    .index("idpId_id", ["idpId", "id"])
+    .index("email_id", ["email", "id"])
     .index("generation", ["generation"]),
-  directoryMembers: defineTable({ ...vWorkosDirectoryMember.fields, ...kept })
-    .index("groupId_userId", ["groupId", "userId"])
-    .index("groupId_generation", ["groupId", "generation"])
-    .index("userId", ["userId"])
-    .index("directoryId", ["directoryId"]),
+  directoryGroups: defineTable({ ...vDirectoryGroup.fields, ...kept })
+    .index("id", ["id"])
+    .index("directoryId_id", ["directoryId", "id"])
+    .index("organizationId_id", ["organizationId", "id"])
+    .index("generation", ["generation"]),
 
   /**
    * The deployment's one webhook endpoint at WorkOS, which `webhook.register`
    * creates, the secret WorkOS signs its deliveries with, and the app's
-   * change handler, as a function handle.
+   * event handler, as a function handle.
    */
   webhook: defineTable({
     endpointId: v.string(),
     url: v.string(),
     secret: v.string(),
-    onChange: v.string(),
+    onEvent: v.string(),
   }),
 });
