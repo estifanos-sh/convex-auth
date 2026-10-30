@@ -41,7 +41,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       listSessions: FunctionReference<
         "query",
         "internal",
-        { limit?: number; userId: string },
+        { userId: string },
         Array<{
           creationTime: number;
           expiresAt: number;
@@ -75,6 +75,13 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         "internal",
         { sessionIds: Array<string> },
         Array<string>,
+        Name
+      >;
+      revokeUserSessions: FunctionReference<
+        "mutation",
+        "internal",
+        { accessTokenTtlSeconds?: number; userId: string },
+        { more: boolean },
         Name
       >;
       signIn: FunctionReference<

@@ -47,6 +47,8 @@ export const REFRESH_GRACE_MS = 5 * 1000; // 5 seconds
 // reuse-detection horizon: past it the row is gone and a replayed token reads
 // as unknown, which revokes nothing but also grants nothing.
 export const SPENT_TOKEN_HORIZON_MS = 60 * 60 * 1000; // 1 hour
+// Convex's limit on the documents one transaction writes.
+const TRANSACTION_WRITE_LIMIT = 16_000;
 
 // The `iss` claim is set by the deployment when this component calls
 // `ctx.auth.signJwt`: `${CONVEX_CLOUD_URL}/components/auth`, which is what the
@@ -773,13 +775,11 @@ export const signOut = mutation({
  * stays cached until a session or token changes; callers that want only the
  * active sessions compare `expiresAt` to the current time themselves.
  *
- * With `limit`, only the newest `limit` are listed, so a caller that revokes
- * every session of a user with many can go a batch per transaction.
  *
  * This is a component function callable by the app, not by end-user clients.
  */
 export const listSessions = query({
-  args: { userId: v.string(), limit: v.optional(v.number()) },
+  args: { userId: v.string() },
   returns: v.array(
     v.object({
       sessionId: v.string(),
@@ -788,13 +788,12 @@ export const listSessions = query({
       expiresAt: v.number(),
     }),
   ),
-  handler: async (ctx, { userId, limit }) => {
-    const newest = ctx.db
+  handler: async (ctx, { userId }) => {
+    const sessions = await ctx.db
       .query("sessions")
       .withIndex("by_user", (q) => q.eq("userId", userId))
-      .order("desc");
-    const sessions =
-      limit === undefined ? await newest.collect() : await newest.take(limit);
+      .order("desc")
+      .collect();
     const result = [];
     for (const session of sessions) {
       // Issued rows have no `retiredAt`, so the index orders them by
@@ -843,6 +842,37 @@ export const listSessions = query({
  */
 // TODO: when we have step-up auth revoking sessions should check its state,
 // rather than count on callers to safely invoke it.
+/**
+ * Revoke as many of a user's sessions as one transaction can delete, and say
+ * whether any are left, so a caller revoking a user with many sessions goes a
+ * transaction at a time. A session holds at most its issued tokens, one
+ * redeemed token, and a spent one per refresh within the reuse horizon, so
+ * the batch follows from the access-token TTL, which sets the refresh rate.
+ *
+ * This is a component function callable by the app, not by end-user clients.
+ */
+export const revokeUserSessions = mutation({
+  args: { userId: v.string(), accessTokenTtlSeconds: v.optional(v.number()) },
+  returns: v.object({ more: v.boolean() }),
+  handler: async (ctx, { userId, accessTokenTtlSeconds }) => {
+    const ttl = accessTokenTtlSeconds ?? DEFAULT_ACCESS_TOKEN_TTL_SECONDS;
+    const writes =
+      1 +
+      STANDARD_ISSUED_REFRESH_TOKEN_LIMIT +
+      1 +
+      Math.ceil(SPENT_TOKEN_HORIZON_MS / (ttl * 1000));
+    const batch = Math.max(1, Math.floor(TRANSACTION_WRITE_LIMIT / writes));
+    const sessions = await ctx.db
+      .query("sessions")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .take(batch + 1);
+    for (const session of sessions.slice(0, batch)) {
+      await deleteSession(ctx, session._id);
+    }
+    return { more: sessions.length > batch };
+  },
+});
+
 export const revokeSessions = mutation({
   args: { sessionIds: v.array(v.string()) },
   returns: v.array(v.string()),
