@@ -1,6 +1,7 @@
 /**
- * The deployment's webhook endpoint at WorkOS: registering it, keeping the
- * secret WorkOS signs its deliveries with, and checking that signature.
+ * The deployment's webhook endpoint at WorkOS: registering and unregistering
+ * it, keeping the secret WorkOS signs its deliveries with, checking that
+ * signature, and applying each delivery to the copy.
  *
  * @module
  */
@@ -14,7 +15,8 @@ import {
 } from "./_generated/server.ts";
 import { EVENTS } from "./constants.ts";
 import { callWorkos, WorkosApiError } from "./rest.ts";
-import { decodeEndpoint, decodeList } from "./wire.ts";
+import { changeHandler, Mirror } from "./mirror.ts";
+import { decodeEndpoint, decodeList, vUpdate } from "./wire.ts";
 
 /** How old a signed timestamp may be, against replays. */
 const TOLERANCE_MS = 5 * 60 * 1000;
@@ -133,7 +135,7 @@ async function createEndpoint(url: string): Promise<Endpoint> {
   return decodeEndpoint(reply.body);
 }
 
-/** The endpoint, enabled and subscribed to every event the sync reads. */
+/** The endpoint, enabled and subscribed to every event the copy applies. */
 async function enableEndpoint(endpoint: Endpoint): Promise<Endpoint> {
   const missing = EVENTS.filter((event) => !endpoint.events.includes(event));
   if (endpoint.enabled && missing.length === 0) return endpoint;
@@ -147,15 +149,17 @@ async function enableEndpoint(endpoint: Endpoint): Promise<Endpoint> {
 
 /**
  * Register this deployment's webhook endpoint at WorkOS, subscribed to the
- * events the directory sync reads, and keep its signing secret. Run it on
+ * events the copy applies, and keep its signing secret and the app's change
+ * handler, a function handle to a mutation taking `{ change }`. Run it on
  * every deploy: it finds the endpoint by its URL, so it never creates a
  * second one, and it enables a disabled endpoint and subscribes it to any
  * event it is missing. Until it has run, the webhook refuses every delivery.
  */
 export const register = action({
-  args: {},
+  args: { onChange: v.string() },
   returns: v.object({ endpointId: v.string(), created: v.boolean() }),
-  handler: async (ctx) => {
+  handler: async (ctx, args) => {
+    changeHandler(args.onChange);
     const url = webhookUrl();
     const found = await findEndpoint(url);
     const endpoint =
@@ -164,91 +168,50 @@ export const register = action({
       endpointId: endpoint.id,
       url,
       secret: endpoint.secret,
+      onChange: args.onChange,
     });
     return { endpointId: endpoint.id, created: found === null };
   },
 });
 
 /**
- * Whether `url` is an https URL on a subdomain of `host` (e.g.
- * `".convex.site"`) with exactly the path `path`, and nothing else.
+ * Delete this deployment's endpoint at WorkOS and forget its secret. Run it
+ * before the deployment is deleted, so WorkOS stops delivering to it.
+ * Returns whether there was an endpoint to delete.
  */
-function matchesPattern(url: string, host: string, path: string): boolean {
-  if (!URL.canParse(url)) return false;
-  const parsed = new URL(url);
-  return (
-    parsed.protocol === "https:" &&
-    parsed.hostname.endsWith(host) &&
-    parsed.hostname.length > host.length &&
-    parsed.port === "" &&
-    parsed.username === "" &&
-    parsed.password === "" &&
-    parsed.pathname === path &&
-    parsed.search === "" &&
-    parsed.hash === ""
-  );
-}
-
-/**
- * Delete the endpoints of deployments that are gone, e.g. an app's retired
- * preview deployments, which share one WorkOS environment. An endpoint is
- * deleted only when its URL is an https URL on a subdomain of `host` with
- * exactly the path `path`, it is not in `keep`, and it is not this
- * deployment's own endpoint. `keep` lists the webhook URLs of the
- * deployments that still exist. Everything is listed before anything is
- * deleted. Returns the ids of the deleted endpoints.
- */
-export const prune = action({
-  args: {
-    /** A host suffix starting with a dot, e.g. `".convex.site"`. */
-    host: v.string(),
-    /** The webhook path the app's deployments share, e.g. `"/workos/webhook"`. */
-    path: v.string(),
-    keep: v.array(v.string()),
-  },
-  returns: v.object({ deleted: v.array(v.string()) }),
-  handler: async (_ctx, args) => {
-    if (!/^(\.[a-z0-9-]+){2,}$/.test(args.host)) {
-      throw new Error(
-        `prune's host must be a suffix such as ".convex.site", not "${args.host}"`,
-      );
-    }
-    if (!args.path.startsWith("/") || args.path === "/") {
-      throw new Error(
-        `prune's path must be a webhook path such as "/workos/webhook", not "${args.path}"`,
-      );
-    }
-    const kept = new Set([...args.keep, webhookUrl()]);
-    const doomed: string[] = [];
-    for await (const endpoint of listEndpoints()) {
-      if (
-        !kept.has(endpoint.url) &&
-        matchesPattern(endpoint.url, args.host, args.path)
-      ) {
-        doomed.push(endpoint.id);
-      }
-    }
-    const deleted: string[] = [];
-    for (const id of doomed) {
+export const unregister = action({
+  args: {},
+  returns: v.object({ deleted: v.boolean() }),
+  handler: async (ctx) => {
+    const kept = await ctx.runQuery(internal.webhook.read, {});
+    const id = kept?.endpointId ?? (await findEndpoint(webhookUrl()))?.id;
+    let deleted = false;
+    if (id !== undefined) {
       try {
         await callWorkos(env.CLIENT_SECRET, {
           method: "DELETE",
           path: `/webhook_endpoints/${encodeURIComponent(id)}`,
         });
-        deleted.push(id);
+        deleted = true;
       } catch (error) {
-        // Another prune got there first.
+        // Already deleted, e.g. in the dashboard.
         if (!(error instanceof WorkosApiError && error.status === 404)) {
           throw error;
         }
       }
     }
+    await ctx.runMutation(internal.webhook.forget, {});
     return { deleted };
   },
 });
 
 export const keep = internalMutation({
-  args: { endpointId: v.string(), url: v.string(), secret: v.string() },
+  args: {
+    endpointId: v.string(),
+    url: v.string(),
+    secret: v.string(),
+    onChange: v.string(),
+  },
   returns: v.null(),
   handler: async (ctx, args) => {
     const row = await ctx.db.query("webhook").first();
@@ -258,12 +221,44 @@ export const keep = internalMutation({
   },
 });
 
-/** The secret deliveries are signed with, or null before `register` ran. */
-export const secret = internalQuery({
+export const forget = internalMutation({
   args: {},
-  returns: v.union(v.null(), v.string()),
+  returns: v.null(),
   handler: async (ctx) => {
     const row = await ctx.db.query("webhook").first();
-    return row?.secret ?? null;
+    if (row !== null) await ctx.db.delete("webhook", row._id);
+    return null;
+  },
+});
+
+/** The registered endpoint, or null before `register` ran. */
+export const read = internalQuery({
+  args: {},
+  returns: v.union(
+    v.null(),
+    v.object({ endpointId: v.string(), secret: v.string() }),
+  ),
+  handler: async (ctx) => {
+    const row = await ctx.db.query("webhook").first();
+    return row === null
+      ? null
+      : { endpointId: row.endpointId, secret: row.secret };
+  },
+});
+
+/**
+ * Apply one verified delivery. WorkOS does not keep deliveries in order, so
+ * an update older than the row it would replace is passed over.
+ */
+export const receive = internalMutation({
+  args: { update: vUpdate },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const row = await ctx.db.query("webhook").first();
+    if (row === null) return null;
+    await new Mirror(ctx, Date.now(), changeHandler(row.onChange)).write(
+      args.update,
+    );
+    return null;
   },
 });

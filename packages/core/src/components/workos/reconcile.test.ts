@@ -16,8 +16,8 @@ const modules = import.meta.glob("./**/*.ts");
 type Json = Record<string, unknown>;
 
 /**
- * A WorkOS environment, as much of its API as the sync calls. Its listings
- * page through `after`, and its events are the ones a test appends.
+ * A WorkOS environment, as much of its API as reconcile calls. Its listings
+ * page through `after`.
  */
 class FakeWorkos {
   organizations: Json[] = [];
@@ -26,21 +26,7 @@ class FakeWorkos {
   users: Json[] = [];
   groups: Json[] = [];
   memberships: Array<{ group: string; user: string }> = [];
-  events: Json[] = [];
-  /** Answer a cursor read with this status, as for a cursor past retention. */
-  refuseCursor: number | undefined;
   now = Date.parse("2026-01-01T00:00:00Z");
-
-  event(event: string, data: Json) {
-    this.now += 1000;
-    this.events.push({
-      object: "event",
-      id: `event_${String(this.events.length + 1).padStart(4, "0")}`,
-      event,
-      data,
-      created_at: new Date(this.now).toISOString(),
-    });
-  }
 
   private page(items: Json[], params: URLSearchParams) {
     const limit = Number(params.get("limit") ?? "10");
@@ -64,21 +50,6 @@ class FakeWorkos {
         headers: { Date: new Date(this.now).toUTCString() },
       });
     switch (url.pathname) {
-      case "/events": {
-        const after = params.get("after");
-        if (after !== null && this.refuseCursor !== undefined) {
-          return json({ code: "invalid_cursor" }, this.refuseCursor);
-        }
-        const since = params.get("range_start");
-        const events =
-          since === null
-            ? this.events
-            : this.events.filter(
-                (event) =>
-                  Date.parse(String(event.created_at)) >= Date.parse(since),
-              );
-        return json(this.page(events, params));
-      }
       case "/organizations":
         return json(this.page(this.organizations, params));
       case "/connections":
@@ -167,6 +138,8 @@ const DIRECTORY = {
   updated_at: at(0),
 };
 
+const WEBHOOK_SECRET = "webhook-secret";
+
 let changes: WorkosDirectoryChange[] = [];
 let refuse: ((change: WorkosDirectoryChange) => boolean) | undefined;
 
@@ -176,8 +149,8 @@ const onChange = makeFunctionReference<
   null
 >("testApp:onChange");
 
-const sync = makeFunctionReference<"mutation", Record<string, never>, null>(
-  "testApp:sync",
+const register = makeFunctionReference<"mutation", Record<string, never>, null>(
+  "testApp:register",
 );
 
 const testApp = {
@@ -192,11 +165,14 @@ const testApp = {
       return null;
     },
   }),
-  sync: mutationGeneric({
+  register: mutationGeneric({
     args: {},
     returns: v.null(),
     handler: async (ctx) => {
-      await ctx.runMutation(api.sync.start, {
+      await ctx.db.insert("webhook", {
+        endpointId: "we_1",
+        url: "https://test.convex.site/workos/webhook",
+        secret: WEBHOOK_SECRET,
         onChange: await createFunctionHandle(onChange),
       });
       return null;
@@ -219,9 +195,50 @@ function setup(workos: FakeWorkos) {
   });
 }
 
-async function runSync(t: ReturnType<typeof setup>) {
-  await t.mutation(sync, {});
+async function reconcile(t: ReturnType<typeof setup>) {
+  await t.mutation(api.reconcile.start, {});
   await t.finishAllScheduledFunctions(vi.runAllTimers);
+}
+
+async function sign(body: string, timestamp: number) {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(WEBHOOK_SECRET),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const digest = await crypto.subtle.sign(
+    "HMAC",
+    key,
+    new TextEncoder().encode(`${timestamp}.${body}`),
+  );
+  const hex = Array.from(new Uint8Array(digest), (byte) =>
+    byte.toString(16).padStart(2, "0"),
+  ).join("");
+  return `t=${timestamp}, v1=${hex}`;
+}
+
+/** Deliver one event to the webhook, signed as WorkOS signs it. */
+async function deliver(
+  t: ReturnType<typeof setup>,
+  event: string,
+  data: Json,
+): Promise<number> {
+  const body = JSON.stringify({
+    object: "event",
+    id: `event_${event}`,
+    event,
+    data,
+    created_at: new Date(Date.now()).toISOString(),
+  });
+  const response = await t.fetch("/webhook", {
+    method: "POST",
+    headers: { "WorkOS-Signature": await sign(body, Date.now()) },
+    body,
+  });
+  await t.finishAllScheduledFunctions(vi.runAllTimers);
+  return response.status;
 }
 
 function seeded(): FakeWorkos {
@@ -246,8 +263,17 @@ function seeded(): FakeWorkos {
   return workos;
 }
 
+async function prepared(workos: FakeWorkos) {
+  const t = setup(workos);
+  await t.mutation(register, {});
+  await reconcile(t);
+  changes = [];
+  return t;
+}
+
 beforeEach(() => {
   vi.useFakeTimers();
+  vi.setSystemTime(Date.parse("2026-01-01T00:00:00Z"));
   changes = [];
   refuse = undefined;
 });
@@ -259,10 +285,18 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("directory sync", () => {
+describe("reconcile", () => {
+  test("refuses to start before the webhook is registered", async () => {
+    const t = setup(seeded());
+    await expect(t.mutation(api.reconcile.start, {})).rejects.toThrow(
+      /Register the webhook/,
+    );
+  });
+
   test("the first run lists everything and tells the app", async () => {
     const t = setup(seeded());
-    await runSync(t);
+    await t.mutation(register, {});
+    await reconcile(t);
 
     expect(changes.map((change) => `${change.kind}:${change.action}`)).toEqual([
       "organization:upserted",
@@ -274,10 +308,6 @@ describe("directory sync", () => {
       "group:upserted",
       "member:added",
     ]);
-    expect(await t.query(api.sync.status, {})).toEqual({
-      phase: "events",
-      running: false,
-    });
     expect(
       await t.query(api.directory.route, { email: "Ada@EXAMPLE.com" }),
     ).toEqual({ organizationId: "org_1" });
@@ -298,32 +328,73 @@ describe("directory sync", () => {
   });
 
   test("a second run with nothing new changes nothing", async () => {
-    const t = setup(seeded());
-    await runSync(t);
-    changes = [];
-    await runSync(t);
+    const t = await prepared(seeded());
+    vi.advanceTimersByTime(1000);
+    await reconcile(t);
     expect(changes).toEqual([]);
   });
 
-  test("events deprovision, regroup and delete users in order", async () => {
+  test("removes what the listings no longer show", async () => {
     const workos = seeded();
-    const t = setup(workos);
-    await runSync(t);
-    changes = [];
+    const t = await prepared(workos);
+    workos.users = [user("directory_user_1")];
+    workos.memberships = [];
+    workos.connections = [];
+    vi.advanceTimersByTime(1000);
+    await reconcile(t);
 
-    workos.event("dsync.user.updated", user("directory_user_1", "inactive", 5));
-    workos.event("dsync.group.user_removed", {
-      directory_id: "directory_1",
-      user: user("directory_user_1"),
-      group: group("directory_group_1"),
+    expect(changes.map((change) => `${change.kind}:${change.action}`)).toEqual([
+      "member:removed",
+      "user:deleted",
+      "connection:deleted",
+    ]);
+    expect(changes[1]).toMatchObject({
+      user: { id: "directory_user_2" },
+      deprovisioned: true,
     });
-    workos.event("dsync.group.user_added", {
-      directory_id: "directory_1",
-      user: user("directory_user_2"),
-      group: group("directory_group_1"),
-    });
-    workos.event("dsync.user.deleted", user("directory_user_2", "active", 6));
-    await runSync(t);
+  });
+
+  test("pages through a listing longer than a page", async () => {
+    const workos = seeded();
+    workos.users = Array.from({ length: 120 }, (_, index) =>
+      user(`directory_user_${String(index).padStart(3, "0")}`),
+    );
+    workos.memberships = [];
+    const t = setup(workos);
+    await t.mutation(register, {});
+    await reconcile(t);
+    expect(changes.filter((change) => change.kind === "user")).toHaveLength(
+      120,
+    );
+  });
+});
+
+describe("webhook deliveries", () => {
+  test("deprovision, regroup and delete users in order", async () => {
+    const t = await prepared(seeded());
+
+    for (const [event, data] of [
+      ["dsync.user.updated", user("directory_user_1", "inactive", 5)],
+      [
+        "dsync.group.user_removed",
+        {
+          directory_id: "directory_1",
+          user: user("directory_user_1"),
+          group: group("directory_group_1"),
+        },
+      ],
+      [
+        "dsync.group.user_added",
+        {
+          directory_id: "directory_1",
+          user: user("directory_user_2"),
+          group: group("directory_group_1"),
+        },
+      ],
+      ["dsync.user.deleted", user("directory_user_2", "active", 6)],
+    ] as const) {
+      expect(await deliver(t, event, data)).toBe(200);
+    }
 
     expect(changes).toEqual([
       {
@@ -367,15 +438,16 @@ describe("directory sync", () => {
     ).toEqual([]);
   });
 
-  test("an older event never overwrites a newer row", async () => {
+  test("an older delivery never overwrites a newer row", async () => {
     const workos = seeded();
     workos.users = [user("directory_user_1", "active", 10)];
-    const t = setup(workos);
-    await runSync(t);
-    changes = [];
+    const t = await prepared(workos);
 
-    workos.event("dsync.user.updated", user("directory_user_1", "inactive", 5));
-    await runSync(t);
+    await deliver(
+      t,
+      "dsync.user.updated",
+      user("directory_user_1", "inactive", 5),
+    );
 
     expect(changes).toEqual([]);
     expect(
@@ -384,13 +456,9 @@ describe("directory sync", () => {
   });
 
   test("a deleted directory takes its users with it", async () => {
-    const workos = seeded();
-    const t = setup(workos);
-    await runSync(t);
-    changes = [];
+    const t = await prepared(seeded());
 
-    workos.event("dsync.deleted", { ...DIRECTORY, state: "deleting" });
-    await runSync(t);
+    await deliver(t, "dsync.deleted", { ...DIRECTORY, state: "deleting" });
 
     expect(changes.map((change) => `${change.kind}:${change.action}`)).toEqual([
       "member:removed",
@@ -404,58 +472,54 @@ describe("directory sync", () => {
     ).toBeNull();
   });
 
-  test("a refused cursor starts over and drops what WorkOS no longer has", async () => {
+  test("a delivery during a reconcile outlives its prune", async () => {
     const workos = seeded();
-    const t = setup(workos);
-    await runSync(t);
-    workos.event("dsync.user.updated", user("directory_user_1", "active", 5));
-    await runSync(t);
-    changes = [];
-
-    // The user went while the sync could not read the stream.
-    workos.users = [user("directory_user_1", "active", 5)];
-    workos.memberships = [];
-    workos.refuseCursor = 400;
-    workos.event("dsync.group.updated", {
-      ...group("directory_group_1", 7),
-      name: "Renamed",
+    const t = await prepared(workos);
+    vi.advanceTimersByTime(1000);
+    await t.mutation(api.reconcile.start, {});
+    vi.advanceTimersByTime(1000);
+    workos.users.push(user("directory_user_3", "active", 9));
+    const body = JSON.stringify({
+      object: "event",
+      id: "event_late",
+      event: "dsync.user.created",
+      data: user("directory_user_3", "active", 9),
+      created_at: new Date(Date.now()).toISOString(),
     });
-    await runSync(t);
-    workos.refuseCursor = undefined;
-
-    // The listing finds nothing new, the prune removes what is gone, and the
-    // stream, read again from the new boundary, applies the rename.
-    expect(changes.map((change) => `${change.kind}:${change.action}`)).toEqual([
-      "member:removed",
-      "user:deleted",
-      "group:upserted",
-    ]);
-    expect(changes[1]).toMatchObject({
-      user: { id: "directory_user_2" },
-      deprovisioned: true,
+    await t.fetch("/webhook", {
+      method: "POST",
+      headers: { "WorkOS-Signature": await sign(body, Date.now()) },
+      body,
     });
+    workos.users = workos.users.filter(
+      (listed) => listed.id !== "directory_user_3",
+    );
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
+
+    expect(
+      await t.query(api.directory.getUser, { id: "directory_user_3" }),
+    ).toMatchObject({ state: "active" });
   });
 
-  test("a refused change stops the sync there until the next run", async () => {
-    const workos = seeded();
-    const t = setup(workos);
-    await runSync(t);
-    changes = [];
+  test("a refused change fails the delivery, and its retry applies it", async () => {
+    const t = await prepared(seeded());
     vi.spyOn(console, "error").mockImplementation(() => {});
-
-    workos.event("dsync.user.updated", user("directory_user_1", "inactive", 5));
-    workos.event("dsync.user.updated", user("directory_user_2", "inactive", 6));
     refuse = (change) =>
       change.kind === "user" && change.user.id === "directory_user_1";
-    await runSync(t);
+
+    const data = user("directory_user_1", "inactive", 5);
+    await expect(deliver(t, "dsync.user.updated", data)).rejects.toThrow(
+      /refused/,
+    );
     expect(changes).toEqual([]);
-    expect((await t.query(api.sync.status, {})).error).toMatch(/refused/);
+    expect(
+      await t.query(api.directory.getUser, { id: "directory_user_1" }),
+    ).toMatchObject({ state: "active" });
 
     refuse = undefined;
-    await runSync(t);
-    expect(
-      changes.map((change) => (change.kind === "user" ? change.user.id : "")),
-    ).toEqual(["directory_user_1", "directory_user_2"]);
-    expect((await t.query(api.sync.status, {})).error).toBeUndefined();
+    expect(await deliver(t, "dsync.user.updated", data)).toBe(200);
+    expect(changes).toMatchObject([
+      { kind: "user", user: { id: "directory_user_1", state: "inactive" } },
+    ]);
   });
 });

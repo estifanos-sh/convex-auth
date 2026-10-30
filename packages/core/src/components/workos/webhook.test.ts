@@ -7,6 +7,7 @@ import schema from "./schema.ts";
 const modules = import.meta.glob("./**/*.ts");
 
 const WEBHOOK_URL = "https://test.convex.site/workos/webhook";
+const REGISTER = { onChange: "function://onChange" };
 
 type Endpoint = {
   object: "webhook_endpoint";
@@ -109,13 +110,13 @@ afterEach(() => {
 });
 
 describe("webhook.register", () => {
-  test("creates the endpoint once, subscribed to the sync's events", async () => {
+  test("creates the endpoint once, subscribed to the webhook's events", async () => {
     const { t, workos } = setup();
-    expect(await t.action(api.webhook.register, {})).toEqual({
+    expect(await t.action(api.webhook.register, REGISTER)).toEqual({
       endpointId: "we_1",
       created: true,
     });
-    expect(await t.action(api.webhook.register, {})).toEqual({
+    expect(await t.action(api.webhook.register, REGISTER)).toEqual({
       endpointId: "we_1",
       created: false,
     });
@@ -123,12 +124,20 @@ describe("webhook.register", () => {
     expect(workos.endpoints[0]?.endpoint_url).toBe(WEBHOOK_URL);
     expect(workos.endpoints[0]?.events).toEqual([...EVENTS]);
     expect(
-      (await kept(t)).map(({ endpointId, url, secret }) => ({
+      (await kept(t)).map(({ endpointId, url, secret, onChange }) => ({
         endpointId,
         url,
         secret,
+        onChange,
       })),
-    ).toEqual([{ endpointId: "we_1", url: WEBHOOK_URL, secret: "secret_1" }]);
+    ).toEqual([
+      {
+        endpointId: "we_1",
+        url: WEBHOOK_URL,
+        secret: "secret_1",
+        onChange: REGISTER.onChange,
+      },
+    ]);
   });
 
   test("finds its endpoint past the first page of other deployments' endpoints", async () => {
@@ -137,7 +146,7 @@ describe("webhook.register", () => {
       workos.add(`https://other-${i}.convex.site/workos/webhook`);
     }
     const mine = workos.add(WEBHOOK_URL);
-    expect(await t.action(api.webhook.register, {})).toEqual({
+    expect(await t.action(api.webhook.register, REGISTER)).toEqual({
       endpointId: mine.id,
       created: false,
     });
@@ -155,7 +164,7 @@ describe("webhook.register", () => {
       status: "disabled",
       events: ["user.created", "dsync.user.created"],
     });
-    await t.action(api.webhook.register, {});
+    await t.action(api.webhook.register, REGISTER);
     expect(endpoint.status).toBe("enabled");
     expect(new Set(endpoint.events)).toEqual(
       new Set(["user.created", ...EVENTS]),
@@ -169,102 +178,62 @@ describe("webhook.register", () => {
       "fetch",
       vi.fn(async () => new Response("{}", { status: 401 })),
     );
-    await expect(t.action(api.webhook.register, {})).rejects.toThrow(/401/);
+    await expect(t.action(api.webhook.register, REGISTER)).rejects.toThrow(
+      /401/,
+    );
     expect(await kept(t)).toEqual([]);
   });
 });
 
-describe("webhook.prune", () => {
-  const PATTERN = { host: ".convex.site", path: "/workos/webhook" };
-  const preview = (name: string) =>
-    `https://${name}.convex.site/workos/webhook`;
-
-  test("deletes the pattern's endpoints that are not kept, and nothing else", async () => {
+describe("webhook.unregister", () => {
+  test("refuses an onChange that is not a function handle", async () => {
     const { t, workos } = setup();
-    const own = workos.add(WEBHOOK_URL);
-    const live = workos.add(preview("live-otter-1"));
-    const gone = workos.add(preview("gone-otter-2"));
-    const goneToo = workos.add(preview("gone-otter-3"));
-    const others = [
-      workos.add("https://hooks.example.com/workos/webhook"),
-      workos.add("https://evilconvex.site/workos/webhook"),
-      workos.add("http://plain-otter-4.convex.site/workos/webhook"),
-      workos.add("https://other-otter-5.convex.site/other/webhook"),
-      workos.add("https://query-otter-6.convex.site/workos/webhook?x=1"),
-    ];
-    const result = await t.action(api.webhook.prune, {
-      ...PATTERN,
-      keep: [live.endpoint_url],
-    });
-    expect(result).toEqual({ deleted: [gone.id, goneToo.id] });
-    expect(workos.endpoints.map((endpoint) => endpoint.id)).toEqual([
-      own.id,
-      live.id,
-      ...others.map((endpoint) => endpoint.id),
-    ]);
-  });
-
-  test("never deletes the calling deployment's own endpoint", async () => {
-    const { t, workos } = setup();
-    vi.stubEnv("CONVEX_SITE_URL", "https://self-otter-7.convex.site/workos");
-    const own = workos.add(preview("self-otter-7"));
-    expect(await t.action(api.webhook.prune, { ...PATTERN, keep: [] })).toEqual(
-      { deleted: [] },
-    );
-    expect(workos.endpoints).toEqual([own]);
-  });
-
-  test("lists every page before it deletes", async () => {
-    const { t, workos } = setup();
-    for (let i = 0; i < 120; i += 1) workos.add(preview(`gone-${i}`));
-    const { deleted } = await t.action(api.webhook.prune, {
-      ...PATTERN,
-      keep: [],
-    });
-    expect(deleted).toHaveLength(120);
+    await expect(
+      t.action(api.webhook.register, { onChange: "testApp:onChange" }),
+    ).rejects.toThrow(/function handle/);
     expect(workos.endpoints).toEqual([]);
-    expect(workos.calls.slice(0, 2)).toEqual([
-      "GET /webhook_endpoints",
-      "GET /webhook_endpoints",
-    ]);
   });
 
-  test("counts an endpoint another prune deleted first as gone", async () => {
+  test("deletes this deployment's endpoint and its secret, and nothing else", async () => {
     const { t, workos } = setup();
-    const raced = workos.add(preview("raced-otter-8"));
-    const gone = workos.add(preview("gone-otter-9"));
-    const respond = workos.respond.bind(workos);
+    const other = workos.add(
+      "https://other-otter-1.convex.site/workos/webhook",
+    );
+    await t.action(api.webhook.register, REGISTER);
+    expect(await t.action(api.webhook.unregister, {})).toEqual({
+      deleted: true,
+    });
+    expect(workos.endpoints).toEqual([other]);
+    expect(await kept(t)).toEqual([]);
+  });
+
+  test("finds its endpoint by URL when no row is kept", async () => {
+    const { t, workos } = setup();
+    workos.add(WEBHOOK_URL);
+    expect(await t.action(api.webhook.unregister, {})).toEqual({
+      deleted: true,
+    });
+    expect(workos.endpoints).toEqual([]);
+  });
+
+  test("counts an endpoint WorkOS no longer has as gone", async () => {
+    const { t, workos } = setup();
+    await t.action(api.webhook.register, REGISTER);
+    workos.endpoints = [];
+    expect(await t.action(api.webhook.unregister, {})).toEqual({
+      deleted: false,
+    });
+    expect(await kept(t)).toEqual([]);
+  });
+
+  test("keeps the row when WorkOS refuses", async () => {
+    const { t } = setup();
+    await t.action(api.webhook.register, REGISTER);
     vi.stubGlobal(
       "fetch",
-      vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
-        const url = new URL(String(input));
-        if (init?.method === "DELETE" && url.pathname.endsWith(raced.id)) {
-          return new Response(JSON.stringify({ code: "not_found" }), {
-            status: 404,
-          });
-        }
-        return await respond(url, init ?? {});
-      }),
+      vi.fn(async () => new Response("{}", { status: 401 })),
     );
-    expect(await t.action(api.webhook.prune, { ...PATTERN, keep: [] })).toEqual(
-      { deleted: [gone.id] },
-    );
-  });
-
-  test.each([
-    ["an empty host", { host: "", path: "/workos/webhook" }],
-    ["a bare top-level host", { host: ".site", path: "/workos/webhook" }],
-    [
-      "a host without a leading dot",
-      { host: "convex.site", path: "/workos/webhook" },
-    ],
-    ["the root path", { host: ".convex.site", path: "/" }],
-  ])("refuses %s, deleting nothing", async (_name, pattern) => {
-    const { t, workos } = setup();
-    workos.add(preview("gone-otter-10"));
-    await expect(
-      t.action(api.webhook.prune, { ...pattern, keep: [] }),
-    ).rejects.toThrow(/prune's/);
-    expect(workos.endpoints).toHaveLength(1);
+    await expect(t.action(api.webhook.unregister, {})).rejects.toThrow(/401/);
+    expect(await kept(t)).toHaveLength(1);
   });
 });

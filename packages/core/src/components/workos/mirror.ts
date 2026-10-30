@@ -1,10 +1,11 @@
 /**
- * Writing the sync's updates into the copy, and telling the app about each
- * change.
+ * Writing updates, from webhook deliveries and from reconcile's listings,
+ * into the copy, and telling the app about each change.
  *
  * @module
  */
 import type { FunctionHandle } from "convex/server";
+import { internal } from "./_generated/api.ts";
 import type { Doc } from "./_generated/dataModel.ts";
 import type { MutationCtx } from "./_generated/server.ts";
 import type {
@@ -19,12 +20,26 @@ import type {
 } from "./schema.ts";
 import type { Update } from "./wire.ts";
 
-/** The app's change handler, as the sync calls it. */
+/** The app's change handler, as the copy calls it. */
 export type ChangeHandler = FunctionHandle<
   "mutation",
   { change: WorkosDirectoryChange },
   null
 >;
+
+/**
+ * A stored handle as the {@link ChangeHandler} it is. Function handles are
+ * strings that Convex brands, and a stored one loses the brand; Convex mints
+ * them with this scheme.
+ */
+export function changeHandler(value: string): ChangeHandler {
+  if (!isHandle(value)) throw new Error("onChange must be a function handle");
+  return value;
+}
+
+function isHandle(value: string): value is ChangeHandler {
+  return value.startsWith("function://");
+}
 
 export function organizationOf(row: Doc<"organizations">): WorkosOrganization {
   return { id: row.id, name: row.name, externalId: row.externalId };
@@ -101,8 +116,8 @@ type StampedRow = { updatedAt: number; generation: number };
 
 /**
  * What writing an object stamped `updatedAt` over `row` does. An older object
- * is passed over, so a replayed event never undoes what a later listing or
- * event wrote, though the row still joins this generation.
+ * is passed over, so a late or repeated delivery never undoes what a later
+ * listing or delivery wrote, though the row is still marked as seen.
  */
 function decide<Row extends StampedRow>(
   row: Row | null,
@@ -115,9 +130,10 @@ function decide<Row extends StampedRow>(
 }
 
 /**
- * The copy, inside one mutation. Every write is stamped with the sync's
- * current generation, and every change runs the app's handler in the same
- * transaction, so the copy and the app never disagree.
+ * The copy, inside one mutation. Every write stamps its row with
+ * `generation`, the time it was written or the start of the reconcile that
+ * listed it, and every change runs the app's handler in the same transaction,
+ * so the copy and the app never disagree.
  */
 export class Mirror {
   constructor(
@@ -267,9 +283,10 @@ export class Mirror {
       .unique();
     if (update.deleted) {
       // Its users, groups and members can be many, so they go a page at a
-      // time in `prune`, which removes the directory last.
+      // time in `reconcile.sweep`, which removes the directory last.
       if (row !== null && row.deleted !== true) {
         await db.patch("directories", row._id, { deleted: true });
+        await this.ctx.scheduler.runAfter(0, internal.reconcile.sweep, {});
       }
       return;
     }
