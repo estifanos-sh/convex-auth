@@ -221,6 +221,16 @@ export default defineSchema({
     .index("generation", ["generation"]),
 
   /**
+   * The deployment's one webhook endpoint at WorkOS, which `webhook.register`
+   * creates, and the secret WorkOS signs its deliveries with.
+   */
+  webhook: defineTable({
+    endpointId: v.string(),
+    url: v.string(),
+    secret: v.string(),
+  }),
+
+  /**
    * The sync's one state row. `phase` is `backfill` while the listings run,
    * then `events` while the event stream is read from `cursor` (or, before
    * the first event, from `since`).

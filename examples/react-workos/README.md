@@ -17,8 +17,10 @@ cd examples/react-workos
 npx convex dev --once    # provisions a deployment, generates convex/_generated
 ```
 
-Then set `AUTH_WORKOS_CLIENT_ID` and `AUTH_WORKOS_API_KEY` (and, for the
-webhook, `AUTH_WORKOS_WEBHOOK_SECRET`) on the deployment, and in the WorkOS
-dashboard add `<site-url>/workos/callback` as a redirect URI and
-`<site-url>/workos/webhook` as a webhook endpoint for the `dsync.*`,
-`connection.*`, `organization.*` and `organization_domain.*` events.
+Then set `AUTH_WORKOS_CLIENT_ID` and `AUTH_WORKOS_API_KEY` on the deployment,
+add `<site-url>/workos/callback` as a redirect URI in the WorkOS dashboard,
+and register the deployment's webhook endpoint at WorkOS:
+
+```bash
+npx convex run workos:registerWorkosWebhook
+```

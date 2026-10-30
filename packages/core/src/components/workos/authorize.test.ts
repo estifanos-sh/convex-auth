@@ -109,4 +109,58 @@ describe("startSignInWithWorkos", () => {
   });
 });
 
+describe("startSignInWithWorkos with options read at sign-in", () => {
+  const appUrl = { current: "https://one.example.com" };
+  const { startSignInWithWorkos: startAtAppUrl } = setupWorkos(fakeCore, {
+    component: asComponentApi<ComponentApi>(api),
+    allowedRedirectOrigins: () => [appUrl.current],
+    callbackUrl: () => `${appUrl.current}/workos/callback`,
+  }).attachUserCallbacks(fakeCallbacks);
+
+  function setupAtAppUrl() {
+    vi.stubEnv("CLIENT_ID", "client_1");
+    vi.stubEnv("CONVEX_SITE_URL", "https://test.convex.site/workos");
+    return convexTest(schema, {
+      ...modules,
+      "./testApp.ts": async () => ({ startSignIn: startAtAppUrl }),
+    });
+  }
+
+  test("sends WorkOS back to the callback URL, and keeps it for the exchange", async () => {
+    const t = setupAtAppUrl();
+    appUrl.current = "https://one.example.com";
+    const { redirect } = await t.mutation(startSignIn, {
+      redirectTo: "https://one.example.com/after",
+      organizationId: "org_1",
+    });
+    expect(new URL(redirect).searchParams.get("redirect_uri")).toBe(
+      "https://one.example.com/workos/callback",
+    );
+    const requests = await t.run(
+      async (ctx) => await ctx.db.query("authorizationRequests").collect(),
+    );
+    expect(requests.map((request) => request.callbackUrl)).toEqual([
+      "https://one.example.com/workos/callback",
+    ]);
+  });
+
+  test("reads the allowed origins when sign-in starts", async () => {
+    const t = setupAtAppUrl();
+    appUrl.current = "https://two.example.com";
+    await expect(
+      t.mutation(startSignIn, {
+        redirectTo: "https://one.example.com/after",
+        organizationId: "org_1",
+      }),
+    ).rejects.toThrow(/allowedRedirectOrigins/);
+    const { redirect } = await t.mutation(startSignIn, {
+      redirectTo: "https://two.example.com/after",
+      organizationId: "org_1",
+    });
+    expect(new URL(redirect).searchParams.get("redirect_uri")).toBe(
+      "https://two.example.com/workos/callback",
+    );
+  });
+});
+
 testProviderFunctionsContract(schema, modules);

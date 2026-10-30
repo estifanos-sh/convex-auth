@@ -187,6 +187,16 @@ describe("workos webhook", () => {
     });
   }
 
+  async function register(t: ReturnType<typeof setup>) {
+    await t.run(async (ctx) => {
+      await ctx.db.insert("webhook", {
+        endpointId: "we_1",
+        url: "https://test.convex.site/workos/webhook",
+        secret: WEBHOOK_SECRET,
+      });
+    });
+  }
+
   async function syncRow(t: ReturnType<typeof setup>) {
     return await t.run(async (ctx) => await ctx.db.query("sync").first());
   }
@@ -194,7 +204,8 @@ describe("workos webhook", () => {
   test("a signed delivery starts a sync run", async () => {
     vi.useFakeTimers();
     try {
-      const t = setup({ WEBHOOK_SECRET });
+      const t = setup();
+      await register(t);
       await seedSync(t);
       const response = await t.fetch("/webhook", {
         method: "POST",
@@ -216,7 +227,8 @@ describe("workos webhook", () => {
       async () => await sign(body, Date.now() - 10 * 60 * 1000),
     ],
   ])("refuses a delivery with %s", async (_name, signature) => {
-    const t = setup({ WEBHOOK_SECRET });
+    const t = setup();
+    await register(t);
     await seedSync(t);
     const header = await signature();
     const response = await t.fetch("/webhook", {
@@ -228,9 +240,15 @@ describe("workos webhook", () => {
     expect((await syncRow(t))?.run).toBeUndefined();
   });
 
-  test("is not served without a webhook secret", async () => {
+  test("refuses a signed delivery before the endpoint is registered", async () => {
     const t = setup();
-    const response = await t.fetch("/webhook", { method: "POST", body });
-    expect(response.status).toBe(404);
+    await seedSync(t);
+    const response = await t.fetch("/webhook", {
+      method: "POST",
+      headers: { "WorkOS-Signature": await sign(body, Date.now()) },
+      body,
+    });
+    expect(response.status).toBe(401);
+    expect((await syncRow(t))?.run).toBeUndefined();
   });
 });

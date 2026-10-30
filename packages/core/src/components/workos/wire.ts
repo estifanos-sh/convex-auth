@@ -309,3 +309,24 @@ export function decodeMember(value: unknown, groupId: string): Update {
     deleted: false,
   };
 }
+
+/** A webhook endpoint, from WorkOS's `/webhook_endpoints` API. */
+export function decodeEndpoint(value: unknown): {
+  id: string;
+  url: string;
+  secret: string;
+  enabled: boolean;
+  events: string[];
+} {
+  const raw = fields(value, "webhook endpoint");
+  const events = Array.isArray(raw.events)
+    ? raw.events.filter((event) => typeof event === "string")
+    : [];
+  return {
+    id: text(raw, "id", "webhook endpoint"),
+    url: text(raw, "endpoint_url", "webhook endpoint"),
+    secret: text(raw, "secret", "webhook endpoint"),
+    enabled: optionalText(raw, "status") === "enabled",
+    events,
+  };
+}

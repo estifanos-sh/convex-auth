@@ -42,9 +42,9 @@ http.route({
   path: "/webhook",
   method: "POST",
   handler: httpActionGeneric(async (ctx, request) => {
-    const secret = env.WEBHOOK_SECRET;
-    if (secret === undefined || secret === "") {
-      return new Response("Webhooks are not configured.", { status: 404 });
+    const secret = await ctx.runQuery(internal.webhook.secret, {});
+    if (secret === null) {
+      return new Response("The webhook is not registered.", { status: 401 });
     }
     const verified = await verifyWebhookSignature({
       header: request.headers.get("WorkOS-Signature"),

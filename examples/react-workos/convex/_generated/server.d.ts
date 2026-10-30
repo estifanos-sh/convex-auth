@@ -32,7 +32,6 @@ type Env = {
   readonly CONVEX_SITE_URL: string;
   readonly AUTH_WORKOS_API_KEY: string;
   readonly AUTH_WORKOS_CLIENT_ID: string;
-  readonly AUTH_WORKOS_WEBHOOK_SECRET: string | undefined;
 };
 
 /**
