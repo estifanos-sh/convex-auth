@@ -95,11 +95,12 @@ providers refuse to sign in inside an embedded web view.
 
 The component keeps a copy of the environment's organizations, verified
 domains, SSO connections, directories, directory users, groups and
-memberships. Webhook deliveries keep it current: each verified delivery is
-written by its object's id. WorkOS delivers in no guaranteed order, so a
-change older than the stored row's `updated_at` is ignored. The webhook
-answers quickly; a deleted directory's users and groups are removed in the
-background.
+memberships. Webhook deliveries keep it current: a verified delivery names
+an object, which the webhook reads again from WorkOS and writes as it is
+now, or removes if WorkOS answers 404. WorkOS delivers in no guaranteed
+order, and reading the current state makes the order not matter. A
+membership delivery lists the group's members again in the background, and
+a deleted directory, user or group loses its contents a batch at a time.
 
 `setupWorkosDirectory` takes your handler, an internal mutation that runs
 for each change in the same transaction that applies it. Map directory users
@@ -120,8 +121,10 @@ never creates a second one, and it enables the endpoint again if WorkOS
 disabled it. Until it has run, the webhook refuses every delivery.
 
 `reconcileWorkosDirectory` lists everything WorkOS holds, a page per
-mutation in the background, writes each object the same way, and removes
-what the listings no longer show. It fills a new deployment's copy and
+mutation in the background, and writes each object the same way. A row the
+listings no longer show is read again by id and removed only if WorkOS
+answers 404, so overlapping runs are harmless. A 429, a 5xx or a timeout
+makes it wait and try the same step again. It fills a new deployment's copy and
 repairs deliveries the webhook missed: WorkOS retries a failed delivery for
 a few minutes in staging and for up to 3 days in production. Run both after
 every deploy:
@@ -141,7 +144,7 @@ npx convex run workos:unregisterWorkosWebhook
 ```
 
 A handler that throws refuses the delivery, and WorkOS retries it; in a
-reconcile, it stops the run at that page, and the next reconcile tries again.
+reconcile, it stops the run at that step, and the next reconcile tries again.
 
 The component's `directory` queries read the copy: `route`,
 `getOrganization`, `listDirectories`, `getUser`, `findUsers` (by

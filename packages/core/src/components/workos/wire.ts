@@ -24,52 +24,21 @@ export class DecodeError extends Error {
 }
 
 /**
- * One write to the copy, decoded from a listed object or an event. A write
- * with `deleted` removes the object. `updatedAt` is WorkOS's time for the
- * object, so an older write never replaces a newer row.
+ * One object as WorkOS holds it now, decoded from a listing or a read by id,
+ * as the write it makes to the copy.
  */
 export const vUpdate = v.union(
   v.object({
     kind: v.literal("organization"),
     row: vWorkosOrganization,
     domains: v.array(vWorkosDomain),
-    updatedAt: v.number(),
-    deleted: v.boolean(),
   }),
-  v.object({
-    kind: v.literal("domain"),
-    row: vWorkosDomain,
-    deleted: v.boolean(),
-  }),
-  v.object({
-    kind: v.literal("connection"),
-    row: vWorkosConnection,
-    updatedAt: v.number(),
-    deleted: v.boolean(),
-  }),
-  v.object({
-    kind: v.literal("directory"),
-    row: vWorkosDirectory,
-    updatedAt: v.number(),
-    deleted: v.boolean(),
-  }),
-  v.object({
-    kind: v.literal("user"),
-    row: vWorkosDirectoryUser,
-    updatedAt: v.number(),
-    deleted: v.boolean(),
-  }),
-  v.object({
-    kind: v.literal("group"),
-    row: vWorkosDirectoryGroup,
-    updatedAt: v.number(),
-    deleted: v.boolean(),
-  }),
-  v.object({
-    kind: v.literal("member"),
-    row: vWorkosDirectoryMember,
-    deleted: v.boolean(),
-  }),
+  v.object({ kind: v.literal("domain"), row: vWorkosDomain }),
+  v.object({ kind: v.literal("connection"), row: vWorkosConnection }),
+  v.object({ kind: v.literal("directory"), row: vWorkosDirectory }),
+  v.object({ kind: v.literal("user"), row: vWorkosDirectoryUser }),
+  v.object({ kind: v.literal("group"), row: vWorkosDirectoryGroup }),
+  v.object({ kind: v.literal("member"), row: vWorkosDirectoryMember }),
 );
 export type Update = Infer<typeof vUpdate>;
 
@@ -95,19 +64,6 @@ function optionalText(object: Fields, name: string): string | undefined {
   return typeof value === "string" ? value : undefined;
 }
 
-/**
- * The object's `updated_at`. An event's object falls back to the event's own
- * time, so a deletion whose object omits it still applies.
- */
-function time(object: Fields, what: string, fallback?: number): number {
-  const at = Date.parse(optionalText(object, "updated_at") ?? "");
-  if (!Number.isNaN(at)) return at;
-  if (fallback !== undefined) return fallback;
-  throw new DecodeError(
-    `WorkOS sent a ${what} with no readable \`updated_at\``,
-  );
-}
-
 function domain(value: unknown, organizationId?: string): WorkosDomain {
   const raw = fields(value, "domain");
   const owner = optionalText(raw, "organization_id") ?? organizationId;
@@ -122,7 +78,7 @@ function domain(value: unknown, organizationId?: string): WorkosDomain {
   };
 }
 
-function organization(value: unknown, deleted: boolean, at?: number): Update {
+function organization(value: unknown): Update {
   const raw = fields(value, "organization");
   const id = text(raw, "id", "organization");
   const domains = raw.domains;
@@ -133,16 +89,13 @@ function organization(value: unknown, deleted: boolean, at?: number): Update {
       name: text(raw, "name", "organization"),
       externalId: optionalText(raw, "external_id"),
     },
-    domains:
-      !deleted && Array.isArray(domains)
-        ? domains.map((item) => domain(item, id))
-        : [],
-    updatedAt: time(raw, "organization", at),
-    deleted,
+    domains: Array.isArray(domains)
+      ? domains.map((item) => domain(item, id))
+      : [],
   };
 }
 
-function connection(value: unknown, deleted: boolean, at?: number): Update {
+function connection(value: unknown): Update {
   const raw = fields(value, "connection");
   return {
     kind: "connection",
@@ -152,12 +105,10 @@ function connection(value: unknown, deleted: boolean, at?: number): Update {
       type: text(raw, "connection_type", "connection"),
       state: text(raw, "state", "connection"),
     },
-    updatedAt: time(raw, "connection", at),
-    deleted,
   };
 }
 
-function directory(value: unknown, deleted: boolean, at?: number): Update {
+function directory(value: unknown): Update {
   const raw = fields(value, "directory");
   return {
     kind: "directory",
@@ -168,12 +119,10 @@ function directory(value: unknown, deleted: boolean, at?: number): Update {
       type: text(raw, "type", "directory"),
       state: text(raw, "state", "directory"),
     },
-    updatedAt: time(raw, "directory", at),
-    deleted,
   };
 }
 
-function user(value: unknown, deleted: boolean, at?: number): Update {
+function user(value: unknown): Update {
   const raw = fields(value, "directory user");
   return {
     kind: "user",
@@ -187,12 +136,10 @@ function user(value: unknown, deleted: boolean, at?: number): Update {
       lastName: optionalText(raw, "last_name"),
       state: text(raw, "state", "directory user"),
     },
-    updatedAt: time(raw, "directory user", at),
-    deleted,
   };
 }
 
-function group(value: unknown, deleted: boolean, at?: number): Update {
+function group(value: unknown): Update {
   const raw = fields(value, "directory group");
   return {
     kind: "group",
@@ -202,44 +149,52 @@ function group(value: unknown, deleted: boolean, at?: number): Update {
       organizationId: optionalText(raw, "organization_id"),
       name: text(raw, "name", "directory group"),
     },
-    updatedAt: time(raw, "directory group", at),
-    deleted,
-  };
-}
-
-function membership(value: unknown, removed: boolean): Update {
-  const raw = fields(value, "group membership");
-  return {
-    kind: "member",
-    row: {
-      directoryId: text(raw, "directory_id", "group membership"),
-      groupId: text(fields(raw.group, "group"), "id", "group"),
-      userId: text(fields(raw.user, "user"), "id", "user"),
-    },
-    deleted: removed,
   };
 }
 
 const HANDLED = new Set<string>(EVENTS);
 
-function event(name: string, data: unknown, at: number): Update {
-  const deleted = name.endsWith(".deleted");
-  if (name === "dsync.group.user_added") return membership(data, false);
-  if (name === "dsync.group.user_removed") return membership(data, true);
-  if (name === "dsync.activated" || name === "dsync.deleted") {
-    return directory(data, deleted, at);
+/** A kind of object WorkOS reads by id. */
+export const vKind = v.union(
+  v.literal("organization"),
+  v.literal("domain"),
+  v.literal("connection"),
+  v.literal("directory"),
+  v.literal("user"),
+  v.literal("group"),
+);
+export type Kind = Infer<typeof vKind>;
+
+/** An object a webhook delivery says changed, to be read again. */
+export type Target =
+  | { kind: Kind; id: string }
+  | { kind: "members"; directoryId: string; groupId: string };
+
+function target(name: string, data: unknown): Target {
+  const raw = fields(data, "event object");
+  if (
+    name === "dsync.group.user_added" ||
+    name === "dsync.group.user_removed"
+  ) {
+    return {
+      kind: "members",
+      directoryId: text(raw, "directory_id", "group membership"),
+      groupId: text(fields(raw.group, "group"), "id", "group"),
+    };
   }
-  if (name.startsWith("dsync.user.")) return user(data, deleted, at);
-  if (name.startsWith("dsync.group.")) return group(data, deleted, at);
   if (name === "organization_domain.verification_failed") {
-    const failed = fields(data, "failed domain verification");
-    return { kind: "domain", row: domain(failed.organization_domain), deleted };
+    const failed = fields(raw.organization_domain, "domain");
+    return { kind: "domain", id: text(failed, "id", "domain") };
   }
-  if (name.startsWith("organization_domain.")) {
-    return { kind: "domain", row: domain(data), deleted };
+  const id = text(raw, "id", "event object");
+  if (name === "dsync.activated" || name === "dsync.deleted") {
+    return { kind: "directory", id };
   }
-  if (name.startsWith("organization.")) return organization(data, deleted, at);
-  return connection(data, deleted, at);
+  if (name.startsWith("dsync.user.")) return { kind: "user", id };
+  if (name.startsWith("dsync.group.")) return { kind: "group", id };
+  if (name.startsWith("organization_domain.")) return { kind: "domain", id };
+  if (name.startsWith("organization.")) return { kind: "organization", id };
+  return { kind: "connection", id };
 }
 
 /** A list page: its objects, and the cursor of the next page if any. */
@@ -256,15 +211,46 @@ export function decodeList(value: unknown): {
 }
 
 /**
- * A webhook delivery, decoded as the write it makes, or null for an event the
- * copy does not keep.
+ * The object a webhook delivery names, or null for an event the copy does
+ * not keep. The delivery's payload is not applied: WorkOS does not deliver in
+ * order, so the object is read again as it is now.
  */
-export function decodeEvent(value: unknown): Update | null {
+export function decodeEvent(value: unknown): Target | null {
   const raw = fields(value, "event");
   const name = text(raw, "event", "event");
   if (!HANDLED.has(name)) return null;
-  const at = Date.parse(optionalText(raw, "created_at") ?? "");
-  return event(name, raw.data, Number.isNaN(at) ? Date.now() : at);
+  return target(name, raw.data);
+}
+
+/** The path that reads one object by id. */
+export function objectPath(kind: Kind, id: string): string {
+  const collection = {
+    organization: "organizations",
+    domain: "organization_domains",
+    connection: "connections",
+    directory: "directories",
+    user: "directory_users",
+    group: "directory_groups",
+  }[kind];
+  return `/${collection}/${encodeURIComponent(id)}`;
+}
+
+/** One object read by id, decoded as the write it makes. */
+export function decodeObject(kind: Kind, value: unknown): Update {
+  switch (kind) {
+    case "organization":
+      return organization(value);
+    case "domain":
+      return { kind: "domain", row: domain(value) };
+    case "connection":
+      return connection(value);
+    case "directory":
+      return directory(value);
+    case "user":
+      return user(value);
+    case "group":
+      return group(value);
+  }
 }
 
 /** What a reconcile listing holds, decoded as the write it makes. */
@@ -274,15 +260,15 @@ export function decodeListed(
 ): Update {
   switch (stage) {
     case "organizations":
-      return organization(value, false);
+      return organization(value);
     case "connections":
-      return connection(value, false);
+      return connection(value);
     case "directories":
-      return directory(value, false);
+      return directory(value);
     case "users":
-      return user(value, false);
+      return user(value);
     case "groups":
-      return group(value, false);
+      return group(value);
   }
 }
 
@@ -296,7 +282,6 @@ export function decodeMember(value: unknown, groupId: string): Update {
       groupId,
       userId: text(raw, "id", "directory user"),
     },
-    deleted: false,
   };
 }
 

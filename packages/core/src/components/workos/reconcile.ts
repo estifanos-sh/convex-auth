@@ -1,44 +1,71 @@
 /**
  * Reconcile: list everything WorkOS holds, write it into the copy, and remove
- * what the listings no longer show. It is how a new deployment fills its copy
- * and how deliveries the webhook missed are repaired: WorkOS retries a
- * failed delivery for a few minutes in staging, and for up to 3 days in
- * production.
+ * what WorkOS no longer has. It is how a new deployment fills its copy and
+ * how deliveries the webhook missed are repaired: WorkOS retries a failed
+ * delivery for a few minutes in staging, and for up to 3 days in production.
  *
  * A reconcile that starts at time T stamps every row it lists with T. Each
- * page is fetched in an action and written in one mutation. Once the listings
- * are done, it removes, a batch per mutation, every row stamped before T: a
- * webhook delivery during the reconcile stamps its row with its own, later
- * time, so it is kept. A run hands over to a fresh action before an action's
- * time limit.
+ * page is fetched in an action and written in one mutation. Once a group's
+ * members are listed, its memberships older than T go. Once every listing is
+ * done, each row older than T is read again by id, and removed only if WorkOS
+ * answers 404, so a reconcile that overlaps another, or a webhook delivery,
+ * never removes what WorkOS still has. A run hands over to a fresh action
+ * before an action's time limit, and waits and tries the same step again
+ * when WorkOS answers 429 or 5xx or times out.
  *
  * @module
  */
-import { v } from "convex/values";
+import { type Infer, v } from "convex/values";
 import { internal } from "./_generated/api.ts";
 import type { Doc } from "./_generated/dataModel.ts";
-import type { MutationCtx } from "./_generated/server.ts";
+import type { ActionCtx, MutationCtx } from "./_generated/server.ts";
 import {
   env,
   internalAction,
   internalMutation,
+  internalQuery,
   mutation,
 } from "./_generated/server.ts";
-import { PAGE_SIZE } from "./constants.ts";
-import { changeHandler, directoryOf, Mirror } from "./mirror.ts";
-import { callWorkos } from "./rest.ts";
+import { BATCH, PAGE_SIZE, PAUSE_MS } from "./constants.ts";
+import { changeHandler, Mirror } from "./mirror.ts";
+import { callWorkos, WorkosApiError } from "./rest.ts";
 import { type BackfillPosition, vBackfillPosition } from "./schema.ts";
-import { decodeList, decodeListed, decodeMember, vUpdate } from "./wire.ts";
+import {
+  decodeList,
+  decodeListed,
+  decodeMember,
+  decodeObject,
+  type Kind,
+  objectPath,
+  type Update,
+  vKind,
+  vUpdate,
+} from "./wire.ts";
 
 /** Pages one action applies before it hands over to a fresh one. */
 const PAGES_PER_RUN = 100;
-/** Rows one removal step removes. */
-const BATCH = 50;
 
+/** The order rows older than a reconcile are read again: children first. */
+const PRUNED: Kind[] = [
+  "user",
+  "group",
+  "directory",
+  "connection",
+  "domain",
+  "organization",
+];
+
+const vTrim = v.object({
+  stage: v.literal("trim"),
+  directoryId: v.string(),
+  groupId: v.string(),
+});
 const vStep = v.union(
   vBackfillPosition,
-  v.object({ stage: v.literal("prune") }),
+  vTrim,
+  v.object({ stage: v.literal("prune"), kind: vKind }),
 );
+type Step = Infer<typeof vStep>;
 
 /** The copy, with the app's handler from the registered webhook. */
 async function mirror(ctx: MutationCtx, generation: number): Promise<Mirror> {
@@ -47,6 +74,22 @@ async function mirror(ctx: MutationCtx, generation: number): Promise<Mirror> {
     throw new Error("Register the webhook (webhook.register) before this");
   }
   return new Mirror(ctx, generation, changeHandler(webhook.onChange));
+}
+
+/**
+ * The object as WorkOS holds it now, or null if WorkOS no longer has it.
+ */
+export async function read(kind: Kind, id: string): Promise<Update | null> {
+  try {
+    const reply = await callWorkos(env.CLIENT_SECRET, {
+      method: "GET",
+      path: objectPath(kind, id),
+    });
+    return decodeObject(kind, reply.body);
+  } catch (error) {
+    if (error instanceof WorkosApiError && error.status === 404) return null;
+    throw error;
+  }
 }
 
 /**
@@ -100,7 +143,7 @@ async function nextGroup(
 async function advance(
   ctx: MutationCtx,
   position: BackfillPosition,
-): Promise<BackfillPosition | { stage: "prune" }> {
+): Promise<Step> {
   switch (position.stage) {
     case "organizations":
       return { stage: "connections" };
@@ -109,7 +152,7 @@ async function advance(
     case "directories": {
       const directoryId = await nextDirectory(ctx, undefined);
       return directoryId === undefined
-        ? { stage: "prune" }
+        ? { stage: "prune", kind: "user" }
         : { stage: "users", directoryId };
     }
     case "users":
@@ -126,7 +169,7 @@ async function advance(
       }
       const directoryId = await nextDirectory(ctx, position.directoryId);
       return directoryId === undefined
-        ? { stage: "prune" }
+        ? { stage: "prune", kind: "user" }
         : { stage: "users", directoryId };
     }
   }
@@ -144,75 +187,87 @@ export const page = internalMutation({
   handler: async (ctx, args) => {
     const copy = await mirror(ctx, args.generation);
     for (const update of args.updates) await copy.write(update);
-    return args.after !== undefined
-      ? { ...args.position, after: args.after }
-      : await advance(ctx, args.position);
+    const position = args.position;
+    if (args.after !== undefined) return { ...position, after: args.after };
+    if (position.stage === "members") {
+      return {
+        stage: "trim" as const,
+        directoryId: position.directoryId,
+        groupId: position.groupId,
+      };
+    }
+    return await advance(ctx, position);
   },
 });
 
 /**
- * Remove up to a batch of the rows stamped before `generation`. Returns
- * whether there may be more.
+ * Remove a batch of the group's memberships that no listing since
+ * `generation` showed, and say where to go next.
  */
-export const prune = internalMutation({
-  args: { generation: v.number() },
-  returns: v.boolean(),
-  handler: async (ctx, args) => {
-    const copy = await mirror(ctx, args.generation);
-    const db = ctx.db;
-    const members = await db
+export const trim = internalMutation({
+  args: { generation: v.number(), step: vTrim },
+  returns: vStep,
+  handler: async (ctx, { generation, step }) => {
+    const copy = await mirror(ctx, generation);
+    const stale = await ctx.db
       .query("directoryMembers")
-      .withIndex("generation", (q) => q.lt("generation", args.generation))
+      .withIndex("groupId_generation", (q) =>
+        q.eq("groupId", step.groupId).lt("generation", generation),
+      )
       .take(BATCH);
-    for (const member of members) await copy.removeMember(member);
-    if (members.length > 0) return true;
-    const users = await db
-      .query("directoryUsers")
-      .withIndex("generation", (q) => q.lt("generation", args.generation))
+    for (const member of stale) await copy.removeMember(member);
+    if (stale.length === BATCH) return step;
+    return await advance(ctx, { ...step, stage: "members" });
+  },
+});
+
+/** Up to a batch of the ids of rows of `kind` older than `generation`. */
+export const stale = internalQuery({
+  args: { kind: vKind, generation: v.number() },
+  returns: v.array(v.string()),
+  handler: async (ctx, { kind, generation }) => {
+    const table = {
+      organization: "organizations",
+      domain: "domains",
+      connection: "connections",
+      directory: "directories",
+      user: "directoryUsers",
+      group: "directoryGroups",
+    } as const;
+    const rows = await ctx.db
+      .query(table[kind])
+      .withIndex("generation", (q) => q.lt("generation", generation))
       .take(BATCH);
-    for (const user of users) await copy.removeUser(user);
-    if (users.length > 0) return true;
-    const groups = await db
-      .query("directoryGroups")
-      .withIndex("generation", (q) => q.lt("generation", args.generation))
-      .take(BATCH);
-    for (const group of groups) await copy.removeGroup(group);
-    if (groups.length > 0) return true;
-    const directories = await db
-      .query("directories")
-      .withIndex("generation", (q) => q.lt("generation", args.generation))
-      .take(BATCH);
-    for (const directory of directories) {
-      await copy.write({
-        kind: "directory",
-        row: directoryOf(directory),
-        updatedAt: directory.updatedAt,
-        deleted: true,
-      });
-    }
-    if (directories.length > 0) return true;
-    const connections = await db
-      .query("connections")
-      .withIndex("generation", (q) => q.lt("generation", args.generation))
-      .take(BATCH);
-    for (const connection of connections) {
-      await copy.removeConnection(connection);
-    }
-    if (connections.length > 0) return true;
-    const domains = await db
-      .query("domains")
-      .withIndex("generation", (q) => q.lt("generation", args.generation))
-      .take(BATCH);
-    for (const domain of domains) await copy.removeDomain(domain);
-    if (domains.length > 0) return true;
-    const organizations = await db
-      .query("organizations")
-      .withIndex("generation", (q) => q.lt("generation", args.generation))
-      .take(BATCH);
-    for (const organization of organizations) {
-      await copy.removeOrganization(organization);
-    }
-    return organizations.length > 0;
+    return rows.map((row) => row.id);
+  },
+});
+
+/**
+ * Write the objects WorkOS returned, and remove those it answered 404 for.
+ * Every row it touches is stamped now.
+ */
+export const settle = internalMutation({
+  args: { kind: vKind, updates: v.array(vUpdate), gone: v.array(v.string()) },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const copy = await mirror(ctx, Date.now());
+    for (const update of args.updates) await copy.write(update);
+    for (const id of args.gone) await copy.remove(args.kind, id);
+    return null;
+  },
+});
+
+/** Remove the next batch of a deleted user's or group's memberships. */
+export const drop = internalMutation({
+  args: {
+    kind: v.union(v.literal("user"), v.literal("group")),
+    id: v.string(),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const copy = await mirror(ctx, Date.now());
+    await copy.remove(args.kind, args.id);
+    return null;
   },
 });
 
@@ -291,42 +346,141 @@ function listing(position: BackfillPosition) {
   }
 }
 
-/** Run reconcile from `step` for up to a budget of pages, then hand over. */
+/** Take one step: a page, a trim batch or a batch of reads by id. */
+async function take(
+  ctx: ActionCtx,
+  generation: number,
+  step: Step,
+): Promise<Step | null> {
+  if (step.stage === "trim") {
+    return await ctx.runMutation(internal.reconcile.trim, { generation, step });
+  }
+  if (step.stage === "prune") {
+    const ids: string[] = await ctx.runQuery(internal.reconcile.stale, {
+      kind: step.kind,
+      generation,
+    });
+    if (ids.length === 0) {
+      const next = PRUNED[PRUNED.indexOf(step.kind) + 1];
+      return next === undefined ? null : { stage: "prune", kind: next };
+    }
+    const updates: Update[] = [];
+    const gone: string[] = [];
+    for (const id of ids) {
+      const update = await read(step.kind, id);
+      if (update === null) gone.push(id);
+      else updates.push(update);
+    }
+    await ctx.runMutation(internal.reconcile.settle, {
+      kind: step.kind,
+      updates,
+      gone,
+    });
+    return step;
+  }
+  const position: BackfillPosition = step;
+  const reply = await callWorkos(env.CLIENT_SECRET, {
+    method: "GET",
+    ...listing(position),
+  });
+  const listed = decodeList(reply.body);
+  const updates = listed.items.map((item) =>
+    position.stage === "members"
+      ? decodeMember(item, position.groupId)
+      : decodeListed(position.stage, item),
+  );
+  return await ctx.runMutation(internal.reconcile.page, {
+    generation,
+    position,
+    updates,
+    after: listed.after,
+  });
+}
+
+/**
+ * Take steps from `step` while `more` holds, for up to a budget of steps.
+ * Returns the step to continue from, if any, and whether to wait first
+ * because WorkOS answered 429 or 5xx or timed out.
+ */
+async function walk(
+  ctx: ActionCtx,
+  generation: number,
+  step: Step,
+  more: (step: Step) => boolean,
+): Promise<{ next: Step; pause: boolean } | null> {
+  let current: Step | null = step;
+  for (let taken = 0; taken < PAGES_PER_RUN; taken += 1) {
+    if (current === null || !more(current)) return null;
+    const at: Step = current;
+    try {
+      current = await take(ctx, generation, at);
+    } catch (error) {
+      if (error instanceof WorkosApiError && error.retryable) {
+        return { next: at, pause: true };
+      }
+      throw error;
+    }
+  }
+  return current !== null && more(current)
+    ? { next: current, pause: false }
+    : null;
+}
+
+/** Run reconcile from `step`, handing over to a fresh action as it goes. */
 export const run = internalAction({
   args: { generation: v.number(), step: vStep },
   returns: v.null(),
   handler: async (ctx, args) => {
-    let step: BackfillPosition | { stage: "prune" } = args.step;
-    for (let pages = 0; pages < PAGES_PER_RUN; pages += 1) {
-      if (step.stage === "prune") {
-        const more: boolean = await ctx.runMutation(internal.reconcile.prune, {
-          generation: args.generation,
-        });
-        if (!more) return null;
-        continue;
-      }
-      const position: BackfillPosition = step;
-      const reply = await callWorkos(env.CLIENT_SECRET, {
-        method: "GET",
-        ...listing(position),
-      });
-      const listed = decodeList(reply.body);
-      const updates = listed.items.map((item) =>
-        position.stage === "members"
-          ? decodeMember(item, position.groupId)
-          : decodeListed(position.stage, item),
+    const left = await walk(ctx, args.generation, args.step, () => true);
+    if (left !== null) {
+      await ctx.scheduler.runAfter(
+        left.pause ? PAUSE_MS : 0,
+        internal.reconcile.run,
+        { generation: args.generation, step: left.next },
       );
-      step = await ctx.runMutation(internal.reconcile.page, {
-        generation: args.generation,
-        position,
-        updates,
-        after: listed.after,
-      });
     }
-    await ctx.scheduler.runAfter(0, internal.reconcile.run, {
-      generation: args.generation,
-      step,
-    });
+    return null;
+  },
+});
+
+const vGroupStep = v.union(
+  vTrim,
+  v.object({
+    stage: v.literal("members"),
+    directoryId: v.string(),
+    groupId: v.string(),
+    after: v.optional(v.string()),
+  }),
+);
+
+/**
+ * List one group's members as WorkOS holds them now, and remove the
+ * memberships the listing did not show. A membership delivery runs this:
+ * WorkOS reads memberships back only as a group's member list.
+ */
+export const members = internalAction({
+  args: { generation: v.number(), step: vGroupStep },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const group = args.step.groupId;
+    const left = await walk(
+      ctx,
+      args.generation,
+      args.step,
+      (step) =>
+        (step.stage === "members" || step.stage === "trim") &&
+        step.groupId === group,
+    );
+    if (
+      left !== null &&
+      (left.next.stage === "members" || left.next.stage === "trim")
+    ) {
+      await ctx.scheduler.runAfter(
+        left.pause ? PAUSE_MS : 0,
+        internal.reconcile.members,
+        { generation: args.generation, step: left.next },
+      );
+    }
     return null;
   },
 });
