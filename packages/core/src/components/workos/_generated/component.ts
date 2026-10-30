@@ -236,6 +236,13 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       >;
     };
     webhook: {
+      prune: FunctionReference<
+        "action",
+        "internal",
+        { host: string; keep: Array<string>; path: string },
+        { deleted: Array<string> },
+        Name
+      >;
       register: FunctionReference<
         "action",
         "internal",

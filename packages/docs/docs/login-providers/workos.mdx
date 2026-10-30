@@ -128,6 +128,14 @@ It finds the endpoint by its URL, so it never creates a second one, and it
 enables the endpoint again if WorkOS disabled it. Until it has run, the
 webhook refuses every delivery, and the cron alone keeps the copy current.
 
+Deployments that share a WorkOS environment, such as preview deployments,
+each register an endpoint, and WorkOS keeps an endpoint after its deployment
+is gone. The component's `webhook.prune` action deletes them: it takes a host
+suffix and a path (`{ host: ".convex.site", path: "/workos/webhook" }`) and
+the webhook URLs to `keep`, and deletes every other endpoint on that pattern
+except the calling deployment's own. Run it from a deployment that can list
+which deployments still exist.
+
 A handler that throws stops the sync at that change, and the next sync tries
 it again. The component's `sync.status` query shows where the sync is and why
 it last stopped.

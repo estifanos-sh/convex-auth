@@ -13,7 +13,7 @@ import {
   internalQuery,
 } from "./_generated/server.ts";
 import { EVENTS } from "./constants.ts";
-import { callWorkos } from "./rest.ts";
+import { callWorkos, WorkosApiError } from "./rest.ts";
 import { decodeEndpoint, decodeList } from "./wire.ts";
 
 /** How old a signed timestamp may be, against replays. */
@@ -100,7 +100,8 @@ function webhookUrl(): string {
   return `${siteUrl}/webhook`;
 }
 
-async function findEndpoint(url: string) {
+/** Every endpoint of the WorkOS environment, a page at a time. */
+async function* listEndpoints() {
   let after: string | undefined;
   do {
     const reply = await callWorkos(env.CLIENT_SECRET, {
@@ -109,12 +110,15 @@ async function findEndpoint(url: string) {
       query: { limit: String(ENDPOINT_PAGE_SIZE), after },
     });
     const page = decodeList(reply.body);
-    for (const item of page.items) {
-      const endpoint = decodeEndpoint(item);
-      if (endpoint.url === url) return endpoint;
-    }
+    for (const item of page.items) yield decodeEndpoint(item);
     after = page.after;
   } while (after !== undefined);
+}
+
+async function findEndpoint(url: string) {
+  for await (const endpoint of listEndpoints()) {
+    if (endpoint.url === url) return endpoint;
+  }
   return null;
 }
 
@@ -162,6 +166,84 @@ export const register = action({
       secret: endpoint.secret,
     });
     return { endpointId: endpoint.id, created: found === null };
+  },
+});
+
+/**
+ * Whether `url` is an https URL on a subdomain of `host` (e.g.
+ * `".convex.site"`) with exactly the path `path`, and nothing else.
+ */
+function matchesPattern(url: string, host: string, path: string): boolean {
+  if (!URL.canParse(url)) return false;
+  const parsed = new URL(url);
+  return (
+    parsed.protocol === "https:" &&
+    parsed.hostname.endsWith(host) &&
+    parsed.hostname.length > host.length &&
+    parsed.port === "" &&
+    parsed.username === "" &&
+    parsed.password === "" &&
+    parsed.pathname === path &&
+    parsed.search === "" &&
+    parsed.hash === ""
+  );
+}
+
+/**
+ * Delete the endpoints of deployments that are gone, e.g. an app's retired
+ * preview deployments, which share one WorkOS environment. An endpoint is
+ * deleted only when its URL is an https URL on a subdomain of `host` with
+ * exactly the path `path`, it is not in `keep`, and it is not this
+ * deployment's own endpoint. `keep` lists the webhook URLs of the
+ * deployments that still exist. Everything is listed before anything is
+ * deleted. Returns the ids of the deleted endpoints.
+ */
+export const prune = action({
+  args: {
+    /** A host suffix starting with a dot, e.g. `".convex.site"`. */
+    host: v.string(),
+    /** The webhook path the app's deployments share, e.g. `"/workos/webhook"`. */
+    path: v.string(),
+    keep: v.array(v.string()),
+  },
+  returns: v.object({ deleted: v.array(v.string()) }),
+  handler: async (_ctx, args) => {
+    if (!/^(\.[a-z0-9-]+){2,}$/.test(args.host)) {
+      throw new Error(
+        `prune's host must be a suffix such as ".convex.site", not "${args.host}"`,
+      );
+    }
+    if (!args.path.startsWith("/") || args.path === "/") {
+      throw new Error(
+        `prune's path must be a webhook path such as "/workos/webhook", not "${args.path}"`,
+      );
+    }
+    const kept = new Set([...args.keep, webhookUrl()]);
+    const doomed: string[] = [];
+    for await (const endpoint of listEndpoints()) {
+      if (
+        !kept.has(endpoint.url) &&
+        matchesPattern(endpoint.url, args.host, args.path)
+      ) {
+        doomed.push(endpoint.id);
+      }
+    }
+    const deleted: string[] = [];
+    for (const id of doomed) {
+      try {
+        await callWorkos(env.CLIENT_SECRET, {
+          method: "DELETE",
+          path: `/webhook_endpoints/${encodeURIComponent(id)}`,
+        });
+        deleted.push(id);
+      } catch (error) {
+        // Another prune got there first.
+        if (!(error instanceof WorkosApiError && error.status === 404)) {
+          throw error;
+        }
+      }
+    }
+    return { deleted };
   },
 });
 
