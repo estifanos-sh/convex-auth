@@ -51,7 +51,7 @@ function refusalCode(bodyText: string): string {
 export async function callWorkos(
   apiKey: string,
   request: {
-    method: "GET" | "POST" | "PATCH";
+    method: "GET" | "POST" | "PATCH" | "DELETE";
     path: string;
     query?: Record<string, string | readonly string[] | undefined>;
     body?: Record<string, unknown>;
