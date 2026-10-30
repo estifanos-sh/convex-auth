@@ -1,6 +1,6 @@
 /**
  * Decoding what WorkOS's API sends: list pages, events, and the objects in
- * them. It is untrusted JSON, so each field the sync reads is checked before
+ * them. It is untrusted JSON, so each field the copy reads is checked before
  * it is used, and anything else fails as a {@link DecodeError}. Fields WorkOS
  * adds over time are ignored.
  *
@@ -256,28 +256,18 @@ export function decodeList(value: unknown): {
 }
 
 /**
- * A page of events, decoded. An event of a type the sync does not handle is
- * passed over, but the cursor still moves past it.
+ * A webhook delivery, decoded as the write it makes, or null for an event the
+ * copy does not keep.
  */
-export function decodeEvents(items: unknown[]): {
-  updates: Update[];
-  last: string | undefined;
-} {
-  const updates: Update[] = [];
-  let last: string | undefined;
-  for (const item of items) {
-    const raw = fields(item, "event");
-    const name = text(raw, "event", "event");
-    if (HANDLED.has(name)) {
-      const at = Date.parse(optionalText(raw, "created_at") ?? "");
-      updates.push(event(name, raw.data, Number.isNaN(at) ? Date.now() : at));
-    }
-    last = text(raw, "id", "event");
-  }
-  return { updates, last };
+export function decodeEvent(value: unknown): Update | null {
+  const raw = fields(value, "event");
+  const name = text(raw, "event", "event");
+  if (!HANDLED.has(name)) return null;
+  const at = Date.parse(optionalText(raw, "created_at") ?? "");
+  return event(name, raw.data, Number.isNaN(at) ? Date.now() : at);
 }
 
-/** What a backfill listing holds, decoded as the write it makes. */
+/** What a reconcile listing holds, decoded as the write it makes. */
 export function decodeListed(
   stage: "organizations" | "connections" | "directories" | "users" | "groups",
   value: unknown,

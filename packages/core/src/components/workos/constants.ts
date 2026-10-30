@@ -1,7 +1,7 @@
 /**
  * Everything about WorkOS that never varies between apps: the SSO endpoints,
  * the shape of the SSO profile, the REST API's base URL, and the events the
- * directory sync reads.
+ * webhook applies.
  *
  * Sign-in goes through WorkOS's standalone SSO API, not AuthKit (User
  * Management). The SSO API creates no WorkOS users and no WorkOS sessions, so
@@ -49,10 +49,10 @@ type WorkosSsoProfile = {
  */
 export type WorkosUserInfo = { profile: WorkosSsoProfile };
 
-/** The base URL of WorkOS's REST API, for the directory sync and the portal. */
+/** The base URL of WorkOS's REST API, for the webhook, reconcile and the portal. */
 export const API_BASE = "https://api.workos.com";
 
-/** The events the directory sync applies, in the order WorkOS emits them. */
+/** The events the webhook applies, and the endpoint is subscribed to. */
 export const EVENTS = [
   "organization.created",
   "organization.updated",

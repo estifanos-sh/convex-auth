@@ -1,6 +1,6 @@
 /**
- * WorkOS's routes: the SSO callback, and the webhook that rings the
- * directory sync.
+ * WorkOS's routes: the SSO callback, and the webhook that keeps the copy of
+ * the directories current.
  *
  * @module
  */
@@ -15,6 +15,7 @@ import {
   USER_INFO_ENDPOINTS,
 } from "./constants.ts";
 import { verifyWebhookSignature } from "./webhook.ts";
+import { decodeEvent } from "./wire.ts";
 
 const http: HttpRouter = buildCallbackRouter<ClaimedRequest>({
   claim: (ctx, stateHash) =>
@@ -34,28 +35,37 @@ const http: HttpRouter = buildCallbackRouter<ClaimedRequest>({
 });
 
 /**
- * A webhook only starts a sync run: its payload is never applied, so a
- * dropped, repeated or reordered delivery changes nothing, and the event
- * stream stays the one source of truth.
+ * A verified delivery's payload is the change. It is applied in one mutation,
+ * which queues anything larger, such as removing a deleted directory's
+ * users, for the scheduler, so WorkOS gets its answer quickly.
  */
 http.route({
   path: "/webhook",
   method: "POST",
   handler: httpActionGeneric(async (ctx, request) => {
-    const secret = await ctx.runQuery(internal.webhook.secret, {});
-    if (secret === null) {
+    const endpoint = await ctx.runQuery(internal.webhook.read, {});
+    if (endpoint === null) {
       return new Response("The webhook is not registered.", { status: 401 });
     }
+    const body = await request.text();
     const verified = await verifyWebhookSignature({
       header: request.headers.get("WorkOS-Signature"),
-      body: await request.text(),
-      secret,
+      body,
+      secret: endpoint.secret,
       now: Date.now(),
     });
     if (!verified) {
       return new Response("Invalid signature.", { status: 401 });
     }
-    await ctx.runMutation(internal.sync.doorbell, {});
+    let update;
+    try {
+      update = decodeEvent(JSON.parse(body));
+    } catch {
+      return new Response("Unreadable event.", { status: 400 });
+    }
+    if (update !== null) {
+      await ctx.runMutation(internal.webhook.receive, { update });
+    }
     return new Response(null, { status: 200 });
   }),
 });

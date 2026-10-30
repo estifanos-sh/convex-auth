@@ -94,11 +94,12 @@ providers refuse to sign in inside an embedded web view.
 ## Directory Sync (SCIM)
 
 The component keeps a copy of the environment's organizations, verified
-domains, SSO connections and directories. It reads WorkOS's
-[Events API](https://workos.com/docs/events): the first sync lists
-everything, then each sync applies the events since the last one, in order.
-The webhook only starts a sync, so a missed or repeated delivery changes
-nothing, and the cron is the backstop.
+domains, SSO connections, directories, directory users, groups and
+memberships. Webhook deliveries keep it current: each verified delivery is
+written by its object's id. WorkOS delivers in no guaranteed order, so a
+change older than the stored row's `updated_at` is ignored. The webhook
+answers quickly; a deleted directory's users and groups are removed in the
+background.
 
 `setupWorkosDirectory` takes your handler, an internal mutation that runs
 for each change in the same transaction that applies it. Map directory users
@@ -110,35 +111,37 @@ inactive: revoke their sessions.
 
 ```
 
-```ts file="examples/react-workos/convex/crons.ts" title="convex/crons.ts"
-
-```
-
 `registerWorkosWebhook` registers the deployment's webhook endpoint,
 `<site-url>/workos/webhook`, at WorkOS through the
 [Webhooks API](https://workos.com/docs/reference/webhooks), subscribed to the
-events the sync reads, and keeps the secret WorkOS signs its deliveries with
-in the component. Run it after every deploy:
+events the copy keeps, and keeps in the component the secret WorkOS signs
+its deliveries with and your handler. It finds the endpoint by its URL, so it
+never creates a second one, and it enables the endpoint again if WorkOS
+disabled it. Until it has run, the webhook refuses every delivery.
+
+`reconcileWorkosDirectory` lists everything WorkOS holds, a page per
+mutation in the background, writes each object the same way, and removes
+what the listings no longer show. It fills a new deployment's copy and
+repairs deliveries the webhook missed: WorkOS retries a failed delivery for
+a few minutes in staging and for up to 3 days in production. Run both after
+every deploy:
 
 ```sh
 npx convex run workos:registerWorkosWebhook
+npx convex run workos:reconcileWorkosDirectory
 ```
 
-It finds the endpoint by its URL, so it never creates a second one, and it
-enables the endpoint again if WorkOS disabled it. Until it has run, the
-webhook refuses every delivery, and the cron alone keeps the copy current.
+Every deployment that shares a WorkOS environment, such as a preview
+deployment, registers its own endpoint, and WorkOS keeps an endpoint after
+its deployment is gone. Run `unregisterWorkosWebhook`, which deletes this
+deployment's endpoint and its secret, before you delete the deployment:
 
-Deployments that share a WorkOS environment, such as preview deployments,
-each register an endpoint, and WorkOS keeps an endpoint after its deployment
-is gone. The component's `webhook.prune` action deletes them: it takes a host
-suffix and a path (`{ host: ".convex.site", path: "/workos/webhook" }`) and
-the webhook URLs to `keep`, and deletes every other endpoint on that pattern
-except the calling deployment's own. Run it from a deployment that can list
-which deployments still exist.
+```sh
+npx convex run workos:unregisterWorkosWebhook
+```
 
-A handler that throws stops the sync at that change, and the next sync tries
-it again. The component's `sync.status` query shows where the sync is and why
-it last stopped.
+A handler that throws refuses the delivery, and WorkOS retries it; in a
+reconcile, it stops the run at that page, and the next reconcile tries again.
 
 The component's `directory` queries read the copy: `route`,
 `getOrganization`, `listDirectories`, `getUser`, `findUsers` (by

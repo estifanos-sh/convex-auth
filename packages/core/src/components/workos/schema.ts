@@ -129,7 +129,7 @@ export const vWorkosDirectoryChange = v.union(
 export type WorkosDirectoryChange = Infer<typeof vWorkosDirectoryChange>;
 
 /**
- * Where a backfill is: the listing it is on, the directory and group the
+ * Where a reconcile is: the listing it is on, the directory and group the
  * listing is scoped to, and WorkOS's cursor within it.
  */
 export const vBackfillPosition = v.union(
@@ -156,9 +156,9 @@ export const vBackfillPosition = v.union(
 export type BackfillPosition = Infer<typeof vBackfillPosition>;
 
 /**
- * Every row the sync writes carries the backfill generation that last wrote
- * it. A backfill ends by removing the rows of older generations, which is how
- * the copy drops what WorkOS deleted while the event stream was out of reach.
+ * Every row carries the time it was last written or listed. A reconcile that
+ * started at time T ends by removing the rows older than T, which is how the
+ * copy drops what WorkOS deleted while its webhook deliveries were missed.
  */
 const kept = {
   generation: v.number(),
@@ -193,8 +193,8 @@ export default defineSchema({
     ...vWorkosDirectory.fields,
     ...stamped,
     /**
-     * Set when WorkOS deleted the directory. The row stays until its users,
-     * groups and members are removed, a page at a time.
+     * Set when WorkOS deleted the directory. The row stays until `sweep` has
+     * removed its users, groups and members, a page at a time.
      */
     deleted: v.optional(v.boolean()),
   })
@@ -222,38 +222,13 @@ export default defineSchema({
 
   /**
    * The deployment's one webhook endpoint at WorkOS, which `webhook.register`
-   * creates, and the secret WorkOS signs its deliveries with.
+   * creates, the secret WorkOS signs its deliveries with, and the app's
+   * change handler, as a function handle.
    */
   webhook: defineTable({
     endpointId: v.string(),
     url: v.string(),
     secret: v.string(),
-  }),
-
-  /**
-   * The sync's one state row. `phase` is `backfill` while the listings run,
-   * then `events` while the event stream is read from `cursor` (or, before
-   * the first event, from `since`).
-   */
-  sync: defineTable({
-    /** The app's change handler, as a function handle. */
-    onChange: v.optional(v.string()),
-    /** The run that holds the lease, and when it took it. */
-    run: v.optional(v.object({ id: v.string(), startedAt: v.number() })),
-    /** A run was asked for while one held the lease. */
-    again: v.boolean(),
-    generation: v.number(),
-    phase: v.union(
-      v.literal("idle"),
-      v.literal("backfill"),
-      v.literal("prune"),
-      v.literal("events"),
-    ),
-    backfill: v.optional(vBackfillPosition),
-    /** A WorkOS time the events are read forward from, before a cursor. */
-    since: v.optional(v.number()),
-    cursor: v.optional(v.string()),
-    /** Why the last run stopped early, cleared by the next page it applies. */
-    error: v.optional(v.string()),
+    onChange: v.string(),
   }),
 });

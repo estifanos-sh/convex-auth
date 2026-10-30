@@ -174,18 +174,7 @@ async function sign(body: string, timestamp: number, secret = WEBHOOK_SECRET) {
 }
 
 describe("workos webhook", () => {
-  const body = JSON.stringify({ id: "event_1", event: "dsync.user.updated" });
-
-  async function seedSync(t: ReturnType<typeof setup>) {
-    await t.run(async (ctx) => {
-      await ctx.db.insert("sync", {
-        onChange: "function://handler",
-        again: false,
-        generation: 1,
-        phase: "events",
-      });
-    });
-  }
+  const body = JSON.stringify({ id: "event_1", event: "user.created" });
 
   async function register(t: ReturnType<typeof setup>) {
     await t.run(async (ctx) => {
@@ -193,30 +182,32 @@ describe("workos webhook", () => {
         endpointId: "we_1",
         url: "https://test.convex.site/workos/webhook",
         secret: WEBHOOK_SECRET,
+        onChange: "function://handler",
       });
     });
   }
 
-  async function syncRow(t: ReturnType<typeof setup>) {
-    return await t.run(async (ctx) => await ctx.db.query("sync").first());
-  }
+  test("answers a signed delivery it does not keep with 200", async () => {
+    const t = setup();
+    await register(t);
+    const response = await t.fetch("/webhook", {
+      method: "POST",
+      headers: { "WorkOS-Signature": await sign(body, Date.now()) },
+      body,
+    });
+    expect(response.status).toBe(200);
+  });
 
-  test("a signed delivery starts a sync run", async () => {
-    vi.useFakeTimers();
-    try {
-      const t = setup();
-      await register(t);
-      await seedSync(t);
-      const response = await t.fetch("/webhook", {
-        method: "POST",
-        headers: { "WorkOS-Signature": await sign(body, Date.now()) },
-        body,
-      });
-      expect(response.status).toBe(200);
-      expect((await syncRow(t))?.run).toBeDefined();
-    } finally {
-      vi.useRealTimers();
-    }
+  test("answers an unreadable signed delivery with 400", async () => {
+    const t = setup();
+    await register(t);
+    const garbled = JSON.stringify({ event: "dsync.user.updated", data: 1 });
+    const response = await t.fetch("/webhook", {
+      method: "POST",
+      headers: { "WorkOS-Signature": await sign(garbled, Date.now()) },
+      body: garbled,
+    });
+    expect(response.status).toBe(400);
   });
 
   test.each([
@@ -229,7 +220,6 @@ describe("workos webhook", () => {
   ])("refuses a delivery with %s", async (_name, signature) => {
     const t = setup();
     await register(t);
-    await seedSync(t);
     const header = await signature();
     const response = await t.fetch("/webhook", {
       method: "POST",
@@ -237,18 +227,15 @@ describe("workos webhook", () => {
       body,
     });
     expect(response.status).toBe(401);
-    expect((await syncRow(t))?.run).toBeUndefined();
   });
 
   test("refuses a signed delivery before the endpoint is registered", async () => {
     const t = setup();
-    await seedSync(t);
     const response = await t.fetch("/webhook", {
       method: "POST",
       headers: { "WorkOS-Signature": await sign(body, Date.now()) },
       body,
     });
     expect(response.status).toBe(401);
-    expect((await syncRow(t))?.run).toBeUndefined();
   });
 });

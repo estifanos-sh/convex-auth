@@ -271,25 +271,32 @@ export type WorkosChangeHandler = FunctionReference<
 
 /**
  * Keep the WorkOS component's copy of the directories current, and run
- * `onChange` for each change, in WorkOS's order, in the transaction that
- * makes it. The handler maps directory users and groups onto the app's own
- * users and roles; a `user` change with `deprovisioned: true` is the signal
- * to revoke the app user's sessions.
+ * `onChange` for each change, in the transaction that makes it. The handler
+ * maps directory users and groups onto the app's own users and roles; a
+ * `user` change with `deprovisioned: true` is the signal to revoke the app
+ * user's sessions.
  *
  * ```ts
- * export const { registerWorkosWebhook, syncWorkosDirectory } = setupWorkosDirectory({
+ * export const {
+ *   registerWorkosWebhook,
+ *   reconcileWorkosDirectory,
+ *   unregisterWorkosWebhook,
+ * } = setupWorkosDirectory({
  *   component: components.authWorkos,
  *   onChange: internal.workos.onDirectoryChange,
  * });
  * ```
  *
- * Run `registerWorkosWebhook` on every deploy: it creates this deployment's
- * webhook endpoint at WorkOS once, and keeps the secret its deliveries are
- * signed with. Run `syncWorkosDirectory` from a cron (every few minutes is
- * plenty with the webhook registered, which starts a sync as soon as WorkOS
- * has a change). The
- * handler must not throw for a change it doesn't care about: a throw stops
- * the sync at that change until the next run.
+ * On every deploy, run `registerWorkosWebhook`, which creates this
+ * deployment's webhook endpoint at WorkOS once and keeps its signing secret
+ * and the handler, then `reconcileWorkosDirectory`, which lists everything
+ * in the background and repairs what the webhook missed. Run
+ * `unregisterWorkosWebhook` before you delete the deployment.
+ *
+ * WorkOS delivers changes in no guaranteed order; an older change never
+ * replaces a newer one. The handler must not throw for a change it doesn't
+ * care about: a throw refuses the delivery, which WorkOS retries, and stops
+ * a reconcile.
  */
 export function setupWorkosDirectory(options: {
   /** The WorkOS component instance, i.e. `components.authWorkos`. */
@@ -302,17 +309,23 @@ export function setupWorkosDirectory(options: {
       args: {},
       returns: v.object({ endpointId: v.string(), created: v.boolean() }),
       handler: async (ctx) =>
-        await ctx.runAction(options.component.webhook.register, {}),
+        await ctx.runAction(options.component.webhook.register, {
+          onChange: await createFunctionHandle(options.onChange),
+        }),
     }),
-    syncWorkosDirectory: internalMutationGeneric({
+    reconcileWorkosDirectory: internalMutationGeneric({
       args: {},
       returns: v.null(),
       handler: async (ctx) => {
-        await ctx.runMutation(options.component.sync.start, {
-          onChange: await createFunctionHandle(options.onChange),
-        });
+        await ctx.runMutation(options.component.reconcile.start, {});
         return null;
       },
+    }),
+    unregisterWorkosWebhook: internalActionGeneric({
+      args: {},
+      returns: v.object({ deleted: v.boolean() }),
+      handler: async (ctx) =>
+        await ctx.runAction(options.component.webhook.unregister, {}),
     }),
   };
 }

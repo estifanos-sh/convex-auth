@@ -215,39 +215,22 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         Name
       >;
     };
-    sync: {
-      start: FunctionReference<
-        "mutation",
-        "internal",
-        { onChange: string },
-        null,
-        Name
-      >;
-      status: FunctionReference<
-        "query",
-        "internal",
-        {},
-        {
-          error?: string;
-          phase: "idle" | "backfill" | "prune" | "events";
-          running: boolean;
-        },
-        Name
-      >;
+    reconcile: {
+      start: FunctionReference<"mutation", "internal", {}, null, Name>;
     };
     webhook: {
-      prune: FunctionReference<
-        "action",
-        "internal",
-        { host: string; keep: Array<string>; path: string },
-        { deleted: Array<string> },
-        Name
-      >;
       register: FunctionReference<
         "action",
         "internal",
-        {},
+        { onChange: string },
         { created: boolean; endpointId: string },
+        Name
+      >;
+      unregister: FunctionReference<
+        "action",
+        "internal",
+        {},
+        { deleted: boolean },
         Name
       >;
     };
