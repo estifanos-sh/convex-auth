@@ -15,7 +15,7 @@ app.use(auth);
 // The `httpPrefix` below controls where the component's routes are mounted:
 // the SSO callback at `<site-url>/workos/callback`, which is the redirect URI
 // to add in the WorkOS dashboard, and the webhook at `<site-url>/workos/webhook`,
-// which `registerWorkosWebhook` registers at WorkOS.
+// which `syncWorkos` registers at WorkOS.
 app.use(workos, {
   httpPrefix: "/workos",
   env: {

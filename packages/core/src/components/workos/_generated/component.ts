@@ -23,47 +23,49 @@ import type { FunctionReference } from "convex/server";
  */
 export type ComponentApi<Name extends string | undefined = string | undefined> =
   {
-    directory: {
-      findUsers: FunctionReference<
-        "query",
-        "internal",
-        { idpId: string; organizationId: string },
-        Array<{
-          directoryId: string;
-          email?: string;
-          firstName?: string;
-          id: string;
-          idpId: string;
-          lastName?: string;
-          organizationId?: string;
-          state: string;
-        }>,
-        Name
-      >;
-      getOrganization: FunctionReference<
-        "query",
-        "internal",
-        { id: string },
-        null | { externalId?: string; id: string; name: string },
-        Name
-      >;
-      getUser: FunctionReference<
+    connections: {
+      get: FunctionReference<
         "query",
         "internal",
         { id: string },
         null | {
-          directoryId: string;
-          email?: string;
-          firstName?: string;
+          connectionType: string;
           id: string;
-          idpId: string;
-          lastName?: string;
+          name?: string;
           organizationId?: string;
           state: string;
         },
         Name
       >;
-      listDirectories: FunctionReference<
+      list: FunctionReference<
+        "query",
+        "internal",
+        { organizationId: string },
+        Array<{
+          connectionType: string;
+          id: string;
+          name?: string;
+          organizationId?: string;
+          state: string;
+        }>,
+        Name
+      >;
+    };
+    directories: {
+      get: FunctionReference<
+        "query",
+        "internal",
+        { id: string },
+        null | {
+          id: string;
+          name: string;
+          organizationId?: string;
+          state: string;
+          type: string;
+        },
+        Name
+      >;
+      list: FunctionReference<
         "query",
         "internal",
         { organizationId: string },
@@ -76,11 +78,27 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         }>,
         Name
       >;
-      listGroups: FunctionReference<
+    };
+    directoryGroups: {
+      get: FunctionReference<
+        "query",
+        "internal",
+        { id: string },
+        null | {
+          directoryId: string;
+          id: string;
+          idpId?: string;
+          name: string;
+          organizationId?: string;
+        },
+        Name
+      >;
+      list: FunctionReference<
         "query",
         "internal",
         {
-          directoryId: string;
+          directory?: string;
+          organization?: string;
           paginationOpts: {
             cursor: string | null;
             endCursor?: string | null;
@@ -96,6 +114,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           page: Array<{
             directoryId: string;
             id: string;
+            idpId?: string;
             name: string;
             organizationId?: string;
           }>;
@@ -104,46 +123,34 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         },
         Name
       >;
-      listMembers: FunctionReference<
+    };
+    directoryUsers: {
+      get: FunctionReference<
         "query",
         "internal",
-        {
-          groupId: string;
-          paginationOpts: {
-            cursor: string | null;
-            endCursor?: string | null;
-            id?: number;
-            maximumBytesRead?: number;
-            maximumRowsRead?: number;
-            numItems: number;
-          };
-        },
-        {
-          continueCursor: string;
-          isDone: boolean;
-          page: Array<{ directoryId: string; groupId: string; userId: string }>;
-          pageStatus?: "SplitRecommended" | "SplitRequired" | null;
-          splitCursor?: string | null;
-        },
-        Name
-      >;
-      listUserGroups: FunctionReference<
-        "query",
-        "internal",
-        { userId: string },
-        Array<{
+        { id: string },
+        null | {
           directoryId: string;
+          email?: string;
+          firstName?: string;
           id: string;
-          name: string;
+          idpId: string;
+          lastName?: string;
           organizationId?: string;
-        }>,
+          role?: { slug: string };
+          roles?: Array<{ slug: string }>;
+          state: string;
+        },
         Name
       >;
-      listUsers: FunctionReference<
+      list: FunctionReference<
         "query",
         "internal",
         {
-          directoryId: string;
+          directory?: string;
+          email?: string;
+          idpId?: string;
+          organization?: string;
           paginationOpts: {
             cursor: string | null;
             endCursor?: string | null;
@@ -164,6 +171,8 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
             idpId: string;
             lastName?: string;
             organizationId?: string;
+            role?: { slug: string };
+            roles?: Array<{ slug: string }>;
             state: string;
           }>;
           pageStatus?: "SplitRecommended" | "SplitRequired" | null;
@@ -171,11 +180,65 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         },
         Name
       >;
-      route: FunctionReference<
+    };
+    organizationDomains: {
+      get: FunctionReference<
         "query",
         "internal",
-        { email: string },
-        null | { organizationId: string },
+        { domain: string },
+        null | {
+          connection: {
+            connectionType: string;
+            id: string;
+            name?: string;
+            organizationId?: string;
+            state: string;
+          };
+          organization: { externalId?: string; id: string; name: string };
+        },
+        Name
+      >;
+      list: FunctionReference<
+        "query",
+        "internal",
+        { organizationId: string },
+        Array<{
+          domain: string;
+          id: string;
+          organizationId: string;
+          state: string;
+        }>,
+        Name
+      >;
+    };
+    organizations: {
+      get: FunctionReference<
+        "query",
+        "internal",
+        { id: string },
+        null | { externalId?: string; id: string; name: string },
+        Name
+      >;
+      list: FunctionReference<
+        "query",
+        "internal",
+        {
+          paginationOpts: {
+            cursor: string | null;
+            endCursor?: string | null;
+            id?: number;
+            maximumBytesRead?: number;
+            maximumRowsRead?: number;
+            numItems: number;
+          };
+        },
+        {
+          continueCursor: string;
+          isDone: boolean;
+          page: Array<{ externalId?: string; id: string; name: string }>;
+          pageStatus?: "SplitRecommended" | "SplitRequired" | null;
+          splitCursor?: string | null;
+        },
         Name
       >;
     };
@@ -222,7 +285,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       register: FunctionReference<
         "action",
         "internal",
-        { onChange: string },
+        { onEvent: string },
         { created: boolean; endpointId: string },
         Name
       >;

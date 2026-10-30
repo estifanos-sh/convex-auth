@@ -7,6 +7,7 @@ import { setupUsernamePasskey } from "@convex-dev/auth/methods/username-passkey/
 import { setupUsernamePassword } from "@convex-dev/auth/methods/username-password/server";
 import { setupWorkos } from "@convex-dev/auth/methods/workos/server";
 import { components, internal } from "./_generated/api";
+import type { DataModel } from "./_generated/dataModel";
 import { env } from "./_generated/server";
 
 // Every sign-in method, thus `api.auth` has the functions of each one. The
@@ -92,7 +93,14 @@ export const { startSignInWithGithub, completeSignInWithGithub } = setupGithub(
   { component: components.authGithub, allowedRedirectOrigins },
 ).attachUserCallbacks({ createUser: internal.users.createUserGithub });
 
-export const { startSignInWithWorkos, completeSignInWithWorkos } = setupWorkos(
-  auth,
-  { component: components.authWorkos, allowedRedirectOrigins },
-).attachUserCallbacks({ createUser: internal.users.createUserWorkos });
+const workos = setupWorkos(auth, {
+  component: components.authWorkos,
+  module: "auth",
+  allowedRedirectOrigins,
+});
+export const { startSignInWithWorkos, completeSignInWithWorkos } =
+  workos.attachUserCallbacks({ createUser: internal.users.createUserWorkos });
+export const { syncWorkos, unregisterWorkos, onWorkosEvent } =
+  workos.attachDirectoryCallbacks<DataModel>({
+    "dsync.user.deleted": async () => {},
+  });

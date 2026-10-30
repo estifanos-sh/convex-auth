@@ -1,8 +1,11 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
-import { vWorkosProfile } from "@convex-dev/auth/methods/workos/server";
+import {
+  vWorkosProfile,
+  type WorkosDirectoryUser,
+} from "@convex-dev/auth/methods/workos/server";
 import { ConvexError, v } from "convex/values";
-import { components } from "./_generated/api";
-import { internalMutation, query } from "./_generated/server";
+import { components, internal } from "./_generated/api";
+import { internalMutation, type MutationCtx, query } from "./_generated/server";
 
 const vProvider = v.object({
   name: v.literal("workos"),
@@ -33,12 +36,45 @@ export const onSignIn = internalMutation({
   handler: async (ctx, { provider: { profile } }) => {
     if (profile.organizationId === undefined) return null;
     const entries = await ctx.runQuery(
-      components.authWorkos.directory.findUsers,
-      { organizationId: profile.organizationId, idpId: profile.idpId },
+      components.authWorkos.directoryUsers.list,
+      {
+        organization: profile.organizationId,
+        idpId: profile.idpId,
+        paginationOpts: { numItems: 10, cursor: null },
+      },
     );
-    if (entries.some((entry) => entry.state !== "active")) {
+    if (entries.page.some((entry) => entry.state !== "active")) {
       throw new ConvexError("Your organization has deactivated this account.");
     }
+    return null;
+  },
+});
+
+/** Mark the directory user's app users and sign them out everywhere. */
+export async function deprovision(ctx: MutationCtx, user: WorkosDirectoryUser) {
+  const users = await ctx.db
+    .query("users")
+    .withIndex("organizationId_idpId", (q) =>
+      q.eq("organizationId", user.organizationId).eq("idpId", user.idpId),
+    )
+    .collect();
+  for (const row of users) {
+    await ctx.db.patch("users", row._id, { deprovisioned: true });
+    await ctx.scheduler.runAfter(0, internal.users.revoke, { userId: row._id });
+  }
+}
+
+/** Revoke a batch of the user's sessions, and queue the next. */
+export const revoke = internalMutation({
+  args: { userId: v.id("users") },
+  returns: v.null(),
+  handler: async (ctx, { userId }) => {
+    const { more } = await ctx.runMutation(
+      components.auth.public.revokeUserSessions,
+      { userId },
+    );
+    if (more)
+      await ctx.scheduler.runAfter(0, internal.users.revoke, { userId });
     return null;
   },
 });

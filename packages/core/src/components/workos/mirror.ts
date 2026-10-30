@@ -1,6 +1,7 @@
 /**
  * Writing updates, from webhook deliveries and from reconcile's listings,
- * into the copy, and telling the app about each change.
+ * into the copy, and telling the app about each change as the WorkOS event
+ * it is.
  *
  * @module
  */
@@ -9,108 +10,152 @@ import { internal } from "./_generated/api.ts";
 import type { Doc } from "./_generated/dataModel.ts";
 import type { MutationCtx } from "./_generated/server.ts";
 import type {
-  WorkosConnection,
-  WorkosDirectory,
-  WorkosDirectoryChange,
-  WorkosDirectoryGroup,
-  WorkosDirectoryMember,
-  WorkosDirectoryUser,
-  WorkosDomain,
-  WorkosOrganization,
+  Connection,
+  Directory,
+  DirectoryGroup,
+  DirectoryUser,
+  Organization,
+  OrganizationDomain,
+  WorkosEvent,
 } from "./schema.ts";
-import { BATCH } from "./constants.ts";
 import type { Kind, Update } from "./wire.ts";
 
-/** The app's change handler, as the copy calls it. */
-export type ChangeHandler = FunctionHandle<
+/** The app's event handler, as the copy calls it. */
+export type EventHandler = FunctionHandle<
   "mutation",
-  { change: WorkosDirectoryChange },
+  { event: WorkosEvent },
   null
 >;
 
 /**
- * A stored handle as the {@link ChangeHandler} it is. Function handles are
+ * A stored handle as the {@link EventHandler} it is. Function handles are
  * strings that Convex brands, and a stored one loses the brand; Convex mints
  * them with this scheme.
  */
-export function changeHandler(value: string): ChangeHandler {
-  if (!isHandle(value)) throw new Error("onChange must be a function handle");
+export function eventHandler(value: string): EventHandler {
+  if (!isHandle(value)) throw new Error("onEvent must be a function handle");
   return value;
 }
 
-function isHandle(value: string): value is ChangeHandler {
+function isHandle(value: string): value is EventHandler {
   return value.startsWith("function://");
 }
 
-export function organizationOf(row: Doc<"organizations">): WorkosOrganization {
-  return { id: row.id, name: row.name, externalId: row.externalId };
+export function organizationOf({
+  id,
+  name,
+  externalId,
+}: Doc<"organizations">): Organization {
+  return { id, name, externalId };
 }
 
-export function domainOf(row: Doc<"domains">): WorkosDomain {
+export function domainOf({
+  id,
+  organizationId,
+  domain,
+  state,
+}: Doc<"organizationDomains">): OrganizationDomain {
+  return { id, organizationId, domain, state };
+}
+
+export function connectionOf({
+  id,
+  organizationId,
+  connectionType,
+  name,
+  state,
+}: Doc<"connections">): Connection {
+  return { id, organizationId, connectionType, name, state };
+}
+
+export function directoryOf({
+  id,
+  organizationId,
+  name,
+  type,
+  state,
+}: Doc<"directories">): Directory {
+  return { id, organizationId, name, type, state };
+}
+
+export function userOf({
+  id,
+  directoryId,
+  organizationId,
+  idpId,
+  email,
+  firstName,
+  lastName,
+  state,
+  role,
+  roles,
+}: Doc<"directoryUsers">): DirectoryUser {
   return {
-    id: row.id,
-    organizationId: row.organizationId,
-    domain: row.domain,
-    state: row.state,
+    id,
+    directoryId,
+    organizationId,
+    idpId,
+    email,
+    firstName,
+    lastName,
+    state,
+    role,
+    roles,
   };
 }
 
-export function connectionOf(row: Doc<"connections">): WorkosConnection {
+export function groupOf({
+  id,
+  directoryId,
+  organizationId,
+  idpId,
+  name,
+}: Doc<"directoryGroups">): DirectoryGroup {
+  return { id, directoryId, organizationId, idpId, name };
+}
+
+/**
+ * One page of rows read in `id` order, from after the cursor, which is the
+ * last id of the page before. Components cannot use Convex's `paginate`.
+ */
+export async function pageOf<Row extends { id: string }, Item>(
+  rows: { take(n: number): Promise<Row[]> },
+  numItems: number,
+  convert: (row: Row) => Item,
+) {
+  const taken = await rows.take(numItems + 1);
+  const page = taken.slice(0, numItems);
   return {
-    id: row.id,
-    organizationId: row.organizationId,
-    type: row.type,
-    state: row.state,
+    page: page.map(convert),
+    isDone: taken.length <= numItems,
+    continueCursor: page.at(-1)?.id ?? "",
   };
 }
 
-export function directoryOf(row: Doc<"directories">): WorkosDirectory {
-  return {
-    id: row.id,
-    organizationId: row.organizationId,
-    name: row.name,
-    type: row.type,
-    state: row.state,
-  };
-}
-
-export function userOf(row: Doc<"directoryUsers">): WorkosDirectoryUser {
-  return {
-    id: row.id,
-    directoryId: row.directoryId,
-    organizationId: row.organizationId,
-    idpId: row.idpId,
-    email: row.email,
-    firstName: row.firstName,
-    lastName: row.lastName,
-    state: row.state,
-  };
-}
-
-export function groupOf(row: Doc<"directoryGroups">): WorkosDirectoryGroup {
-  return {
-    id: row.id,
-    directoryId: row.directoryId,
-    organizationId: row.organizationId,
-    name: row.name,
-  };
-}
-
-export function memberOf(row: Doc<"directoryMembers">): WorkosDirectoryMember {
-  return {
-    directoryId: row.directoryId,
-    groupId: row.groupId,
-    userId: row.userId,
-  };
-}
-
-/** Whether two public shapes hold the same values. */
-function same<T extends Record<string, string | undefined>>(a: T, b: T) {
-  const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
-  for (const key of keys) {
-    if (a[key] !== b[key]) return false;
+/** Whether two values hold the same JSON, whatever their keys' order. */
+function same(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (Array.isArray(a) && Array.isArray(b)) {
+    return a.length === b.length && a.every((item, i) => same(item, b[i]));
   }
-  return true;
+  if (
+    typeof a !== "object" ||
+    typeof b !== "object" ||
+    a === null ||
+    b === null ||
+    Array.isArray(a) ||
+    Array.isArray(b)
+  ) {
+    return false;
+  }
+  const left = Object.entries(a).filter(([, value]) => value !== undefined);
+  const right = new Map(
+    Object.entries(b).filter(([, value]) => value !== undefined),
+  );
+  return (
+    left.length === right.size &&
+    left.every(([key, value]) => same(value, right.get(key)))
+  );
 }
 
 /**
@@ -123,32 +168,28 @@ export class Mirror {
   constructor(
     private readonly ctx: MutationCtx,
     private readonly generation: number,
-    private readonly onChange: ChangeHandler | undefined,
+    private readonly onEvent: EventHandler,
   ) {}
 
   /** Tell the app about one change. */
-  async emit(change: WorkosDirectoryChange): Promise<void> {
-    if (this.onChange !== undefined) {
-      await this.ctx.runMutation(this.onChange, { change });
-    }
+  async emit(event: WorkosEvent): Promise<void> {
+    await this.ctx.runMutation(this.onEvent, { event });
   }
 
   async write(update: Update): Promise<void> {
     switch (update.kind) {
       case "organization":
         return await this.organization(update.row, update.domains);
-      case "domain":
+      case "organizationDomain":
         return await this.domain(update.row);
       case "connection":
         return await this.connection(update.row);
       case "directory":
         return await this.directory(update.row);
-      case "user":
+      case "directoryUser":
         return await this.user(update.row);
-      case "group":
+      case "directoryGroup":
         return await this.group(update.row);
-      case "member":
-        return await this.member(update.row);
     }
   }
 
@@ -164,9 +205,9 @@ export class Mirror {
         if (row !== null) await this.removeOrganization(row);
         return;
       }
-      case "domain": {
+      case "organizationDomain": {
         const row = await db
-          .query("domains")
+          .query("organizationDomains")
           .withIndex("id", (q) => q.eq("id", id))
           .unique();
         if (row !== null) await this.removeDomain(row);
@@ -181,8 +222,8 @@ export class Mirror {
         return;
       }
       case "directory": {
-        // Its users, groups and members can be many, so they go a page at a
-        // time in `reconcile.sweep`, which removes the directory last.
+        // Its users and groups can be many, so they go a batch at a time in
+        // `reconcile.sweep`, which removes the directory last.
         const row = await db
           .query("directories")
           .withIndex("id", (q) => q.eq("id", id))
@@ -197,7 +238,7 @@ export class Mirror {
         }
         return;
       }
-      case "user": {
+      case "directoryUser": {
         const row = await db
           .query("directoryUsers")
           .withIndex("id", (q) => q.eq("id", id))
@@ -205,7 +246,7 @@ export class Mirror {
         if (row !== null) await this.removeUser(row);
         return;
       }
-      case "group": {
+      case "directoryGroup": {
         const row = await db
           .query("directoryGroups")
           .withIndex("id", (q) => q.eq("id", id))
@@ -217,8 +258,8 @@ export class Mirror {
   }
 
   private async organization(
-    next: WorkosOrganization,
-    domains: WorkosDomain[],
+    next: Organization,
+    domains: OrganizationDomain[],
   ) {
     const db = this.ctx.db;
     const row = await db
@@ -230,16 +271,15 @@ export class Mirror {
     else await db.replace("organizations", row._id, fields);
     if (row === null || !same(organizationOf(row), next)) {
       await this.emit({
-        kind: "organization",
-        action: "upserted",
-        organization: next,
+        event: row === null ? "organization.created" : "organization.updated",
+        data: next,
       });
     }
     // The organization's list of domains is the whole set: a domain it no
     // longer lists is gone. An organization holds a handful.
     const listed = new Set(domains.map((domain) => domain.id));
     const held = await db
-      .query("domains")
+      .query("organizationDomains")
       .withIndex("organizationId", (q) => q.eq("organizationId", next.id))
       .collect();
     for (const domain of held) {
@@ -248,21 +288,27 @@ export class Mirror {
     for (const domain of domains) await this.domain(domain);
   }
 
-  private async domain(next: WorkosDomain) {
+  private async domain(next: OrganizationDomain) {
     const db = this.ctx.db;
     const row = await db
-      .query("domains")
+      .query("organizationDomains")
       .withIndex("id", (q) => q.eq("id", next.id))
       .unique();
     const fields = { ...next, generation: this.generation };
-    if (row === null) await db.insert("domains", fields);
-    else await db.replace("domains", row._id, fields);
+    if (row === null) await db.insert("organizationDomains", fields);
+    else await db.replace("organizationDomains", row._id, fields);
     if (row === null || !same(domainOf(row), next)) {
-      await this.emit({ kind: "domain", action: "upserted", domain: next });
+      await this.emit({
+        event:
+          row === null
+            ? "organization_domain.created"
+            : "organization_domain.updated",
+        data: next,
+      });
     }
   }
 
-  private async connection(next: WorkosConnection) {
+  private async connection(next: Connection) {
     const db = this.ctx.db;
     const row = await db
       .query("connections")
@@ -273,14 +319,16 @@ export class Mirror {
     else await db.replace("connections", row._id, fields);
     if (row === null || !same(connectionOf(row), next)) {
       await this.emit({
-        kind: "connection",
-        action: "upserted",
-        connection: next,
+        event:
+          next.state === "active"
+            ? "connection.activated"
+            : "connection.deactivated",
+        data: next,
       });
     }
   }
 
-  private async directory(next: WorkosDirectory) {
+  private async directory(next: Directory) {
     const db = this.ctx.db;
     const row = await db
       .query("directories")
@@ -291,15 +339,11 @@ export class Mirror {
     if (row === null) await db.insert("directories", fields);
     else await db.replace("directories", row._id, fields);
     if (row === null || !same(directoryOf(row), next)) {
-      await this.emit({
-        kind: "directory",
-        action: "upserted",
-        directory: next,
-      });
+      await this.emit({ event: "dsync.activated", data: next });
     }
   }
 
-  private async user(next: WorkosDirectoryUser) {
+  private async user(next: DirectoryUser) {
     const db = this.ctx.db;
     const row = await db
       .query("directoryUsers")
@@ -310,15 +354,13 @@ export class Mirror {
     else await db.replace("directoryUsers", row._id, fields);
     if (row === null || !same(userOf(row), next)) {
       await this.emit({
-        kind: "user",
-        action: "upserted",
-        user: next,
-        deprovisioned: next.state !== "active",
+        event: row === null ? "dsync.user.created" : "dsync.user.updated",
+        data: next,
       });
     }
   }
 
-  private async group(next: WorkosDirectoryGroup) {
+  private async group(next: DirectoryGroup) {
     const db = this.ctx.db;
     const row = await db
       .query("directoryGroups")
@@ -328,142 +370,51 @@ export class Mirror {
     if (row === null) await db.insert("directoryGroups", fields);
     else await db.replace("directoryGroups", row._id, fields);
     if (row === null || !same(groupOf(row), next)) {
-      await this.emit({ kind: "group", action: "upserted", group: next });
+      await this.emit({
+        event: row === null ? "dsync.group.created" : "dsync.group.updated",
+        data: next,
+      });
     }
-  }
-
-  /**
-   * A membership a listing of its group showed. Its time only moves forward,
-   * so a listing that started earlier never makes it look older than a later
-   * listing that also showed it.
-   */
-  private async member(next: WorkosDirectoryMember) {
-    const db = this.ctx.db;
-    const row = await db
-      .query("directoryMembers")
-      .withIndex("groupId_userId", (q) =>
-        q.eq("groupId", next.groupId).eq("userId", next.userId),
-      )
-      .unique();
-    if (row !== null) {
-      if (row.generation < this.generation) {
-        await db.patch("directoryMembers", row._id, {
-          generation: this.generation,
-        });
-      }
-      return;
-    }
-    await db.insert("directoryMembers", {
-      ...next,
-      generation: this.generation,
-    });
-    await this.emit({ kind: "member", action: "added", member: next });
   }
 
   async removeOrganization(row: Doc<"organizations">): Promise<void> {
     const domains = await this.ctx.db
-      .query("domains")
+      .query("organizationDomains")
       .withIndex("organizationId", (q) => q.eq("organizationId", row.id))
       .collect();
     for (const domain of domains) await this.removeDomain(domain);
     await this.ctx.db.delete("organizations", row._id);
     await this.emit({
-      kind: "organization",
-      action: "deleted",
-      organization: organizationOf(row),
+      event: "organization.deleted",
+      data: organizationOf(row),
     });
   }
 
-  async removeDomain(row: Doc<"domains">): Promise<void> {
-    await this.ctx.db.delete("domains", row._id);
+  async removeDomain(row: Doc<"organizationDomains">): Promise<void> {
+    await this.ctx.db.delete("organizationDomains", row._id);
     await this.emit({
-      kind: "domain",
-      action: "deleted",
-      domain: domainOf(row),
+      event: "organization_domain.deleted",
+      data: domainOf(row),
     });
   }
 
   async removeConnection(row: Doc<"connections">): Promise<void> {
     await this.ctx.db.delete("connections", row._id);
-    await this.emit({
-      kind: "connection",
-      action: "deleted",
-      connection: connectionOf(row),
-    });
+    await this.emit({ event: "connection.deleted", data: connectionOf(row) });
   }
 
   async removeDirectory(row: Doc<"directories">): Promise<void> {
     await this.ctx.db.delete("directories", row._id);
-    await this.emit({
-      kind: "directory",
-      action: "deleted",
-      directory: directoryOf(row),
-    });
+    await this.emit({ event: "dsync.deleted", data: directoryOf(row) });
   }
 
-  /**
-   * Remove a directory user, after their memberships, which go a batch at a
-   * time without a change of their own: the user's deletion says they ended.
-   * A user with more than a batch keeps their row, freshly stamped so a
-   * reconcile's removal passes over it, until `reconcile.drop` has removed
-   * the rest.
-   */
   async removeUser(row: Doc<"directoryUsers">): Promise<void> {
-    const memberships = await this.ctx.db
-      .query("directoryMembers")
-      .withIndex("userId", (q) => q.eq("userId", row.id))
-      .take(BATCH);
-    for (const membership of memberships) {
-      await this.ctx.db.delete("directoryMembers", membership._id);
-    }
-    if (memberships.length === BATCH) {
-      await this.ctx.db.patch("directoryUsers", row._id, {
-        generation: this.generation,
-      });
-      await this.ctx.scheduler.runAfter(0, internal.reconcile.drop, {
-        kind: "user",
-        id: row.id,
-      });
-      return;
-    }
     await this.ctx.db.delete("directoryUsers", row._id);
-    await this.emit({
-      kind: "user",
-      action: "deleted",
-      user: userOf(row),
-      deprovisioned: true,
-    });
+    await this.emit({ event: "dsync.user.deleted", data: userOf(row) });
   }
 
-  /** Remove a group after its memberships, as {@link removeUser} does. */
   async removeGroup(row: Doc<"directoryGroups">): Promise<void> {
-    const memberships = await this.ctx.db
-      .query("directoryMembers")
-      .withIndex("groupId_userId", (q) => q.eq("groupId", row.id))
-      .take(BATCH);
-    for (const membership of memberships) {
-      await this.ctx.db.delete("directoryMembers", membership._id);
-    }
-    if (memberships.length === BATCH) {
-      await this.ctx.db.patch("directoryGroups", row._id, {
-        generation: this.generation,
-      });
-      await this.ctx.scheduler.runAfter(0, internal.reconcile.drop, {
-        kind: "group",
-        id: row.id,
-      });
-      return;
-    }
     await this.ctx.db.delete("directoryGroups", row._id);
-    await this.emit({ kind: "group", action: "deleted", group: groupOf(row) });
-  }
-
-  async removeMember(row: Doc<"directoryMembers">): Promise<void> {
-    await this.ctx.db.delete("directoryMembers", row._id);
-    await this.emit({
-      kind: "member",
-      action: "removed",
-      member: memberOf(row),
-    });
+    await this.emit({ event: "dsync.group.deleted", data: groupOf(row) });
   }
 }

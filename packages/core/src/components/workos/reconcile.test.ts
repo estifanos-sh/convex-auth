@@ -8,8 +8,8 @@ import {
 import { v } from "convex/values";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { api, internal } from "./_generated/api.ts";
-import schema, { vWorkosDirectoryChange } from "./schema.ts";
-import type { WorkosDirectoryChange } from "./schema.ts";
+import schema, { vWorkosEvent } from "./schema.ts";
+import type { WorkosEvent } from "./schema.ts";
 
 const modules = import.meta.glob("./**/*.ts");
 
@@ -26,7 +26,6 @@ class FakeWorkos {
   directories: Json[] = [];
   users: Json[] = [];
   groups: Json[] = [];
-  memberships: Array<{ group: string; user: string }> = [];
   failures: number[] = [];
   calls: string[] = [];
   now = Date.parse("2026-01-01T00:00:00Z");
@@ -94,30 +93,15 @@ class FakeWorkos {
         return json(this.page(this.connections, params));
       case "/directories":
         return json(this.page(this.directories, params));
-      case "/directory_users": {
-        const group = params.get("group");
-        if (group === null) {
-          return json(
-            this.page(
-              this.users.filter(
-                (user) => user.directory_id === params.get("directory"),
-              ),
-              params,
-            ),
-          );
-        }
-        const members = new Set(
-          this.memberships
-            .filter((membership) => membership.group === group)
-            .map((membership) => membership.user),
-        );
+      case "/directory_users":
         return json(
           this.page(
-            this.users.filter((user) => members.has(String(user.id))),
+            this.users.filter(
+              (user) => user.directory_id === params.get("directory"),
+            ),
             params,
           ),
         );
-      }
       case "/directory_groups":
         return json(
           this.page(
@@ -149,7 +133,12 @@ function organization(id: string, domains: string[], updated = 0): Json {
   };
 }
 
-function user(id: string, state = "active", updated = 0): Json {
+function user(
+  id: string,
+  state = "active",
+  updated = 0,
+  role = "member",
+): Json {
   return {
     object: "directory_user",
     id,
@@ -160,6 +149,8 @@ function user(id: string, state = "active", updated = 0): Json {
     first_name: "First",
     last_name: "Last",
     state,
+    role: { slug: role },
+    roles: [{ slug: role }],
     updated_at: at(updated),
   };
 }
@@ -187,28 +178,26 @@ const DIRECTORY = {
 
 const WEBHOOK_SECRET = "webhook-secret";
 
-let changes: WorkosDirectoryChange[] = [];
-let refuse: ((change: WorkosDirectoryChange) => boolean) | undefined;
+let events: WorkosEvent[] = [];
+let refuse: ((event: WorkosEvent) => boolean) | undefined;
 
-const onChange = makeFunctionReference<
-  "mutation",
-  { change: WorkosDirectoryChange },
-  null
->("testApp:onChange");
+const onEvent = makeFunctionReference<"mutation", { event: WorkosEvent }, null>(
+  "testApp:onEvent",
+);
 
 const register = makeFunctionReference<"mutation", Record<string, never>, null>(
   "testApp:register",
 );
 
 const testApp = {
-  onChange: internalMutationGeneric({
-    args: { change: vWorkosDirectoryChange },
+  onEvent: internalMutationGeneric({
+    args: { event: vWorkosEvent },
     returns: v.null(),
     handler: async (_ctx, args) => {
-      if (refuse?.(args.change) === true) {
+      if (refuse?.(args.event) === true) {
         throw new Error("the app refused the change");
       }
-      changes.push(args.change);
+      events.push(args.event);
       return null;
     },
   }),
@@ -220,7 +209,7 @@ const testApp = {
         endpointId: "we_1",
         url: "https://test.convex.site/workos/webhook",
         secret: WEBHOOK_SECRET,
-        onChange: await createFunctionHandle(onChange),
+        onEvent: await createFunctionHandle(onEvent),
       });
       return null;
     },
@@ -305,9 +294,6 @@ function seeded(): FakeWorkos {
   workos.directories = [DIRECTORY];
   workos.users = [user("directory_user_1"), user("directory_user_2")];
   workos.groups = [group("directory_group_1")];
-  workos.memberships = [
-    { group: "directory_group_1", user: "directory_user_1" },
-  ];
   return workos;
 }
 
@@ -315,14 +301,14 @@ async function prepared(workos: FakeWorkos) {
   const t = setup(workos);
   await t.mutation(register, {});
   await reconcile(t);
-  changes = [];
+  events = [];
   return t;
 }
 
 beforeEach(() => {
   vi.useFakeTimers();
   vi.setSystemTime(Date.parse("2026-01-01T00:00:00Z"));
-  changes = [];
+  events = [];
   refuse = undefined;
 });
 
@@ -332,6 +318,8 @@ afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
+
+const names = () => events.map((event) => event.event);
 
 describe("reconcile", () => {
   test("refuses to start before the webhook is registered", async () => {
@@ -346,60 +334,60 @@ describe("reconcile", () => {
     await t.mutation(register, {});
     await reconcile(t);
 
-    expect(changes.map((change) => `${change.kind}:${change.action}`)).toEqual([
-      "organization:upserted",
-      "domain:upserted",
-      "connection:upserted",
-      "directory:upserted",
-      "user:upserted",
-      "user:upserted",
-      "group:upserted",
-      "member:added",
+    expect(names()).toEqual([
+      "organization.created",
+      "organization_domain.created",
+      "connection.activated",
+      "dsync.activated",
+      "dsync.user.created",
+      "dsync.user.created",
+      "dsync.group.created",
     ]);
     expect(
-      await t.query(api.directory.route, { email: "Ada@EXAMPLE.com" }),
-    ).toEqual({ organizationId: "org_1" });
+      await t.query(api.organizationDomains.get, { domain: "Ada@EXAMPLE.com" }),
+    ).toMatchObject({
+      organization: { id: "org_1" },
+      connection: { id: "conn_1", connectionType: "OktaSAML" },
+    });
     expect(
-      await t.query(api.directory.route, { email: "ada@elsewhere.com" }),
+      await t.query(api.organizationDomains.get, { domain: "elsewhere.com" }),
     ).toBeNull();
     expect(
-      await t.query(api.directory.findUsers, {
-        organizationId: "org_1",
+      await t.query(api.directoryUsers.list, {
+        organization: "org_1",
         idpId: "idp_directory_user_1",
+        paginationOpts: { numItems: 10, cursor: null },
       }),
-    ).toMatchObject([{ id: "directory_user_1", state: "active" }]);
+    ).toMatchObject({
+      page: [
+        { id: "directory_user_1", state: "active", role: { slug: "member" } },
+      ],
+    });
     expect(
-      await t.query(api.directory.listUserGroups, {
-        userId: "directory_user_1",
+      await t.query(api.directoryGroups.list, {
+        directory: "directory_1",
+        paginationOpts: { numItems: 10, cursor: null },
       }),
-    ).toMatchObject([{ id: "directory_group_1" }]);
+    ).toMatchObject({ page: [{ id: "directory_group_1" }] });
   });
 
   test("a second run with nothing new changes nothing", async () => {
     const t = await prepared(seeded());
     vi.advanceTimersByTime(1000);
     await reconcile(t);
-    expect(changes).toEqual([]);
+    expect(events).toEqual([]);
   });
 
   test("removes what the listings no longer show", async () => {
     const workos = seeded();
     const t = await prepared(workos);
     workos.users = [user("directory_user_1")];
-    workos.memberships = [];
     workos.connections = [];
     vi.advanceTimersByTime(1000);
     await reconcile(t);
 
-    expect(changes.map((change) => `${change.kind}:${change.action}`)).toEqual([
-      "member:removed",
-      "user:deleted",
-      "connection:deleted",
-    ]);
-    expect(changes[1]).toMatchObject({
-      user: { id: "directory_user_2" },
-      deprovisioned: true,
-    });
+    expect(names()).toEqual(["dsync.user.deleted", "connection.deleted"]);
+    expect(events[0]).toMatchObject({ data: { id: "directory_user_2" } });
   });
 
   test("pages through a listing longer than a page", async () => {
@@ -407,13 +395,28 @@ describe("reconcile", () => {
     workos.users = Array.from({ length: 120 }, (_, index) =>
       user(`directory_user_${String(index).padStart(3, "0")}`),
     );
-    workos.memberships = [];
     const t = setup(workos);
     await t.mutation(register, {});
     await reconcile(t);
-    expect(changes.filter((change) => change.kind === "user")).toHaveLength(
-      120,
-    );
+    expect(
+      names().filter((name) => name === "dsync.user.created"),
+    ).toHaveLength(120);
+    const listed: string[] = [];
+    let cursor: string | null = null;
+    for (let done = false; !done;) {
+      const page: {
+        page: { id: string }[];
+        isDone: boolean;
+        continueCursor: string;
+      } = await t.query(api.directoryUsers.list, {
+        directory: "directory_1",
+        paginationOpts: { numItems: 50, cursor },
+      });
+      listed.push(...page.page.map((row) => row.id));
+      cursor = page.continueCursor;
+      done = page.isDone;
+    }
+    expect(listed).toEqual(workos.users.map((row) => row.id));
   });
 
   test("an overlapping older reconcile never makes a newer one remove a listed user", async () => {
@@ -432,13 +435,13 @@ describe("reconcile", () => {
     });
     await t.action(internal.reconcile.run, {
       generation: newer,
-      step: { stage: "prune", kind: "user" },
+      step: { stage: "prune", kind: "directoryUser" },
     });
     await t.finishAllScheduledFunctions(vi.runAllTimers);
 
-    expect(changes).toEqual([]);
+    expect(events).toEqual([]);
     expect(
-      await t.query(api.directory.getUser, { id: "directory_user_2" }),
+      await t.query(api.directoryUsers.get, { id: "directory_user_2" }),
     ).toMatchObject({ state: "active" });
   });
 
@@ -448,7 +451,9 @@ describe("reconcile", () => {
     const t = setup(workos);
     await t.mutation(register, {});
     await reconcile(t);
-    expect(changes.filter((change) => change.kind === "user")).toHaveLength(2);
+    expect(
+      names().filter((name) => name === "dsync.user.created"),
+    ).toHaveLength(2);
     expect(workos.calls.slice(0, 2)).toEqual([
       "/organizations",
       "/organizations",
@@ -462,7 +467,7 @@ describe("reconcile", () => {
     await t.mutation(register, {});
     vi.spyOn(console, "error").mockImplementation(() => {});
     await reconcile(t).catch(() => undefined);
-    expect(changes).toEqual([]);
+    expect(events).toEqual([]);
     expect(workos.calls).toEqual(["/organizations"]);
   });
 });
@@ -481,23 +486,21 @@ describe("webhook deliveries", () => {
       expect(await deliver(t, "dsync.user.updated", delivered)).toBe(200);
     }
 
-    expect(changes).toEqual([
+    expect(events).toEqual([
       {
-        kind: "user",
-        action: "upserted",
-        user: expect.objectContaining({
+        event: "dsync.user.updated",
+        data: expect.objectContaining({
           id: "directory_user_1",
           state: "inactive",
         }),
-        deprovisioned: true,
       },
     ]);
     expect(
-      await t.query(api.directory.getUser, { id: "directory_user_1" }),
+      await t.query(api.directoryUsers.get, { id: "directory_user_1" }),
     ).toMatchObject({ state: "inactive" });
   });
 
-  test("a late membership add does not bring back a removed membership", async () => {
+  test("a membership change reads the directory user again, with its roles", async () => {
     const workos = seeded();
     const t = await prepared(workos);
     const membership = {
@@ -506,45 +509,18 @@ describe("webhook deliveries", () => {
       group: group("directory_group_1"),
     };
 
-    workos.memberships = [];
-    await deliver(t, "dsync.group.user_removed", membership);
-    await deliver(t, "dsync.group.user_added", membership);
+    workos.users[0] = user("directory_user_1", "active", 4, "lead");
+    expect(await deliver(t, "dsync.group.user_added", membership)).toBe(200);
+    expect(await deliver(t, "dsync.group.user_added", membership)).toBe(200);
 
-    expect(changes).toEqual([
+    expect(events).toEqual([
       {
-        kind: "member",
-        action: "removed",
-        member: {
-          directoryId: "directory_1",
-          groupId: "directory_group_1",
-          userId: "directory_user_1",
-        },
-      },
-    ]);
-    expect(
-      await t.query(api.directory.listUserGroups, {
-        userId: "directory_user_1",
-      }),
-    ).toEqual([]);
-  });
-
-  test("a membership add the copy has not seen is listed in", async () => {
-    const workos = seeded();
-    const t = await prepared(workos);
-    workos.memberships.push({
-      group: "directory_group_1",
-      user: "directory_user_2",
-    });
-    await deliver(t, "dsync.group.user_added", {
-      directory_id: "directory_1",
-      user: user("directory_user_2"),
-      group: group("directory_group_1"),
-    });
-    expect(changes).toMatchObject([
-      {
-        kind: "member",
-        action: "added",
-        member: { userId: "directory_user_2" },
+        event: "dsync.user.updated",
+        data: expect.objectContaining({
+          id: "directory_user_1",
+          role: { slug: "lead" },
+          roles: [{ slug: "lead" }],
+        }),
       },
     ]);
   });
@@ -557,114 +533,78 @@ describe("webhook deliveries", () => {
     expect(await deliver(t, "dsync.user.deleted", gone)).toBe(200);
     expect(await deliver(t, "dsync.user.created", gone)).toBe(200);
 
-    expect(changes).toEqual([]);
+    expect(events).toEqual([]);
     expect(
-      await t.query(api.directory.getUser, { id: "directory_user_9" }),
+      await t.query(api.directoryUsers.get, { id: "directory_user_9" }),
     ).toBeNull();
   });
 
-  test("a deleted user goes with their memberships", async () => {
-    const workos = seeded();
-    const t = await prepared(workos);
-    workos.users = [user("directory_user_2")];
-    workos.memberships = [];
-
-    await deliver(t, "dsync.user.deleted", user("directory_user_1"));
-
-    expect(changes).toMatchObject([
-      {
-        kind: "user",
-        action: "deleted",
-        user: { id: "directory_user_1" },
-        deprovisioned: true,
-      },
-    ]);
-    expect(
-      await t.query(api.directory.listUserGroups, {
-        userId: "directory_user_1",
-      }),
-    ).toEqual([]);
-  });
-
-  test("a deleted directory takes its users with it", async () => {
+  test("a deleted directory takes its users and groups with it", async () => {
     const workos = seeded();
     const t = await prepared(workos);
     workos.directories = [];
 
     await deliver(t, "dsync.deleted", { ...DIRECTORY, state: "deleting" });
 
-    expect(changes.map((change) => `${change.kind}:${change.action}`)).toEqual([
-      "member:removed",
-      "user:deleted",
-      "user:deleted",
-      "group:deleted",
-      "directory:deleted",
+    expect(names()).toEqual([
+      "dsync.user.deleted",
+      "dsync.user.deleted",
+      "dsync.group.deleted",
+      "dsync.deleted",
     ]);
     expect(
-      await t.query(api.directory.getUser, { id: "directory_user_1" }),
+      await t.query(api.directoryUsers.get, { id: "directory_user_1" }),
+    ).toBeNull();
+    expect(
+      await t.query(api.directories.get, { id: "directory_1" }),
     ).toBeNull();
   });
 
-  test("a group of 301 members is listed and removed in batches", async () => {
+  test("a deleted directory of 301 users is removed in batches", async () => {
     const workos = seeded();
-    const t = await prepared(workos);
-    const ids = Array.from(
-      { length: 301 },
-      (_, index) => `directory_user_${String(index).padStart(3, "0")}`,
+    workos.users = Array.from({ length: 301 }, (_, index) =>
+      user(`directory_user_${String(index).padStart(3, "0")}`),
     );
-    workos.users = ids.map((id) => user(id));
-    workos.memberships = ids.map((id) => ({
-      group: "directory_group_1",
-      user: id,
-    }));
-
-    await deliver(t, "dsync.group.user_added", {
-      directory_id: "directory_1",
-      user: user(ids[0] ?? ""),
-      group: group("directory_group_1"),
-    });
-    const members = async () =>
-      await t.run(
-        async (ctx) =>
-          (
-            await ctx.db
-              .query("directoryMembers")
-              .withIndex("groupId_userId", (q) =>
-                q.eq("groupId", "directory_group_1"),
-              )
-              .collect()
-          ).length,
-      );
-    expect(await members()).toBe(301);
-
-    changes = [];
+    const t = await prepared(workos);
+    workos.directories = [];
+    workos.users = [];
     workos.groups = [];
-    await deliver(t, "dsync.group.deleted", group("directory_group_1"));
-    expect(await members()).toBe(0);
-    expect(changes).toMatchObject([{ kind: "group", action: "deleted" }]);
+
+    await deliver(t, "dsync.deleted", { ...DIRECTORY, state: "deleting" });
+
+    expect(
+      names().filter((name) => name === "dsync.user.deleted"),
+    ).toHaveLength(301);
+    expect(names().at(-1)).toBe("dsync.deleted");
+    expect(
+      await t.run(
+        async (ctx) => (await ctx.db.query("directoryUsers").collect()).length,
+      ),
+    ).toBe(0);
   });
 
   test("a refused change fails the delivery, and its retry applies it", async () => {
     const workos = seeded();
     const t = await prepared(workos);
     vi.spyOn(console, "error").mockImplementation(() => {});
-    refuse = (change) =>
-      change.kind === "user" && change.user.id === "directory_user_1";
+    refuse = (event) =>
+      event.event === "dsync.user.updated" &&
+      event.data.id === "directory_user_1";
 
     workos.users[0] = user("directory_user_1", "inactive", 5);
     const data = user("directory_user_1", "inactive", 5);
     expect(await deliver(t, "dsync.user.updated", data).catch(() => 500)).toBe(
       500,
     );
-    expect(changes).toEqual([]);
+    expect(events).toEqual([]);
     expect(
-      await t.query(api.directory.getUser, { id: "directory_user_1" }),
+      await t.query(api.directoryUsers.get, { id: "directory_user_1" }),
     ).toMatchObject({ state: "active" });
 
     refuse = undefined;
     expect(await deliver(t, "dsync.user.updated", data)).toBe(200);
-    expect(changes).toMatchObject([
-      { kind: "user", user: { id: "directory_user_1", state: "inactive" } },
+    expect(events).toMatchObject([
+      { event: "dsync.user.updated", data: { state: "inactive" } },
     ]);
   });
 });

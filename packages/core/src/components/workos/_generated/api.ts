@@ -8,10 +8,15 @@
  * @module
  */
 
+import type * as connections from "../connections.js";
 import type * as constants from "../constants.js";
-import type * as directory from "../directory.js";
+import type * as directories from "../directories.js";
+import type * as directoryGroups from "../directoryGroups.js";
+import type * as directoryUsers from "../directoryUsers.js";
 import type * as http from "../http.js";
 import type * as mirror from "../mirror.js";
+import type * as organizationDomains from "../organizationDomains.js";
+import type * as organizations from "../organizations.js";
 import type * as portal from "../portal.js";
 import type * as provider from "../provider.js";
 import type * as reconcile from "../reconcile.js";
@@ -27,10 +32,15 @@ import type {
 import { anyApi, componentsGeneric } from "convex/server";
 
 const fullApi: ApiFromModules<{
+  connections: typeof connections;
   constants: typeof constants;
-  directory: typeof directory;
+  directories: typeof directories;
+  directoryGroups: typeof directoryGroups;
+  directoryUsers: typeof directoryUsers;
   http: typeof http;
   mirror: typeof mirror;
+  organizationDomains: typeof organizationDomains;
+  organizations: typeof organizations;
   portal: typeof portal;
   provider: typeof provider;
   reconcile: typeof reconcile;
