@@ -21,7 +21,7 @@ export const get = query({
       .query("directoryUsers")
       .withIndex("id", (q) => q.eq("id", args.id))
       .unique();
-    return row === null ? null : userOf(row);
+    return row === null || row.deleted === true ? null : userOf(row);
   },
 });
 

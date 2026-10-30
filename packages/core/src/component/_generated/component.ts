@@ -80,7 +80,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       revokeUserSessions: FunctionReference<
         "mutation",
         "internal",
-        { accessTokenTtlSeconds?: number; userId: string },
+        { userId: string },
         { more: boolean },
         Name
       >;

@@ -845,31 +845,38 @@ export const listSessions = query({
 /**
  * Revoke as many of a user's sessions as one transaction can delete, and say
  * whether any are left, so a caller revoking a user with many sessions goes a
- * transaction at a time. A session holds at most its issued tokens, one
- * redeemed token, and a spent one per refresh within the reuse horizon, so
- * the batch follows from the access-token TTL, which sets the refresh rate.
+ * transaction at a time. Each session costs the token rows it holds plus
+ * itself, counted as they are read, and the batch stops short of the
+ * transaction's write limit by the one write the caller needs to schedule
+ * its continuation. A session holding more tokens than that is deleted over
+ * several calls. A caller revoking several users makes one call per
+ * transaction, since each call spends the transaction's whole budget.
  *
  * This is a component function callable by the app, not by end-user clients.
  */
 export const revokeUserSessions = mutation({
-  args: { userId: v.string(), accessTokenTtlSeconds: v.optional(v.number()) },
+  args: { userId: v.string() },
   returns: v.object({ more: v.boolean() }),
-  handler: async (ctx, { userId, accessTokenTtlSeconds }) => {
-    const ttl = accessTokenTtlSeconds ?? DEFAULT_ACCESS_TOKEN_TTL_SECONDS;
-    const writes =
-      1 +
-      STANDARD_ISSUED_REFRESH_TOKEN_LIMIT +
-      1 +
-      Math.ceil(SPENT_TOKEN_HORIZON_MS / (ttl * 1000));
-    const batch = Math.max(1, Math.floor(TRANSACTION_WRITE_LIMIT / writes));
-    const sessions = await ctx.db
+  handler: async (ctx, { userId }) => {
+    const budget = TRANSACTION_WRITE_LIMIT - 1;
+    let written = 0;
+    const sessions = ctx.db
       .query("sessions")
-      .withIndex("by_user", (q) => q.eq("userId", userId))
-      .take(batch + 1);
-    for (const session of sessions.slice(0, batch)) {
-      await deleteSession(ctx, session._id);
+      .withIndex("by_user", (q) => q.eq("userId", userId));
+    for await (const session of sessions) {
+      const room = budget - written;
+      if (room === 0) return { more: true };
+      const tokens = await ctx.db
+        .query("refreshTokens")
+        .withIndex("by_session_state", (q) => q.eq("sessionId", session._id))
+        .take(room);
+      if (tokens.length === room && written > 0) return { more: true };
+      for (const row of tokens) await ctx.db.delete("refreshTokens", row._id);
+      if (tokens.length === room) return { more: true };
+      await ctx.db.delete("sessions", session._id);
+      written += tokens.length + 1;
     }
-    return { more: sessions.length > batch };
+    return { more: false };
   },
 });
 

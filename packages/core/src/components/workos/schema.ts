@@ -162,12 +162,17 @@ export const vBackfillPosition = v.union(
 export type BackfillPosition = Infer<typeof vBackfillPosition>;
 
 /**
- * Every row carries the time it was last written or listed. A reconcile that
- * started at time T reads each row older than T again by id, and removes it
- * only if WorkOS no longer has it.
+ * Every row carries the time it was last written or listed, and WorkOS's
+ * `updated_at` for the version it holds: a read that commits after a newer
+ * one is dropped. A reconcile that started at time T reads each row older
+ * than T again by id, and removes it only if WorkOS no longer has it. A
+ * removed row stays, marked `deleted`, so a read from before the removal
+ * cannot write it back: WorkOS never reuses an id.
  */
 const kept = {
   generation: v.number(),
+  updatedAt: v.string(),
+  deleted: v.optional(v.boolean()),
 };
 
 export default defineSchema({
@@ -176,29 +181,24 @@ export default defineSchema({
 
   organizations: defineTable({ ...vOrganization.fields, ...kept })
     .index("id", ["id"])
-    .index("generation", ["generation"]),
+    .index("deleted_generation", ["deleted", "generation"]),
   organizationDomains: defineTable({ ...vOrganizationDomain.fields, ...kept })
     .index("id", ["id"])
     .index("domain", ["domain"])
     .index("organizationId", ["organizationId"])
-    .index("generation", ["generation"]),
+    .index("deleted_generation", ["deleted", "generation"]),
   connections: defineTable({ ...vConnection.fields, ...kept })
     .index("id", ["id"])
     .index("organizationId_state", ["organizationId", "state"])
-    .index("generation", ["generation"]),
-  directories: defineTable({
-    ...vDirectory.fields,
-    ...kept,
-    /**
-     * Set when WorkOS deleted the directory. The row stays until `sweep` has
-     * removed its users and groups, a batch at a time.
-     */
-    deleted: v.optional(v.boolean()),
-  })
+    .index("deleted_generation", ["deleted", "generation"]),
+  /**
+   * A directory WorkOS deleted stays, `deleted`, until `sweep` has removed
+   * its users and groups, a batch at a time.
+   */
+  directories: defineTable({ ...vDirectory.fields, ...kept })
     .index("id", ["id"])
     .index("organizationId", ["organizationId"])
-    .index("deleted", ["deleted"])
-    .index("generation", ["generation"]),
+    .index("deleted_generation", ["deleted", "generation"]),
   directoryUsers: defineTable({ ...vDirectoryUser.fields, ...kept })
     .index("id", ["id"])
     .index("directoryId_id", ["directoryId", "id"])
@@ -206,12 +206,12 @@ export default defineSchema({
     .index("organizationId_idpId_id", ["organizationId", "idpId", "id"])
     .index("idpId_id", ["idpId", "id"])
     .index("email_id", ["email", "id"])
-    .index("generation", ["generation"]),
+    .index("deleted_generation", ["deleted", "generation"]),
   directoryGroups: defineTable({ ...vDirectoryGroup.fields, ...kept })
     .index("id", ["id"])
     .index("directoryId_id", ["directoryId", "id"])
     .index("organizationId_id", ["organizationId", "id"])
-    .index("generation", ["generation"]),
+    .index("deleted_generation", ["deleted", "generation"]),
 
   /**
    * The deployment's one webhook endpoint at WorkOS, which `webhook.register`

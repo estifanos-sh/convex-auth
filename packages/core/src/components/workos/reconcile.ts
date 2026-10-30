@@ -167,7 +167,10 @@ export const page = internalMutation({
   },
 });
 
-/** Up to a batch of the ids of rows of `kind` older than `generation`. */
+/**
+ * Up to a batch of the ids of rows of `kind` older than `generation`, other
+ * than removed ones.
+ */
 export const stale = internalQuery({
   args: { kind: vKind, generation: v.number() },
   returns: v.array(v.string()),
@@ -182,7 +185,9 @@ export const stale = internalQuery({
     } as const;
     const rows = await ctx.db
       .query(table[kind])
-      .withIndex("generation", (q) => q.lt("generation", generation))
+      .withIndex("deleted_generation", (q) =>
+        q.eq("deleted", undefined).lt("generation", generation),
+      )
       .take(BATCH);
     return rows.map((row) => row.id);
   },
@@ -233,7 +238,7 @@ export const sweep = internalMutation({
   handler: async (ctx) => {
     const directory = await ctx.db
       .query("directories")
-      .withIndex("deleted", (q) => q.eq("deleted", true))
+      .withIndex("deleted_generation", (q) => q.eq("deleted", true))
       .first();
     if (directory === null) return null;
     const copy = await mirror(ctx, Date.now());
