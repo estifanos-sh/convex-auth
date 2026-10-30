@@ -82,3 +82,9 @@ export const EVENTS = [
  * and each change in it may run the app's handler in that transaction.
  */
 export const PAGE_SIZE = 50;
+
+/** Rows one removal step removes in one mutation. */
+export const BATCH = 100;
+
+/** How long a step waits before it tries WorkOS again after a 429, a 5xx or a timeout. */
+export const PAUSE_MS = 30 * 1000;

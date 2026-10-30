@@ -1,7 +1,7 @@
 /**
  * The deployment's webhook endpoint at WorkOS: registering and unregistering
  * it, keeping the secret WorkOS signs its deliveries with, checking that
- * signature, and applying each delivery to the copy.
+ * signature.
  *
  * @module
  */
@@ -15,8 +15,8 @@ import {
 } from "./_generated/server.ts";
 import { EVENTS } from "./constants.ts";
 import { callWorkos, WorkosApiError } from "./rest.ts";
-import { changeHandler, Mirror } from "./mirror.ts";
-import { decodeEndpoint, decodeList, vUpdate } from "./wire.ts";
+import { changeHandler } from "./mirror.ts";
+import { decodeEndpoint, decodeList } from "./wire.ts";
 
 /** How old a signed timestamp may be, against replays. */
 const TOLERANCE_MS = 5 * 60 * 1000;
@@ -243,22 +243,5 @@ export const read = internalQuery({
     return row === null
       ? null
       : { endpointId: row.endpointId, secret: row.secret };
-  },
-});
-
-/**
- * Apply one verified delivery. WorkOS does not keep deliveries in order, so
- * an update older than the row it would replace is passed over.
- */
-export const receive = internalMutation({
-  args: { update: vUpdate },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const row = await ctx.db.query("webhook").first();
-    if (row === null) return null;
-    await new Mirror(ctx, Date.now(), changeHandler(row.onChange)).write(
-      args.update,
-    );
-    return null;
   },
 });

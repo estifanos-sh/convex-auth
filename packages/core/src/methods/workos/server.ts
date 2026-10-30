@@ -293,8 +293,8 @@ export type WorkosChangeHandler = FunctionReference<
  * in the background and repairs what the webhook missed. Run
  * `unregisterWorkosWebhook` before you delete the deployment.
  *
- * WorkOS delivers changes in no guaranteed order; an older change never
- * replaces a newer one. The handler must not throw for a change it doesn't
+ * WorkOS delivers changes in no guaranteed order, so each delivery reads its
+ * object again and the copy holds what WorkOS holds now. The handler must not throw for a change it doesn't
  * care about: a throw refuses the delivery, which WorkOS retries, and stops
  * a reconcile.
  */

@@ -15,6 +15,7 @@ import {
   USER_INFO_ENDPOINTS,
 } from "./constants.ts";
 import { verifyWebhookSignature } from "./webhook.ts";
+import { read } from "./reconcile.ts";
 import { decodeEvent } from "./wire.ts";
 
 const http: HttpRouter = buildCallbackRouter<ClaimedRequest>({
@@ -35,9 +36,10 @@ const http: HttpRouter = buildCallbackRouter<ClaimedRequest>({
 });
 
 /**
- * A verified delivery's payload is the change. It is applied in one mutation,
- * which queues anything larger, such as removing a deleted directory's
- * users, for the scheduler, so WorkOS gets its answer quickly.
+ * A verified delivery names an object, which is read again from WorkOS and
+ * written as it is now, or removed if WorkOS answers 404, so deliveries can
+ * arrive in any order. A membership delivery queues a listing of the group's
+ * members, which can be long. A failure answers 500, and WorkOS retries.
  */
 http.route({
   path: "/webhook",
@@ -57,15 +59,30 @@ http.route({
     if (!verified) {
       return new Response("Invalid signature.", { status: 401 });
     }
-    let update;
+    let target;
     try {
-      update = decodeEvent(JSON.parse(body));
+      target = decodeEvent(JSON.parse(body));
     } catch {
       return new Response("Unreadable event.", { status: 400 });
     }
-    if (update !== null) {
-      await ctx.runMutation(internal.webhook.receive, { update });
+    if (target === null) return new Response(null, { status: 200 });
+    if (target.kind === "members") {
+      await ctx.scheduler.runAfter(0, internal.reconcile.members, {
+        generation: Date.now(),
+        step: {
+          stage: "members",
+          directoryId: target.directoryId,
+          groupId: target.groupId,
+        },
+      });
+      return new Response(null, { status: 200 });
     }
+    const update = await read(target.kind, target.id);
+    await ctx.runMutation(internal.reconcile.settle, {
+      kind: target.kind,
+      updates: update === null ? [] : [update],
+      gone: update === null ? [target.id] : [],
+    });
     return new Response(null, { status: 200 });
   }),
 });

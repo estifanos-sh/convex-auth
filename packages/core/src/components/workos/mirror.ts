@@ -18,7 +18,8 @@ import type {
   WorkosDomain,
   WorkosOrganization,
 } from "./schema.ts";
-import type { Update } from "./wire.ts";
+import { BATCH } from "./constants.ts";
+import type { Kind, Update } from "./wire.ts";
 
 /** The app's change handler, as the copy calls it. */
 export type ChangeHandler = FunctionHandle<
@@ -112,26 +113,9 @@ function same<T extends Record<string, string | undefined>>(a: T, b: T) {
   return true;
 }
 
-type StampedRow = { updatedAt: number; generation: number };
-
-/**
- * What writing an object stamped `updatedAt` over `row` does. An older object
- * is passed over, so a late or repeated delivery never undoes what a later
- * listing or delivery wrote, though the row is still marked as seen.
- */
-function decide<Row extends StampedRow>(
-  row: Row | null,
-  changed: (row: Row) => boolean,
-  updatedAt: number,
-): { op: "insert" } | { op: "replace"; row: Row } | { op: "touch"; row: Row } {
-  if (row === null) return { op: "insert" };
-  if (row.updatedAt > updatedAt || !changed(row)) return { op: "touch", row };
-  return { op: "replace", row };
-}
-
 /**
  * The copy, inside one mutation. Every write stamps its row with
- * `generation`, the time it was written or the start of the reconcile that
+ * `generation`, the time it was read or the start of the reconcile that
  * listed it, and every change runs the app's handler in the same transaction,
  * so the copy and the app never disagree.
  */
@@ -152,238 +136,208 @@ export class Mirror {
   async write(update: Update): Promise<void> {
     switch (update.kind) {
       case "organization":
-        return await this.organization(update);
+        return await this.organization(update.row, update.domains);
       case "domain":
-        return await this.domain(update.row, update.deleted);
+        return await this.domain(update.row);
       case "connection":
-        return await this.connection(update);
+        return await this.connection(update.row);
       case "directory":
-        return await this.directory(update);
+        return await this.directory(update.row);
       case "user":
-        return await this.user(update);
+        return await this.user(update.row);
       case "group":
-        return await this.group(update);
+        return await this.group(update.row);
       case "member":
-        return await this.member(update.row, update.deleted);
+        return await this.member(update.row);
+    }
+  }
+
+  /** Remove an object WorkOS no longer has, if the copy holds it. */
+  async remove(kind: Kind, id: string): Promise<void> {
+    const db = this.ctx.db;
+    switch (kind) {
+      case "organization": {
+        const row = await db
+          .query("organizations")
+          .withIndex("id", (q) => q.eq("id", id))
+          .unique();
+        if (row !== null) await this.removeOrganization(row);
+        return;
+      }
+      case "domain": {
+        const row = await db
+          .query("domains")
+          .withIndex("id", (q) => q.eq("id", id))
+          .unique();
+        if (row !== null) await this.removeDomain(row);
+        return;
+      }
+      case "connection": {
+        const row = await db
+          .query("connections")
+          .withIndex("id", (q) => q.eq("id", id))
+          .unique();
+        if (row !== null) await this.removeConnection(row);
+        return;
+      }
+      case "directory": {
+        // Its users, groups and members can be many, so they go a page at a
+        // time in `reconcile.sweep`, which removes the directory last.
+        const row = await db
+          .query("directories")
+          .withIndex("id", (q) => q.eq("id", id))
+          .unique();
+        if (row === null) return;
+        await db.patch("directories", row._id, {
+          deleted: true,
+          generation: this.generation,
+        });
+        if (row.deleted !== true) {
+          await this.ctx.scheduler.runAfter(0, internal.reconcile.sweep, {});
+        }
+        return;
+      }
+      case "user": {
+        const row = await db
+          .query("directoryUsers")
+          .withIndex("id", (q) => q.eq("id", id))
+          .unique();
+        if (row !== null) await this.removeUser(row);
+        return;
+      }
+      case "group": {
+        const row = await db
+          .query("directoryGroups")
+          .withIndex("id", (q) => q.eq("id", id))
+          .unique();
+        if (row !== null) await this.removeGroup(row);
+        return;
+      }
     }
   }
 
   private async organization(
-    update: Extract<Update, { kind: "organization" }>,
+    next: WorkosOrganization,
+    domains: WorkosDomain[],
   ) {
     const db = this.ctx.db;
     const row = await db
       .query("organizations")
-      .withIndex("id", (q) => q.eq("id", update.row.id))
+      .withIndex("id", (q) => q.eq("id", next.id))
       .unique();
-    const held = await db
-      .query("domains")
-      .withIndex("organizationId", (q) => q.eq("organizationId", update.row.id))
-      .collect();
-    if (update.deleted) {
-      for (const domain of held) await this.removeDomain(domain);
-      if (row !== null) await this.removeOrganization(row);
-      return;
-    }
-    const decision = decide(
-      row,
-      (current) => !same(organizationOf(current), update.row),
-      update.updatedAt,
-    );
-    const fields = {
-      ...update.row,
-      updatedAt: update.updatedAt,
-      generation: this.generation,
-    };
-    if (decision.op === "touch") {
-      await db.patch("organizations", decision.row._id, {
-        generation: this.generation,
-      });
-      if (decision.row.updatedAt > update.updatedAt) return;
-    } else {
-      if (decision.op === "insert") await db.insert("organizations", fields);
-      else await db.replace("organizations", decision.row._id, fields);
+    const fields = { ...next, generation: this.generation };
+    if (row === null) await db.insert("organizations", fields);
+    else await db.replace("organizations", row._id, fields);
+    if (row === null || !same(organizationOf(row), next)) {
       await this.emit({
         kind: "organization",
         action: "upserted",
-        organization: update.row,
+        organization: next,
       });
     }
     // The organization's list of domains is the whole set: a domain it no
-    // longer lists is gone.
-    const listed = new Set(update.domains.map((domain) => domain.id));
+    // longer lists is gone. An organization holds a handful.
+    const listed = new Set(domains.map((domain) => domain.id));
+    const held = await db
+      .query("domains")
+      .withIndex("organizationId", (q) => q.eq("organizationId", next.id))
+      .collect();
     for (const domain of held) {
       if (!listed.has(domain.id)) await this.removeDomain(domain);
     }
-    for (const domain of update.domains) await this.domain(domain, false);
+    for (const domain of domains) await this.domain(domain);
   }
 
-  private async domain(next: WorkosDomain, deleted: boolean) {
+  private async domain(next: WorkosDomain) {
     const db = this.ctx.db;
     const row = await db
       .query("domains")
       .withIndex("id", (q) => q.eq("id", next.id))
       .unique();
-    if (deleted) {
-      if (row !== null) await this.removeDomain(row);
-      return;
-    }
     const fields = { ...next, generation: this.generation };
-    if (row !== null && same(domainOf(row), next)) {
-      if (row.generation !== this.generation) {
-        await db.patch("domains", row._id, { generation: this.generation });
-      }
-      return;
-    }
     if (row === null) await db.insert("domains", fields);
     else await db.replace("domains", row._id, fields);
-    await this.emit({ kind: "domain", action: "upserted", domain: next });
+    if (row === null || !same(domainOf(row), next)) {
+      await this.emit({ kind: "domain", action: "upserted", domain: next });
+    }
   }
 
-  private async connection(update: Extract<Update, { kind: "connection" }>) {
+  private async connection(next: WorkosConnection) {
     const db = this.ctx.db;
     const row = await db
       .query("connections")
-      .withIndex("id", (q) => q.eq("id", update.row.id))
+      .withIndex("id", (q) => q.eq("id", next.id))
       .unique();
-    if (update.deleted) {
-      if (row !== null) await this.removeConnection(row);
-      return;
-    }
-    const decision = decide(
-      row,
-      (current) => !same(connectionOf(current), update.row),
-      update.updatedAt,
-    );
-    const fields = {
-      ...update.row,
-      updatedAt: update.updatedAt,
-      generation: this.generation,
-    };
-    if (decision.op === "touch") {
-      await db.patch("connections", decision.row._id, {
-        generation: this.generation,
+    const fields = { ...next, generation: this.generation };
+    if (row === null) await db.insert("connections", fields);
+    else await db.replace("connections", row._id, fields);
+    if (row === null || !same(connectionOf(row), next)) {
+      await this.emit({
+        kind: "connection",
+        action: "upserted",
+        connection: next,
       });
-      return;
     }
-    if (decision.op === "insert") await db.insert("connections", fields);
-    else await db.replace("connections", decision.row._id, fields);
-    await this.emit({
-      kind: "connection",
-      action: "upserted",
-      connection: update.row,
-    });
   }
 
-  private async directory(update: Extract<Update, { kind: "directory" }>) {
+  private async directory(next: WorkosDirectory) {
     const db = this.ctx.db;
     const row = await db
       .query("directories")
-      .withIndex("id", (q) => q.eq("id", update.row.id))
+      .withIndex("id", (q) => q.eq("id", next.id))
       .unique();
-    if (update.deleted) {
-      // Its users, groups and members can be many, so they go a page at a
-      // time in `reconcile.sweep`, which removes the directory last.
-      if (row !== null && row.deleted !== true) {
-        await db.patch("directories", row._id, { deleted: true });
-        await this.ctx.scheduler.runAfter(0, internal.reconcile.sweep, {});
-      }
-      return;
-    }
     if (row?.deleted === true) return;
-    const decision = decide(
-      row,
-      (current) => !same(directoryOf(current), update.row),
-      update.updatedAt,
-    );
-    const fields = {
-      ...update.row,
-      updatedAt: update.updatedAt,
-      generation: this.generation,
-    };
-    if (decision.op === "touch") {
-      await db.patch("directories", decision.row._id, {
-        generation: this.generation,
+    const fields = { ...next, generation: this.generation };
+    if (row === null) await db.insert("directories", fields);
+    else await db.replace("directories", row._id, fields);
+    if (row === null || !same(directoryOf(row), next)) {
+      await this.emit({
+        kind: "directory",
+        action: "upserted",
+        directory: next,
       });
-      return;
     }
-    if (decision.op === "insert") await db.insert("directories", fields);
-    else await db.replace("directories", decision.row._id, fields);
-    await this.emit({
-      kind: "directory",
-      action: "upserted",
-      directory: update.row,
-    });
   }
 
-  private async user(update: Extract<Update, { kind: "user" }>) {
+  private async user(next: WorkosDirectoryUser) {
     const db = this.ctx.db;
     const row = await db
       .query("directoryUsers")
-      .withIndex("id", (q) => q.eq("id", update.row.id))
+      .withIndex("id", (q) => q.eq("id", next.id))
       .unique();
-    if (update.deleted) {
-      if (row !== null) await this.removeUser(row);
-      return;
-    }
-    const decision = decide(
-      row,
-      (current) => !same(userOf(current), update.row),
-      update.updatedAt,
-    );
-    const fields = {
-      ...update.row,
-      updatedAt: update.updatedAt,
-      generation: this.generation,
-    };
-    if (decision.op === "touch") {
-      await db.patch("directoryUsers", decision.row._id, {
-        generation: this.generation,
+    const fields = { ...next, generation: this.generation };
+    if (row === null) await db.insert("directoryUsers", fields);
+    else await db.replace("directoryUsers", row._id, fields);
+    if (row === null || !same(userOf(row), next)) {
+      await this.emit({
+        kind: "user",
+        action: "upserted",
+        user: next,
+        deprovisioned: next.state !== "active",
       });
-      return;
     }
-    if (decision.op === "insert") await db.insert("directoryUsers", fields);
-    else await db.replace("directoryUsers", decision.row._id, fields);
-    await this.emit({
-      kind: "user",
-      action: "upserted",
-      user: update.row,
-      deprovisioned: update.row.state !== "active",
-    });
   }
 
-  private async group(update: Extract<Update, { kind: "group" }>) {
+  private async group(next: WorkosDirectoryGroup) {
     const db = this.ctx.db;
     const row = await db
       .query("directoryGroups")
-      .withIndex("id", (q) => q.eq("id", update.row.id))
+      .withIndex("id", (q) => q.eq("id", next.id))
       .unique();
-    if (update.deleted) {
-      if (row !== null) await this.removeGroup(row);
-      return;
+    const fields = { ...next, generation: this.generation };
+    if (row === null) await db.insert("directoryGroups", fields);
+    else await db.replace("directoryGroups", row._id, fields);
+    if (row === null || !same(groupOf(row), next)) {
+      await this.emit({ kind: "group", action: "upserted", group: next });
     }
-    const decision = decide(
-      row,
-      (current) => !same(groupOf(current), update.row),
-      update.updatedAt,
-    );
-    const fields = {
-      ...update.row,
-      updatedAt: update.updatedAt,
-      generation: this.generation,
-    };
-    if (decision.op === "touch") {
-      await db.patch("directoryGroups", decision.row._id, {
-        generation: this.generation,
-      });
-      return;
-    }
-    if (decision.op === "insert") await db.insert("directoryGroups", fields);
-    else await db.replace("directoryGroups", decision.row._id, fields);
-    await this.emit({ kind: "group", action: "upserted", group: update.row });
   }
 
-  private async member(next: WorkosDirectoryMember, removed: boolean) {
+  /**
+   * A membership a listing of its group showed. Its time only moves forward,
+   * so a listing that started earlier never makes it look older than a later
+   * listing that also showed it.
+   */
+  private async member(next: WorkosDirectoryMember) {
     const db = this.ctx.db;
     const row = await db
       .query("directoryMembers")
@@ -391,12 +345,8 @@ export class Mirror {
         q.eq("groupId", next.groupId).eq("userId", next.userId),
       )
       .unique();
-    if (removed) {
-      if (row !== null) await this.removeMember(row);
-      return;
-    }
     if (row !== null) {
-      if (row.generation !== this.generation) {
+      if (row.generation < this.generation) {
         await db.patch("directoryMembers", row._id, {
           generation: this.generation,
         });
@@ -411,6 +361,11 @@ export class Mirror {
   }
 
   async removeOrganization(row: Doc<"organizations">): Promise<void> {
+    const domains = await this.ctx.db
+      .query("domains")
+      .withIndex("organizationId", (q) => q.eq("organizationId", row.id))
+      .collect();
+    for (const domain of domains) await this.removeDomain(domain);
     await this.ctx.db.delete("organizations", row._id);
     await this.emit({
       kind: "organization",
@@ -447,16 +402,29 @@ export class Mirror {
   }
 
   /**
-   * Remove a directory user and their memberships. The memberships go
-   * without a change of their own: the user's deletion says they ended.
+   * Remove a directory user, after their memberships, which go a batch at a
+   * time without a change of their own: the user's deletion says they ended.
+   * A user with more than a batch keeps their row, freshly stamped so a
+   * reconcile's removal passes over it, until `reconcile.drop` has removed
+   * the rest.
    */
   async removeUser(row: Doc<"directoryUsers">): Promise<void> {
     const memberships = await this.ctx.db
       .query("directoryMembers")
       .withIndex("userId", (q) => q.eq("userId", row.id))
-      .collect();
+      .take(BATCH);
     for (const membership of memberships) {
       await this.ctx.db.delete("directoryMembers", membership._id);
+    }
+    if (memberships.length === BATCH) {
+      await this.ctx.db.patch("directoryUsers", row._id, {
+        generation: this.generation,
+      });
+      await this.ctx.scheduler.runAfter(0, internal.reconcile.drop, {
+        kind: "user",
+        id: row.id,
+      });
+      return;
     }
     await this.ctx.db.delete("directoryUsers", row._id);
     await this.emit({
@@ -467,14 +435,24 @@ export class Mirror {
     });
   }
 
-  /** Remove a group and, without changes of their own, its memberships. */
+  /** Remove a group after its memberships, as {@link removeUser} does. */
   async removeGroup(row: Doc<"directoryGroups">): Promise<void> {
     const memberships = await this.ctx.db
       .query("directoryMembers")
       .withIndex("groupId_userId", (q) => q.eq("groupId", row.id))
-      .collect();
+      .take(BATCH);
     for (const membership of memberships) {
       await this.ctx.db.delete("directoryMembers", membership._id);
+    }
+    if (memberships.length === BATCH) {
+      await this.ctx.db.patch("directoryGroups", row._id, {
+        generation: this.generation,
+      });
+      await this.ctx.scheduler.runAfter(0, internal.reconcile.drop, {
+        kind: "group",
+        id: row.id,
+      });
+      return;
     }
     await this.ctx.db.delete("directoryGroups", row._id);
     await this.emit({ kind: "group", action: "deleted", group: groupOf(row) });

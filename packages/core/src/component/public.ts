@@ -773,10 +773,13 @@ export const signOut = mutation({
  * stays cached until a session or token changes; callers that want only the
  * active sessions compare `expiresAt` to the current time themselves.
  *
+ * With `limit`, only the newest `limit` are listed, so a caller that revokes
+ * every session of a user with many can go a batch per transaction.
+ *
  * This is a component function callable by the app, not by end-user clients.
  */
 export const listSessions = query({
-  args: { userId: v.string() },
+  args: { userId: v.string(), limit: v.optional(v.number()) },
   returns: v.array(
     v.object({
       sessionId: v.string(),
@@ -785,12 +788,13 @@ export const listSessions = query({
       expiresAt: v.number(),
     }),
   ),
-  handler: async (ctx, { userId }) => {
-    const sessions = await ctx.db
+  handler: async (ctx, { userId, limit }) => {
+    const newest = ctx.db
       .query("sessions")
       .withIndex("by_user", (q) => q.eq("userId", userId))
-      .order("desc")
-      .collect();
+      .order("desc");
+    const sessions =
+      limit === undefined ? await newest.collect() : await newest.take(limit);
     const result = [];
     for (const session of sessions) {
       // Issued rows have no `retiredAt`, so the index orders them by

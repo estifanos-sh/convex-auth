@@ -6,7 +6,7 @@ import {
 } from "../../lib/oauth/schema.ts";
 
 /**
- * The shapes of the WorkOS objects the directory sync keeps, as the app reads
+ * The shapes of the WorkOS objects the copy keeps, as the app reads
  * them and as its change handler receives them. `id` is WorkOS's id.
  */
 export const vWorkosOrganization = v.object({
@@ -80,9 +80,9 @@ export type WorkosDirectoryMember = Infer<typeof vWorkosDirectoryMember>;
 const vWritten = v.union(v.literal("upserted"), v.literal("deleted"));
 
 /**
- * One change the directory sync made to its copy, as the app's handler
- * receives it. Changes arrive in the order WorkOS made them, and a change
- * that changes nothing is not delivered.
+ * One change to the copy, as the app's handler receives it. Each carries
+ * the object as WorkOS held it when it was read, and a write that changes
+ * nothing is not delivered.
  *
  * A `user` change carries `deprovisioned`: true when the directory deleted
  * the user or marked them inactive. That is the signal to revoke the app
@@ -157,17 +157,13 @@ export type BackfillPosition = Infer<typeof vBackfillPosition>;
 
 /**
  * Every row carries the time it was last written or listed. A reconcile that
- * started at time T ends by removing the rows older than T, which is how the
- * copy drops what WorkOS deleted while its webhook deliveries were missed.
+ * started at time T reads each row older than T again by id, and removes it
+ * only if WorkOS no longer has it. A membership has no read by id: it carries
+ * the time of the latest listing of its group that showed it, and a listing
+ * that started at T removes the group's memberships older than T.
  */
 const kept = {
   generation: v.number(),
-};
-
-/** The time WorkOS last changed the object, so an older write never lands. */
-const stamped = {
-  ...kept,
-  updatedAt: v.number(),
 };
 
 export default defineSchema({
@@ -176,7 +172,7 @@ export default defineSchema({
 
   organizations: defineTable({
     ...vWorkosOrganization.fields,
-    ...stamped,
+    ...kept,
   })
     .index("id", ["id"])
     .index("generation", ["generation"]),
@@ -185,13 +181,13 @@ export default defineSchema({
     .index("domain", ["domain"])
     .index("organizationId", ["organizationId"])
     .index("generation", ["generation"]),
-  connections: defineTable({ ...vWorkosConnection.fields, ...stamped })
+  connections: defineTable({ ...vWorkosConnection.fields, ...kept })
     .index("id", ["id"])
     .index("organizationId_state", ["organizationId", "state"])
     .index("generation", ["generation"]),
   directories: defineTable({
     ...vWorkosDirectory.fields,
-    ...stamped,
+    ...kept,
     /**
      * Set when WorkOS deleted the directory. The row stays until `sweep` has
      * removed its users, groups and members, a page at a time.
@@ -202,23 +198,23 @@ export default defineSchema({
     .index("organizationId", ["organizationId"])
     .index("deleted", ["deleted"])
     .index("generation", ["generation"]),
-  directoryUsers: defineTable({ ...vWorkosDirectoryUser.fields, ...stamped })
+  directoryUsers: defineTable({ ...vWorkosDirectoryUser.fields, ...kept })
     .index("id", ["id"])
     .index("directoryId", ["directoryId"])
     .index("organizationId_idpId", ["organizationId", "idpId"])
     .index("generation", ["generation"]),
   directoryGroups: defineTable({
     ...vWorkosDirectoryGroup.fields,
-    ...stamped,
+    ...kept,
   })
     .index("id", ["id"])
     .index("directoryId_id", ["directoryId", "id"])
     .index("generation", ["generation"]),
   directoryMembers: defineTable({ ...vWorkosDirectoryMember.fields, ...kept })
     .index("groupId_userId", ["groupId", "userId"])
+    .index("groupId_generation", ["groupId", "generation"])
     .index("userId", ["userId"])
-    .index("directoryId", ["directoryId"])
-    .index("generation", ["generation"]),
+    .index("directoryId", ["directoryId"]),
 
   /**
    * The deployment's one webhook endpoint at WorkOS, which `webhook.register`

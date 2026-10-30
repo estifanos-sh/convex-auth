@@ -41,7 +41,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       listSessions: FunctionReference<
         "query",
         "internal",
-        { userId: string },
+        { limit?: number; userId: string },
         Array<{
           creationTime: number;
           expiresAt: number;
