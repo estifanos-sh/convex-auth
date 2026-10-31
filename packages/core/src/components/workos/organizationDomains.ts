@@ -27,23 +27,23 @@ export const get = query({
       .withIndex("domain", (q) => q.eq("domain", domain.toLowerCase()))
       .collect();
     for (const claim of claims) {
-      if (claim.state !== "verified" || claim.deleted === true) continue;
+      if ("deleted" in claim || claim.state !== "verified") continue;
       const connections = await ctx.db
         .query("connections")
         .withIndex("organizationId_state", (q) =>
           q.eq("organizationId", claim.organizationId).eq("state", "active"),
         )
         .collect();
-      const connection =
-        connections.find((row) => row.deleted !== true) ?? null;
+      const connection = connections.find((row) => !("deleted" in row));
       const organization = await ctx.db
         .query("organizations")
         .withIndex("id", (q) => q.eq("id", claim.organizationId))
         .unique();
       if (
-        connection !== null &&
+        connection !== undefined &&
+        !("deleted" in connection) &&
         organization !== null &&
-        organization.deleted !== true
+        !("deleted" in organization)
       ) {
         return {
           organization: organizationOf(organization),
@@ -66,6 +66,6 @@ export const list = query({
         q.eq("organizationId", args.organizationId),
       )
       .collect();
-    return rows.filter((row) => row.deleted !== true).map(domainOf);
+    return rows.flatMap((row) => ("deleted" in row ? [] : [domainOf(row)]));
   },
 });

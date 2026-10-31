@@ -21,7 +21,7 @@ export const get = query({
       .query("directoryUsers")
       .withIndex("id", (q) => q.eq("id", args.id))
       .unique();
-    return row === null || row.deleted === true ? null : userOf(row);
+    return row === null || "deleted" in row ? null : userOf(row);
   },
 });
 
@@ -90,6 +90,8 @@ export const list = query({
         "Filter directory users by one of directory, organization, idpId or email",
       );
     }
-    return await pageOf(rows, numItems, userOf);
+    return await pageOf(rows, numItems, (row) =>
+      "deleted" in row ? null : userOf(row),
+    );
   },
 });

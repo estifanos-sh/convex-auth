@@ -7,7 +7,7 @@
  */
 import type { FunctionHandle } from "convex/server";
 import { internal } from "./_generated/api.ts";
-import type { Doc } from "./_generated/dataModel.ts";
+import type { Id } from "./_generated/dataModel.ts";
 import type { MutationCtx } from "./_generated/server.ts";
 import type {
   Connection,
@@ -45,7 +45,7 @@ export function organizationOf({
   id,
   name,
   externalId,
-}: Doc<"organizations">): Organization {
+}: Organization): Organization {
   return { id, name, externalId };
 }
 
@@ -54,7 +54,7 @@ export function domainOf({
   organizationId,
   domain,
   state,
-}: Doc<"organizationDomains">): OrganizationDomain {
+}: OrganizationDomain): OrganizationDomain {
   return { id, organizationId, domain, state };
 }
 
@@ -64,7 +64,7 @@ export function connectionOf({
   connectionType,
   name,
   state,
-}: Doc<"connections">): Connection {
+}: Connection): Connection {
   return { id, organizationId, connectionType, name, state };
 }
 
@@ -74,7 +74,7 @@ export function directoryOf({
   name,
   type,
   state,
-}: Doc<"directories">): Directory {
+}: Directory): Directory {
   return { id, organizationId, name, type, state };
 }
 
@@ -89,7 +89,7 @@ export function userOf({
   state,
   role,
   roles,
-}: Doc<"directoryUsers">): DirectoryUser {
+}: DirectoryUser): DirectoryUser {
   return {
     id,
     directoryId,
@@ -110,7 +110,7 @@ export function groupOf({
   organizationId,
   idpId,
   name,
-}: Doc<"directoryGroups">): DirectoryGroup {
+}: DirectoryGroup): DirectoryGroup {
   return { id, directoryId, organizationId, idpId, name };
 }
 
@@ -119,18 +119,18 @@ export function groupOf({
  * last id of the page before, without the removed ones. Components cannot use
  * Convex's `paginate`.
  */
-export async function pageOf<
-  Row extends { id: string; deleted?: boolean },
-  Item,
->(
+export async function pageOf<Row extends { id: string }, Item>(
   rows: { take(n: number): Promise<Row[]> },
   numItems: number,
-  convert: (row: Row) => Item,
+  convert: (row: Row) => Item | null,
 ) {
   const taken = await rows.take(numItems + 1);
   const page = taken.slice(0, numItems);
   return {
-    page: page.filter((row) => row.deleted !== true).map(convert),
+    page: page.flatMap((row) => {
+      const item = convert(row);
+      return item === null ? [] : [item];
+    }),
     isDone: taken.length <= numItems,
     continueCursor: page.at(-1)?.id ?? "",
   };
@@ -163,21 +163,29 @@ function same(a: unknown, b: unknown): boolean {
 }
 
 /**
- * Whether a read of version `updatedAt` may replace `row`: a removed row, or
- * one in a removed directory, is never written back, and an older version
+ * Whether a read of version `updatedAt` may replace `row`: a removed object,
+ * or one in a removed directory, is never written back, and an older version
  * never replaces a newer one.
  */
 function supersedes(
-  row: { updatedAt: string; deleted?: boolean } | null,
+  row: { updatedAt: string } | { deleted: true } | null,
   updatedAt: string,
-  directory: { deleted?: boolean } | null = null,
+  directory: object | null = null,
 ): boolean {
-  if (directory?.deleted === true) return false;
+  if (directory !== null && "deleted" in directory) return false;
   if (row === null) return true;
   return (
-    row.deleted !== true && Date.parse(row.updatedAt) <= Date.parse(updatedAt)
+    !("deleted" in row) && Date.parse(row.updatedAt) <= Date.parse(updatedAt)
   );
 }
+
+type Table =
+  | "organizations"
+  | "organizationDomains"
+  | "connections"
+  | "directories"
+  | "directoryUsers"
+  | "directoryGroups";
 
 /**
  * The copy, inside one mutation. Every write stamps its row with
@@ -214,7 +222,10 @@ export class Mirror {
     }
   }
 
-  /** Remove an object WorkOS no longer has, if the copy holds it. */
+  /**
+   * Record that WorkOS no longer has an object, whether or not the copy
+   * holds it, and tell the app if it did.
+   */
   async remove(kind: Kind, id: string): Promise<void> {
     const db = this.ctx.db;
     switch (kind) {
@@ -223,7 +234,8 @@ export class Mirror {
           .query("organizations")
           .withIndex("id", (q) => q.eq("id", id))
           .unique();
-        if (row !== null) await this.removeOrganization(row);
+        if (row === null) return await this.bury("organizations", id);
+        if (!("deleted" in row)) await this.removeOrganization(row);
         return;
       }
       case "organizationDomain": {
@@ -231,7 +243,8 @@ export class Mirror {
           .query("organizationDomains")
           .withIndex("id", (q) => q.eq("id", id))
           .unique();
-        if (row !== null) await this.removeDomain(row);
+        if (row === null) return await this.bury("organizationDomains", id);
+        if (!("deleted" in row)) await this.removeDomain(row);
         return;
       }
       case "connection": {
@@ -239,21 +252,30 @@ export class Mirror {
           .query("connections")
           .withIndex("id", (q) => q.eq("id", id))
           .unique();
-        if (row !== null) await this.removeConnection(row);
+        if (row === null) return await this.bury("connections", id);
+        if (!("deleted" in row)) {
+          await db.replace("connections", row._id, this.removal(id));
+          await this.emit({
+            event: "connection.deleted",
+            data: connectionOf(row),
+          });
+        }
         return;
       }
       case "directory": {
         // Its users and groups can be many, so they go a batch at a time in
-        // `reconcile.sweep`, which removes the directory last.
+        // `reconcile.sweep`.
         const row = await db
           .query("directories")
           .withIndex("id", (q) => q.eq("id", id))
           .unique();
-        if (row === null || row.deleted === true) return;
-        await db.patch("directories", row._id, {
-          deleted: true,
-          generation: this.generation,
+        if (row === null) return await this.bury("directories", id);
+        if ("deleted" in row) return;
+        await db.replace("directories", row._id, {
+          ...this.removal(id),
+          sweeping: true,
         });
+        await this.emit({ event: "dsync.deleted", data: directoryOf(row) });
         await this.ctx.scheduler.runAfter(0, internal.reconcile.sweep, {});
         return;
       }
@@ -262,12 +284,11 @@ export class Mirror {
           .query("directoryUsers")
           .withIndex("id", (q) => q.eq("id", id))
           .unique();
-        if (row === null || row.deleted === true) return;
-        await db.patch("directoryUsers", row._id, {
-          deleted: true,
-          generation: this.generation,
-        });
-        await this.emit({ event: "dsync.user.deleted", data: userOf(row) });
+        if (row === null) return await this.bury("directoryUsers", id);
+        if (!("deleted" in row)) {
+          await db.replace("directoryUsers", row._id, this.removal(id));
+          await this.emit({ event: "dsync.user.deleted", data: userOf(row) });
+        }
         return;
       }
       case "directoryGroup": {
@@ -275,15 +296,23 @@ export class Mirror {
           .query("directoryGroups")
           .withIndex("id", (q) => q.eq("id", id))
           .unique();
-        if (row === null || row.deleted === true) return;
-        await db.patch("directoryGroups", row._id, {
-          deleted: true,
-          generation: this.generation,
-        });
-        await this.emit({ event: "dsync.group.deleted", data: groupOf(row) });
+        if (row === null) return await this.bury("directoryGroups", id);
+        if (!("deleted" in row)) {
+          await db.replace("directoryGroups", row._id, this.removal(id));
+          await this.emit({ event: "dsync.group.deleted", data: groupOf(row) });
+        }
         return;
       }
     }
+  }
+
+  private removal(id: string) {
+    return { id, deleted: true as const, generation: this.generation };
+  }
+
+  /** Record the removal of an object the copy never held. */
+  private async bury(table: Table, id: string): Promise<void> {
+    await this.ctx.db.insert(table, this.removal(id));
   }
 
   private async organization({
@@ -300,22 +329,14 @@ export class Mirror {
     const fields = { ...next, updatedAt, generation: this.generation };
     if (row === null) await db.insert("organizations", fields);
     else await db.replace("organizations", row._id, fields);
-    if (row === null || !same(organizationOf(row), next)) {
+    if (row === null || "deleted" in row || !same(organizationOf(row), next)) {
       await this.emit({
         event: row === null ? "organization.created" : "organization.updated",
         data: next,
       });
     }
-    // The organization's list of domains is the whole set: a domain it no
-    // longer lists is gone. An organization holds a handful.
-    const listed = new Set(domains.map((domain) => domain.row.id));
-    const held = await db
-      .query("organizationDomains")
-      .withIndex("organizationId", (q) => q.eq("organizationId", next.id))
-      .collect();
-    for (const domain of held) {
-      if (!listed.has(domain.id)) await this.removeDomain(domain);
-    }
+    // A domain the organization no longer lists is removed only once a read
+    // of it by id answers 404: this list may be older than the domain's own.
     for (const domain of domains) await this.domain(domain);
   }
 
@@ -329,7 +350,7 @@ export class Mirror {
     const fields = { ...next, updatedAt, generation: this.generation };
     if (row === null) await db.insert("organizationDomains", fields);
     else await db.replace("organizationDomains", row._id, fields);
-    if (row === null || !same(domainOf(row), next)) {
+    if (row === null || "deleted" in row || !same(domainOf(row), next)) {
       await this.emit({
         event:
           row === null
@@ -353,7 +374,7 @@ export class Mirror {
     const fields = { ...next, updatedAt, generation: this.generation };
     if (row === null) await db.insert("connections", fields);
     else await db.replace("connections", row._id, fields);
-    if (row === null || !same(connectionOf(row), next)) {
+    if (row === null || "deleted" in row || !same(connectionOf(row), next)) {
       await this.emit({
         event:
           next.state === "active"
@@ -377,7 +398,7 @@ export class Mirror {
     const fields = { ...next, updatedAt, generation: this.generation };
     if (row === null) await db.insert("directories", fields);
     else await db.replace("directories", row._id, fields);
-    if (row === null || !same(directoryOf(row), next)) {
+    if (row === null || "deleted" in row || !same(directoryOf(row), next)) {
       await this.emit({ event: "dsync.activated", data: next });
     }
   }
@@ -399,7 +420,7 @@ export class Mirror {
     const fields = { ...next, updatedAt, generation: this.generation };
     if (row === null) await db.insert("directoryUsers", fields);
     else await db.replace("directoryUsers", row._id, fields);
-    if (row === null || !same(userOf(row), next)) {
+    if (row === null || "deleted" in row || !same(userOf(row), next)) {
       await this.emit({
         event: row === null ? "dsync.user.created" : "dsync.user.updated",
         data: next,
@@ -424,7 +445,7 @@ export class Mirror {
     const fields = { ...next, updatedAt, generation: this.generation };
     if (row === null) await db.insert("directoryGroups", fields);
     else await db.replace("directoryGroups", row._id, fields);
-    if (row === null || !same(groupOf(row), next)) {
+    if (row === null || "deleted" in row || !same(groupOf(row), next)) {
       await this.emit({
         event: row === null ? "dsync.group.created" : "dsync.group.updated",
         data: next,
@@ -432,64 +453,48 @@ export class Mirror {
     }
   }
 
-  async removeOrganization(row: Doc<"organizations">): Promise<void> {
-    if (row.deleted === true) return;
+  private async removeOrganization(
+    row: Organization & { _id: Id<"organizations"> },
+  ): Promise<void> {
     const domains = await this.ctx.db
       .query("organizationDomains")
       .withIndex("organizationId", (q) => q.eq("organizationId", row.id))
       .collect();
-    for (const domain of domains) await this.removeDomain(domain);
-    await this.ctx.db.patch("organizations", row._id, {
-      deleted: true,
-      generation: this.generation,
-    });
+    for (const domain of domains) {
+      if (!("deleted" in domain)) await this.removeDomain(domain);
+    }
+    await this.ctx.db.replace("organizations", row._id, this.removal(row.id));
     await this.emit({
       event: "organization.deleted",
       data: organizationOf(row),
     });
   }
 
-  async removeDomain(row: Doc<"organizationDomains">): Promise<void> {
-    if (row.deleted === true) return;
-    await this.ctx.db.patch("organizationDomains", row._id, {
-      deleted: true,
-      generation: this.generation,
-    });
+  private async removeDomain(
+    row: OrganizationDomain & { _id: Id<"organizationDomains"> },
+  ): Promise<void> {
+    await this.ctx.db.replace(
+      "organizationDomains",
+      row._id,
+      this.removal(row.id),
+    );
     await this.emit({
       event: "organization_domain.deleted",
       data: domainOf(row),
     });
   }
 
-  async removeConnection(row: Doc<"connections">): Promise<void> {
-    if (row.deleted === true) return;
-    await this.ctx.db.patch("connections", row._id, {
-      deleted: true,
-      generation: this.generation,
-    });
-    await this.emit({ event: "connection.deleted", data: connectionOf(row) });
-  }
-
   /**
-   * The contents of a directory WorkOS deleted go for good: the deleted
-   * directory, which goes last, refuses any write to them meanwhile.
+   * A user or group of a directory WorkOS deleted goes for good: the
+   * directory's removal refuses any write to its contents.
    */
-  async removeDirectory(row: Doc<"directories">): Promise<void> {
-    await this.ctx.db.delete("directories", row._id);
-    await this.emit({ event: "dsync.deleted", data: directoryOf(row) });
-  }
-
-  async removeUser(row: Doc<"directoryUsers">): Promise<void> {
+  async removeUser(row: DirectoryUser & { _id: Id<"directoryUsers"> }) {
     await this.ctx.db.delete("directoryUsers", row._id);
-    if (row.deleted !== true) {
-      await this.emit({ event: "dsync.user.deleted", data: userOf(row) });
-    }
+    await this.emit({ event: "dsync.user.deleted", data: userOf(row) });
   }
 
-  async removeGroup(row: Doc<"directoryGroups">): Promise<void> {
+  async removeGroup(row: DirectoryGroup & { _id: Id<"directoryGroups"> }) {
     await this.ctx.db.delete("directoryGroups", row._id);
-    if (row.deleted !== true) {
-      await this.emit({ event: "dsync.group.deleted", data: groupOf(row) });
-    }
+    await this.emit({ event: "dsync.group.deleted", data: groupOf(row) });
   }
 }

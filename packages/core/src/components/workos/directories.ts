@@ -18,7 +18,7 @@ export const get = query({
       .query("directories")
       .withIndex("id", (q) => q.eq("id", args.id))
       .unique();
-    return row === null || row.deleted === true ? null : directoryOf(row);
+    return row === null || "deleted" in row ? null : directoryOf(row);
   },
 });
 
@@ -33,6 +33,6 @@ export const list = query({
         q.eq("organizationId", args.organizationId),
       )
       .collect();
-    return rows.filter((row) => row.deleted !== true).map(directoryOf);
+    return rows.flatMap((row) => ("deleted" in row ? [] : [directoryOf(row)]));
   },
 });
