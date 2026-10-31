@@ -617,6 +617,81 @@ describe("webhook deliveries", () => {
     ).toBeNull();
   });
 
+  test("a read from before a directory's deletion never brings it or its users back", async () => {
+    const workos = seeded();
+    const t = await prepared(workos);
+    const directory = decodeObject("directory", DIRECTORY);
+    const member = decodeObject("directoryUser", user("directory_user_1"));
+    workos.directories = [];
+    workos.users = [];
+    workos.groups = [];
+
+    await deliver(t, "dsync.deleted", { ...DIRECTORY, state: "deleting" });
+    events = [];
+    await t.mutation(internal.reconcile.settle, {
+      kind: "directory",
+      updates: [directory],
+      gone: [],
+    });
+    await t.mutation(internal.reconcile.page, {
+      generation: Date.now(),
+      position: { stage: "directoryUsers", directoryId: "directory_1" },
+      updates: [member],
+      after: "directory_user_1",
+    });
+
+    expect(events).toEqual([]);
+    expect(
+      await t.query(api.directories.get, { id: "directory_1" }),
+    ).toBeNull();
+    expect(
+      await t.query(api.directoryUsers.get, { id: "directory_user_1" }),
+    ).toBeNull();
+  });
+
+  test("an older organization read never removes a domain WorkOS updated since", async () => {
+    const workos = seeded();
+    const t = await prepared(workos);
+    const older = decodeObject("organization", organization("org_1", [], 1));
+
+    workos.organizations = [organization("org_1", ["example.com"], 2)];
+    expect(
+      await deliver(t, "organization_domain.updated", {
+        id: "org_domain_org_1_0",
+        organization_id: "org_1",
+      }),
+    ).toBe(200);
+    await t.mutation(internal.reconcile.settle, {
+      kind: "organization",
+      updates: [older],
+      gone: [],
+    });
+
+    expect(
+      await t.query(api.organizationDomains.get, { domain: "example.com" }),
+    ).toMatchObject({ organization: { id: "org_1" } });
+  });
+
+  test("a deletion of an object the copy never held keeps a read from before it out", async () => {
+    const workos = seeded();
+    const t = await prepared(workos);
+    const late = decodeObject("directoryUser", user("directory_user_9"));
+
+    expect(
+      await deliver(t, "dsync.user.deleted", user("directory_user_9")),
+    ).toBe(200);
+    await t.mutation(internal.reconcile.settle, {
+      kind: "directoryUser",
+      updates: [late],
+      gone: [],
+    });
+
+    expect(events).toEqual([]);
+    expect(
+      await t.query(api.directoryUsers.get, { id: "directory_user_9" }),
+    ).toBeNull();
+  });
+
   test("a deleted directory takes its users and groups with it", async () => {
     const workos = seeded();
     const t = await prepared(workos);
@@ -625,10 +700,10 @@ describe("webhook deliveries", () => {
     await deliver(t, "dsync.deleted", { ...DIRECTORY, state: "deleting" });
 
     expect(names()).toEqual([
+      "dsync.deleted",
       "dsync.user.deleted",
       "dsync.user.deleted",
       "dsync.group.deleted",
-      "dsync.deleted",
     ]);
     expect(
       await t.query(api.directoryUsers.get, { id: "directory_user_1" }),
@@ -653,7 +728,7 @@ describe("webhook deliveries", () => {
     expect(
       names().filter((name) => name === "dsync.user.deleted"),
     ).toHaveLength(301);
-    expect(names().at(-1)).toBe("dsync.deleted");
+    expect(names()[0]).toBe("dsync.deleted");
     expect(
       await t.run(
         async (ctx) => (await ctx.db.query("directoryUsers").collect()).length,

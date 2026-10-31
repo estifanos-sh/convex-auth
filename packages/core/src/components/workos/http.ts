@@ -5,7 +5,7 @@
  * @module
  */
 import { httpActionGeneric, type HttpRouter } from "convex/server";
-import { internal } from "./_generated/api.ts";
+import { api, internal } from "./_generated/api.ts";
 import { env } from "./_generated/server.ts";
 import type { ClaimedRequest } from "../../lib/oauth/callback.ts";
 import { buildCallbackRouter } from "../../lib/oauth/http.ts";
@@ -38,7 +38,8 @@ const http: HttpRouter = buildCallbackRouter<ClaimedRequest>({
 /**
  * A verified delivery names an object, which is read again from WorkOS and
  * written as it is now, or removed if WorkOS answers 404, so deliveries can
- * arrive in any order. A membership delivery reads the directory user again,
+ * arrive in any order. A domain the copy holds that an organization no
+ * longer lists is read by id too, and removed only on a 404. A membership delivery reads the directory user again,
  * whose roles it may move. A failure answers 500, and WorkOS retries.
  */
 http.route({
@@ -72,6 +73,25 @@ http.route({
       updates: update === null ? [] : [update],
       gone: update === null ? [target.id] : [],
     });
+    if (update?.kind === "organization") {
+      const listed = new Set(update.domains.map((domain) => domain.row.id));
+      const held = await ctx.runQuery(api.organizationDomains.list, {
+        organizationId: update.row.id,
+      });
+      const updates = [];
+      const gone = [];
+      for (const domain of held) {
+        if (listed.has(domain.id)) continue;
+        const now = await read("organizationDomain", domain.id);
+        if (now === null) gone.push(domain.id);
+        else updates.push(now);
+      }
+      await ctx.runMutation(internal.reconcile.settle, {
+        kind: "organizationDomain",
+        updates,
+        gone,
+      });
+    }
     return new Response(null, { status: 200 });
   }),
 });

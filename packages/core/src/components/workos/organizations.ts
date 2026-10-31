@@ -22,7 +22,7 @@ export const get = query({
       .query("organizations")
       .withIndex("id", (q) => q.eq("id", args.id))
       .unique();
-    return row === null || row.deleted === true ? null : organizationOf(row);
+    return row === null || "deleted" in row ? null : organizationOf(row);
   },
 });
 
@@ -35,6 +35,6 @@ export const list = query({
         .query("organizations")
         .withIndex("id", (q) => (cursor === null ? q : q.gt("id", cursor))),
       numItems,
-      organizationOf,
+      (row) => ("deleted" in row ? null : organizationOf(row)),
     ),
 });

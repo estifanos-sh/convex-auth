@@ -165,41 +165,66 @@ export type BackfillPosition = Infer<typeof vBackfillPosition>;
  * Every row carries the time it was last written or listed, and WorkOS's
  * `updated_at` for the version it holds: a read that commits after a newer
  * one is dropped. A reconcile that started at time T reads each row older
- * than T again by id, and removes it only if WorkOS no longer has it. A
- * removed row stays, marked `deleted`, so a read from before the removal
- * cannot write it back: WorkOS never reuses an id.
+ * than T again by id, and removes it only if WorkOS no longer has it.
  */
 const kept = {
   generation: v.number(),
   updatedAt: v.string(),
-  deleted: v.optional(v.boolean()),
+};
+
+/**
+ * What a removal leaves: the id alone, marked `deleted`, whether or not the
+ * copy held the object, so a read from before the removal cannot write it
+ * back. WorkOS never reuses an id.
+ */
+const removed = {
+  id: v.string(),
+  deleted: v.literal(true),
+  generation: v.number(),
 };
 
 export default defineSchema({
   authorizationRequests: authorizationRequestsTable,
   tickets: ticketsTable,
 
-  organizations: defineTable({ ...vOrganization.fields, ...kept })
+  organizations: defineTable(
+    v.union(v.object({ ...vOrganization.fields, ...kept }), v.object(removed)),
+  )
     .index("id", ["id"])
     .index("deleted_generation", ["deleted", "generation"]),
-  organizationDomains: defineTable({ ...vOrganizationDomain.fields, ...kept })
+  organizationDomains: defineTable(
+    v.union(
+      v.object({ ...vOrganizationDomain.fields, ...kept }),
+      v.object(removed),
+    ),
+  )
     .index("id", ["id"])
     .index("domain", ["domain"])
     .index("organizationId", ["organizationId"])
     .index("deleted_generation", ["deleted", "generation"]),
-  connections: defineTable({ ...vConnection.fields, ...kept })
+  connections: defineTable(
+    v.union(v.object({ ...vConnection.fields, ...kept }), v.object(removed)),
+  )
     .index("id", ["id"])
     .index("organizationId_state", ["organizationId", "state"])
     .index("deleted_generation", ["deleted", "generation"]),
   /**
-   * A directory WorkOS deleted stays, `deleted`, until `sweep` has removed
-   * its users and groups, a batch at a time.
+   * A directory WorkOS deleted is `sweeping` until `sweep` has removed its
+   * users and groups, a batch at a time, and its removal stays after that.
    */
-  directories: defineTable({ ...vDirectory.fields, ...kept })
+  directories: defineTable(
+    v.union(
+      v.object({ ...vDirectory.fields, ...kept }),
+      v.object({ ...removed, sweeping: v.optional(v.literal(true)) }),
+    ),
+  )
     .index("id", ["id"])
     .index("organizationId", ["organizationId"])
+    .index("sweeping", ["sweeping"])
     .index("deleted_generation", ["deleted", "generation"]),
-  directoryUsers: defineTable({ ...vDirectoryUser.fields, ...kept })
+  directoryUsers: defineTable(
+    v.union(v.object({ ...vDirectoryUser.fields, ...kept }), v.object(removed)),
+  )
     .index("id", ["id"])
     .index("directoryId_id", ["directoryId", "id"])
     .index("organizationId_id", ["organizationId", "id"])
@@ -207,7 +232,12 @@ export default defineSchema({
     .index("idpId_id", ["idpId", "id"])
     .index("email_id", ["email", "id"])
     .index("deleted_generation", ["deleted", "generation"]),
-  directoryGroups: defineTable({ ...vDirectoryGroup.fields, ...kept })
+  directoryGroups: defineTable(
+    v.union(
+      v.object({ ...vDirectoryGroup.fields, ...kept }),
+      v.object(removed),
+    ),
+  )
     .index("id", ["id"])
     .index("directoryId_id", ["directoryId", "id"])
     .index("organizationId_id", ["organizationId", "id"])

@@ -20,7 +20,7 @@ export const get = query({
       .query("directoryGroups")
       .withIndex("id", (q) => q.eq("id", args.id))
       .unique();
-    return row === null || row.deleted === true ? null : groupOf(row);
+    return row === null || "deleted" in row ? null : groupOf(row);
   },
 });
 
@@ -54,6 +54,8 @@ export const list = query({
         "Filter directory groups by one of directory or organization",
       );
     }
-    return await pageOf(rows, numItems, groupOf);
+    return await pageOf(rows, numItems, (row) =>
+      "deleted" in row ? null : groupOf(row),
+    );
   },
 });

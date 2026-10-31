@@ -16,7 +16,6 @@
  */
 import { type Infer, v } from "convex/values";
 import { internal } from "./_generated/api.ts";
-import type { Doc } from "./_generated/dataModel.ts";
 import type { ActionCtx, MutationCtx } from "./_generated/server.ts";
 import {
   env,
@@ -117,7 +116,7 @@ async function nextDirectory(ctx: MutationCtx, afterId: string | undefined) {
     .query("directories")
     .withIndex("id", (q) => (afterId === undefined ? q : q.gt("id", afterId)));
   for await (const directory of following) {
-    if (directory.deleted !== true) return directory.id;
+    if (!("deleted" in directory)) return directory.id;
   }
   return undefined;
 }
@@ -211,26 +210,31 @@ export const settle = internalMutation({
 async function removeContents(
   ctx: MutationCtx,
   copy: Mirror,
-  directory: Doc<"directories">,
+  directoryId: string,
 ): Promise<boolean> {
   const db = ctx.db;
   const users = await db
     .query("directoryUsers")
-    .withIndex("directoryId_id", (q) => q.eq("directoryId", directory.id))
+    .withIndex("directoryId_id", (q) => q.eq("directoryId", directoryId))
     .take(BATCH);
-  for (const user of users) await copy.removeUser(user);
+  for (const user of users) {
+    if (!("deleted" in user)) await copy.removeUser(user);
+  }
   if (users.length > 0) return true;
   const groups = await db
     .query("directoryGroups")
-    .withIndex("directoryId_id", (q) => q.eq("directoryId", directory.id))
+    .withIndex("directoryId_id", (q) => q.eq("directoryId", directoryId))
     .take(BATCH);
-  for (const group of groups) await copy.removeGroup(group);
+  for (const group of groups) {
+    if (!("deleted" in group)) await copy.removeGroup(group);
+  }
   return groups.length > 0;
 }
 
 /**
- * Remove a batch of the contents of a directory WorkOS deleted, and the
- * directory once it is empty, then queue the next batch.
+ * Remove a batch of the contents of a directory WorkOS deleted, and mark the
+ * directory swept once it is empty, then queue the next batch. The
+ * directory's removal stays.
  */
 export const sweep = internalMutation({
   args: {},
@@ -238,12 +242,14 @@ export const sweep = internalMutation({
   handler: async (ctx) => {
     const directory = await ctx.db
       .query("directories")
-      .withIndex("deleted_generation", (q) => q.eq("deleted", true))
+      .withIndex("sweeping", (q) => q.eq("sweeping", true))
       .first();
     if (directory === null) return null;
     const copy = await mirror(ctx, Date.now());
-    if (!(await removeContents(ctx, copy, directory))) {
-      await copy.removeDirectory(directory);
+    if (!(await removeContents(ctx, copy, directory.id))) {
+      await ctx.db.patch("directories", directory._id, {
+        sweeping: undefined,
+      });
     }
     await ctx.scheduler.runAfter(0, internal.reconcile.sweep, {});
     return null;
