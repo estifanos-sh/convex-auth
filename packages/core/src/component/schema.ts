@@ -19,6 +19,9 @@ export default defineSchema({
   sessions: defineTable({
     userId: v.string(),
     accountId: v.id("accounts"),
+    // Never written or read: sessions stored before #758 still carry it, and a
+    // push whose schema refuses a stored row fails. Dropped once those expire.
+    lastRefreshedAt: v.optional(v.number()),
   }).index("by_user", ["userId"]),
 
   // Every refresh token a session has handed out and still remembers, by its
