@@ -10,7 +10,7 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 import { api } from "./_generated/api.ts";
 import type { ComponentApi } from "./_generated/component.ts";
 import schema from "./schema.ts";
-import { addRouting } from "../../methods/workos/routing.ts";
+import { addRoute } from "../../methods/workos/routing.ts";
 import { setupWorkos } from "../../methods/workos/server.ts";
 import {
   ALLOWED_ORIGINS,
@@ -52,7 +52,8 @@ describe("startSignInWithWorkos", () => {
   test("routes to an organization, with the hints", async () => {
     const t = setup();
     const { redirect, state } = await t.mutation(startSignIn, {
-      redirectTo: addRouting(REDIRECT_TO, {
+      redirectTo: addRoute(REDIRECT_TO, {
+        kind: "organization",
         organizationId: "org_1",
         loginHint: "ada@example.com",
         domainHint: "example.com",
@@ -86,7 +87,8 @@ describe("startSignInWithWorkos", () => {
   test("keeps the app's own query parameters on redirectTo", async () => {
     const t = setup();
     await t.mutation(startSignIn, {
-      redirectTo: addRouting(`${REDIRECT_TO}?tab=sso`, {
+      redirectTo: addRoute(`${REDIRECT_TO}?tab=sso`, {
+        kind: "connection",
         connectionId: "conn_1",
       }),
     });
@@ -101,7 +103,10 @@ describe("startSignInWithWorkos", () => {
   test("routes to a connection", async () => {
     const t = setup();
     const { redirect } = await t.mutation(startSignIn, {
-      redirectTo: addRouting(REDIRECT_TO, { connectionId: "conn_1" }),
+      redirectTo: addRoute(REDIRECT_TO, {
+        kind: "connection",
+        connectionId: "conn_1",
+      }),
     });
     const params = new URL(redirect).searchParams;
     expect(params.get("connection")).toBe("conn_1");
@@ -109,14 +114,15 @@ describe("startSignInWithWorkos", () => {
   });
 
   test.each([
-    ["neither", {}],
-    ["both", { organizationId: "org_1", connectionId: "conn_1" }],
-    ["a malformed organization", { organizationId: "acme" }],
-    ["a malformed connection", { connectionId: "org_1" }],
-  ])("refuses %s, writing nothing", async (_name, routing) => {
+    ["no route", ""],
+    ["only a hint", "workos_login_hint=ada%40example.com"],
+    ["both", "workos_organization_id=org_1&workos_connection_id=conn_1"],
+    ["a malformed organization", "workos_organization_id=acme"],
+    ["a malformed connection", "workos_connection_id=org_1"],
+  ])("refuses %s, writing nothing", async (_name, query) => {
     const t = setup();
     await expect(
-      t.mutation(startSignIn, { redirectTo: addRouting(REDIRECT_TO, routing) }),
+      t.mutation(startSignIn, { redirectTo: `${REDIRECT_TO}?${query}` }),
     ).rejects.toThrow();
     const requests = await t.run(
       async (ctx) => await ctx.db.query("authorizationRequests").collect(),
@@ -146,7 +152,8 @@ describe("startSignInWithWorkos with options read at sign-in", () => {
     const t = setupAtAppUrl();
     appUrl.current = "https://one.example.com";
     const { redirect } = await t.mutation(startSignIn, {
-      redirectTo: addRouting("https://one.example.com/after", {
+      redirectTo: addRoute("https://one.example.com/after", {
+        kind: "organization",
         organizationId: "org_1",
       }),
     });
@@ -166,13 +173,15 @@ describe("startSignInWithWorkos with options read at sign-in", () => {
     appUrl.current = "https://two.example.com";
     await expect(
       t.mutation(startSignIn, {
-        redirectTo: addRouting("https://one.example.com/after", {
+        redirectTo: addRoute("https://one.example.com/after", {
+          kind: "organization",
           organizationId: "org_1",
         }),
       }),
     ).rejects.toThrow(/allowedRedirectOrigins/);
     const { redirect } = await t.mutation(startSignIn, {
-      redirectTo: addRouting("https://two.example.com/after", {
+      redirectTo: addRoute("https://two.example.com/after", {
+        kind: "organization",
         organizationId: "org_1",
       }),
     });

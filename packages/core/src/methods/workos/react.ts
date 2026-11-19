@@ -10,7 +10,13 @@
  * const { signIn } = useSignInWithWorkos(api.auth);
  * const { flowError } = useOauth();
  *
- * await signIn({ organizationId: "org_...", loginHint: "ada@example.com" });
+ * await signIn({
+ *   route: {
+ *     kind: "organization",
+ *     organizationId: "org_...",
+ *     loginHint: "ada@example.com",
+ *   },
+ * });
  * ```
  *
  * In a native iOS app, open the `redirect` URL in an
@@ -29,9 +35,9 @@ import type {
   SignInOptions,
 } from "../oauth/client.ts";
 import { useOauthSignIn } from "../oauth/react.ts";
-import { addRouting, type WorkosRouting } from "./routing.ts";
+import { addRoute, type WorkosRoute } from "./routing.ts";
 
-export type { WorkosRouting };
+export type { WorkosHints, WorkosRoute } from "./routing.ts";
 export { useOauth, type UseOauthReturn } from "../oauth/react.ts";
 export type {
   OauthCompleteResult,
@@ -41,15 +47,18 @@ export type {
 } from "../oauth/client.ts";
 
 /** What starting a WorkOS sign-in takes. */
-export type WorkosSignInOptions = Omit<SignInOptions, "code"> &
-  WorkosRouting & { code?: undefined };
+export type WorkosSignInOptions = Omit<SignInOptions, "code"> & {
+  /** Where the sign-in goes: an organization or a connection. */
+  route: WorkosRoute;
+  code?: undefined;
+};
 
 /** What {@link useSignInWithWorkos} returns. */
 export type UseSignInWithWorkosReturn = {
   /**
-   * Start an SSO sign-in routed by the {@link WorkosRouting} fields (exactly
-   * one of `organizationId` and `connectionId`), or, with `code`, finish one
-   * started elsewhere. See `useOauthSignIn`.
+   * Start an SSO sign-in to its {@link WorkosRoute}, an organization or a
+   * connection, or, with `code`, finish one started elsewhere. See
+   * `useOauthSignIn`.
    */
   signIn: {
     (options: SignInOptions & { code: string }): Promise<OauthCompleteResult>;
@@ -92,7 +101,7 @@ export function useSignInWithWorkos(api: {
             "such as React Native.",
         );
       }
-      return oauthSignIn({ redirectTo: addRouting(redirectTo, options) });
+      return oauthSignIn({ redirectTo: addRoute(redirectTo, options.route) });
     }
     return signIn;
   }, [oauthSignIn]);

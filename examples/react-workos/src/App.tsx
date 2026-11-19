@@ -67,8 +67,11 @@ function SignedOut(): ReactNode {
             return;
           }
           const result = await signIn({
-            organizationId: route.organizationId,
-            loginHint: email,
+            route: {
+              kind: "organization",
+              organizationId: route.organizationId,
+              loginHint: email,
+            },
           });
           if (result.status === "redirect") return;
           switch (result.userError.error) {

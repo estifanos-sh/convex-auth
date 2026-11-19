@@ -73,8 +73,9 @@ deployment's environment.
 
 <Step title="Sign in">
 
-A sign-in is routed to exactly one `organizationId` or `connectionId`, and
-takes an optional `loginHint` and `domainHint`. To route by the email the
+A sign-in takes a `route`: `{ kind: "organization", organizationId }` or
+`{ kind: "connection", connectionId }`, each with an optional `loginHint` and
+`domainHint`. To route by the email the
 user typed, look its domain up with the component's `organizationDomains.get`
 query, which returns the organization that verified the domain and its
 active connection:

@@ -34,7 +34,7 @@ import {
   PROVIDER_NAME,
   type WorkosUserInfo,
 } from "../../components/workos/constants.ts";
-import { authorizationParams, takeRouting } from "./routing.ts";
+import { authorizationParams, takeRoute } from "./routing.ts";
 import {
   vWorkosEvent,
   type WorkosEvent,
@@ -42,7 +42,7 @@ import {
 } from "../../components/workos/schema.ts";
 
 export type { WorkosUserInfo };
-export type { WorkosRouting } from "./routing.ts";
+export type { WorkosHints, WorkosRoute } from "./routing.ts";
 export {
   vConnection as vWorkosConnection,
   vDirectory as vWorkosDirectory,
@@ -211,7 +211,7 @@ export function setupWorkos<UsersTable extends string>(
         onSignIn: callbacks.onSignIn,
       });
 
-      // The routing rides on `redirectTo` (see `routing.ts`), so this takes
+      // The route rides on `redirectTo` (see `routing.ts`), so this takes
       // the same arguments as every other method's `startSignIn`.
       const startSignIn = mutationGeneric({
         args: { redirectTo: v.string() },
@@ -221,7 +221,7 @@ export function setupWorkos<UsersTable extends string>(
           if (redirectTo === null) {
             throw new Error("redirectTo must be an absolute URL");
           }
-          const routingParams = authorizationParams(takeRouting(redirectTo));
+          const routingParams = authorizationParams(takeRoute(redirectTo));
           if (!allowedOrigins().includes(redirectTo.origin)) {
             throw new Error(
               `redirectTo origin "${redirectTo.origin}" is not in allowedRedirectOrigins`,

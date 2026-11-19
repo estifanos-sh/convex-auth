@@ -1,92 +1,131 @@
 /**
- * Where a WorkOS sign-in goes: an organization or a connection, and the hints
- * the identity provider pre-fills.
+ * Where a WorkOS sign-in goes, as a {@link WorkosRoute}.
  *
- * The routing rides on `redirectTo` as the query parameters of
- * {@link ROUTING_PARAMS}, because the shared OAuth client passes
- * `startSignIn` nothing but `redirectTo`. `startSignInWithWorkos` takes them
- * off before it records where the flow returns to, so the user comes back to
- * the URL without them.
+ * The route rides on `redirectTo` as the `workos_*` query parameters of
+ * {@link PARAMS}, because the shared OAuth client passes `startSignIn`
+ * nothing but `redirectTo`. {@link addRoute} is the one place that writes
+ * them, on the client, and {@link takeRoute} the one place that reads them,
+ * on the server, which also takes them off so the user comes back to the URL
+ * without them.
  *
  * @module
  */
 
-/**
- * Exactly one of `organizationId` and `connectionId` is required: WorkOS
- * picks the organization's active connection, or uses the one given.
- */
-export type WorkosRouting = {
-  /** A WorkOS organization id (`org_...`), as `organizationDomains.get` has. */
-  organizationId?: string;
-  /** A WorkOS connection id (`conn_...`). */
-  connectionId?: string;
-  /** Pre-fills the email at the identity provider, where it supports it. */
+/** Pre-fills at the identity provider, where it supports them. */
+export type WorkosHints = {
+  /** Pre-fills the email. */
   loginHint?: string;
   /** Pre-fills the domain, for Microsoft OAuth and Google SAML connections. */
   domainHint?: string;
 };
 
-const ROUTING_PARAMS = {
+/**
+ * Where a WorkOS sign-in goes. WorkOS signs in through an organization's
+ * active connection or through a given connection; `startSignInWithWorkos`
+ * refuses a `hint` route, which names neither, and a `default` route, which
+ * carries nothing.
+ */
+export type WorkosRoute =
+  | ({
+      kind: "organization";
+      /** A WorkOS organization id (`org_...`), as `organizationDomains.get` has. */
+      organizationId: string;
+    } & WorkosHints)
+  | ({
+      kind: "connection";
+      /** A WorkOS connection id (`conn_...`). */
+      connectionId: string;
+    } & WorkosHints)
+  | ({ kind: "hint" } & WorkosHints)
+  | { kind: "default" };
+
+const PARAMS = {
   organizationId: "workos_organization_id",
   connectionId: "workos_connection_id",
   loginHint: "workos_login_hint",
   domainHint: "workos_domain_hint",
-} as const satisfies Record<keyof WorkosRouting, string>;
+} as const;
 
-const ROUTING_KEYS = Object.keys(ROUTING_PARAMS) as (keyof WorkosRouting)[];
+type RouteField = keyof typeof PARAMS;
 
-const MAX_ROUTING_LENGTH = 256;
+const FIELDS = Object.keys(PARAMS) as RouteField[];
+
+const MAX_LENGTH = 256;
 
 /**
- * `redirectTo` with `routing` added as its query parameters. A `redirectTo`
- * that is no URL is left for `startSignInWithWorkos` to refuse.
+ * `redirectTo` with `route` set as its query parameters. A `redirectTo` that
+ * is no URL is left for `startSignInWithWorkos` to refuse.
  */
-export function addRouting(redirectTo: string, routing: WorkosRouting): string {
+export function addRoute(redirectTo: string, route: WorkosRoute): string {
   if (!URL.canParse(redirectTo)) return redirectTo;
   const url = new URL(redirectTo);
-  for (const key of ROUTING_KEYS) {
-    const value = routing[key];
-    if (value !== undefined) url.searchParams.set(ROUTING_PARAMS[key], value);
+  const { kind: _kind, ...rest } = route;
+  const fields: Partial<Record<RouteField, string>> = rest;
+  for (const field of FIELDS) {
+    const value = fields[field];
+    if (value !== undefined) url.searchParams.set(PARAMS[field], value);
   }
   return url.toString();
 }
 
-/** Remove the routing from `url`'s query parameters, and return it. */
-export function takeRouting(url: URL): WorkosRouting {
-  const routing: WorkosRouting = {};
-  for (const key of ROUTING_KEYS) {
-    const value = url.searchParams.get(ROUTING_PARAMS[key]);
-    if (value !== null) routing[key] = value;
-    url.searchParams.delete(ROUTING_PARAMS[key]);
+/**
+ * Read the route off `url`'s query parameters and remove them from `url`.
+ * Throws on a route no client builds: both an organization and a connection,
+ * a malformed id, or a value too long.
+ */
+export function takeRoute(url: URL): WorkosRoute {
+  const read: Partial<Record<RouteField, string>> = {};
+  for (const field of FIELDS) {
+    const value = url.searchParams.get(PARAMS[field]);
+    url.searchParams.delete(PARAMS[field]);
+    if (value === null) continue;
+    if (value.length > MAX_LENGTH) {
+      throw new Error("A WorkOS routing argument is too long");
+    }
+    read[field] = value;
   }
-  return routing;
-}
-
-/** WorkOS's authorize parameters for a routing, refusing a malformed one. */
-export function authorizationParams(
-  routing: WorkosRouting,
-): Record<string, string> {
-  const { organizationId, connectionId, loginHint, domainHint } = routing;
-  if ((organizationId === undefined) === (connectionId === undefined)) {
+  const { organizationId, connectionId, loginHint, domainHint } = read;
+  const hints: WorkosHints = {
+    ...(loginHint === undefined ? {} : { loginHint }),
+    ...(domainHint === undefined ? {} : { domainHint }),
+  };
+  if (organizationId !== undefined && connectionId !== undefined) {
     throw new Error(
       "startSignInWithWorkos takes exactly one of organizationId and connectionId",
     );
   }
-  for (const value of [organizationId, connectionId, loginHint, domainHint]) {
-    if (value !== undefined && value.length > MAX_ROUTING_LENGTH) {
-      throw new Error("A WorkOS routing argument is too long");
+  if (organizationId !== undefined) {
+    if (!organizationId.startsWith("org_")) {
+      throw new Error("organizationId must be a WorkOS organization id");
     }
+    return { kind: "organization", organizationId, ...hints };
   }
-  if (organizationId !== undefined && !organizationId.startsWith("org_")) {
-    throw new Error("organizationId must be a WorkOS organization id");
+  if (connectionId !== undefined) {
+    if (!connectionId.startsWith("conn_")) {
+      throw new Error("connectionId must be a WorkOS connection id");
+    }
+    return { kind: "connection", connectionId, ...hints };
   }
-  if (connectionId !== undefined && !connectionId.startsWith("conn_")) {
-    throw new Error("connectionId must be a WorkOS connection id");
+  if (loginHint !== undefined || domainHint !== undefined) {
+    return { kind: "hint", ...hints };
   }
-  const params: Record<string, string> = {};
-  if (organizationId !== undefined) params.organization = organizationId;
-  if (connectionId !== undefined) params.connection = connectionId;
-  if (loginHint !== undefined) params.login_hint = loginHint;
-  if (domainHint !== undefined) params.domain_hint = domainHint;
+  return { kind: "default" };
+}
+
+/** WorkOS's authorize parameters for a route, refusing one WorkOS can't sign in by. */
+export function authorizationParams(
+  route: WorkosRoute,
+): Record<string, string> {
+  if (route.kind === "hint" || route.kind === "default") {
+    throw new Error(
+      "startSignInWithWorkos takes exactly one of organizationId and connectionId",
+    );
+  }
+  const params: Record<string, string> =
+    route.kind === "organization"
+      ? { organization: route.organizationId }
+      : { connection: route.connectionId };
+  if (route.loginHint !== undefined) params.login_hint = route.loginHint;
+  if (route.domainHint !== undefined) params.domain_hint = route.domainHint;
   return params;
 }
