@@ -10,7 +10,7 @@ const TIMEOUT_MS = 10 * 1000;
 
 /**
  * A call WorkOS refused or never answered. `retryable` is true for a
- * timeout, a 429 or a 5xx, which the next run tries again.
+ * timeout, a 429 or a 5xx.
  */
 export class WorkosApiError extends Error {
   override readonly name = "WorkosApiError";
@@ -19,6 +19,8 @@ export class WorkosApiError extends Error {
     readonly status: number,
     readonly retryable: boolean,
     detail: string,
+    /** WorkOS's `Retry-After`, in milliseconds, when it sent one. */
+    readonly retryAfterMs?: number,
   ) {
     super(`WorkOS API responded with ${status}: ${detail}`);
   }
@@ -45,6 +47,17 @@ function refusalCode(bodyText: string): string {
     // Not JSON.
   }
   return "unknown";
+}
+
+/** `Retry-After` as seconds or an HTTP date, in milliseconds from now. */
+function retryAfter(header: string | null): number | undefined {
+  if (header === null) return undefined;
+  const seconds = Number(header);
+  if (header.trim() !== "" && Number.isFinite(seconds)) {
+    return Math.max(0, seconds * 1000);
+  }
+  const at = Date.parse(header);
+  return Number.isNaN(at) ? undefined : Math.max(0, at - Date.now());
 }
 
 /** Call WorkOS's API with the API key. Refuses redirects, like the callback. */
@@ -93,6 +106,7 @@ export async function callWorkos(
       status,
       status === 429 || status >= 500,
       refusalCode(text),
+      retryAfter(response.headers.get("Retry-After")),
     );
   }
   const date = Date.parse(response.headers.get("Date") ?? "");

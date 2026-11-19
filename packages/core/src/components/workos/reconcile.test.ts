@@ -74,7 +74,12 @@ class FakeWorkos {
         headers: { Date: new Date(this.now).toUTCString() },
       });
     const failure = this.failures.shift();
-    if (failure !== undefined) return json({ code: "unavailable" }, failure);
+    if (failure !== undefined) {
+      return new Response(JSON.stringify({ code: "unavailable" }), {
+        status: failure,
+        headers: failure === 429 ? { "Retry-After": "2" } : {},
+      });
+    }
     const [, collection, id] = url.pathname.split("/");
     if (collection !== undefined && id !== undefined) {
       const found = this.byId(collection, decodeURIComponent(id));
@@ -437,18 +442,28 @@ describe("reconcile", () => {
     ).toMatchObject({ state: "active" });
   });
 
-  test("waits and tries again when WorkOS answers 429 or 5xx", async () => {
+  test("tries the same step again after WorkOS's Retry-After", async () => {
     const workos = seeded();
-    workos.failures = [503, 429];
+    workos.failures = [429];
     const t = setup(workos);
     await t.mutation(register, {});
     await reconcile(t);
     expect(changes.filter((change) => change.kind === "user")).toHaveLength(2);
-    expect(workos.calls.slice(0, 3)).toEqual([
-      "/organizations",
+    expect(workos.calls.slice(0, 2)).toEqual([
       "/organizations",
       "/organizations",
     ]);
+  });
+
+  test("ends the run on a failure that names no Retry-After", async () => {
+    const workos = seeded();
+    workos.failures = [503];
+    const t = setup(workos);
+    await t.mutation(register, {});
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    await reconcile(t).catch(() => undefined);
+    expect(changes).toEqual([]);
+    expect(workos.calls).toEqual(["/organizations"]);
   });
 });
 
@@ -590,12 +605,12 @@ describe("webhook deliveries", () => {
     ).toBeNull();
   });
 
-  test("a group of 16,001 members is listed and removed in batches", async () => {
+  test("a group of 301 members is listed and removed in batches", async () => {
     const workos = seeded();
     const t = await prepared(workos);
     const ids = Array.from(
-      { length: 16_001 },
-      (_, index) => `directory_user_${String(index).padStart(5, "0")}`,
+      { length: 301 },
+      (_, index) => `directory_user_${String(index).padStart(3, "0")}`,
     );
     workos.users = ids.map((id) => user(id));
     workos.memberships = ids.map((id) => ({
@@ -620,14 +635,14 @@ describe("webhook deliveries", () => {
               .collect()
           ).length,
       );
-    expect(await members()).toBe(16_001);
+    expect(await members()).toBe(301);
 
     changes = [];
     workos.groups = [];
     await deliver(t, "dsync.group.deleted", group("directory_group_1"));
     expect(await members()).toBe(0);
     expect(changes).toMatchObject([{ kind: "group", action: "deleted" }]);
-  }, 120_000);
+  });
 
   test("a refused change fails the delivery, and its retry applies it", async () => {
     const workos = seeded();

@@ -10,8 +10,8 @@
  * done, each row older than T is read again by id, and removed only if WorkOS
  * answers 404, so a reconcile that overlaps another, or a webhook delivery,
  * never removes what WorkOS still has. A run hands over to a fresh action
- * before an action's time limit, and waits and tries the same step again
- * when WorkOS answers 429 or 5xx or times out.
+ * before an action's time limit, and tries the same step again after
+ * WorkOS's `Retry-After` when WorkOS sends one.
  *
  * @module
  */
@@ -26,7 +26,7 @@ import {
   internalQuery,
   mutation,
 } from "./_generated/server.ts";
-import { BATCH, PAGE_SIZE, PAUSE_MS } from "./constants.ts";
+import { BATCH, PAGE_SIZE } from "./constants.ts";
 import { changeHandler, Mirror } from "./mirror.ts";
 import { callWorkos, WorkosApiError } from "./rest.ts";
 import { type BackfillPosition, vBackfillPosition } from "./schema.ts";
@@ -399,15 +399,17 @@ async function take(
 
 /**
  * Take steps from `step` while `more` holds, for up to a budget of steps.
- * Returns the step to continue from, if any, and whether to wait first
- * because WorkOS answered 429 or 5xx or timed out.
+ * Returns the step to continue from, if any, and how long to wait first:
+ * when WorkOS refuses with a `Retry-After`, the same step goes again once it
+ * has passed. Any other failure ends the run, and the next delivery, which
+ * WorkOS retries, or the next deploy's reconcile drives the work again.
  */
 async function walk(
   ctx: ActionCtx,
   generation: number,
   step: Step,
   more: (step: Step) => boolean,
-): Promise<{ next: Step; pause: boolean } | null> {
+): Promise<{ next: Step; pause: number } | null> {
   let current: Step | null = step;
   for (let taken = 0; taken < PAGES_PER_RUN; taken += 1) {
     if (current === null || !more(current)) return null;
@@ -415,15 +417,17 @@ async function walk(
     try {
       current = await take(ctx, generation, at);
     } catch (error) {
-      if (error instanceof WorkosApiError && error.retryable) {
-        return { next: at, pause: true };
+      if (
+        error instanceof WorkosApiError &&
+        error.retryable &&
+        error.retryAfterMs !== undefined
+      ) {
+        return { next: at, pause: error.retryAfterMs };
       }
       throw error;
     }
   }
-  return current !== null && more(current)
-    ? { next: current, pause: false }
-    : null;
+  return current !== null && more(current) ? { next: current, pause: 0 } : null;
 }
 
 /** Run reconcile from `step`, handing over to a fresh action as it goes. */
@@ -433,11 +437,10 @@ export const run = internalAction({
   handler: async (ctx, args) => {
     const left = await walk(ctx, args.generation, args.step, () => true);
     if (left !== null) {
-      await ctx.scheduler.runAfter(
-        left.pause ? PAUSE_MS : 0,
-        internal.reconcile.run,
-        { generation: args.generation, step: left.next },
-      );
+      await ctx.scheduler.runAfter(left.pause, internal.reconcile.run, {
+        generation: args.generation,
+        step: left.next,
+      });
     }
     return null;
   },
@@ -475,11 +478,10 @@ export const members = internalAction({
       left !== null &&
       (left.next.stage === "members" || left.next.stage === "trim")
     ) {
-      await ctx.scheduler.runAfter(
-        left.pause ? PAUSE_MS : 0,
-        internal.reconcile.members,
-        { generation: args.generation, step: left.next },
-      );
+      await ctx.scheduler.runAfter(left.pause, internal.reconcile.members, {
+        generation: args.generation,
+        step: left.next,
+      });
     }
     return null;
   },
