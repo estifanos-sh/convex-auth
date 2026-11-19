@@ -471,7 +471,84 @@
       "types": "./dist/components/workos/_generated/component.d.ts",
       "default": "./dist/components/workos/_generated/component.js"
     },
-    "./components/workos/test": "./src/testing/workos.ts"
+    "./components/workos/test": "./src/testing/workos.ts",
+    "./lib/oauth/providerFunctions": {
+      "convex-auth-internal-types": {
+        "types": "./dist/internal-types/lib/oauth/providerFunctions.d.ts"
+      },
+      "types": "./dist/lib/oauth/providerFunctions.d.ts",
+      "default": "./dist/lib/oauth/providerFunctions.js"
+    },
+    "./lib/oauth/schema": {
+      "convex-auth-internal-types": {
+        "types": "./dist/internal-types/lib/oauth/schema.d.ts"
+      },
+      "types": "./dist/lib/oauth/schema.d.ts",
+      "default": "./dist/lib/oauth/schema.js"
+    },
+    "./lib/oauth/dbHelpers": {
+      "convex-auth-internal-types": {
+        "types": "./dist/internal-types/lib/oauth/dbHelpers.d.ts"
+      },
+      "types": "./dist/lib/oauth/dbHelpers.d.ts",
+      "default": "./dist/lib/oauth/dbHelpers.js"
+    },
+    "./lib/oauth/http": {
+      "convex-auth-internal-types": {
+        "types": "./dist/internal-types/lib/oauth/http.d.ts"
+      },
+      "types": "./dist/lib/oauth/http.d.ts",
+      "default": "./dist/lib/oauth/http.js"
+    },
+    "./lib/oauth/callback": {
+      "convex-auth-internal-types": {
+        "types": "./dist/internal-types/lib/oauth/callback.d.ts"
+      },
+      "types": "./dist/lib/oauth/callback.d.ts",
+      "default": "./dist/lib/oauth/callback.js"
+    },
+    "./lib/oauth/redemption": {
+      "convex-auth-internal-types": {
+        "types": "./dist/internal-types/lib/oauth/redemption.d.ts"
+      },
+      "types": "./dist/lib/oauth/redemption.d.ts",
+      "default": "./dist/lib/oauth/redemption.js"
+    },
+    "./lib/oauth/crypto": {
+      "convex-auth-internal-types": {
+        "types": "./dist/internal-types/lib/oauth/crypto.d.ts"
+      },
+      "types": "./dist/lib/oauth/crypto.d.ts",
+      "default": "./dist/lib/oauth/crypto.js"
+    },
+    "./lib/oauth/constants": {
+      "convex-auth-internal-types": {
+        "types": "./dist/internal-types/lib/oauth/constants.d.ts"
+      },
+      "types": "./dist/lib/oauth/constants.d.ts",
+      "default": "./dist/lib/oauth/constants.js"
+    },
+    "./lib/crypto": {
+      "convex-auth-internal-types": {
+        "types": "./dist/internal-types/lib/crypto.d.ts"
+      },
+      "types": "./dist/lib/crypto.d.ts",
+      "default": "./dist/lib/crypto.js"
+    },
+    "./lib/oauthParams": {
+      "convex-auth-internal-types": {
+        "types": "./dist/internal-types/lib/oauthParams.d.ts"
+      },
+      "types": "./dist/lib/oauthParams.d.ts",
+      "default": "./dist/lib/oauthParams.js"
+    },
+    "./lib/types": {
+      "convex-auth-internal-types": {
+        "types": "./dist/internal-types/lib/types.d.ts"
+      },
+      "types": "./dist/lib/types.d.ts",
+      "default": "./dist/lib/types.js"
+    }
   },
   "dependencies": {
     "@convex-dev/batch-worker": "^0.3.2",
