@@ -10,7 +10,7 @@ import { v } from "convex/values";
  * bind the environment's client ID and API key:
  *
  * ```ts
- * app.use(workos, {
+ * app.use(authWorkos, {
  *   httpPrefix: "/workos",
  *   env: {
  *     CLIENT_ID: app.env.AUTH_WORKOS_CLIENT_ID,

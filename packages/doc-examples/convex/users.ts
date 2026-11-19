@@ -75,9 +75,8 @@ export const createUserGithub = internalMutation({
 
 export const createUserWorkos = internalMutation({
   args: {
-    provider: v.object({
+    method: v.object({
       name: v.literal("workos"),
-      accountId: v.string(),
       profile: vWorkosProfile,
     }),
   },

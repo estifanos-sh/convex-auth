@@ -29,7 +29,7 @@ import type {
   SignInOptions,
 } from "../oauth/client.ts";
 import { useOauthSignIn } from "../oauth/react.ts";
-import type { WorkosRouting } from "./server.ts";
+import { addRouting, type WorkosRouting } from "./routing.ts";
 
 export type { WorkosRouting };
 export { useOauth, type UseOauthReturn } from "../oauth/react.ts";
@@ -41,7 +41,7 @@ export type {
 } from "../oauth/client.ts";
 
 /** What starting a WorkOS sign-in takes. */
-export type WorkosSignInOptions = Omit<SignInOptions, "code" | "startArgs"> &
+export type WorkosSignInOptions = Omit<SignInOptions, "code"> &
   WorkosRouting & { code?: undefined };
 
 /** What {@link useSignInWithWorkos} returns. */
@@ -85,16 +85,23 @@ export function useSignInWithWorkos(api: {
           code: options.code,
         });
       }
-      const { organizationId, connectionId, loginHint, domainHint } = options;
-      const startArgs: Record<string, string> = {};
-      if (organizationId !== undefined)
-        startArgs.organizationId = organizationId;
-      if (connectionId !== undefined) startArgs.connectionId = connectionId;
-      if (loginHint !== undefined) startArgs.loginHint = loginHint;
-      if (domainHint !== undefined) startArgs.domainHint = domainHint;
-      return oauthSignIn({ redirectTo: options.redirectTo, startArgs });
+      const redirectTo = options.redirectTo ?? currentHref();
+      if (redirectTo === null) {
+        throw new Error(
+          "`redirectTo` is required where there is no current page URL, " +
+            "such as React Native.",
+        );
+      }
+      return oauthSignIn({ redirectTo: addRouting(redirectTo, options) });
     }
     return signIn;
   }, [oauthSignIn]);
   return { signIn };
+}
+
+function currentHref(): string | null {
+  if (typeof window === "undefined" || window.location === undefined) {
+    return null;
+  }
+  return window.location.href;
 }

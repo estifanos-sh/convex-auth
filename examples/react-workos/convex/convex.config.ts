@@ -1,7 +1,7 @@
 import { defineApp } from "convex/server";
 import { v } from "convex/values";
 import auth from "@convex-dev/auth/convex.config.js";
-import workos from "@convex-dev/auth/components/workos/convex.config.js";
+import authWorkos from "@convex-dev/auth/components/workos/convex.config.js";
 
 const app = defineApp({
   env: {
@@ -16,7 +16,7 @@ app.use(auth);
 // the SSO callback at `<site-url>/workos/callback`, which is the redirect URI
 // to add in the WorkOS dashboard, and the webhook at
 // `<site-url>/workos/webhook`, which `syncWorkos` registers at WorkOS.
-app.use(workos, {
+app.use(authWorkos, {
   httpPrefix: "/workos",
   env: {
     CLIENT_ID: app.env.AUTH_WORKOS_CLIENT_ID,

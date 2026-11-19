@@ -1,5 +1,6 @@
 import { type ReactNode, useState } from "react";
 import { useConvex, useConvexAuth, useQuery } from "convex/react";
+import { ConvexError } from "convex/values";
 import { useAuthActions } from "@convex-dev/auth/react";
 import {
   useOauth,
@@ -33,15 +34,15 @@ function SignedOut(): ReactNode {
                   return "That sign-in took too long. Please try again.";
                 case "INVALID_FLOW":
                   return "This sign-in can't be completed here. Please try again.";
-                case "REJECTED":
-                  // Your backend rejected the sign-in with a ConvexError,
-                  // and `data` is its data. Show it when it's text for the
-                  // user.
-                  return typeof flowError.data === "string"
-                    ? flowError.data
-                    : "Sign-in was declined.";
                 case "OTHER_ERROR":
-                  // The details are on `cause` if you want to log them.
+                  // `onSignIn` refuses a deprovisioned user with a
+                  // ConvexError, which arrives as the `cause`.
+                  if (
+                    flowError.cause instanceof ConvexError &&
+                    typeof flowError.cause.data === "string"
+                  ) {
+                    return flowError.cause.data;
+                  }
                   return "Something went wrong during sign-in. Please try again.";
                 default:
                   flowError satisfies never;

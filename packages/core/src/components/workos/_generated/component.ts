@@ -258,14 +258,14 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       >;
     };
     provider: {
-      claimTicket: FunctionReference<
+      _internal_dangerous_createAccount: FunctionReference<
         "mutation",
         "internal",
-        { stateHash: string; ticketCodeHash: string },
-        null | { encryptedPayload: string },
+        { providerAccountId: string; userId: string },
+        null,
         Name
       >;
-      createAuthorizationRequest: FunctionReference<
+      _internal_dangerous_createAuthorizationRequest: FunctionReference<
         "mutation",
         "internal",
         {
@@ -275,6 +275,20 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           stateHash: string;
         },
         { callbackUrl: string; clientId: string },
+        Name
+      >;
+      claimTicket: FunctionReference<
+        "mutation",
+        "internal",
+        { stateHash: string; ticketCodeHash: string },
+        null | { encryptedPayload: string },
+        Name
+      >;
+      getUserIdByAccount: FunctionReference<
+        "query",
+        "internal",
+        { providerAccountId: string },
+        string | null,
         Name
       >;
     };

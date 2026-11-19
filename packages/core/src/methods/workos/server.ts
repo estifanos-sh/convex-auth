@@ -10,24 +10,31 @@ import {
   internalActionGeneric,
   internalMutationGeneric,
   makeFunctionReference,
+  mutationGeneric,
   type GenericDataModel,
   type GenericMutationCtx,
 } from "convex/server";
 import { Infer, v } from "convex/values";
 import type { UserCallbacks } from "../../lib/types.ts";
 import type { AuthCore } from "../../server/setup.ts";
-import { buildStartSignIn } from "../../lib/oauth/authorize.ts";
+import { sha256Hex } from "../../lib/crypto.ts";
+import { CALLBACK_PATH } from "../../lib/oauth/constants.ts";
+import {
+  generateRandomToken,
+  sha256Base64Url,
+} from "../../lib/oauth/crypto.ts";
 import {
   buildCompleteSignIn,
+  parseUrl,
   validateAllowedRedirectOrigins,
 } from "../../lib/oauth/redemption.ts";
 import type { ComponentApi } from "../../components/workos/_generated/component.ts";
 import {
   AUTHORIZATION_ENDPOINT,
   PROVIDER_NAME,
-  SCOPES,
   type WorkosUserInfo,
 } from "../../components/workos/constants.ts";
+import { authorizationParams, takeRouting } from "./routing.ts";
 import {
   vWorkosEvent,
   type WorkosEvent,
@@ -35,6 +42,7 @@ import {
 } from "../../components/workos/schema.ts";
 
 export type { WorkosUserInfo };
+export type { WorkosRouting } from "./routing.ts";
 export {
   vConnection as vWorkosConnection,
   vDirectory as vWorkosDirectory,
@@ -106,60 +114,11 @@ export function normalizeWorkosProfile(
   };
 }
 
-/**
- * Where `startSignInWithWorkos` sends the user. Exactly one of
- * `organizationId` and `connectionId` is required: WorkOS picks the
- * organization's active connection, or uses the one given.
- */
-export const vWorkosRouting = {
-  /** A WorkOS organization id (`org_...`), as `organizationDomains.get` has. */
-  organizationId: v.optional(v.string()),
-  /** A WorkOS connection id (`conn_...`). */
-  connectionId: v.optional(v.string()),
-  /** Pre-fills the email at the identity provider, where it supports it. */
-  loginHint: v.optional(v.string()),
-  /** Pre-fills the domain, for Microsoft OAuth and Google SAML connections. */
-  domainHint: v.optional(v.string()),
-};
-
-export type WorkosRouting = {
-  organizationId?: string;
-  connectionId?: string;
-  loginHint?: string;
-  domainHint?: string;
-};
-
-const MAX_ROUTING_LENGTH = 256;
-
-/** WorkOS's authorize parameters for a routing, refusing a malformed one. */
-function authorizationParams(routing: WorkosRouting): Record<string, string> {
-  const { organizationId, connectionId, loginHint, domainHint } = routing;
-  if ((organizationId === undefined) === (connectionId === undefined)) {
-    throw new Error(
-      "startSignInWithWorkos takes exactly one of organizationId and connectionId",
-    );
-  }
-  for (const value of [organizationId, connectionId, loginHint, domainHint]) {
-    if (value !== undefined && value.length > MAX_ROUTING_LENGTH) {
-      throw new Error("A WorkOS routing argument is too long");
-    }
-  }
-  if (organizationId !== undefined && !organizationId.startsWith("org_")) {
-    throw new Error("organizationId must be a WorkOS organization id");
-  }
-  if (connectionId !== undefined && !connectionId.startsWith("conn_")) {
-    throw new Error("connectionId must be a WorkOS connection id");
-  }
-  const params: Record<string, string> = {};
-  if (organizationId !== undefined) params.organization = organizationId;
-  if (connectionId !== undefined) params.connection = connectionId;
-  if (loginHint !== undefined) params.login_hint = loginHint;
-  if (domainHint !== undefined) params.domain_hint = domainHint;
-  return params;
-}
+/** The name of this sign-in method. The app's user callbacks get it as `method.name`. */
+const METHOD_NAME = "workos";
 
 /** App-defined config for setting up the `workos` method. */
-export type WorkosMethodOptions = {
+export type WorkosOptions = {
   /** The WorkOS component instance, i.e. `components.authWorkos`. */
   component: ComponentApi;
   /**
@@ -226,7 +185,7 @@ export type WorkosMethodOptions = {
  */
 export function setupWorkos<UsersTable extends string>(
   core: AuthCore<UsersTable>,
-  options: WorkosMethodOptions,
+  options: WorkosOptions,
 ) {
   const origins = options.allowedRedirectOrigins;
   let allowedOrigins: () => string[];
@@ -244,28 +203,72 @@ export function setupWorkos<UsersTable extends string>(
      * args must be declared) and get the functions of this method to export.
      */
     attachUserCallbacks(
-      callbacks: UserCallbacks<"workos", WorkosProfile, UsersTable>,
+      callbacks: UserCallbacks<typeof METHOD_NAME, WorkosProfile, UsersTable>,
     ) {
-      const { authMutation } = core.bindProvider({
-        name: PROVIDER_NAME,
+      const { authMutation } = core.bindMethod({
+        name: METHOD_NAME,
         createUser: callbacks.createUser,
         onSignIn: callbacks.onSignIn,
       });
 
-      const startSignIn = buildStartSignIn({
-        allowedOrigins,
-        authorizationEndpoint: AUTHORIZATION_ENDPOINT,
-        scopes: SCOPES,
-        startArgs: vWorkosRouting,
-        authorizationParams,
-        createAuthorizationRequest:
-          callbackUrl === undefined
-            ? options.component.provider.createAuthorizationRequest
-            : (ctx, args) =>
-                ctx.runMutation(
-                  options.component.provider.createAuthorizationRequest,
-                  { ...args, callbackUrl: callbackUrl() },
-                ),
+      // The routing rides on `redirectTo` (see `routing.ts`), so this takes
+      // the same arguments as every other method's `startSignIn`.
+      const startSignIn = mutationGeneric({
+        args: { redirectTo: v.string() },
+        returns: v.object({ redirect: v.string(), state: v.string() }),
+        handler: async (ctx, args) => {
+          const redirectTo = parseUrl(args.redirectTo);
+          if (redirectTo === null) {
+            throw new Error("redirectTo must be an absolute URL");
+          }
+          const routingParams = authorizationParams(takeRouting(redirectTo));
+          if (!allowedOrigins().includes(redirectTo.origin)) {
+            throw new Error(
+              `redirectTo origin "${redirectTo.origin}" is not in allowedRedirectOrigins`,
+            );
+          }
+
+          const state = generateRandomToken();
+          const codeVerifier = generateRandomToken();
+          const request = await ctx.runMutation(
+            options.component.provider
+              ._internal_dangerous_createAuthorizationRequest,
+            {
+              stateHash: await sha256Hex(state),
+              redirectTo: redirectTo.toString(),
+              codeVerifier,
+              ...(callbackUrl === undefined
+                ? {}
+                : { callbackUrl: callbackUrl() }),
+            },
+          );
+          if (
+            callbackUrl === undefined &&
+            new URL(request.callbackUrl).pathname === CALLBACK_PATH
+          ) {
+            throw new Error(
+              `The WorkOS component is not served under an httpPrefix, so ` +
+                `its callback URL would be ${request.callbackUrl}, which ` +
+                `returns 404. In convex/convex.config.ts, install it with ` +
+                `\`app.use(authWorkos, { httpPrefix: "/workos", ... })\`.`,
+            );
+          }
+
+          const url = new URL(AUTHORIZATION_ENDPOINT);
+          const params: Record<string, string> = {
+            ...routingParams,
+            response_type: "code",
+            client_id: request.clientId,
+            redirect_uri: request.callbackUrl,
+            state,
+            code_challenge: await sha256Base64Url(codeVerifier),
+            code_challenge_method: "S256",
+          };
+          for (const [key, value] of Object.entries(params)) {
+            url.searchParams.set(key, value);
+          }
+          return { redirect: url.toString(), state };
+        },
       });
 
       const completeSignIn = buildCompleteSignIn<
@@ -274,8 +277,16 @@ export function setupWorkos<UsersTable extends string>(
       >({
         providerName: PROVIDER_NAME,
         authMutation,
+        component: options.component,
         claimTicket: (ctx, args) =>
           ctx.runMutation(options.component.provider.claimTicket, args),
+        getUserIdByAccount: (ctx, args) =>
+          ctx.runQuery(options.component.provider.getUserIdByAccount, args),
+        createAccount: (ctx, args) =>
+          ctx.runMutation(
+            options.component.provider._internal_dangerous_createAccount,
+            args,
+          ),
         profile: (payload) => normalizeWorkosProfile(payload.userInfoResponses),
       });
 

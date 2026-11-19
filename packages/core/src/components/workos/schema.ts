@@ -1,6 +1,7 @@
 import { defineSchema, defineTable } from "convex/server";
 import { Infer, v } from "convex/values";
 import {
+  accountsTable,
   authorizationRequestsTable,
   ticketsTable,
 } from "../../lib/oauth/schema.ts";
@@ -186,6 +187,7 @@ const removed = {
 export default defineSchema({
   authorizationRequests: authorizationRequestsTable,
   tickets: ticketsTable,
+  accounts: accountsTable,
 
   organizations: defineTable(
     v.union(v.object({ ...vOrganization.fields, ...kept }), v.object(removed)),

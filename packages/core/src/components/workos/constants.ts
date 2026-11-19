@@ -24,10 +24,7 @@ export const USER_INFO_ENDPOINTS: Record<keyof WorkosUserInfo, string> = {
   profile: "https://api.workos.com/sso/profile",
 };
 
-/** The SSO API takes no scopes: the connection decides what is returned. */
-export const SCOPES: string[] = [];
-
-/** The name this method's accounts are namespaced under in the core. */
+/** The provider's name, used in error messages. */
 export const PROVIDER_NAME = "workos";
 
 /** The WorkOS SSO profile fields the mapping reads. */
