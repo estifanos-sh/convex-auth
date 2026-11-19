@@ -16,7 +16,7 @@ export const get = query({
       .query("connections")
       .withIndex("id", (q) => q.eq("id", args.id))
       .unique();
-    return row === null ? null : connectionOf(row);
+    return row === null || row.deleted === true ? null : connectionOf(row);
   },
 });
 
@@ -31,6 +31,6 @@ export const list = query({
         q.eq("organizationId", args.organizationId),
       )
       .collect();
-    return rows.map(connectionOf);
+    return rows.filter((row) => row.deleted !== true).map(connectionOf);
   },
 });

@@ -15,7 +15,6 @@ import {
   vOrganization,
   vOrganizationDomain,
   type DirectoryUser,
-  type OrganizationDomain,
 } from "./schema.ts";
 import { EVENTS } from "./constants.ts";
 
@@ -34,21 +33,49 @@ export const vKind = v.union(
 );
 export type Kind = Infer<typeof vKind>;
 
+const vDomainUpdate = v.object({
+  row: vOrganizationDomain,
+  updatedAt: v.string(),
+});
+export type DomainUpdate = Infer<typeof vDomainUpdate>;
+
 /**
  * One object as WorkOS holds it now, decoded from a listing or a read by id,
- * as the write it makes to the copy. An organization carries its domains.
+ * as the write it makes to the copy, with WorkOS's `updated_at` for that
+ * version. An organization carries its domains.
  */
 export const vUpdate = v.union(
   v.object({
     kind: v.literal("organization"),
     row: vOrganization,
-    domains: v.array(vOrganizationDomain),
+    updatedAt: v.string(),
+    domains: v.array(vDomainUpdate),
   }),
-  v.object({ kind: v.literal("organizationDomain"), row: vOrganizationDomain }),
-  v.object({ kind: v.literal("connection"), row: vConnection }),
-  v.object({ kind: v.literal("directory"), row: vDirectory }),
-  v.object({ kind: v.literal("directoryUser"), row: vDirectoryUser }),
-  v.object({ kind: v.literal("directoryGroup"), row: vDirectoryGroup }),
+  v.object({
+    kind: v.literal("organizationDomain"),
+    row: vOrganizationDomain,
+    updatedAt: v.string(),
+  }),
+  v.object({
+    kind: v.literal("connection"),
+    row: vConnection,
+    updatedAt: v.string(),
+  }),
+  v.object({
+    kind: v.literal("directory"),
+    row: vDirectory,
+    updatedAt: v.string(),
+  }),
+  v.object({
+    kind: v.literal("directoryUser"),
+    row: vDirectoryUser,
+    updatedAt: v.string(),
+  }),
+  v.object({
+    kind: v.literal("directoryGroup"),
+    row: vDirectoryGroup,
+    updatedAt: v.string(),
+  }),
 );
 export type Update = Infer<typeof vUpdate>;
 
@@ -74,23 +101,38 @@ function optionalText(object: Fields, name: string): string | undefined {
   return typeof value === "string" ? value : undefined;
 }
 
-function domain(value: unknown, organizationId?: string): OrganizationDomain {
+/**
+ * A domain an organization lists may carry no `updated_at` of its own, and is
+ * as new as the organization that listed it.
+ */
+function domain(
+  value: unknown,
+  organization?: { id: string; updatedAt: string },
+): DomainUpdate {
   const raw = fields(value, "organization domain");
-  const owner = optionalText(raw, "organization_id") ?? organizationId;
+  const owner = optionalText(raw, "organization_id") ?? organization?.id;
   if (owner === undefined) {
     throw new DecodeError("WorkOS sent a domain with no organization");
   }
+  const updatedAt = optionalText(raw, "updated_at") ?? organization?.updatedAt;
+  if (updatedAt === undefined) {
+    throw new DecodeError("WorkOS sent a domain with no `updated_at`");
+  }
   return {
-    id: text(raw, "id", "organization domain"),
-    organizationId: owner,
-    domain: text(raw, "domain", "organization domain").toLowerCase(),
-    state: optionalText(raw, "state") ?? "pending",
+    row: {
+      id: text(raw, "id", "organization domain"),
+      organizationId: owner,
+      domain: text(raw, "domain", "organization domain").toLowerCase(),
+      state: optionalText(raw, "state") ?? "pending",
+    },
+    updatedAt,
   };
 }
 
 function organization(value: unknown): Update {
   const raw = fields(value, "organization");
   const id = text(raw, "id", "organization");
+  const updatedAt = text(raw, "updated_at", "organization");
   const domains = raw.domains;
   return {
     kind: "organization",
@@ -99,8 +141,9 @@ function organization(value: unknown): Update {
       name: text(raw, "name", "organization"),
       externalId: optionalText(raw, "external_id"),
     },
+    updatedAt,
     domains: Array.isArray(domains)
-      ? domains.map((item) => domain(item, id))
+      ? domains.map((item) => domain(item, { id, updatedAt }))
       : [],
   };
 }
@@ -116,6 +159,7 @@ function connection(value: unknown): Update {
       name: optionalText(raw, "name"),
       state: text(raw, "state", "connection"),
     },
+    updatedAt: text(raw, "updated_at", "connection"),
   };
 }
 
@@ -130,6 +174,7 @@ function directory(value: unknown): Update {
       type: text(raw, "type", "directory"),
       state: text(raw, "state", "directory"),
     },
+    updatedAt: text(raw, "updated_at", "directory"),
   };
 }
 
@@ -155,7 +200,11 @@ function user(value: unknown): Update {
       ? raw.roles.flatMap((item) => role(item) ?? [])
       : undefined,
   };
-  return { kind: "directoryUser", row };
+  return {
+    kind: "directoryUser",
+    row,
+    updatedAt: text(raw, "updated_at", "directory user"),
+  };
 }
 
 function group(value: unknown): Update {
@@ -169,6 +218,7 @@ function group(value: unknown): Update {
       idpId: optionalText(raw, "idp_id"),
       name: text(raw, "name", "directory group"),
     },
+    updatedAt: text(raw, "updated_at", "directory group"),
   };
 }
 
@@ -252,7 +302,7 @@ export function decodeObject(kind: Kind, value: unknown): Update {
     case "organization":
       return organization(value);
     case "organizationDomain":
-      return { kind: "organizationDomain", row: domain(value) };
+      return { kind: "organizationDomain", ...domain(value) };
     case "connection":
       return connection(value);
     case "directory":

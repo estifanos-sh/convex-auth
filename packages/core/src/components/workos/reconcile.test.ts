@@ -10,6 +10,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { api, internal } from "./_generated/api.ts";
 import schema, { vWorkosEvent } from "./schema.ts";
 import type { WorkosEvent } from "./schema.ts";
+import { decodeObject } from "./wire.ts";
 
 const modules = import.meta.glob("./**/*.ts");
 
@@ -48,6 +49,7 @@ class FakeWorkos {
     const domains = this.organizations.flatMap((organization) =>
       Array.isArray(organization.domains)
         ? organization.domains.map((domain: Json) => ({
+            updated_at: organization.updated_at,
             ...domain,
             organization_id: organization.id,
           }))
@@ -536,6 +538,82 @@ describe("webhook deliveries", () => {
     expect(events).toEqual([]);
     expect(
       await t.query(api.directoryUsers.get, { id: "directory_user_9" }),
+    ).toBeNull();
+  });
+
+  test("a read that commits late never overwrites a newer one", async () => {
+    const workos = seeded();
+    const t = await prepared(workos);
+    const late = decodeObject(
+      "directoryUser",
+      user("directory_user_1", "active", 2),
+    );
+
+    workos.users[0] = user("directory_user_1", "inactive", 3);
+    expect(await deliver(t, "dsync.user.updated", workos.users[0])).toBe(200);
+    await t.mutation(internal.reconcile.settle, {
+      kind: "directoryUser",
+      updates: [late],
+      gone: [],
+    });
+    await t.mutation(internal.reconcile.page, {
+      generation: Date.now(),
+      position: { stage: "directoryUsers", directoryId: "directory_1" },
+      updates: [late],
+      after: "directory_user_1",
+    });
+
+    expect(events).toMatchObject([
+      { event: "dsync.user.updated", data: { state: "inactive" } },
+    ]);
+    expect(
+      await t.query(api.directoryUsers.get, { id: "directory_user_1" }),
+    ).toMatchObject({ state: "inactive" });
+  });
+
+  test("a read from before a deletion never brings the object back", async () => {
+    const workos = seeded();
+    const t = await prepared(workos);
+    const late = decodeObject("directoryUser", user("directory_user_1"));
+    const domain = decodeObject(
+      "organization",
+      organization("org_1", ["example.com"]),
+    );
+
+    workos.users = [user("directory_user_2")];
+    workos.organizations = [organization("org_1", [], 1)];
+    expect(
+      await deliver(t, "dsync.user.deleted", user("directory_user_1")),
+    ).toBe(200);
+    expect(
+      await deliver(t, "organization.updated", workos.organizations[0]),
+    ).toBe(200);
+    await t.mutation(internal.reconcile.settle, {
+      kind: "directoryUser",
+      updates: [late],
+      gone: [],
+    });
+    await t.mutation(internal.reconcile.settle, {
+      kind: "organization",
+      updates: [domain],
+      gone: [],
+    });
+
+    expect(names()).toEqual([
+      "dsync.user.deleted",
+      "organization_domain.deleted",
+    ]);
+    expect(
+      await t.query(api.directoryUsers.get, { id: "directory_user_1" }),
+    ).toBeNull();
+    expect(
+      await t.query(api.directoryUsers.list, {
+        directory: "directory_1",
+        paginationOpts: { numItems: 10, cursor: null },
+      }),
+    ).toMatchObject({ page: [{ id: "directory_user_2" }] });
+    expect(
+      await t.query(api.organizationDomains.get, { domain: "example.com" }),
     ).toBeNull();
   });
 

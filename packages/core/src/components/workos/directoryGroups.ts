@@ -20,7 +20,7 @@ export const get = query({
       .query("directoryGroups")
       .withIndex("id", (q) => q.eq("id", args.id))
       .unique();
-    return row === null ? null : groupOf(row);
+    return row === null || row.deleted === true ? null : groupOf(row);
   },
 });
 

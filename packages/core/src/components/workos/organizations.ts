@@ -22,7 +22,7 @@ export const get = query({
       .query("organizations")
       .withIndex("id", (q) => q.eq("id", args.id))
       .unique();
-    return row === null ? null : organizationOf(row);
+    return row === null || row.deleted === true ? null : organizationOf(row);
   },
 });
 
