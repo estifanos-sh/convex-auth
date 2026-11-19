@@ -39,8 +39,9 @@ const http: HttpRouter = buildCallbackRouter<ClaimedRequest>({
  * A verified delivery names an object, which is read again from WorkOS and
  * written as it is now, or removed if WorkOS answers 404, so deliveries can
  * arrive in any order. A domain the copy holds that an organization no
- * longer lists is read by id too, and removed only on a 404. A membership delivery reads the directory user again,
- * whose roles it may move. A failure answers 500, and WorkOS retries.
+ * longer lists is read by id too, and removed only on a 404. A membership
+ * delivery reads the directory user again, whose roles it may move. A failure
+ * answers 500, and WorkOS retries.
  */
 http.route({
   path: "/webhook",

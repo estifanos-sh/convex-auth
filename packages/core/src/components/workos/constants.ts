@@ -49,7 +49,7 @@ type WorkosSsoProfile = {
  */
 export type WorkosUserInfo = { profile: WorkosSsoProfile };
 
-/** The base URL of WorkOS's REST API, for the webhook, reconcile and the portal. */
+/** WorkOS's REST API, for the webhook, reconcile and the portal. */
 export const API_BASE = "https://api.workos.com";
 
 /** The events the webhook applies, and the endpoint is subscribed to. */

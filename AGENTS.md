@@ -9,10 +9,11 @@ This is a pnpm monorepo:
   - The core: sessions and JWTs. It knows no sign-in method.
   - The optional components, which store the data of the sign-in methods:
     `username`, `password`, `email`, `passkey`, `totp`, `anonymous`,
-    `oauth`, `google`, `apple`, `github`, and `workos`. Most of them key their data by
-    an opaque user id. `totp` is a second factor, not part of a sign-in
-    method, and the package does not export it for now. The package does not
-    export `anonymous` and the generic `oauth` component for now either.
+    `oauth`, `google`, `apple`, `github`, and `workos`. Most of them key
+    their data by an opaque user id. `totp` is a second factor, not part of a
+    sign-in method, and the package does not export it for now. The package
+    does not export `anonymous` and the generic `oauth` component for now
+    either.
   - The sign-in methods, which the app wires up: `anonymous` (not exported
     for now), `username-password`, `email-password`, `username-passkey`, `oauth`
     (only its shared React client is exported for now; the API for custom

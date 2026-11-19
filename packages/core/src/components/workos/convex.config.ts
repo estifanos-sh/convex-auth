@@ -5,9 +5,9 @@ import { v } from "convex/values";
  * The WorkOS component, for enterprise SSO and SCIM directory sync through
  * WorkOS. It serves the SSO callback, keeps a copy of the environment's
  * organizations, organization domains, SSO connections, directories,
- * directory users and directory groups, and generates
- * Admin Portal links. Install it once, with the `httpPrefix` its routes are
- * served under, and bind the environment's client ID and API key:
+ * directory users and directory groups, and generates Admin Portal links.
+ * Install it once, with the `httpPrefix` its routes are served under, and
+ * bind the environment's client ID and API key:
  *
  * ```ts
  * app.use(workos, {
@@ -21,10 +21,10 @@ import { v } from "convex/values";
  *
  * WorkOS authenticates the code exchange and every API call with the
  * environment's API key, which is why it is bound as `CLIENT_SECRET`. The
- * component also serves a webhook at `<httpPrefix>/webhook` that starts a
- * directory sync as soon as WorkOS has a change. `webhook.register` creates
- * that endpoint at WorkOS and keeps its signing secret, so there is no
- * webhook secret to bind.
+ * component also serves a webhook at `<httpPrefix>/webhook` that applies each
+ * change WorkOS delivers to the copy. `webhook.register` creates that
+ * endpoint at WorkOS and keeps its signing secret, so there is no webhook
+ * secret to bind.
  */
 const component = defineComponent("authWorkos", {
   env: {

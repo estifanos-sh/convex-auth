@@ -6,11 +6,11 @@
  *
  * A reconcile that starts at time T stamps every row it lists with T. Each
  * page is fetched in an action and written in one mutation. Once every
- * listing is done, each row older than T is read again by id, and removed only if WorkOS
- * answers 404, so a reconcile that overlaps another, or a webhook delivery,
- * never removes what WorkOS still has. A run hands over to a fresh action
- * before an action's time limit, and tries the same step again after
- * WorkOS's `Retry-After` when WorkOS sends one.
+ * listing is done, each row older than T is read again by id, and removed
+ * only if WorkOS answers 404, so a reconcile that overlaps another, or a
+ * webhook delivery, never removes what WorkOS still has. A run hands over to
+ * a fresh action before an action's time limit, and tries the same step again
+ * after WorkOS's `Retry-After` when WorkOS sends one.
  *
  * @module
  */

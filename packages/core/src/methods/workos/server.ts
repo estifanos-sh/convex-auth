@@ -112,7 +112,7 @@ export function normalizeWorkosProfile(
  * organization's active connection, or uses the one given.
  */
 export const vWorkosRouting = {
-  /** A WorkOS organization id (`org_...`), e.g. from `organizationDomains.get`. */
+  /** A WorkOS organization id (`org_...`), as `organizationDomains.get` has. */
   organizationId: v.optional(v.string()),
   /** A WorkOS connection id (`conn_...`). */
   connectionId: v.optional(v.string()),

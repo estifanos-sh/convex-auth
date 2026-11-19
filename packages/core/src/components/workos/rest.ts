@@ -31,7 +31,7 @@ export type WorkosReply = { body: unknown; date: number };
 
 /**
  * The error code of a refusal, and nothing else: an error body can carry the
- * user's email, and this ends up in logs and in the sync's state row.
+ * user's email, and this ends up in logs.
  */
 function refusalCode(bodyText: string): string {
   try {
