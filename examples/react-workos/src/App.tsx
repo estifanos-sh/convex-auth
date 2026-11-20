@@ -1,24 +1,31 @@
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { useConvex, useConvexAuth, useQuery } from "convex/react";
 import { ConvexError } from "convex/values";
 import { useAuthActions } from "@convex-dev/auth/react";
-import {
-  useOauth,
-  useSignInWithWorkos,
-} from "@estifanos-sh/convex-workos/react";
+import { useProvisionedSignInWithWorkos } from "@estifanos-sh/convex-workos/react";
 import { api } from "../convex/_generated/api";
 
 /**
  * A failure to start comes back from the sign-in call, and a failure after the
- * redirect back shows up in `useOauth`'s `flowError`. Each is handled with an
- * exhaustive switch on its code.
+ * redirect back shows up in the hook's `flowError`. Each is handled with an
+ * exhaustive switch on its code. While the server waits for the directory
+ * sync to provision a new user, the hook holds the sign-in's ticket, and the
+ * page finishes it every two seconds until the session arrives.
  */
 function SignedOut(): ReactNode {
-  const { signIn } = useSignInWithWorkos(api.auth);
+  const { signIn, finish, flowError, deferredTicket } =
+    useProvisionedSignInWithWorkos(api.auth);
   const convex = useConvex();
   const [email, setEmail] = useState("");
-  const { flowError } = useOauth();
   const [startError, setStartError] = useState<string | null>(null);
+  useEffect(() => {
+    if (deferredTicket === null) return;
+    const timer = setInterval(() => void finish(deferredTicket), 2000);
+    return () => clearInterval(timer);
+  }, [deferredTicket, finish]);
+  if (deferredTicket !== null) {
+    return <p>Setting up your account…</p>;
+  }
   return (
     <>
       <h1>Sign in</h1>

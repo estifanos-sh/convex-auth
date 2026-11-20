@@ -5,13 +5,15 @@ import { setupWorkos } from "@estifanos-sh/convex-workos/server";
 const auth = setupConvexAuth({ component: components.auth });
 export const { signOut, refreshSession, isAuthenticated } = auth;
 
-export const { startSignInWithWorkos, completeSignInWithWorkos } = setupWorkos(
-  auth,
-  {
-    component: components.authWorkos,
-    allowedRedirectOrigins: ["http://localhost:5173"],
-  },
-).attachUserCallbacks({
+export const {
+  startSignInWithWorkos,
+  completeSignInWithWorkos,
+  finishSignInWithWorkos,
+} = setupWorkos(auth, {
+  component: components.authWorkos,
+  allowedRedirectOrigins: ["http://localhost:5173"],
+}).attachProvisionedUserCallbacks({
   createUser: internal.users.createUser,
   onSignIn: internal.users.onSignIn,
+  provision: internal.users.provision,
 });

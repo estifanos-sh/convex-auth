@@ -92,6 +92,10 @@ user typed, look its domain up with the component's `organizationDomains.get`
 query, which returns the organization that verified the domain and its
 active connection:
 
+The example's `provision` holds a new user's first sign-in until the copy of
+the organization's directory holds them, so this page also finishes a
+deferred sign-in:
+
 ```tsx file="examples/react-workos/src/App.tsx" title="src/App.tsx"
 
 ```
@@ -103,6 +107,60 @@ providers refuse to sign in inside an embedded web view.
 </Step>
 
 </StepByStep>
+
+## Deferred provisioning
+
+An app that provisions its users asynchronously, through a workflow, a queue
+or a directory sync, can't create the user inside the sign-in's transaction.
+It attaches its callbacks with `attachProvisionedUserCallbacks`, which takes
+a `provision` callback besides `createUser`. For an account with no user yet, `provision` runs first and answers `{ ready: true }` to create the
+user now with `createUser`, or `{ defer: true }` to wait. It runs in the
+sign-in's transaction, so it can file its provisioning work there. With
+`attachUserCallbacks`, sign-in works as described above.
+
+```ts
+export const provision = internalMutation({
+  args: vWorkosProvisionArgs({}),
+  returns: vWorkosProvision,
+  handler: async (ctx, { profile }) => {
+    const user = await ctx.db
+      .query("users")
+      .withIndex("workosId", (q) => q.eq("workosId", profile.id))
+      .unique();
+    if (user !== null) return { ready: true as const };
+    await ctx.scheduler.runAfter(0, internal.users.importWorkos, {
+      workosId: profile.id,
+    });
+    return { defer: true as const };
+  },
+});
+```
+
+`createUser` then returns the id of the user the import made.
+
+On `defer`, `completeSignInWithWorkos` mints no session: it keeps the
+verified profile and the host args under a single-use ticket and returns
+`{ status: "deferred", ticket }`. `finishSignInWithWorkos({ ticket })` asks
+`provision` again with what it kept. On `ready`, it signs the user up through
+`createUser` and spends the ticket; while `provision` still defers, it returns
+the same ticket. `provision` runs again on each finish, so the work it files
+must be idempotent. A ticket lives as long as an authorization request, ten
+minutes from the sign-in; a spent or expired one returns `INVALID_CODE`.
+
+The client registers the WorkOS package's own `workos()` in place of
+`oauth()`, since both would claim the callback's code, and signs in with
+`useProvisionedSignInWithWorkos`. Its `deferredTicket` holds the ticket of a
+deferred sign-in, and `finish(ticket)` finishes it, as the example's sign-in
+page above does every two seconds until the user exists:
+
+```tsx file="examples/react-workos/src/main.tsx" title="src/main.tsx"
+
+```
+
+Deferred provisioning runs on the SPA session model only, not yet under the
+SSR auth proxy: the proxy forwards only a session or an error, so its
+`signIn` allowlist refuses the completion and the finish of a host that
+provisions users, at compile time.
 
 ## Directory Sync (SCIM)
 

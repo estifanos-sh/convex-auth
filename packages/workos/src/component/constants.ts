@@ -24,3 +24,10 @@ export const USER_INFO_ENDPOINTS = {
 
 /** The provider's name, for the accounts and the error messages. */
 export const PROVIDER_NAME = "workos";
+
+/**
+ * The `stateHash` of a deferred sign-in's ticket. No sha256 hex digest equals
+ * it, so the kit's redemption, which hashes the state the caller presents,
+ * can never claim a deferred ticket, and finishing claims only deferred ones.
+ */
+export const DEFERRED_STATE_HASH = "deferred";

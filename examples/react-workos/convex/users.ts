@@ -1,15 +1,47 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
 import {
   vWorkosAccount,
+  vWorkosProvision,
+  vWorkosProvisionArgs,
   type WorkosDirectoryUser,
 } from "@estifanos-sh/convex-workos/server";
 import { ConvexError, v } from "convex/values";
-import { components } from "./_generated/api";
+import { components, internal } from "./_generated/api";
 import { internalMutation, type MutationCtx, query } from "./_generated/server";
 
 const vMethod = v.object({
   name: v.literal("workos"),
   profile: vWorkosAccount({}),
+});
+
+/**
+ * Hold a new account's first sign-in until the copy of its organization's
+ * directory holds the user, so the app knows the user's directory entry from
+ * the start. Until then it rings a sync and defers; an organization with no
+ * directory is ready at once.
+ */
+export const provision = internalMutation({
+  args: vWorkosProvisionArgs({}),
+  returns: vWorkosProvision,
+  handler: async (ctx, { profile }) => {
+    const organizationId = profile.organization_id;
+    if (organizationId === undefined) return { ready: true as const };
+    const directories = await ctx.runQuery(
+      components.authWorkos.directories.list,
+      { organizationId },
+    );
+    if (directories.length === 0) return { ready: true as const };
+    const entries = await ctx.runQuery(
+      components.authWorkos.directoryUsers.list,
+      {
+        filter: { organization: organizationId, idpId: profile.idp_id },
+        paginationOpts: { numItems: 1, cursor: null },
+      },
+    );
+    if (entries.page.length > 0) return { ready: true as const };
+    await ctx.scheduler.runAfter(0, internal.workos.sync, {});
+    return { defer: true as const };
+  },
 });
 
 /** Create the user row for a new SSO account and return its id. */

@@ -5,12 +5,26 @@
  *
  * @module
  */
-import { mutationGeneric, type RegisteredMutation } from "convex/server";
-import { type ObjectType, type PropertyValidators, v } from "convex/values";
+import {
+  type FunctionReference_future,
+  type GenericDataModel,
+  type GenericMutationCtx,
+  mutationGeneric,
+  type RegisteredMutation,
+} from "convex/server";
+import {
+  convexToJson,
+  jsonToConvex,
+  type ObjectType,
+  type PropertyValidators,
+  v,
+} from "convex/values";
 import type { AuthCore } from "@convex-dev/auth/server";
 import { sha256Hex } from "@convex-dev/auth/lib/crypto";
 import { CALLBACK_PATH } from "@convex-dev/auth/lib/oauth/constants";
 import {
+  decryptTicketPayload,
+  encryptTicketPayload,
   generateRandomToken,
   sha256Base64Url,
 } from "@convex-dev/auth/lib/oauth/crypto";
@@ -21,13 +35,17 @@ import {
   type TicketPayload,
   validateAllowedRedirectOrigins,
 } from "@convex-dev/auth/lib/oauth/redemption";
-import type {
-  BoundAuthHelpers,
-  UserCallbacks,
+import {
+  type BoundAuthHelpers,
+  type ConvexAuthCtx,
+  type UserCallbacks,
+  vSignInComplete,
+  vSignInError,
 } from "@convex-dev/auth/lib/types";
 import type { ComponentApi } from "./component/_generated/component.ts";
 import {
   AUTHORIZATION_ENDPOINT,
+  DEFERRED_STATE_HASH,
   PROVIDER_NAME,
 } from "./component/constants.ts";
 import { decode } from "./component/decode.ts";
@@ -66,8 +84,11 @@ const METHOD_NAME = "workos";
 /** The args of the method's own start; the kit's redemption names its own. */
 const START_ARGS = { redirectTo: v.string() };
 
+/** The args of the completion of a host that provisions users. */
+const COMPLETE_ARGS = { code: v.string(), state: v.string() };
+
 /** The args of the method's own functions, which host args may not reuse. */
-const OWN_ARGS = ["redirectTo", "code", "state"];
+const OWN_ARGS = [...Object.keys(START_ARGS), ...Object.keys(COMPLETE_ARGS)];
 
 /**
  * Validators of the args a host app passes to every call of the method's
@@ -96,6 +117,110 @@ export type WorkosAccount<Host extends HostArgs = NoHostArgs> = Profile & {
 export function vWorkosAccount<Host extends HostArgs>(host: Host) {
   return v.object({ ...vProfile.fields, host: v.object(host) });
 }
+
+/**
+ * What the app's `provision` answers for an account with no user yet:
+ * `ready` to create the user now with `createUser`, or `defer` while the app
+ * provisions it asynchronously.
+ */
+export type WorkosProvision = { ready: true } | { defer: true };
+
+/**
+ * The validator of {@link WorkosProvision}, for the `returns` of the app's
+ * `provision`:
+ *
+ * ```ts
+ * export const provisionWorkos = internalMutation({
+ *   args: vWorkosProvisionArgs({}),
+ *   returns: vWorkosProvision,
+ *   handler: async (ctx, { profile }) => {
+ *     const user = await ctx.db
+ *       .query("users")
+ *       .withIndex("workosId", (q) => q.eq("workosId", profile.id))
+ *       .unique();
+ *     if (user !== null) return { ready: true as const };
+ *     await ctx.scheduler.runAfter(0, internal.users.importWorkos, {
+ *       workosId: profile.id,
+ *     });
+ *     return { defer: true as const };
+ *   },
+ * });
+ * ```
+ */
+export const vWorkosProvision = v.union(
+  v.object({ ready: v.literal(true) }),
+  v.object({ defer: v.literal(true) }),
+);
+
+/**
+ * The args validators of the app's `provision`: WorkOS's SSO profile and the
+ * host args of the call that completed the sign-in. Pass the same host args
+ * as to `setupWorkos`, or `{}` for none.
+ */
+export function vWorkosProvisionArgs<Host extends HostArgs>(host: Host) {
+  return { profile: vProfile, host: v.object(host) };
+}
+
+/**
+ * The app's `provision`, an internal mutation. It runs, in the transaction
+ * of the call, before `createUser` for an account with no user yet, on the
+ * completion and on each finish of a sign-in it deferred. Since it runs
+ * again on each finish, the work it files must be idempotent.
+ */
+export type ProvisionFn<Host extends HostArgs = NoHostArgs> =
+  FunctionReference_future<
+    "mutation",
+    "internal",
+    { profile: Profile; host: ObjectType<Host> },
+    WorkosProvision
+  >;
+
+/**
+ * The user callbacks of an app that provisions its users: the core's
+ * `createUser` and `onSignIn`, and `provision`.
+ */
+export type ProvisionedUserCallbacks<
+  UsersTable extends string = string,
+  Host extends HostArgs = NoHostArgs,
+> = UserCallbacks<typeof METHOD_NAME, WorkosAccount<Host>, UsersTable> & {
+  provision: ProvisionFn<Host>;
+};
+
+/**
+ * A sign-in the app deferred: the identity is verified, the app is still
+ * provisioning its user, and `ticket` finishes it. Only the WorkOS client
+ * handles it: the SSR proxy forwards only the shared sign-in envelope, so its
+ * `signIn` allowlist refuses a function that can return this.
+ */
+export type WorkosDeferred = { status: "deferred"; ticket: string };
+
+/**
+ * What the completion and the finish of a host that provisions users
+ * return: the session, the ticket of a sign-in the app deferred, or
+ * `INVALID_CODE` for a code or ticket that is unknown, spent or expired.
+ */
+export type WorkosSignInResult = CompleteSignInResult | WorkosDeferred;
+
+const vWorkosSignInResult = v.union(
+  vSignInComplete,
+  vSignInError(v.object({ error: v.literal("INVALID_CODE") })),
+  v.object({ status: v.literal("deferred"), ticket: v.string() }),
+);
+
+const INVALID_CODE = {
+  status: "error",
+  userError: { error: "INVALID_CODE" },
+} as const;
+
+/** What a deferred sign-in keeps, encrypted under its ticket. */
+function vDeferredAccount<Host extends HostArgs>(host: Host) {
+  return v.object(vWorkosProvisionArgs(host));
+}
+
+/** What the ticket of a code redemption holds: WorkOS's profile response. */
+const vTicketProfile = v.object({
+  userInfoResponses: v.object({ profile: vProfile }),
+});
 
 /** App-defined config for setting up the `workos` method. */
 export type WorkosOptions<Host extends HostArgs = NoHostArgs> = {
@@ -140,6 +265,36 @@ export type WorkosFunctions<Host extends HostArgs = NoHostArgs> = {
   >;
 };
 
+/**
+ * The functions of the method for a host that provisions users, for the app
+ * to export. Its client is `workos()` from the package's `react` entry.
+ */
+export type ProvisionedWorkosFunctions<Host extends HostArgs = NoHostArgs> = {
+  /** Start an SSO sign-in to the route `redirectTo` carries (see `addRoute`). */
+  startSignInWithWorkos: WorkosFunctions<Host>["startSignInWithWorkos"];
+  /**
+   * Redeem the one-time code the callback redirected back with. For an
+   * account with no user yet, it asks `provision` first, and when that
+   * defers, it mints no session and returns the ticket of the deferred
+   * sign-in.
+   */
+  completeSignInWithWorkos: RegisteredMutation<
+    "public",
+    { code: string; state: string } & ObjectType<Host>,
+    Promise<WorkosSignInResult>
+  >;
+  /**
+   * Redeem the ticket of a deferred sign-in. It asks `provision` again with
+   * the profile and host args the deferring completion kept, and while that
+   * still defers, returns the same ticket.
+   */
+  finishSignInWithWorkos: RegisteredMutation<
+    "public",
+    { ticket: string },
+    Promise<WorkosSignInResult>
+  >;
+};
+
 /** What the callback fetched with the access token. */
 type WorkosPayload = TicketPayload<{ profile?: unknown }>;
 
@@ -168,6 +323,11 @@ type WorkosPayload = TicketPayload<{ profile?: unknown }>;
  *
  * It uses WorkOS's SSO API, not AuthKit: WorkOS creates no users and no
  * sessions of its own, and the session is Convex Auth's.
+ *
+ * An app that provisions its users asynchronously, through a workflow or a
+ * queue, attaches its callbacks with `attachProvisionedUserCallbacks`, with a
+ * `provision` (see {@link vWorkosProvision}), and its client registers
+ * `workos()` in place of `oauth()`.
  */
 export function setupWorkos<
   UsersTable extends string,
@@ -184,6 +344,78 @@ export function setupWorkos<
   const { component, callbackUrl } = options;
   const host = hostArgs(options.args);
 
+  /** Bind the method to the core with the app's callbacks, and build its start. */
+  function bind(
+    callbacks: UserCallbacks<
+      typeof METHOD_NAME,
+      WorkosAccount<Host>,
+      UsersTable
+    >,
+  ) {
+    const { authMutation } = core.bindMethod({
+      name: METHOD_NAME,
+      createUser: callbacks.createUser,
+      onSignIn: callbacks.onSignIn,
+    });
+
+    // The kit's `buildStartSignIn` takes no authorize parameters, and
+    // WorkOS's route is one, so this start is WorkOS's own. The route rides
+    // on `redirectTo` (see `routing.ts`), so it takes the same arguments as
+    // every other method's start, and the host args.
+    const startSignInWithWorkos = mutationGeneric({
+      args: { ...host, ...START_ARGS },
+      returns: v.object({ redirect: v.string(), state: v.string() }),
+      handler: async (ctx, args) => {
+        const redirectTo = parseUrl(pick(START_ARGS, args).redirectTo);
+        if (redirectTo === null) {
+          throw new Error("redirectTo must be an absolute URL");
+        }
+        const route = authorizationParams(takeRoute(redirectTo));
+        if (!allowedOrigins().includes(redirectTo.origin)) {
+          throw new Error(
+            `redirectTo origin "${redirectTo.origin}" is not in allowedRedirectOrigins`,
+          );
+        }
+        const state = generateRandomToken();
+        const codeVerifier = generateRandomToken();
+        const request = await ctx.runMutation(
+          component.provider._internal_dangerous_createAuthorizationRequest,
+          {
+            stateHash: await sha256Hex(state),
+            redirectTo: redirectTo.toString(),
+            codeVerifier,
+            callbackUrl: callbackUrl?.(),
+          },
+        );
+        if (
+          callbackUrl === undefined &&
+          new URL(request.callbackUrl).pathname === CALLBACK_PATH
+        ) {
+          throw new Error(
+            `The WorkOS component is not served under an httpPrefix, so ` +
+              `its callback URL would be ${request.callbackUrl}, which ` +
+              `returns 404. In convex/convex.config.ts, install it with ` +
+              `\`app.use(workos, { httpPrefix: "/workos", ... })\`.`,
+          );
+        }
+        const url = new URL(AUTHORIZATION_ENDPOINT);
+        for (const [key, value] of Object.entries({
+          ...route,
+          response_type: "code",
+          client_id: request.clientId,
+          redirect_uri: request.callbackUrl,
+          state,
+          code_challenge: await sha256Base64Url(codeVerifier),
+          code_challenge_method: "S256",
+        })) {
+          url.searchParams.set(key, value);
+        }
+        return { redirect: url.toString(), state };
+      },
+    });
+    return { authMutation, startSignInWithWorkos };
+  }
+
   return {
     /**
      * Supply the app's user callbacks (see `UserCallbacks` for how their
@@ -196,11 +428,7 @@ export function setupWorkos<
         UsersTable
       >,
     ): WorkosFunctions<Host> {
-      const { authMutation } = core.bindMethod({
-        name: METHOD_NAME,
-        createUser: callbacks.createUser,
-        onSignIn: callbacks.onSignIn,
-      });
+      const { authMutation, startSignInWithWorkos } = bind(callbacks);
 
       // The kit's redemption maps the ticket to WorkOS's profile and takes
       // only its own args. This builder adds the host args to the mutation
@@ -219,62 +447,6 @@ export function setupWorkos<
               pick(fn.args, args),
             ),
         });
-
-      // The kit's `buildStartSignIn` takes no authorize parameters, and
-      // WorkOS's route is one, so this start is WorkOS's own. The route rides
-      // on `redirectTo` (see `routing.ts`), so it takes the same arguments as
-      // every other method's start, and the host args.
-      const startSignInWithWorkos = mutationGeneric({
-        args: { ...host, ...START_ARGS },
-        returns: v.object({ redirect: v.string(), state: v.string() }),
-        handler: async (ctx, args) => {
-          const redirectTo = parseUrl(pick(START_ARGS, args).redirectTo);
-          if (redirectTo === null) {
-            throw new Error("redirectTo must be an absolute URL");
-          }
-          const route = authorizationParams(takeRoute(redirectTo));
-          if (!allowedOrigins().includes(redirectTo.origin)) {
-            throw new Error(
-              `redirectTo origin "${redirectTo.origin}" is not in allowedRedirectOrigins`,
-            );
-          }
-          const state = generateRandomToken();
-          const codeVerifier = generateRandomToken();
-          const request = await ctx.runMutation(
-            component.provider._internal_dangerous_createAuthorizationRequest,
-            {
-              stateHash: await sha256Hex(state),
-              redirectTo: redirectTo.toString(),
-              codeVerifier,
-              callbackUrl: callbackUrl?.(),
-            },
-          );
-          if (
-            callbackUrl === undefined &&
-            new URL(request.callbackUrl).pathname === CALLBACK_PATH
-          ) {
-            throw new Error(
-              `The WorkOS component is not served under an httpPrefix, so ` +
-                `its callback URL would be ${request.callbackUrl}, which ` +
-                `returns 404. In convex/convex.config.ts, install it with ` +
-                `\`app.use(workos, { httpPrefix: "/workos", ... })\`.`,
-            );
-          }
-          const url = new URL(AUTHORIZATION_ENDPOINT);
-          for (const [key, value] of Object.entries({
-            ...route,
-            response_type: "code",
-            client_id: request.clientId,
-            redirect_uri: request.callbackUrl,
-            state,
-            code_challenge: await sha256Base64Url(codeVerifier),
-            code_challenge_method: "S256",
-          })) {
-            url.searchParams.set(key, value);
-          }
-          return { redirect: url.toString(), state };
-        },
-      });
 
       const completeSignInWithWorkos = buildCompleteSignIn<
         Profile,
@@ -297,6 +469,147 @@ export function setupWorkos<
       });
 
       return { startSignInWithWorkos, completeSignInWithWorkos };
+    },
+
+    /**
+     * Supply the app's user callbacks with `provision`, for an app that
+     * provisions its users asynchronously, and get the functions of this
+     * method to export, `finishSignInWithWorkos` among them. A sign-in of an
+     * account with no user yet waits while `provision` defers.
+     */
+    attachProvisionedUserCallbacks(
+      callbacks: ProvisionedUserCallbacks<UsersTable, Host>,
+    ): ProvisionedWorkosFunctions<Host> {
+      const { authMutation, startSignInWithWorkos } = bind(callbacks);
+      const { provision } = callbacks;
+
+      type Ctx = GenericMutationCtx<GenericDataModel> &
+        ConvexAuthCtx<WorkosAccount<Host>>;
+      type Kept = { profile: Profile; host: ObjectType<Host> };
+
+      /**
+       * Sign the account's user in, or, for an account with no user yet, ask
+       * `provision`: on `ready`, create the user through the core's sign-up,
+       * and on `defer`, return the ticket `deferral` gives.
+       */
+      const settle = async (
+        ctx: Ctx,
+        kept: Kept,
+        deferral: () => Promise<string>,
+      ): Promise<WorkosSignInResult> => {
+        const account: WorkosAccount<Host> = {
+          ...kept.profile,
+          host: kept.host,
+        };
+        const userId = await ctx.runQuery(
+          component.provider.getUserIdByAccount,
+          {
+            providerAccountId: account.id,
+          },
+        );
+        if (userId !== null) {
+          const tokens = await ctx.convexAuth.completeSignIn({
+            userId,
+            profile: account,
+            authenticatedBy: component,
+          });
+          return { status: "complete", tokens };
+        }
+        if ("defer" in (await ctx.runMutation(provision, kept))) {
+          return { status: "deferred", ticket: await deferral() };
+        }
+        const tokens = await ctx.convexAuth.completeSignUp({
+          profile: account,
+          authenticatedBy: component,
+        });
+        await ctx.runMutation(
+          component.provider._internal_dangerous_createAccount,
+          { providerAccountId: account.id, userId: tokens.userId },
+        );
+        return { status: "complete", tokens };
+      };
+
+      const completeSignInWithWorkos = authMutation({
+        args: { ...host, ...COMPLETE_ARGS },
+        returns: vWorkosSignInResult,
+        handler: async (ctx, args): Promise<WorkosSignInResult> => {
+          const { code, state } = pick(COMPLETE_ARGS, args);
+          const claimed = await ctx.runMutation(
+            component.provider.claimTicket,
+            {
+              ticketCodeHash: await sha256Hex(code),
+              stateHash: await sha256Hex(state),
+            },
+          );
+          if (claimed === null) {
+            return INVALID_CODE;
+          }
+          const payload = await decryptTicketPayload(
+            code,
+            claimed.encryptedPayload,
+          );
+          const kept: Kept = {
+            profile: decode(vTicketProfile, JSON.parse(payload))
+              .userInfoResponses.profile,
+            host: pick(host, args),
+          };
+          return await settle(ctx, kept, async () => {
+            const ticket = generateRandomToken();
+            await ctx.runMutation(
+              component.provider._internal_dangerous_deferTicket,
+              {
+                ticketCodeHash: await sha256Hex(ticket),
+                encryptedPayload: await encryptTicketPayload(
+                  ticket,
+                  JSON.stringify(convexToJson(kept)),
+                ),
+              },
+            );
+            return ticket;
+          });
+        },
+      });
+
+      const finishSignInWithWorkos = authMutation({
+        args: { ticket: v.string() },
+        returns: vWorkosSignInResult,
+        handler: async (ctx, { ticket }): Promise<WorkosSignInResult> => {
+          const ticketCodeHash = await sha256Hex(ticket);
+          const deferred = await ctx.runQuery(
+            component.provider.deferredTicket,
+            {
+              ticketCodeHash,
+            },
+          );
+          if (deferred === null) {
+            return INVALID_CODE;
+          }
+          const payload = await decryptTicketPayload(
+            ticket,
+            deferred.encryptedPayload,
+          );
+          const kept = decode(
+            vDeferredAccount(host),
+            jsonToConvex(JSON.parse(payload)),
+          );
+          const result = await settle(ctx, kept, async () => ticket);
+          if (result.status === "complete") {
+            // The read above saw the ticket in this transaction, so the claim
+            // finds it and spends it.
+            await ctx.runMutation(component.provider.claimTicket, {
+              ticketCodeHash,
+              stateHash: DEFERRED_STATE_HASH,
+            });
+          }
+          return result;
+        },
+      });
+
+      return {
+        startSignInWithWorkos,
+        completeSignInWithWorkos,
+        finishSignInWithWorkos,
+      };
     },
   };
 }

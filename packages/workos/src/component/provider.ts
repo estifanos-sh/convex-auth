@@ -12,6 +12,7 @@ import {
   insertAuthorizationRequest,
 } from "@convex-dev/auth/lib/oauth/dbHelpers";
 import { buildProviderFunctions } from "@convex-dev/auth/lib/oauth/providerFunctions";
+import { DEFERRED_STATE_HASH } from "./constants.ts";
 
 export const {
   claimAuthorizationRequest,
@@ -69,5 +70,53 @@ export const _internal_dangerous_createAuthorizationRequest = mutation({
       expiresAt: Date.now() + AUTHORIZATION_REQUEST_TTL_MS,
     });
     return { clientId: env.CLIENT_ID, callbackUrl };
+  },
+});
+
+/**
+ * Keep a verified identity under the ticket of a sign-in the app deferred.
+ * It lives as long as an authorization request, since the sign-in is still
+ * in flight, and the kit's claim spends it once. `finishSignInWithWorkos`
+ * redeems it with `deferredTicket` and `claimTicket`, under
+ * `DEFERRED_STATE_HASH`.
+ *
+ * DANGER: the ticket redeems to whatever identity `encryptedPayload` holds.
+ * Only `completeSignInWithWorkos` calls it, after it verified the identity.
+ */
+export const _internal_dangerous_deferTicket = mutation({
+  args: { ticketCodeHash: v.string(), encryptedPayload: v.string() },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await ctx.db.insert("tickets", {
+      ...args,
+      stateHash: DEFERRED_STATE_HASH,
+      expiresAt: Date.now() + AUTHORIZATION_REQUEST_TTL_MS,
+    });
+    return null;
+  },
+});
+
+/**
+ * The identity a live deferred ticket holds, without spending it, or `null`
+ * for an unknown, spent or expired one.
+ */
+export const deferredTicket = query({
+  args: { ticketCodeHash: v.string() },
+  returns: v.union(v.null(), v.object({ encryptedPayload: v.string() })),
+  handler: async (ctx, args) => {
+    const ticket = await ctx.db
+      .query("tickets")
+      .withIndex("ticketCodeHash", (q) =>
+        q.eq("ticketCodeHash", args.ticketCodeHash),
+      )
+      .unique();
+    if (
+      ticket === null ||
+      ticket.stateHash !== DEFERRED_STATE_HASH ||
+      ticket.expiresAt < Date.now()
+    ) {
+      return null;
+    }
+    return { encryptedPayload: ticket.encryptedPayload };
   },
 });

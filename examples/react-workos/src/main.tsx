@@ -2,6 +2,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { ConvexReactClient } from "convex/react";
 import { ConvexAuthProvider } from "@convex-dev/auth/react";
+import { workos } from "@estifanos-sh/convex-workos/react";
 import { api } from "../convex/_generated/api";
 import App from "./App";
 import "./index.css";
@@ -22,6 +23,7 @@ createRoot(rootElement).render(
         signOut: api.auth.signOut,
         isAuthenticated: api.auth.isAuthenticated,
       }}
+      ambientSignIns={[workos()]}
     >
       <App />
     </ConvexAuthProvider>

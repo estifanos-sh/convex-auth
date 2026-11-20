@@ -703,10 +703,24 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         { callbackUrl: string; clientId: string },
         Name
       >;
+      _internal_dangerous_deferTicket: FunctionReference<
+        "mutation",
+        "internal",
+        { encryptedPayload: string; ticketCodeHash: string },
+        null,
+        Name
+      >;
       claimTicket: FunctionReference<
         "mutation",
         "internal",
         { stateHash: string; ticketCodeHash: string },
+        null | { encryptedPayload: string },
+        Name
+      >;
+      deferredTicket: FunctionReference<
+        "query",
+        "internal",
+        { ticketCodeHash: string },
         null | { encryptedPayload: string },
         Name
       >;

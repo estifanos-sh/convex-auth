@@ -1,6 +1,6 @@
 {
   "name": "@convex-dev/auth",
-  "version": "2.1.0-workos.0",
+  "version": "2.1.0-workos.1",
   "description": "Authentication for Convex",
   "keywords": [
     "auth",
@@ -63,6 +63,13 @@
       },
       "types": "./dist/react/index.d.ts",
       "default": "./dist/react/index.js"
+    },
+    "./react/methods": {
+      "convex-auth-internal-types": {
+        "types": "./dist/internal-types/react/methods.d.ts"
+      },
+      "types": "./dist/react/methods.d.ts",
+      "default": "./dist/react/methods.js"
     },
     "./browser": {
       "convex-auth-internal-types": {
