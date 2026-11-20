@@ -20,8 +20,9 @@ export const route = query({
 });
 
 /**
- * Bring the component's copy of WorkOS up to date, a page at a time. Two
- * syncs at once land each page once.
+ * Bring the component's copy of WorkOS up to date, a page at a time. Of two
+ * syncs at once, each page lands once: the other sync's copy of it says it
+ * did not land.
  */
 export const sync = internalAction({
   args: {},
@@ -44,10 +45,11 @@ export const land = internalMutation({
   args: { until: v.string() },
   returns: v.null(),
   handler: async (ctx, { until }) => {
-    const changes = await ctx.runMutation(components.authWorkos.events.land, {
+    const page = await ctx.runMutation(components.authWorkos.events.land, {
       until,
     });
-    for (const change of changes) {
+    if (!page.landed) return null;
+    for (const change of page.changes) {
       switch (change.event) {
         case "dsync.user.updated":
           if (change.data.state !== "active") {

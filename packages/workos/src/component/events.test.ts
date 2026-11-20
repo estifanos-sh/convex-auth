@@ -20,6 +20,7 @@ import {
   stubFetch,
   USER,
 } from "./workos.fixture.ts";
+import { conflicts, footprint } from "./occ.fixture.ts";
 
 type T = ReturnType<typeof setup>;
 
@@ -70,11 +71,10 @@ async function sync(t: T): Promise<WorkosEvent[]> {
   for (;;) {
     const pulled = await t.action(api.events.pull, {});
     if (pulled === null) return changes;
-    changes.push(
-      ...(await t.mutation(api.events.land, {
-        until: pulled.until as Id<"pages">,
-      })),
-    );
+    const landed = await t.mutation(api.events.land, {
+      until: pulled.until as Id<"pages">,
+    });
+    if (landed.landed) changes.push(...landed.changes);
   }
 }
 
@@ -147,70 +147,132 @@ describe("the copy", () => {
     ).toEqual(["org_1", "org_2"]);
   });
 
-  test("two pulls from one cursor stage one page, which lands once", async () => {
+  test("of two pulls from one cursor, one lands, and the other says it did not", async () => {
     const t = setup();
     workos();
     const first = await t.action(api.events.pull, {});
     const second = await t.action(api.events.pull, {});
-    expect(second).toEqual(first);
-    const until = first?.until as Id<"pages">;
-    expect(await t.mutation(api.events.land, { until })).toHaveLength(1);
-    expect(await t.mutation(api.events.land, { until })).toEqual([]);
+    expect(second?.after).toBe(first?.after);
+    const landed = await t.mutation(api.events.land, {
+      until: first?.until as Id<"pages">,
+    });
+    expect(landed).toMatchObject({ landed: true, changes: [{}] });
+    expect(
+      await t.mutation(api.events.land, {
+        until: second?.until as Id<"pages">,
+      }),
+    ).toEqual({ landed: false });
+    expect(
+      await t.mutation(api.events.land, { until: first?.until as Id<"pages"> }),
+    ).toEqual({ landed: false });
+    expect(
+      await t.run(async (ctx) => await ctx.db.query("pages").collect()),
+    ).toEqual([]);
   });
 
-  test("a pull a landing overtook stages nothing", async () => {
+  test("an empty page lands, and says so", async () => {
     const t = setup();
     workos();
-    const pulled = await t.action(api.events.pull, {});
-    await t.mutation(api.events.land, { until: pulled?.until as Id<"pages"> });
-    expect(
-      await t.mutation(internal.events.stage, {
-        after: null,
-        position: { step: "connections", since: new Date().toISOString() },
-        events: [],
-      }),
-    ).toBeNull();
+    await sync(t);
+    const at = new Date().toISOString();
+    const until = await t.mutation(internal.events.stage, {
+      after: await t.run(
+        async (ctx) => (await ctx.db.query("cursor").first())?.page ?? null,
+      ),
+      position: { step: "since", at },
+      events: [],
+    });
+    expect(await t.mutation(api.events.land, { until })).toEqual({
+      landed: true,
+      changes: [],
+    });
+  });
+
+  test("a pull during a landing conflicts with it in neither direction", async () => {
+    const t = setup();
+    workos([event("dsync.user.updated", { ...USER, state: "inactive" })]);
+    const first = await t.action(api.events.pull, {});
+    await t.mutation(api.events.land, { until: first?.until as Id<"pages"> });
+    const next = await t.action(api.events.pull, {});
+    const landing = await footprint(
+      async () =>
+        await t.mutation(api.events.land, {
+          until: next?.until as Id<"pages">,
+        }),
+    );
+    expect(landing.result.landed).toBe(true);
+    for (const after of [next?.after ?? null, next?.until ?? null]) {
+      const staging = await footprint(
+        async () =>
+          await t.mutation(internal.events.stage, {
+            after: after as Id<"pages"> | null,
+            position: { step: "since", at: new Date().toISOString() },
+            events: [],
+          }),
+      );
+      expect(staging.reads).toEqual([]);
+      expect(conflicts(landing, staging) + conflicts(staging, landing)).toBe(0);
+    }
+  });
+
+  test("two landings conflict on the cursor, which orders them", async () => {
+    const t = setup();
+    workos();
+    const first = await t.action(api.events.pull, {});
+    const second = await t.action(api.events.pull, {});
+    const one = await footprint(
+      async () =>
+        await t.mutation(api.events.land, {
+          until: first?.until as Id<"pages">,
+        }),
+    );
+    const other = await footprint(
+      async () =>
+        await t.mutation(api.events.land, {
+          until: second?.until as Id<"pages">,
+        }),
+    );
+    expect(conflicts(other, one)).toBeGreaterThan(0);
+  });
+
+  test("a page staged an hour before a landing, and never landed, is deleted", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      const t = setup();
+      workos();
+      const lost = await t.action(api.events.pull, {});
+      vi.setSystemTime(Date.now() + 2 * 60 * 60 * 1000);
+      const pulled = await t.action(api.events.pull, {});
+      await t.mutation(api.events.land, {
+        until: pulled?.until as Id<"pages">,
+      });
+      expect(
+        await t.run(
+          async (ctx) => await ctx.db.get("pages", lost?.until as Id<"pages">),
+        ),
+      ).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   test("a page that no longer follows the cursor is dropped", async () => {
     const t = setup();
     workos();
     const pulled = await t.action(api.events.pull, {});
-    const until = pulled?.until as Id<"pages">;
-    await t.mutation(api.events.reset, {});
-    await t.run(async (ctx) => {
-      await ctx.db.insert("pages", {
-        state: "landed",
-        after: null,
-        position: { step: "since", at: new Date().toISOString() },
-      });
-    });
+    for (;;) {
+      const { done } = await t.mutation(api.events.reset, {});
+      if (done) break;
+    }
     const stale = await t.mutation(internal.events.stage, {
-      after: null,
+      after: pulled?.until as Id<"pages">,
       position: { step: "connections", since: new Date().toISOString() },
       events: [],
     });
-    expect(stale).toBeNull();
-    await t.run(async (ctx) => {
-      await ctx.db.insert("pages", {
-        state: "staged",
-        after: until,
-        position: { step: "connections", since: new Date().toISOString() },
-        events: [],
-      });
+    expect(await t.mutation(api.events.land, { until: stale })).toEqual({
+      landed: false,
     });
-    const orphan = await t.run(
-      async (ctx) =>
-        await ctx.db
-          .query("pages")
-          .withIndex("state_after", (q) =>
-            q.eq("state", "staged").eq("after", until),
-          )
-          .unique(),
-    );
-    const id = orphan?._id as Id<"pages">;
-    expect(await t.mutation(api.events.land, { until: id })).toEqual([]);
-    expect(await t.run(async (ctx) => await ctx.db.get("pages", id))).toBe(
+    expect(await t.run(async (ctx) => await ctx.db.get("pages", stale))).toBe(
       null,
     );
   });
@@ -276,11 +338,13 @@ describe("the copy", () => {
     const calls = workos();
     const at = new Date(Date.now() - 40 * 24 * 60 * 60 * 1000).toISOString();
     await t.run(async (ctx) => {
-      await ctx.db.insert("pages", {
-        state: "landed",
+      const page = await ctx.db.insert("pages", {
         after: null,
         position: { step: "since", at },
+        events: [],
       });
+      await ctx.db.delete("pages", page);
+      await ctx.db.insert("cursor", { page, position: { step: "since", at } });
     });
     const pulled = await t.action(api.events.pull, {});
     expect(pulled).not.toBeNull();
@@ -301,9 +365,9 @@ describe("the copy", () => {
       json(list([event("dsync.user.updated", { ...USER, state: "archived" })])),
     );
     await t.run(async (ctx) => {
-      const landed = await ctx.db.query("pages").first();
-      if (landed !== null) {
-        await ctx.db.patch("pages", landed._id, {
+      const cursor = await ctx.db.query("cursor").first();
+      if (cursor !== null) {
+        await ctx.db.patch("cursor", cursor._id, {
           position: { step: "after", id: "event_0" },
         });
       }
@@ -312,11 +376,7 @@ describe("the copy", () => {
       /\.data\.state/,
     );
     const staged = await t.run(
-      async (ctx) =>
-        await ctx.db
-          .query("pages")
-          .withIndex("state_after", (q) => q.eq("state", "staged"))
-          .collect(),
+      async (ctx) => await ctx.db.query("pages").collect(),
     );
     expect(staged).toEqual([]);
   });

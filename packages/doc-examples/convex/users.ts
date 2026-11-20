@@ -2,7 +2,7 @@ import { v } from "convex/values";
 import { vAppleProfile } from "@convex-dev/auth/methods/apple/server";
 import { vGithubProfile } from "@convex-dev/auth/methods/github/server";
 import { vGoogleProfile } from "@convex-dev/auth/methods/google/server";
-import { vWorkosProfile } from "@estifanos-sh/convex-workos/server";
+import { vWorkosAccount } from "@estifanos-sh/convex-workos/server";
 import { internalMutation } from "./_generated/server";
 
 // The `createUser` callback of each sign-in method of `auth.ts`.
@@ -77,7 +77,7 @@ export const createUserWorkos = internalMutation({
   args: {
     method: v.object({
       name: v.literal("workos"),
-      profile: vWorkosProfile,
+      profile: vWorkosAccount({}),
     }),
   },
   returns: v.id("users"),

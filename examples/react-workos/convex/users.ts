@@ -1,6 +1,6 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
 import {
-  vWorkosProfile,
+  vWorkosAccount,
   type WorkosDirectoryUser,
 } from "@estifanos-sh/convex-workos/server";
 import { ConvexError, v } from "convex/values";
@@ -9,7 +9,7 @@ import { internalMutation, type MutationCtx, query } from "./_generated/server";
 
 const vMethod = v.object({
   name: v.literal("workos"),
-  profile: vWorkosProfile,
+  profile: vWorkosAccount({}),
 });
 
 /** Create the user row for a new SSO account and return its id. */

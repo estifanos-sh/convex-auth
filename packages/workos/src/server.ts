@@ -6,7 +6,7 @@
  * @module
  */
 import { mutationGeneric, type RegisteredMutation } from "convex/server";
-import { v } from "convex/values";
+import { type ObjectType, type PropertyValidators, v } from "convex/values";
 import type { AuthCore } from "@convex-dev/auth/server";
 import { sha256Hex } from "@convex-dev/auth/lib/crypto";
 import { CALLBACK_PATH } from "@convex-dev/auth/lib/oauth/constants";
@@ -21,7 +21,10 @@ import {
   type TicketPayload,
   validateAllowedRedirectOrigins,
 } from "@convex-dev/auth/lib/oauth/redemption";
-import type { UserCallbacks } from "@convex-dev/auth/lib/types";
+import type {
+  BoundAuthHelpers,
+  UserCallbacks,
+} from "@convex-dev/auth/lib/types";
 import type { ComponentApi } from "./component/_generated/component.ts";
 import {
   AUTHORIZATION_ENDPOINT,
@@ -41,6 +44,7 @@ export {
   vIntent as vWorkosIntent,
   vOrganization as vWorkosOrganization,
   vOrganizationDomain as vWorkosOrganizationDomain,
+  vLanded as vWorkosLanded,
   vProfile as vWorkosProfile,
   vWorkosEvent,
   type Connection as WorkosConnection,
@@ -50,6 +54,7 @@ export {
   type Intent as WorkosIntent,
   type Organization as WorkosOrganization,
   type OrganizationDomain as WorkosOrganizationDomain,
+  type Landed as WorkosLanded,
   type Profile as WorkosProfile,
   type WorkosEvent,
   type WorkosEvents,
@@ -58,8 +63,42 @@ export {
 /** The name of this sign-in method. The app's user callbacks get it as `method.name`. */
 const METHOD_NAME = "workos";
 
+/** The args of the method's own start; the kit's redemption names its own. */
+const START_ARGS = { redirectTo: v.string() };
+
+/** The args of the method's own functions, which host args may not reuse. */
+const OWN_ARGS = ["redirectTo", "code", "state"];
+
+/**
+ * Validators of the args a host app passes to every call of the method's
+ * functions, besides their own, e.g. `{ siteId: v.id("sites") }`. They may
+ * not reuse the name of an arg of the method's own.
+ */
+export type HostArgs = PropertyValidators;
+
+/** No host args. */
+export type NoHostArgs = Record<never, never>;
+
+/**
+ * The account profile the app's `createUser` and `onSignIn` get: WorkOS's
+ * SSO profile, and in `host` the host args of the call that completed the
+ * sign-in.
+ */
+export type WorkosAccount<Host extends HostArgs = NoHostArgs> = Profile & {
+  host: ObjectType<Host>;
+};
+
+/**
+ * The validator of {@link WorkosAccount}, for the `method.profile` arg of the
+ * app's `createUser` and `onSignIn`. Pass the same host args as to
+ * `setupWorkos`, or `{}` for none.
+ */
+export function vWorkosAccount<Host extends HostArgs>(host: Host) {
+  return v.object({ ...vProfile.fields, host: v.object(host) });
+}
+
 /** App-defined config for setting up the `workos` method. */
-export type WorkosOptions = {
+export type WorkosOptions<Host extends HostArgs = NoHostArgs> = {
   /** The WorkOS component instance, e.g. `components.authWorkos`. */
   component: ComponentApi;
   /**
@@ -76,20 +115,27 @@ export type WorkosOptions = {
    * WorkOS environment. Defaults to `<CONVEX_SITE_URL><httpPrefix>/callback`.
    */
   callbackUrl?: () => string;
+  /**
+   * Args the host app passes to every call of the method's functions, such
+   * as the site a sign-in is for. Both functions validate them, and the
+   * call that completes the sign-in hands them to `createUser` and
+   * `onSignIn` as `method.profile.host`.
+   */
+  args?: Host;
 };
 
 /** The functions of the method, for the app to export. */
-export type WorkosFunctions = {
+export type WorkosFunctions<Host extends HostArgs = NoHostArgs> = {
   /** Start an SSO sign-in to the route `redirectTo` carries (see `addRoute`). */
   startSignInWithWorkos: RegisteredMutation<
     "public",
-    { redirectTo: string },
+    { redirectTo: string } & ObjectType<Host>,
     Promise<{ redirect: string; state: string }>
   >;
   /** Redeem the one-time code the callback redirected back with. */
   completeSignInWithWorkos: RegisteredMutation<
     "public",
-    { code: string; state: string },
+    { code: string; state: string } & ObjectType<Host>,
     Promise<CompleteSignInResult>
   >;
 };
@@ -123,10 +169,10 @@ type WorkosPayload = TicketPayload<{ profile?: unknown }>;
  * It uses WorkOS's SSO API, not AuthKit: WorkOS creates no users and no
  * sessions of its own, and the session is Convex Auth's.
  */
-export function setupWorkos<UsersTable extends string>(
-  core: AuthCore<UsersTable>,
-  options: WorkosOptions,
-) {
+export function setupWorkos<
+  UsersTable extends string,
+  Host extends HostArgs = NoHostArgs,
+>(core: AuthCore<UsersTable>, options: WorkosOptions<Host>) {
   const origins = options.allowedRedirectOrigins;
   let allowedOrigins: () => string[];
   if (typeof origins === "function") {
@@ -136,6 +182,7 @@ export function setupWorkos<UsersTable extends string>(
     allowedOrigins = () => validated;
   }
   const { component, callbackUrl } = options;
+  const host = hostArgs(options.args);
 
   return {
     /**
@@ -143,23 +190,45 @@ export function setupWorkos<UsersTable extends string>(
      * args must be declared) and get the functions of this method to export.
      */
     attachUserCallbacks(
-      callbacks: UserCallbacks<typeof METHOD_NAME, Profile, UsersTable>,
-    ): WorkosFunctions {
+      callbacks: UserCallbacks<
+        typeof METHOD_NAME,
+        WorkosAccount<Host>,
+        UsersTable
+      >,
+    ): WorkosFunctions<Host> {
       const { authMutation } = core.bindMethod({
         name: METHOD_NAME,
         createUser: callbacks.createUser,
         onSignIn: callbacks.onSignIn,
       });
 
+      // The kit's redemption maps the ticket to WorkOS's profile and takes
+      // only its own args. This builder adds the host args to the mutation
+      // it builds, and the host values to the profile it hands the core. The
+      // core does not export the builder's type, so `bindMethod` names it.
+      type KitBuilder = ReturnType<
+        typeof core.bindMethod<typeof METHOD_NAME, Profile>
+      >["authMutation"];
+      const redeem: KitBuilder = (fn) =>
+        authMutation({
+          args: { ...host, ...fn.args },
+          returns: fn.returns,
+          handler: (ctx, args) =>
+            fn.handler(
+              { ...ctx, convexAuth: hosted(ctx.convexAuth, pick(host, args)) },
+              pick(fn.args, args),
+            ),
+        });
+
       // The kit's `buildStartSignIn` takes no authorize parameters, and
       // WorkOS's route is one, so this start is WorkOS's own. The route rides
       // on `redirectTo` (see `routing.ts`), so it takes the same arguments as
-      // every other method's start.
+      // every other method's start, and the host args.
       const startSignInWithWorkos = mutationGeneric({
-        args: { redirectTo: v.string() },
+        args: { ...host, ...START_ARGS },
         returns: v.object({ redirect: v.string(), state: v.string() }),
         handler: async (ctx, args) => {
-          const redirectTo = parseUrl(args.redirectTo);
+          const redirectTo = parseUrl(pick(START_ARGS, args).redirectTo);
           if (redirectTo === null) {
             throw new Error("redirectTo must be an absolute URL");
           }
@@ -212,7 +281,7 @@ export function setupWorkos<UsersTable extends string>(
         WorkosPayload
       >({
         providerName: PROVIDER_NAME,
-        authMutation,
+        authMutation: redeem,
         component,
         claimTicket: (ctx, args) =>
           ctx.runMutation(component.provider.claimTicket, args),
@@ -229,5 +298,51 @@ export function setupWorkos<UsersTable extends string>(
 
       return { startSignInWithWorkos, completeSignInWithWorkos };
     },
+  };
+}
+
+function hostArgs<Host extends HostArgs>(args: Host | undefined): Host {
+  const host = args ?? ({} as Host);
+  for (const name of OWN_ARGS) {
+    if (name in host) {
+      throw new Error(`The host arg "${name}" is an arg of the method's own`);
+    }
+  }
+  return host;
+}
+
+/** The args `validators` names, among a call's validated args. */
+function pick<Validators extends PropertyValidators>(
+  validators: Validators,
+  args: Record<string, unknown>,
+): ObjectType<Validators> {
+  const values: Record<string, unknown> = {};
+  for (const name of Object.keys(validators)) {
+    if (args[name] !== undefined) values[name] = args[name];
+  }
+  // Convex validated `args` against these validators before the handler ran.
+  return values as ObjectType<Validators>;
+}
+
+/** The core's helpers over the account: WorkOS's profile and the host values. */
+function hosted<Host extends HostArgs>(
+  helpers: BoundAuthHelpers<WorkosAccount<Host>>,
+  values: ObjectType<Host>,
+): BoundAuthHelpers<Profile> {
+  const account = (profile: Profile): WorkosAccount<Host> => ({
+    ...profile,
+    host: values,
+  });
+  return {
+    ...helpers,
+    completeSignUp: async (args) =>
+      await helpers.completeSignUp({ ...args, profile: account(args.profile) }),
+    completeSignIn: async (args) =>
+      await helpers.completeSignIn({ ...args, profile: account(args.profile) }),
+    signUpWithoutSession: async (args) =>
+      await helpers.signUpWithoutSession({
+        ...args,
+        profile: account(args.profile),
+      }),
   };
 }

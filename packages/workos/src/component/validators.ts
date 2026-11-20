@@ -218,6 +218,13 @@ export const EVENTS: readonly WorkosEvent["event"][] = vWorkosEvent.members.map(
   (member) => member.fields.event.value,
 );
 
+/** What `events.land` did: applied the page, with its changes, or nothing. */
+export const vLanded = v.union(
+  v.object({ landed: v.literal(true), changes: v.array(vWorkosEvent) }),
+  v.object({ landed: v.literal(false) }),
+);
+export type Landed = Infer<typeof vLanded>;
+
 /** One page of a WorkOS list endpoint. */
 export function vList<Item extends Validator<unknown, "required", string>>(
   item: Item,

@@ -57,11 +57,22 @@ npx convex env set AUTH_WORKOS_API_KEY sk_...
 
 ```
 
-The profile passed to `createUser` and `onSignIn` is `vWorkosProfile`,
-WorkOS's own profile with its own field names: the profile `id` (the account
-id), `organization_id`, `connection_id`, `idp_id` and `email`. The email is asserted by the customer's identity
-provider and not verified by WorkOS, so don't use it to link to an existing
-account unless its domain is one the organization verified.
+The profile passed to `createUser` and `onSignIn` is `vWorkosAccount(...)`:
+WorkOS's own SSO profile with its own field names (the profile `id`, which
+is the account id, `organization_id`, `connection_id`, `idp_id` and
+`email`), and in `host` the host args of the call. The email is asserted by
+the customer's identity provider and not verified by WorkOS, so don't use it
+to link to an existing account unless its domain is one the organization
+verified.
+
+If your client passes extra args to every call, such as the site a sign-in
+is for, declare them as `args: { siteId: v.id("sites") }`. Both
+`startSignInWithWorkos` and `completeSignInWithWorkos` then take and
+validate them, and the callbacks get the values of the completing call as
+`method.profile.host`; declare the profile as
+`vWorkosAccount({ siteId: v.id("sites") })`, and as `vWorkosAccount({})`
+without host args. The React hook calls the functions with their own args
+only, so a client that passes host args calls them itself.
 
 To serve the callback from your app's own domain (e.g. a proxy that forwards
 `https://app.example.com/workos/*` to the deployment's site URL), pass
@@ -105,17 +116,19 @@ The copy is kept from WorkOS's
 [Events API](https://workos.com/docs/events), which lists every change in
 order. `events.pull` (an action) fetches the next page, decodes it and stages
 it in the component; `events.land` (a mutation) applies that page to the copy
-and returns its changes, each a WorkOS event as a typed union on `event`. Run
-`land` in your own mutation, so your data changes in the same transaction as
-the copy, and the two never disagree. The first pulls fill an empty copy: they
-list everything WorkOS holds, as `*.created` and `*.activated` changes, then
-follow the events from when the fill started. A deleted directory's users and
+and returns `{ landed: true, changes }`, each change a WorkOS event as a
+typed union on `event`, or `{ landed: false }` for a page another sync
+landed first. Run `land` in your own mutation, so your data changes in the
+same transaction as the copy, and the two never disagree. The first pulls
+fill an empty copy: they list everything WorkOS holds, as `*.created` and
+`*.activated` changes, then follow the events from when the fill started. A deleted directory's users and
 groups come back as `dsync.user.deleted` and `dsync.group.deleted` changes,
 which WorkOS sends no event for.
 
-Two pulls from the same place stage the same page, and a page lands once, so
-two syncs at once are harmless. The example signs a user out everywhere when
-the directory deletes or deactivates them:
+Two pulls from the same place stage a page each, and only one of them lands,
+so two syncs at once are harmless. A pull never conflicts with a landing: it
+only inserts its page, which nothing a landing reads covers. The example
+signs a user out everywhere when the directory deletes or deactivates them:
 
 ```ts file="examples/react-workos/convex/workos.ts" title="convex/workos.ts"
 

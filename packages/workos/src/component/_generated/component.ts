@@ -220,349 +220,353 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         "mutation",
         "internal",
         { until: string },
-        Array<
-          | {
-              data: {
-                domains: Array<{
-                  domain: string;
-                  id: string;
-                  object: "organization_domain";
-                  state?: "pending" | "verified" | "unverified" | "failed";
-                }>;
-                external_id?: string;
-                id: string;
-                name: string;
-                object: "organization";
-              };
-              event: "organization.created";
-              id?: string;
-            }
-          | {
-              data: {
-                domains: Array<{
-                  domain: string;
-                  id: string;
-                  object: "organization_domain";
-                  state?: "pending" | "verified" | "unverified" | "failed";
-                }>;
-                external_id?: string;
-                id: string;
-                name: string;
-                object: "organization";
-              };
-              event: "organization.updated";
-              id?: string;
-            }
-          | {
-              data: {
-                domains: Array<{
-                  domain: string;
-                  id: string;
-                  object: "organization_domain";
-                  state?: "pending" | "verified" | "unverified" | "failed";
-                }>;
-                external_id?: string;
-                id: string;
-                name: string;
-                object: "organization";
-              };
-              event: "organization.deleted";
-              id?: string;
-            }
-          | {
-              data: {
-                domain: string;
-                id: string;
-                object: "organization_domain";
-                organization_id: string;
-                state: "pending" | "verified" | "unverified" | "failed";
-              };
-              event: "organization_domain.created";
-              id?: string;
-            }
-          | {
-              data: {
-                domain: string;
-                id: string;
-                object: "organization_domain";
-                organization_id: string;
-                state: "pending" | "verified" | "unverified" | "failed";
-              };
-              event: "organization_domain.updated";
-              id?: string;
-            }
-          | {
-              data: {
-                domain: string;
-                id: string;
-                object: "organization_domain";
-                organization_id: string;
-                state: "pending" | "verified" | "unverified" | "failed";
-              };
-              event: "organization_domain.verified";
-              id?: string;
-            }
-          | {
-              data: {
-                organization_domain: {
-                  domain: string;
-                  id: string;
-                  object: "organization_domain";
-                  organization_id: string;
-                  state: "pending" | "verified" | "unverified" | "failed";
-                };
-                reason: string;
-              };
-              event: "organization_domain.verification_failed";
-              id?: string;
-            }
-          | {
-              data: {
-                domain: string;
-                id: string;
-                object: "organization_domain";
-                organization_id: string;
-                state: "pending" | "verified" | "unverified" | "failed";
-              };
-              event: "organization_domain.deleted";
-              id?: string;
-            }
-          | {
-              data: {
-                connection_type: string;
-                id: string;
-                name: string;
-                object: "connection";
-                organization_id?: string;
-                state:
-                  | "requires_type"
-                  | "draft"
-                  | "active"
-                  | "validating"
-                  | "inactive"
-                  | "deleting";
-              };
-              event: "connection.activated";
-              id?: string;
-            }
-          | {
-              data: {
-                connection_type: string;
-                id: string;
-                name: string;
-                object: "connection";
-                organization_id?: string;
-                state:
-                  | "requires_type"
-                  | "draft"
-                  | "active"
-                  | "validating"
-                  | "inactive"
-                  | "deleting";
-              };
-              event: "connection.deactivated";
-              id?: string;
-            }
-          | {
-              data: {
-                connection_type: string;
-                id: string;
-                name: string;
-                object: "connection";
-                organization_id?: string;
-                state:
-                  | "requires_type"
-                  | "draft"
-                  | "active"
-                  | "validating"
-                  | "inactive"
-                  | "deleting";
-              };
-              event: "connection.deleted";
-              id?: string;
-            }
-          | {
-              data: {
-                id: string;
-                name: string;
-                object: "directory";
-                organization_id?: string;
-                state:
-                  | "linked"
-                  | "unlinked"
-                  | "active"
-                  | "inactive"
-                  | "validating"
-                  | "invalid_credentials"
-                  | "deleting";
-                type: string;
-              };
-              event: "dsync.activated";
-              id?: string;
-            }
-          | {
-              data: {
-                id: string;
-                name: string;
-                object: "directory";
-                organization_id?: string;
-                state:
-                  | "linked"
-                  | "unlinked"
-                  | "active"
-                  | "inactive"
-                  | "validating"
-                  | "invalid_credentials"
-                  | "deleting";
-                type: string;
-              };
-              event: "dsync.deleted";
-              id?: string;
-            }
-          | {
-              data: {
-                directory_id: string;
-                email?: string;
-                first_name?: string;
-                id: string;
-                idp_id: string;
-                last_name?: string;
-                object: "directory_user";
-                organization_id?: string;
-                role?: { slug: string };
-                roles?: Array<{ slug: string }>;
-                state: "active" | "suspended" | "inactive";
-              };
-              event: "dsync.user.created";
-              id?: string;
-            }
-          | {
-              data: {
-                directory_id: string;
-                email?: string;
-                first_name?: string;
-                id: string;
-                idp_id: string;
-                last_name?: string;
-                object: "directory_user";
-                organization_id?: string;
-                role?: { slug: string };
-                roles?: Array<{ slug: string }>;
-                state: "active" | "suspended" | "inactive";
-              };
-              event: "dsync.user.updated";
-              id?: string;
-            }
-          | {
-              data: {
-                directory_id: string;
-                email?: string;
-                first_name?: string;
-                id: string;
-                idp_id: string;
-                last_name?: string;
-                object: "directory_user";
-                organization_id?: string;
-                role?: { slug: string };
-                roles?: Array<{ slug: string }>;
-                state: "active" | "suspended" | "inactive";
-              };
-              event: "dsync.user.deleted";
-              id?: string;
-            }
-          | {
-              data: {
-                directory_id: string;
-                id: string;
-                idp_id: string;
-                name: string;
-                object: "directory_group";
-                organization_id?: string;
-              };
-              event: "dsync.group.created";
-              id?: string;
-            }
-          | {
-              data: {
-                directory_id: string;
-                id: string;
-                idp_id: string;
-                name: string;
-                object: "directory_group";
-                organization_id?: string;
-              };
-              event: "dsync.group.updated";
-              id?: string;
-            }
-          | {
-              data: {
-                directory_id: string;
-                id: string;
-                idp_id: string;
-                name: string;
-                object: "directory_group";
-                organization_id?: string;
-              };
-              event: "dsync.group.deleted";
-              id?: string;
-            }
-          | {
-              data: {
-                directory_id: string;
-                group: {
-                  directory_id: string;
-                  id: string;
-                  idp_id: string;
-                  name: string;
-                  object: "directory_group";
-                  organization_id?: string;
-                };
-                user: {
-                  directory_id: string;
-                  email?: string;
-                  first_name?: string;
-                  id: string;
-                  idp_id: string;
-                  last_name?: string;
-                  object: "directory_user";
-                  organization_id?: string;
-                  role?: { slug: string };
-                  roles?: Array<{ slug: string }>;
-                  state: "active" | "suspended" | "inactive";
-                };
-              };
-              event: "dsync.group.user_added";
-              id?: string;
-            }
-          | {
-              data: {
-                directory_id: string;
-                group: {
-                  directory_id: string;
-                  id: string;
-                  idp_id: string;
-                  name: string;
-                  object: "directory_group";
-                  organization_id?: string;
-                };
-                user: {
-                  directory_id: string;
-                  email?: string;
-                  first_name?: string;
-                  id: string;
-                  idp_id: string;
-                  last_name?: string;
-                  object: "directory_user";
-                  organization_id?: string;
-                  role?: { slug: string };
-                  roles?: Array<{ slug: string }>;
-                  state: "active" | "suspended" | "inactive";
-                };
-              };
-              event: "dsync.group.user_removed";
-              id?: string;
-            }
-        >,
+        | {
+            changes: Array<
+              | {
+                  data: {
+                    domains: Array<{
+                      domain: string;
+                      id: string;
+                      object: "organization_domain";
+                      state?: "pending" | "verified" | "unverified" | "failed";
+                    }>;
+                    external_id?: string;
+                    id: string;
+                    name: string;
+                    object: "organization";
+                  };
+                  event: "organization.created";
+                  id?: string;
+                }
+              | {
+                  data: {
+                    domains: Array<{
+                      domain: string;
+                      id: string;
+                      object: "organization_domain";
+                      state?: "pending" | "verified" | "unverified" | "failed";
+                    }>;
+                    external_id?: string;
+                    id: string;
+                    name: string;
+                    object: "organization";
+                  };
+                  event: "organization.updated";
+                  id?: string;
+                }
+              | {
+                  data: {
+                    domains: Array<{
+                      domain: string;
+                      id: string;
+                      object: "organization_domain";
+                      state?: "pending" | "verified" | "unverified" | "failed";
+                    }>;
+                    external_id?: string;
+                    id: string;
+                    name: string;
+                    object: "organization";
+                  };
+                  event: "organization.deleted";
+                  id?: string;
+                }
+              | {
+                  data: {
+                    domain: string;
+                    id: string;
+                    object: "organization_domain";
+                    organization_id: string;
+                    state: "pending" | "verified" | "unverified" | "failed";
+                  };
+                  event: "organization_domain.created";
+                  id?: string;
+                }
+              | {
+                  data: {
+                    domain: string;
+                    id: string;
+                    object: "organization_domain";
+                    organization_id: string;
+                    state: "pending" | "verified" | "unverified" | "failed";
+                  };
+                  event: "organization_domain.updated";
+                  id?: string;
+                }
+              | {
+                  data: {
+                    domain: string;
+                    id: string;
+                    object: "organization_domain";
+                    organization_id: string;
+                    state: "pending" | "verified" | "unverified" | "failed";
+                  };
+                  event: "organization_domain.verified";
+                  id?: string;
+                }
+              | {
+                  data: {
+                    organization_domain: {
+                      domain: string;
+                      id: string;
+                      object: "organization_domain";
+                      organization_id: string;
+                      state: "pending" | "verified" | "unverified" | "failed";
+                    };
+                    reason: string;
+                  };
+                  event: "organization_domain.verification_failed";
+                  id?: string;
+                }
+              | {
+                  data: {
+                    domain: string;
+                    id: string;
+                    object: "organization_domain";
+                    organization_id: string;
+                    state: "pending" | "verified" | "unverified" | "failed";
+                  };
+                  event: "organization_domain.deleted";
+                  id?: string;
+                }
+              | {
+                  data: {
+                    connection_type: string;
+                    id: string;
+                    name: string;
+                    object: "connection";
+                    organization_id?: string;
+                    state:
+                      | "requires_type"
+                      | "draft"
+                      | "active"
+                      | "validating"
+                      | "inactive"
+                      | "deleting";
+                  };
+                  event: "connection.activated";
+                  id?: string;
+                }
+              | {
+                  data: {
+                    connection_type: string;
+                    id: string;
+                    name: string;
+                    object: "connection";
+                    organization_id?: string;
+                    state:
+                      | "requires_type"
+                      | "draft"
+                      | "active"
+                      | "validating"
+                      | "inactive"
+                      | "deleting";
+                  };
+                  event: "connection.deactivated";
+                  id?: string;
+                }
+              | {
+                  data: {
+                    connection_type: string;
+                    id: string;
+                    name: string;
+                    object: "connection";
+                    organization_id?: string;
+                    state:
+                      | "requires_type"
+                      | "draft"
+                      | "active"
+                      | "validating"
+                      | "inactive"
+                      | "deleting";
+                  };
+                  event: "connection.deleted";
+                  id?: string;
+                }
+              | {
+                  data: {
+                    id: string;
+                    name: string;
+                    object: "directory";
+                    organization_id?: string;
+                    state:
+                      | "linked"
+                      | "unlinked"
+                      | "active"
+                      | "inactive"
+                      | "validating"
+                      | "invalid_credentials"
+                      | "deleting";
+                    type: string;
+                  };
+                  event: "dsync.activated";
+                  id?: string;
+                }
+              | {
+                  data: {
+                    id: string;
+                    name: string;
+                    object: "directory";
+                    organization_id?: string;
+                    state:
+                      | "linked"
+                      | "unlinked"
+                      | "active"
+                      | "inactive"
+                      | "validating"
+                      | "invalid_credentials"
+                      | "deleting";
+                    type: string;
+                  };
+                  event: "dsync.deleted";
+                  id?: string;
+                }
+              | {
+                  data: {
+                    directory_id: string;
+                    email?: string;
+                    first_name?: string;
+                    id: string;
+                    idp_id: string;
+                    last_name?: string;
+                    object: "directory_user";
+                    organization_id?: string;
+                    role?: { slug: string };
+                    roles?: Array<{ slug: string }>;
+                    state: "active" | "suspended" | "inactive";
+                  };
+                  event: "dsync.user.created";
+                  id?: string;
+                }
+              | {
+                  data: {
+                    directory_id: string;
+                    email?: string;
+                    first_name?: string;
+                    id: string;
+                    idp_id: string;
+                    last_name?: string;
+                    object: "directory_user";
+                    organization_id?: string;
+                    role?: { slug: string };
+                    roles?: Array<{ slug: string }>;
+                    state: "active" | "suspended" | "inactive";
+                  };
+                  event: "dsync.user.updated";
+                  id?: string;
+                }
+              | {
+                  data: {
+                    directory_id: string;
+                    email?: string;
+                    first_name?: string;
+                    id: string;
+                    idp_id: string;
+                    last_name?: string;
+                    object: "directory_user";
+                    organization_id?: string;
+                    role?: { slug: string };
+                    roles?: Array<{ slug: string }>;
+                    state: "active" | "suspended" | "inactive";
+                  };
+                  event: "dsync.user.deleted";
+                  id?: string;
+                }
+              | {
+                  data: {
+                    directory_id: string;
+                    id: string;
+                    idp_id: string;
+                    name: string;
+                    object: "directory_group";
+                    organization_id?: string;
+                  };
+                  event: "dsync.group.created";
+                  id?: string;
+                }
+              | {
+                  data: {
+                    directory_id: string;
+                    id: string;
+                    idp_id: string;
+                    name: string;
+                    object: "directory_group";
+                    organization_id?: string;
+                  };
+                  event: "dsync.group.updated";
+                  id?: string;
+                }
+              | {
+                  data: {
+                    directory_id: string;
+                    id: string;
+                    idp_id: string;
+                    name: string;
+                    object: "directory_group";
+                    organization_id?: string;
+                  };
+                  event: "dsync.group.deleted";
+                  id?: string;
+                }
+              | {
+                  data: {
+                    directory_id: string;
+                    group: {
+                      directory_id: string;
+                      id: string;
+                      idp_id: string;
+                      name: string;
+                      object: "directory_group";
+                      organization_id?: string;
+                    };
+                    user: {
+                      directory_id: string;
+                      email?: string;
+                      first_name?: string;
+                      id: string;
+                      idp_id: string;
+                      last_name?: string;
+                      object: "directory_user";
+                      organization_id?: string;
+                      role?: { slug: string };
+                      roles?: Array<{ slug: string }>;
+                      state: "active" | "suspended" | "inactive";
+                    };
+                  };
+                  event: "dsync.group.user_added";
+                  id?: string;
+                }
+              | {
+                  data: {
+                    directory_id: string;
+                    group: {
+                      directory_id: string;
+                      id: string;
+                      idp_id: string;
+                      name: string;
+                      object: "directory_group";
+                      organization_id?: string;
+                    };
+                    user: {
+                      directory_id: string;
+                      email?: string;
+                      first_name?: string;
+                      id: string;
+                      idp_id: string;
+                      last_name?: string;
+                      object: "directory_user";
+                      organization_id?: string;
+                      role?: { slug: string };
+                      roles?: Array<{ slug: string }>;
+                      state: "active" | "suspended" | "inactive";
+                    };
+                  };
+                  event: "dsync.group.user_removed";
+                  id?: string;
+                }
+            >;
+            landed: true;
+          }
+        | { landed: false },
         Name
       >;
       pull: FunctionReference<
