@@ -32,6 +32,7 @@
 "use client";
 
 import { getFunctionName } from "convex/server";
+import { convexToJson } from "convex/values";
 import { useMemo } from "react";
 import {
   type OauthCompleteResult,
@@ -44,9 +45,11 @@ import {
 import { useAmbientSignInValue } from "@convex-dev/auth/react/methods";
 import {
   currentHref,
+  type HostValues,
   type ProvisionedWorkosApi,
   type WorkosActions,
   type WorkosCompleteResult,
+  type WorkosHostArgs,
   WORKOS_KEYS,
   WORKOS_SETUP_ID,
 } from "./client.ts";
@@ -56,6 +59,7 @@ export {
   workos,
   type ProvisionedWorkosApi,
   type WorkosCompleteResult,
+  type WorkosHostArgs,
 } from "./client.ts";
 
 export { addRoute, type WorkosHints, type WorkosRoute } from "./routing.ts";
@@ -155,6 +159,10 @@ export type UseProvisionedSignInWithWorkosReturn = {
  * {@link workos} in `ConvexAuthProvider`'s `ambientSignIns` in place of
  * `oauth()`. It runs on the SPA session model only.
  *
+ * A host that declares host args in `setupWorkos` passes their values as
+ * `host`, and every call carries them: the start, the redemption of its code
+ * and the finish.
+ *
  * ```tsx
  * const { signIn, finish, deferredTicket } = useProvisionedSignInWithWorkos(
  *   api.provisioned,
@@ -166,8 +174,13 @@ export type UseProvisionedSignInWithWorkosReturn = {
  * if (deferredTicket !== null) await finish(deferredTicket);
  * ```
  */
-export function useProvisionedSignInWithWorkos(
-  api: ProvisionedWorkosApi,
+export function useProvisionedSignInWithWorkos<
+  Api extends ProvisionedWorkosApi,
+>(
+  api: Api,
+  ...[host]: Record<never, never> extends WorkosHostArgs<Api>
+    ? [host?: WorkosHostArgs<Api>]
+    : [host: WorkosHostArgs<Api>]
 ): UseProvisionedSignInWithWorkosReturn {
   const actions = useAmbientSignInValue<WorkosActions>(
     WORKOS_SETUP_ID,
@@ -181,13 +194,16 @@ export function useProvisionedSignInWithWorkos(
     WORKOS_SETUP_ID,
     WORKOS_KEYS.deferredTicket,
   );
+  const values: HostValues = host ?? {};
   // Generated api objects make a fresh reference on every property access,
-  // so the memo is keyed on the function paths.
-  const paths = [
+  // and host values are often a fresh literal on every render, so the memo
+  // is keyed on the function paths and the values' JSON.
+  const key = JSON.stringify([
     getFunctionName(api.startSignInWithWorkos),
     getFunctionName(api.completeSignInWithWorkos),
     getFunctionName(api.finishSignInWithWorkos),
-  ].join();
+    convexToJson(values),
+  ]);
   const bound = useMemo(() => {
     if (actions === undefined) {
       throw new Error(
@@ -196,8 +212,8 @@ export function useProvisionedSignInWithWorkos(
           "`ambientSignIns`, in place of oauth().",
       );
     }
-    return bind(actions, api);
-  }, [actions, paths]);
+    return bind(actions, api, values);
+  }, [actions, key]);
   return {
     ...bound,
     flowError: flowError ?? null,
@@ -209,6 +225,7 @@ export function useProvisionedSignInWithWorkos(
 function bind(
   actions: WorkosActions,
   api: ProvisionedWorkosApi,
+  host: HostValues,
 ): Pick<UseProvisionedSignInWithWorkosReturn, "signIn" | "finish"> {
   function signIn(
     options: SignInOptions & { code: string },
@@ -220,9 +237,9 @@ function bind(
     if (options.code !== undefined) {
       return actions.redeem(options.code);
     }
-    return actions.start(api, startTarget(options));
+    return actions.start(api, startTarget(options), host);
   }
-  return { signIn, finish: (ticket) => actions.finish(api, ticket) };
+  return { signIn, finish: (ticket) => actions.finish(api, ticket, host) };
 }
 
 /** Where a start returns to: `redirectTo`, routed (see `addRoute`). */

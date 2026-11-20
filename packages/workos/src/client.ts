@@ -12,10 +12,12 @@
  * @module
  */
 import {
+  type FunctionArgs,
   type FunctionReference,
   getFunctionName,
   makeFunctionReference,
 } from "convex/server";
+import { convexToJson, jsonToConvex, type Value } from "convex/values";
 import {
   OAUTH_CODE_PARAM,
   OAUTH_ERROR_PARAM,
@@ -50,6 +52,19 @@ export type ProvisionedWorkosApi = {
 };
 
 /**
+ * The host args a host's functions take besides their own, as declared in
+ * `setupWorkos`'s `args`: the args of its finish other than `ticket`.
+ */
+export type WorkosHostArgs<Api extends ProvisionedWorkosApi> = Omit<
+  FunctionArgs<Api["finishSignInWithWorkos"]>,
+  "ticket"
+> &
+  HostValues;
+
+/** The values of a host's host args, which every call carries. */
+export type HostValues = Record<string, Value>;
+
+/**
  * What redeeming a code, or finishing a deferred sign-in, resolves to: the
  * session was adopted, the app still provisions the user and `ticket`
  * finishes the sign-in later, or why it failed. It never rejects.
@@ -61,10 +76,14 @@ export type WorkosCompleteResult =
 
 /** The actions {@link workos} publishes for its hook to read. */
 export type WorkosActions = {
-  /** Start a flow that returns to `redirectTo`. */
+  /**
+   * Start a flow that returns to `redirectTo`. The flow keeps `host`, so the
+   * redemption carries it too.
+   */
   start: (
     api: ProvisionedWorkosApi,
     redirectTo: string,
+    host: HostValues,
   ) => Promise<OauthStartResult>;
   /** Redeem a callback `code` against the saved flow. */
   redeem: (code: string) => Promise<WorkosCompleteResult>;
@@ -72,6 +91,7 @@ export type WorkosActions = {
   finish: (
     api: ProvisionedWorkosApi,
     ticket: string,
+    host: HostValues,
   ) => Promise<WorkosCompleteResult>;
 };
 
@@ -162,7 +182,17 @@ export function workos(): AmbientSignInClient {
             typeof flow !== "object" ||
             flow === null ||
             !("state" in flow && typeof flow.state === "string") ||
-            !("complete" in flow && typeof flow.complete === "string")
+            !("complete" in flow && typeof flow.complete === "string") ||
+            !("host" in flow && typeof flow.host === "string")
+          ) {
+            return { status: "error", userError: { error: "INVALID_FLOW" } };
+          }
+          const host = jsonToConvex(JSON.parse(flow.host));
+          if (
+            typeof host !== "object" ||
+            host === null ||
+            Array.isArray(host) ||
+            host instanceof ArrayBuffer
           ) {
             return { status: "error", userError: { error: "INVALID_FLOW" } };
           }
@@ -172,7 +202,11 @@ export function workos(): AmbientSignInClient {
             WorkosSignInResult
           >(flow.complete);
           return await adopt(
-            await convex.mutation(complete, { code, state: flow.state }),
+            await convex.mutation(complete, {
+              ...host,
+              code,
+              state: flow.state,
+            }),
           );
         } catch (cause) {
           return {
@@ -182,18 +216,19 @@ export function workos(): AmbientSignInClient {
         }
       };
 
-      const start: WorkosActions["start"] = async (api, redirectTo) => {
+      const start: WorkosActions["start"] = async (api, redirectTo, host) => {
         setFlowError(null);
         try {
           const { redirect, state } = await convex.mutation(
             api.startSignInWithWorkos,
-            { redirectTo },
+            { ...host, redirectTo },
           );
           await storage.set(
             FLOW_KEY,
             JSON.stringify({
               state,
               complete: getFunctionName(api.completeSignInWithWorkos),
+              host: JSON.stringify(convexToJson(host)),
             }),
           );
           const url = new URL(redirect);
@@ -209,12 +244,15 @@ export function workos(): AmbientSignInClient {
         }
       };
 
-      const finish: WorkosActions["finish"] = async (api, ticket) => {
+      const finish: WorkosActions["finish"] = async (api, ticket, host) => {
         setFlowError(null);
         return await client.withSignInPending(async () => {
           try {
             return await adopt(
-              await convex.mutation(api.finishSignInWithWorkos, { ticket }),
+              await convex.mutation(api.finishSignInWithWorkos, {
+                ...host,
+                ticket,
+              }),
             );
           } catch (cause) {
             return {

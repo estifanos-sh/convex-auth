@@ -1,7 +1,6 @@
 /**
- * The one decoder of what WorkOS sends, and of what a deferred sign-in
- * keeps: a Convex validator walks the value, checks every field it names and
- * keeps only those. WorkOS adds fields over
+ * The one decoder of what WorkOS sends: a Convex validator walks the JSON,
+ * checks every field it names and keeps only those. WorkOS adds fields over
  * time, so unknown fields are dropped rather than refused, and it writes an
  * absent value as `null`, so `null` in an optional field is taken as absent.
  *
@@ -105,15 +104,12 @@ function walk(
     case "any":
       return value;
     case "int64":
-      if (typeof value !== "bigint") throw new DecodeError(path, "an int64");
-      return value;
     case "bytes":
-      if (!(value instanceof ArrayBuffer)) {
-        throw new DecodeError(path, "bytes");
-      }
-      return value;
     case "commitTs":
-      throw new DecodeError(path, "a commitTs, which no payload holds");
+      throw new DecodeError(
+        path,
+        `a ${validator.kind}, which JSON cannot hold`,
+      );
   }
 }
 

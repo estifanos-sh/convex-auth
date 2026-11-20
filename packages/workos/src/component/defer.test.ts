@@ -57,7 +57,9 @@ describe("deferred provisioning", () => {
     expect(app.signedUp).toEqual([]);
 
     app.answer = { ready: true };
-    expect(await t.mutation(testApp.finish, { ticket })).toMatchObject({
+    expect(
+      await t.mutation(testApp.finish, { ticket, siteId: "site_1" }),
+    ).toMatchObject({
       status: "complete",
       tokens: { userId: "user_1" },
     });
@@ -68,22 +70,47 @@ describe("deferred provisioning", () => {
   test("a finish before provisioning returns the same ticket", async () => {
     const t = setup();
     const ticket = await defer(t);
-    expect(await t.mutation(testApp.finish, { ticket })).toEqual({
+    expect(
+      await t.mutation(testApp.finish, { ticket, siteId: "site_1" }),
+    ).toEqual({
       status: "deferred",
       ticket,
     });
     app.answer = { ready: true };
-    expect(await t.mutation(testApp.finish, { ticket })).toMatchObject({
+    expect(
+      await t.mutation(testApp.finish, { ticket, siteId: "site_1" }),
+    ).toMatchObject({
       status: "complete",
     });
+  });
+
+  test("a finish carries its own host args to provision and sign-up", async () => {
+    const t = setup();
+    const ticket = await defer(t);
+    app.answer = { ready: true };
+    await expect(t.mutation(testApp.finish, { ticket })).rejects.toThrow(
+      /siteId/,
+    );
+    expect(
+      await t.mutation(testApp.finish, { ticket, siteId: "site_2" }),
+    ).toMatchObject({ status: "complete", tokens: { userId: "user_1" } });
+    expect(app.asked).toEqual([
+      asked,
+      { ...asked, host: { siteId: "site_2" } },
+    ]);
+    expect(app.signedUp).toEqual([
+      expect.objectContaining({ id: "prof_1", host: { siteId: "site_2" } }),
+    ]);
   });
 
   test("a ticket is spent once", async () => {
     const t = setup();
     const ticket = await defer(t);
     app.answer = { ready: true };
-    await t.mutation(testApp.finish, { ticket });
-    expect(await t.mutation(testApp.finish, { ticket })).toEqual(INVALID_CODE);
+    await t.mutation(testApp.finish, { ticket, siteId: "site_1" });
+    expect(
+      await t.mutation(testApp.finish, { ticket, siteId: "site_1" }),
+    ).toEqual(INVALID_CODE);
     expect(app.signedUp).toHaveLength(1);
   });
 
@@ -91,7 +118,7 @@ describe("deferred provisioning", () => {
     const t = setup();
     const ticket = await defer(t);
     app.answer = { ready: true };
-    await t.mutation(testApp.finish, { ticket });
+    await t.mutation(testApp.finish, { ticket, siteId: "site_1" });
     app.asked.length = 0;
     expect(
       await t.mutation(testApp.complete, {
@@ -121,6 +148,8 @@ describe("deferred provisioning", () => {
     const ticket = await defer(t);
     app.answer = { ready: true };
     vi.setSystemTime(Date.now() + AUTHORIZATION_REQUEST_TTL_MS + 1000);
-    expect(await t.mutation(testApp.finish, { ticket })).toEqual(INVALID_CODE);
+    expect(
+      await t.mutation(testApp.finish, { ticket, siteId: "site_1" }),
+    ).toEqual(INVALID_CODE);
   });
 });

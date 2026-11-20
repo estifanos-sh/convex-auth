@@ -66,13 +66,16 @@ to link to an existing account unless its domain is one the organization
 verified.
 
 If your client passes extra args to every call, such as the site a sign-in
-is for, declare them as `args: { siteId: v.id("sites") }`. Both
-`startSignInWithWorkos` and `completeSignInWithWorkos` then take and
-validate them, and the callbacks get the values of the completing call as
-`method.profile.host`; declare the profile as
+is for, declare them as `args: { siteId: v.id("sites") }`.
+`startSignInWithWorkos`, `completeSignInWithWorkos` and, with
+[deferred provisioning](#deferred-provisioning), `finishSignInWithWorkos`
+then take and validate them, and the callbacks get the values of the call
+that signs the user in as `method.profile.host`; declare the profile as
 `vWorkosAccount({ siteId: v.id("sites") })`, and as `vWorkosAccount({})`
-without host args. The React hook calls the functions with their own args
-only, so a client that passes host args calls them itself.
+without host args. `useSignInWithWorkos` calls the functions with their own
+args only, so a client that passes host args calls them itself;
+`useProvisionedSignInWithWorkos(api.auth, { siteId })` passes them to every
+call.
 
 To serve the callback from your app's own domain (e.g. a proxy that forwards
 `https://app.example.com/workos/*` to the deployment's site URL), pass
@@ -139,9 +142,10 @@ export const provision = internalMutation({
 `createUser` then returns the id of the user the import made.
 
 On `defer`, `completeSignInWithWorkos` mints no session: it keeps the
-verified profile and the host args under a single-use ticket and returns
-`{ status: "deferred", ticket }`. `finishSignInWithWorkos({ ticket })` asks
-`provision` again with what it kept. On `ready`, it signs the user up through
+verified profile under a single-use ticket and returns
+`{ status: "deferred", ticket }`. `finishSignInWithWorkos({ ticket })`, with
+the host args if you declared them, asks `provision` again with that profile
+and the finish's own host args. On `ready`, it signs the user up through
 `createUser` and spends the ticket; while `provision` still defers, it returns
 the same ticket. `provision` runs again on each finish, so the work it files
 must be idempotent. A ticket lives as long as an authorization request, ten

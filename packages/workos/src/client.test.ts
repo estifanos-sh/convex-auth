@@ -11,6 +11,7 @@ import { AuthClient, InMemoryStorage } from "@convex-dev/auth/browser";
 import type { AuthSignInApi } from "@convex-dev/auth/react/methods";
 import type { ExposedSignInFn } from "@convex-dev/auth/ssr";
 import {
+  type HostValues,
   type ProvisionedWorkosApi,
   workos,
   type WorkosActions,
@@ -42,8 +43,11 @@ const deferred = { status: "deferred", ticket: "ticket-1" };
  * from `answers`, keyed by function path, in order.
  */
 function setup(answers: Record<string, unknown[]>) {
+  const queues = new Map(
+    Object.entries(answers).map(([path, queue]) => [path, [...queue]]),
+  );
   const mutation = vi.fn(async (fn: never, _args: unknown) => {
-    const answer = answers[getFunctionName(fn)]?.shift();
+    const answer = queues.get(getFunctionName(fn))?.shift();
     if (answer === undefined) throw new Error("unexpected call");
     return answer;
   });
@@ -72,12 +76,12 @@ function setup(answers: Record<string, unknown[]>) {
 }
 
 /** Start a flow, as the page before the redirect does. */
-async function start(actions: WorkosActions) {
+async function start(actions: WorkosActions, host: HostValues = {}) {
   Object.defineProperty(window.navigator, "product", {
     value: "ReactNative",
     configurable: true,
   });
-  await actions.start(api, "https://app.example.com/after");
+  await actions.start(api, "https://app.example.com/after", host);
   delete (window.navigator as { product?: string }).product;
 }
 
@@ -117,13 +121,35 @@ describe("WorkOS client", () => {
       "auth:finishSignInWithWorkos": [deferred, complete],
     });
 
-    expect(await actions.finish(api, "ticket-1")).toEqual(deferred);
+    expect(await actions.finish(api, "ticket-1", {})).toEqual(deferred);
     expect(deferredTicket()).toBe("ticket-1");
-    expect(await actions.finish(api, "ticket-1")).toEqual({
+    expect(await actions.finish(api, "ticket-1", {})).toEqual({
       status: "complete",
     });
     expect(client.getSnapshot().isAuthenticated).toBe(true);
     expect(deferredTicket()).toBeNull();
+  });
+
+  test("a host's host args reach the start, the redemption and the finish", async () => {
+    const { client, mutation, actions } = setup({
+      ...START,
+      "auth:completeSignInWithWorkos": [deferred],
+      "auth:finishSignInWithWorkos": [complete],
+    });
+    const host = { siteId: "site_1", seats: 2n };
+    await start(actions, host);
+    window.history.replaceState(null, "", "/?convexAuthCode=code-1");
+    await client.init();
+    await vi.waitFor(() => expect(mutation).toHaveBeenCalledTimes(2));
+
+    expect(await actions.finish(api, "ticket-1", host)).toEqual({
+      status: "complete",
+    });
+    expect(mutation.mock.calls.map(([, args]) => args)).toEqual([
+      { ...host, redirectTo: "https://app.example.com/after" },
+      { ...host, code: "code-1", state: "state-1" },
+      { ...host, ticket: "ticket-1" },
+    ]);
   });
 
   test("a spent ticket is EXPIRED and clears it", async () => {
@@ -132,7 +158,7 @@ describe("WorkOS client", () => {
         { status: "error", userError: { error: "INVALID_CODE" } },
       ],
     });
-    expect(await actions.finish(api, "ticket-1")).toEqual({
+    expect(await actions.finish(api, "ticket-1", {})).toEqual({
       status: "error",
       userError: { error: "EXPIRED" },
     });

@@ -12,13 +12,7 @@ import {
   mutationGeneric,
   type RegisteredMutation,
 } from "convex/server";
-import {
-  convexToJson,
-  jsonToConvex,
-  type ObjectType,
-  type PropertyValidators,
-  v,
-} from "convex/values";
+import { type ObjectType, type PropertyValidators, v } from "convex/values";
 import type { AuthCore } from "@convex-dev/auth/server";
 import { sha256Hex } from "@convex-dev/auth/lib/crypto";
 import { CALLBACK_PATH } from "@convex-dev/auth/lib/oauth/constants";
@@ -87,8 +81,13 @@ const START_ARGS = { redirectTo: v.string() };
 /** The args of the completion of a host that provisions users. */
 const COMPLETE_ARGS = { code: v.string(), state: v.string() };
 
+/** The args of the finish of a deferred sign-in. */
+const FINISH_ARGS = { ticket: v.string() };
+
 /** The args of the method's own functions, which host args may not reuse. */
-const OWN_ARGS = [...Object.keys(START_ARGS), ...Object.keys(COMPLETE_ARGS)];
+const OWN_ARGS = [START_ARGS, COMPLETE_ARGS, FINISH_ARGS].flatMap((args) =>
+  Object.keys(args),
+);
 
 /**
  * Validators of the args a host app passes to every call of the method's
@@ -102,8 +101,8 @@ export type NoHostArgs = Record<never, never>;
 
 /**
  * The account profile the app's `createUser` and `onSignIn` get: WorkOS's
- * SSO profile, and in `host` the host args of the call that completed the
- * sign-in.
+ * SSO profile, and in `host` the host args of the call that signed the user
+ * in: the completion, or the finish of a deferred sign-in.
  */
 export type WorkosAccount<Host extends HostArgs = NoHostArgs> = Profile & {
   host: ObjectType<Host>;
@@ -154,7 +153,7 @@ export const vWorkosProvision = v.union(
 
 /**
  * The args validators of the app's `provision`: WorkOS's SSO profile and the
- * host args of the call that completed the sign-in. Pass the same host args
+ * host args of the completion or the finish that asks. Pass the same host args
  * as to `setupWorkos`, or `{}` for none.
  */
 export function vWorkosProvisionArgs<Host extends HostArgs>(host: Host) {
@@ -211,11 +210,6 @@ const INVALID_CODE = {
   status: "error",
   userError: { error: "INVALID_CODE" },
 } as const;
-
-/** What a deferred sign-in keeps, encrypted under its ticket. */
-function vDeferredAccount<Host extends HostArgs>(host: Host) {
-  return v.object(vWorkosProvisionArgs(host));
-}
 
 /** What the ticket of a code redemption holds: WorkOS's profile response. */
 const vTicketProfile = v.object({
@@ -285,12 +279,12 @@ export type ProvisionedWorkosFunctions<Host extends HostArgs = NoHostArgs> = {
   >;
   /**
    * Redeem the ticket of a deferred sign-in. It asks `provision` again with
-   * the profile and host args the deferring completion kept, and while that
-   * still defers, returns the same ticket.
+   * the profile the deferring completion kept and the host args of this
+   * call, and while that still defers, returns the same ticket.
    */
   finishSignInWithWorkos: RegisteredMutation<
     "public",
-    { ticket: string },
+    { ticket: string } & ObjectType<Host>,
     Promise<WorkosSignInResult>
   >;
 };
@@ -561,7 +555,7 @@ export function setupWorkos<
                 ticketCodeHash: await sha256Hex(ticket),
                 encryptedPayload: await encryptTicketPayload(
                   ticket,
-                  JSON.stringify(convexToJson(kept)),
+                  JSON.stringify(kept.profile),
                 ),
               },
             );
@@ -571,9 +565,10 @@ export function setupWorkos<
       });
 
       const finishSignInWithWorkos = authMutation({
-        args: { ticket: v.string() },
+        args: { ...host, ...FINISH_ARGS },
         returns: vWorkosSignInResult,
-        handler: async (ctx, { ticket }): Promise<WorkosSignInResult> => {
+        handler: async (ctx, args): Promise<WorkosSignInResult> => {
+          const { ticket } = pick(FINISH_ARGS, args);
           const ticketCodeHash = await sha256Hex(ticket);
           const deferred = await ctx.runQuery(
             component.provider.deferredTicket,
@@ -588,10 +583,10 @@ export function setupWorkos<
             ticket,
             deferred.encryptedPayload,
           );
-          const kept = decode(
-            vDeferredAccount(host),
-            jsonToConvex(JSON.parse(payload)),
-          );
+          const kept: Kept = {
+            profile: decode(vProfile, JSON.parse(payload)),
+            host: pick(host, args),
+          };
           const result = await settle(ctx, kept, async () => ticket);
           if (result.status === "complete") {
             // The read above saw the ticket in this transaction, so the claim

@@ -137,7 +137,7 @@ export const testApp = {
   >("testApp:complete"),
   finish: makeFunctionReference<
     "mutation",
-    { ticket: string },
+    { ticket: string; siteId?: string },
     WorkosSignInResult
   >("testApp:finish"),
 };
