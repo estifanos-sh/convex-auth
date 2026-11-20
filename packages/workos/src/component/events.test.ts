@@ -28,6 +28,7 @@ const SECOND_ORGANIZATION = {
   ...ORGANIZATION,
   id: "org_2",
   name: "Globex",
+  external_id: "globex",
   domains: [],
 };
 
@@ -295,6 +296,44 @@ describe("the copy", () => {
       "organization",
       "organization_domain",
     ]);
+  });
+
+  test("an organization is found by its external id, which moves when it changes", async () => {
+    const t = setup();
+    workos([
+      event("organization.updated", {
+        ...ORGANIZATION,
+        external_id: "program_1",
+      }),
+      event("organization.updated", {
+        ...ORGANIZATION,
+        external_id: "program_2",
+      }),
+      event("organization.updated", { ...ORGANIZATION, external_id: null }),
+    ]);
+    const found = async (externalId: string) =>
+      (await t.query(api.organizations.get, { by: { externalId } }))?.id ??
+      null;
+    const seen: (string | null)[][] = [];
+    for (;;) {
+      const pulled = await t.action(api.events.pull, {});
+      if (pulled === null) break;
+      await t.mutation(api.events.land, { until: pulled.until as Id<"pages"> });
+      seen.push([
+        await found("globex"),
+        await found("program_1"),
+        await found("program_2"),
+      ]);
+    }
+    expect(seen.slice(-4)).toEqual([
+      ["org_2", null, null],
+      ["org_2", "org_1", null],
+      ["org_2", null, "org_1"],
+      ["org_2", null, null],
+    ]);
+    expect(
+      await t.query(api.organizations.get, { by: { id: "org_1" } }),
+    ).toEqual(expect.objectContaining({ id: "org_1", name: "Acme" }));
   });
 
   test("an organization's domains are the ones it lists", async () => {

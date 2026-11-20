@@ -20,6 +20,7 @@ export default defineSchema({
   objects: defineTable(vObject)
     .index("object_id", ["object", "id"])
     .index("object_organization_id_id", ["object", "organization_id", "id"])
+    .index("object_external_id", ["object", "external_id"])
     .index("object_domain", ["object", "domain"])
     .index("object_directory_id_id", ["object", "directory_id", "id"])
     .index("object_organization_id_idp_id_id", [

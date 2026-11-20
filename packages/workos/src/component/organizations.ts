@@ -11,13 +11,32 @@ import {
 } from "convex/server";
 import { v } from "convex/values";
 import { query } from "./_generated/server.ts";
-import { find, pageOf } from "./copy.ts";
+import { find, only, pageOf } from "./copy.ts";
 import { vOrganization } from "./validators.ts";
 
+/**
+ * An organization by WorkOS's `id`, or by its `externalId`, the app's own id
+ * that WorkOS keeps on it to link it to the app's entity, and keeps unique
+ * in an environment. Null when the copy holds none.
+ */
 export const get = query({
-  args: { id: v.string() },
+  args: {
+    by: v.union(
+      v.object({ id: v.string() }),
+      v.object({ externalId: v.string() }),
+    ),
+  },
   returns: v.union(v.null(), vOrganization),
-  handler: async (ctx, args) => await find(ctx.db, "organization", args.id),
+  handler: async (ctx, { by }) => {
+    if ("id" in by) return await find(ctx.db, "organization", by.id);
+    const rows = await ctx.db
+      .query("objects")
+      .withIndex("object_external_id", (q) =>
+        q.eq("object", "organization").eq("external_id", by.externalId),
+      )
+      .take(1);
+    return only("organization", rows)[0] ?? null;
+  },
 });
 
 export const list = query({

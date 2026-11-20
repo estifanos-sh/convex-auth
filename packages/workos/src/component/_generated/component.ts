@@ -631,7 +631,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       get: FunctionReference<
         "query",
         "internal",
-        { id: string },
+        { by: { id: string } | { externalId: string } },
         null | {
           external_id?: string;
           id: string;

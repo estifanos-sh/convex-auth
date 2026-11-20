@@ -143,12 +143,13 @@ WorkOS keeps events for 90 days: a deployment idle longer runs
 again.
 
 The component's queries read the copy, one module per object:
-`organizations.get` and `list`, `organizationDomains.get` (by domain or
-email) and `list`, `connections.get` and `list`, `directories.get` and
-`list`, `directoryUsers.get` and `list` (filtered by `directory`, by
-`organization` and optionally `idpId`, which an SSO profile carries too, by
-`idpId` or by `email`), and `directoryGroups.get` and `list` (by `directory`
-or `organization`).
+`organizations.get` (`by: { id }`, or `by: { externalId }` for the external id
+your app set on the organization to link it to its own entity) and `list`,
+`organizationDomains.get` (by domain or email) and `list`, `connections.get`
+and `list`, `directories.get` and `list`, `directoryUsers.get` and `list`
+(filtered by `directory`, by `organization` and optionally `idpId`, which an
+SSO profile carries too, by `idpId` or by `email`), and `directoryGroups.get`
+and `list` (by `directory` or `organization`).
 
 ## Admin Portal
 
