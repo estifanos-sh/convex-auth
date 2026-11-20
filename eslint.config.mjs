@@ -120,4 +120,28 @@ export default defineConfig([
       ],
     },
   },
+  {
+    // The same rule for the WorkOS package, whose method sits next to its
+    // component directory rather than in `methods/`.
+    files: ["packages/workos/src/component/**/*.ts"],
+    ignores: ["**/*.test.ts", "**/*.fixture.ts"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: ["react", "convex/react"].map((name) => ({
+            name,
+            message: "A component module must not import client code.",
+          })),
+          patterns: [
+            {
+              regex: "^\\.\\./",
+              message:
+                "A component module must not import the method or client code. Put the shared code in the component.",
+            },
+          ],
+        },
+      ],
+    },
+  },
 ]);

@@ -1,0 +1,18 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    // The same import rules as packages/core: relative imports carry the
+    // extension of the file on disk, and the build rewrites it to `.js`.
+    "module": "Node16",
+    "moduleResolution": "NodeNext",
+    "allowImportingTsExtensions": true,
+    "rewriteRelativeImportExtensions": true,
+    // The OAuth kit of @convex-dev/auth tags its builders `@internal`, and
+    // its public declarations strip them. This condition resolves the kit to
+    // the declarations that keep them.
+    "customConditions": ["convex-auth-internal-types"],
+    "types": ["node", "vite/client"]
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules"]
+}

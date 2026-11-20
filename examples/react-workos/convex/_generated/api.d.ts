@@ -9,6 +9,7 @@
  */
 
 import type * as auth from "../auth.js";
+import type * as http from "../http.js";
 import type * as users from "../users.js";
 import type * as workos from "../workos.js";
 
@@ -20,6 +21,7 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   auth: typeof auth;
+  http: typeof http;
   users: typeof users;
   workos: typeof workos;
 }>;
@@ -52,5 +54,5 @@ export declare const internal: FilterApi<
 
 export declare const components: {
   auth: import("@convex-dev/auth/_generated/component.js").ComponentApi<"auth">;
-  authWorkos: import("@convex-dev/auth/components/workos/_generated/component.js").ComponentApi<"authWorkos">;
+  authWorkos: import("@estifanos-sh/convex-workos/_generated/component.js").ComponentApi<"authWorkos">;
 };

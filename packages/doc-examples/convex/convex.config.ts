@@ -8,8 +8,8 @@ import authGoogle from "@convex-dev/auth/components/google/convex.config.js";
 import authPasskey from "@convex-dev/auth/components/passkey/convex.config.js";
 import authPassword from "@convex-dev/auth/components/password/convex.config.js";
 import authUsername from "@convex-dev/auth/components/username/convex.config.js";
-import authWorkos from "@convex-dev/auth/components/workos/convex.config.js";
 import resend from "@convex-dev/resend/convex.config.js";
+import authWorkos from "@estifanos-sh/convex-workos/convex.config.js";
 
 const app = defineApp({
   env: {

@@ -1,7 +1,7 @@
 #!/usr/bin/env tsx
-// Typechecks the code examples in the doc comments of `@convex-dev/auth`.
-// Run it after `pnpm build`, because the examples import the package from
-// `packages/core/dist/`, like an app does.
+// Typechecks the code examples in the doc comments of `@convex-dev/auth` and
+// `@estifanos-sh/convex-workos`. Run it after `pnpm build`, because the
+// examples import the packages from their `dist/`, like an app does.
 //
 // TypeDoc copies the doc comments to the API reference, and the published
 // declarations keep them for the editor. `tsc` does not read the code in a
@@ -9,7 +9,7 @@
 // not exist, and no other check finds it.
 //
 // The script finds each ```ts and ```tsx block in a `/** ... */` comment
-// under `packages/core/src/`, and typechecks it as a module of the app in
+// under `packages/core/src/` and `packages/workos/src/`, and typechecks it as a module of the app in
 // `packages/doc-examples/` (see its README):
 //
 //   - A ```tsx example is in `src/` of the app, an example from
@@ -18,8 +18,8 @@
 //     `@/auth` resolve to the files of the app.
 //   - An example can use a name that it does not import. When `tsc` cannot
 //     find a name, the script imports it from the first module that exports
-//     it: the entry point of `@convex-dev/auth` that exports the commented
-//     file, the other entry points, `react`, `convex/react`, `convex/browser`,
+//     it: the entry point that exports the commented file, the other entry
+//     points of both packages, `react`, `convex/react`, `convex/browser`,
 //     `convex/server`, `convex/values`, the `_generated/api` and
 //     `_generated/server` modules of the app, and the commented file.
 //   - `PRELUDE` declares the other names that the examples use without a
@@ -37,8 +37,10 @@ import { fileURLToPath } from "node:url";
 import ts from "typescript";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const coreDir = join(root, "packages", "core");
-const srcDir = join(coreDir, "src");
+const packageDirs = [
+  join(root, "packages", "core"),
+  join(root, "packages", "workos"),
+];
 const appDir = join(root, "packages", "doc-examples");
 
 // Global declarations, relative to `appDir`.
@@ -50,7 +52,7 @@ declare const authOauth: typeof import("@convex-dev/auth/components/oauth/convex
 declare const authGoogle: typeof import("@convex-dev/auth/components/google/convex.config").default;
 declare const authApple: typeof import("@convex-dev/auth/components/apple/convex.config").default;
 declare const authGithub: typeof import("@convex-dev/auth/components/github/convex.config").default;
-declare const authWorkos: typeof import("@convex-dev/auth/components/workos/convex.config").default;
+declare const authWorkos: typeof import("@estifanos-sh/convex-workos/convex.config").default;
 // react-router
 declare function Navigate(props: { to: string; replace?: boolean }): null;
 declare module "expo-secure-store" {
@@ -150,11 +152,20 @@ function findExamples(path: string): Example[] {
   return examples;
 }
 
-/** The public import specifiers of `@convex-dev/auth`, from its `exports`. */
-function packageEntryPoints(): string[] {
-  const pkg = JSON.parse(
-    readFileSync(join(coreDir, "package.json"), "utf8"),
-  ) as { name: string; exports: Record<string, unknown> };
+function packageName(dir: string): string {
+  return (
+    JSON.parse(readFileSync(join(dir, "package.json"), "utf8")) as {
+      name: string;
+    }
+  ).name;
+}
+
+/** The public import specifiers of the package in `dir`, from its `exports`. */
+function packageEntryPoints(dir: string): string[] {
+  const pkg = JSON.parse(readFileSync(join(dir, "package.json"), "utf8")) as {
+    name: string;
+    exports: Record<string, unknown>;
+  };
   return Object.entries(pkg.exports)
     .filter(
       ([key, target]) =>
@@ -193,14 +204,16 @@ function createProgram(files: Map<string, string>): ts.Program {
   return ts.createProgram([...files.keys()], compilerOptions, host);
 }
 
-const examples = sourceFiles(srcDir).flatMap(findExamples);
+const examples = packageDirs
+  .flatMap((dir) => sourceFiles(join(dir, "src")))
+  .flatMap(findExamples);
 
 const baseFiles = new Map<string, string>([
   [join(appDir, "prelude.d.ts"), PRELUDE],
 ]);
 
 // The names that each import source exports.
-const entryPoints = [...packageEntryPoints(), ...MODULES];
+const entryPoints = [...packageDirs.flatMap(packageEntryPoints), ...MODULES];
 const commentedFiles = [...new Set(examples.map((e) => join(root, e.file)))];
 const sources = [...entryPoints, ...commentedFiles];
 const exportsIndex = join(appDir, "convex", "exports.ts");
@@ -240,10 +253,15 @@ for (const statement of indexProgram.getSourceFile(exportsIndex)!.statements) {
 
 /** The entry point of the package that exports the commented file. */
 function ownEntryPoint(example: Example): string | undefined {
-  const stem = example.file
-    .replace(/^packages\/core\/src\//, "")
+  const dir = packageDirs.find((dir) =>
+    join(root, example.file).startsWith(join(dir, "src") + sep),
+  );
+  if (dir === undefined) return undefined;
+  const stem = relative(join(dir, "src"), join(root, example.file))
+    .split(sep)
+    .join("/")
     .replace(/(\/index)?\.tsx?$/, "");
-  return entryPoints.find((e) => e === `@convex-dev/auth/${stem}`);
+  return entryPoints.find((e) => e === `${packageName(dir)}/${stem}`);
 }
 
 function sourceOf(example: Example, name: string): string | undefined {

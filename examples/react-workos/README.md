@@ -5,8 +5,8 @@ This demo shows:
 - The core component.
 - The WorkOS component, with the `workos` method: enterprise SSO routed by
   the email's verified domain.
-- The component's copy of WorkOS, with `dsync.user.*` callbacks that sign a
-  deprovisioned user out everywhere.
+- The component's copy of WorkOS, kept from WorkOS's Events API, whose
+  `dsync.user.*` changes sign a deprovisioned user out everywhere.
 
 ## Generate code / run
 
@@ -19,15 +19,12 @@ npx convex dev --once    # provisions a deployment, generates convex/_generated
 
 Then set `AUTH_WORKOS_CLIENT_ID` and `AUTH_WORKOS_API_KEY` on the deployment,
 add `<site-url>/workos/callback` as a redirect URI in the WorkOS dashboard,
-then register the deployment's webhook endpoint at WorkOS and fill the copy:
+and fill the copy:
 
 ```bash
-npx convex run auth:syncWorkos
+npx convex run workos:sync
 ```
 
-Run it after every deploy. Before deleting the deployment, delete its
-endpoint:
-
-```bash
-npx convex run auth:unregisterWorkos
-```
+To keep it current, add a webhook endpoint at `<site-url>/ring` in the WorkOS
+dashboard for the `dsync.*`, `organization*` and `connection.*` events. A
+delivery only rings a sync; the sync reads the events from WorkOS's API.

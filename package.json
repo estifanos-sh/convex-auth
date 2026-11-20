@@ -3,11 +3,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "pnpm --filter @convex-dev/auth --filter vite-plugin-wasm-module build",
+    "build": "pnpm --filter @convex-dev/auth --filter @estifanos-sh/convex-workos --filter vite-plugin-wasm-module build",
     "check:declarations": "tsx scripts/checkDeclarations.ts",
     "check:doc-examples": "tsx scripts/checkDocExamples.ts",
     "codegen": "tsx scripts/codegen.ts",
-    "clean": "pnpm --filter @convex-dev/auth clean",
+    "clean": "pnpm --filter @convex-dev/auth --filter @estifanos-sh/convex-workos clean",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier . --write",

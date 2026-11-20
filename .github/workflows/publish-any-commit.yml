@@ -30,4 +30,4 @@ jobs:
       - name: Publish
         # pkg.pr.new publishes preview packages, not to an npm registry.
         # zizmor: ignore[use-trusted-publishing]
-        run: pnpm dlx pkg-pr-new publish --no-template ./packages/core
+        run: pnpm dlx pkg-pr-new publish --no-template ./packages/core ./packages/workos

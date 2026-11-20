@@ -2,7 +2,7 @@ import { getAuthUserId } from "@convex-dev/auth/server";
 import {
   vWorkosProfile,
   type WorkosDirectoryUser,
-} from "@convex-dev/auth/methods/workos/server";
+} from "@estifanos-sh/convex-workos/server";
 import { ConvexError, v } from "convex/values";
 import { components } from "./_generated/api";
 import { internalMutation, type MutationCtx, query } from "./_generated/server";
@@ -19,8 +19,8 @@ export const createUser = internalMutation({
   handler: async (ctx, { method: { profile } }) => {
     return await ctx.db.insert("users", {
       email: profile.email,
-      organizationId: profile.organizationId,
-      idpId: profile.idpId,
+      organizationId: profile.organization_id,
+      idpId: profile.idp_id,
     });
   },
 });
@@ -33,12 +33,14 @@ export const onSignIn = internalMutation({
   args: { userId: v.id("users"), method: vMethod },
   returns: v.null(),
   handler: async (ctx, { method: { profile } }) => {
-    if (profile.organizationId === undefined) return null;
+    if (profile.organization_id === undefined) return null;
     const entries = await ctx.runQuery(
       components.authWorkos.directoryUsers.list,
       {
-        organization: profile.organizationId,
-        idpId: profile.idpId,
+        filter: {
+          organization: profile.organization_id,
+          idpId: profile.idp_id,
+        },
         paginationOpts: { numItems: 10, cursor: null },
       },
     );
@@ -54,7 +56,7 @@ export async function deprovision(ctx: MutationCtx, user: WorkosDirectoryUser) {
   const users = await ctx.db
     .query("users")
     .withIndex("organizationId_idpId", (q) =>
-      q.eq("organizationId", user.organizationId).eq("idpId", user.idpId),
+      q.eq("organizationId", user.organization_id).eq("idpId", user.idp_id),
     )
     .collect();
   for (const row of users) {

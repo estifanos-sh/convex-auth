@@ -5,7 +5,7 @@ import { useAuthActions } from "@convex-dev/auth/react";
 import {
   useOauth,
   useSignInWithWorkos,
-} from "@convex-dev/auth/methods/workos/react";
+} from "@estifanos-sh/convex-workos/react";
 import { api } from "../convex/_generated/api";
 
 /**

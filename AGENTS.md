@@ -9,19 +9,26 @@ This is a pnpm monorepo:
   - The core: sessions and JWTs. It knows no sign-in method.
   - The optional components, which store the data of the sign-in methods:
     `username`, `password`, `email`, `passkey`, `totp`, `anonymous`,
-    `oauth`, `google`, `apple`, `github`, and `workos`. Most of them key
-    their data by an opaque user id. `totp` is a second factor, not part of a
-    sign-in method, and the package does not export it for now. The package
-    does not export `anonymous` and the generic `oauth` component for now
-    either.
+    `oauth`, `google`, `apple`, and `github`. Most of them key their data by
+    an opaque user id. `totp` is a second factor, not part of a sign-in
+    method, and the package does not export it for now. The package does not
+    export `anonymous` and the generic `oauth` component for now either.
   - The sign-in methods, which the app wires up: `anonymous` (not exported
     for now), `username-password`, `email-password`, `username-passkey`, `oauth`
     (only its shared React client is exported for now; the API for custom
-    providers is not), `google`, `apple`, `github`, and `workos`.
+    providers is not), `google`, `apple`, and `github`.
+- `packages/workos` — WorkOS enterprise SSO and directory sync, published as
+  `@estifanos-sh/convex-workos` from this fork. It is built like a method and
+  its component in `packages/core`, on the OAuth kit the core exports
+  (`@convex-dev/auth/lib/...`): `src/component/` is the `workos` component
+  (the SSO flow's tables and callback, and a copy of the WorkOS environment
+  kept from WorkOS's Events API), and `src/server.ts` and `src/react.ts` are
+  the `workos` method. Everything WorkOS sends is decoded once, by the Convex
+  validators in `src/component/validators.ts`.
 - `packages/password-hash-wasm` — the `password-hash-wasm` package wrapping the argon2id WASM hasher used by the password component. It publishes compiled JavaScript plus declarations from `dist/`, so consumers never typecheck its source. Its `prepack` script builds the Rust/WASM output and then compiles the TypeScript wrapper, which keeps the Rust toolchain a publish-time requirement — `pnpm install` and TypeScript-only work don't need it. `packages/core` depends on the published package, not the workspace one, for the same reason.
 - `packages/doc-examples` — a private Convex app that installs every
   component and sets up every sign-in method. The code examples in the doc
-  comments of `packages/core/src` compile against it (`pnpm
+  comments of `packages/core/src` and `packages/workos/src` compile against it (`pnpm
 check:doc-examples`). It is not an example to copy.
 - `packages/docs` — the documentation site (private). The pages are in
   `docs/`.
@@ -44,9 +51,9 @@ check:doc-examples`). It is not an example to copy.
     method.
   - `react-github` wires up the core and the github component with the
     `github` method.
-  - `react-workos` wires up the core and the workos component with the
-    `workos` method (SSO routed by email domain), and the directory sync with
-    a handler that signs deprovisioned users out.
+  - `react-workos` wires up the core and `@estifanos-sh/convex-workos` with
+    the `workos` method (SSO routed by email domain), and lands the copy's
+    changes in a mutation that signs deprovisioned users out.
   - `nextjs` is a Next.js (App Router) app with SSR sign-in. It wires up the
     `usernamePassword` and `github` methods.
 
@@ -55,7 +62,7 @@ check:doc-examples`). It is not an example to copy.
 - `component/` — the core Convex component (`auth`): sessions and JWTs.
 - `components/<name>/` — the optional Convex components (`username`,
   `password`, `email`, `passkey`, `totp`, `anonymous`, `oauth`, `google`,
-  `apple`, `github`, `workos`).
+  `apple`, `github`).
 - `methods/<method>/` — the sign-in methods, which use one or more
   components: `server.ts` (Convex functions of the app), `react.tsx` or
   `react.ts` (hooks), and the browser code. A method is published at

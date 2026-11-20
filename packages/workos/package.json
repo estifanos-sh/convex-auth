@@ -1,0 +1,83 @@
+{
+  "name": "@estifanos-sh/convex-workos",
+  "version": "0.0.0",
+  "description": "WorkOS SSO and directory sync for Convex Auth",
+  "keywords": [
+    "auth",
+    "convex",
+    "directory",
+    "scim",
+    "sso",
+    "workos"
+  ],
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/estifanos-sh/convex-auth.git",
+    "directory": "packages/workos"
+  },
+  "files": [
+    "dist",
+    "src",
+    "!src/**/*.test.ts",
+    "!src/**/*.fixture.ts"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "clean": "rm -rf dist",
+    "prepare": "pnpm run build",
+    "typecheck": "tsc --noEmit"
+  },
+  "exports": {
+    "./package.json": "./package.json",
+    "./server": {
+      "types": "./dist/server.d.ts",
+      "default": "./dist/server.js"
+    },
+    "./react": {
+      "types": "./dist/react.d.ts",
+      "default": "./dist/react.js"
+    },
+    "./convex.config.js": {
+      "types": "./dist/component/convex.config.d.ts",
+      "default": "./dist/component/convex.config.js"
+    },
+    "./convex.config": {
+      "types": "./dist/component/convex.config.d.ts",
+      "default": "./dist/component/convex.config.js"
+    },
+    "./_generated/component.js": {
+      "types": "./dist/component/_generated/component.d.ts",
+      "default": "./dist/component/_generated/component.js"
+    },
+    "./_generated/component": {
+      "types": "./dist/component/_generated/component.d.ts",
+      "default": "./dist/component/_generated/component.js"
+    },
+    "./test": "./src/test.ts"
+  },
+  "devDependencies": {
+    "@convex-dev/auth": "workspace:*",
+    "@edge-runtime/vm": "^5.0.0",
+    "@types/node": "^24.12.4",
+    "@types/react": "^19.2.17",
+    "convex": "1.48.0",
+    "convex-test": "^0.0.65",
+    "react": "^19.2.7",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.16",
+    "vitest": "4.1.11"
+  },
+  "peerDependencies": {
+    "@convex-dev/auth": "workspace:*",
+    "convex": "^1.48.0",
+    "react": "^18.0.0 || ^19.0.0"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
+  }
+}

@@ -9,6 +9,7 @@
   "dependencies": {
     "@convex-dev/auth": "workspace:*",
     "@convex-dev/resend": "^0.2.8",
+    "@estifanos-sh/convex-workos": "workspace:*",
     "convex": "1.48.0",
     "next": "^16.0.0",
     "react": "^19.2.7",

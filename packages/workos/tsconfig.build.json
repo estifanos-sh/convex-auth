@@ -1,0 +1,24 @@
+{
+  // Compiled ESM plus declarations under `dist/`, mirroring `src/`, as
+  // packages/core builds.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "noEmit": false,
+    "rootDir": "src",
+    "outDir": "dist",
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true
+  },
+  "include": ["src/**/*"],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "src/**/*.test.ts",
+    "src/**/*.fixture.ts",
+    // Ships as source (see the `./test` export).
+    "src/test.ts"
+  ]
+}

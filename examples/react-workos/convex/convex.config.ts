@@ -1,7 +1,7 @@
 import { defineApp } from "convex/server";
 import { v } from "convex/values";
 import auth from "@convex-dev/auth/convex.config.js";
-import authWorkos from "@convex-dev/auth/components/workos/convex.config.js";
+import authWorkos from "@estifanos-sh/convex-workos/convex.config.js";
 
 const app = defineApp({
   env: {
@@ -12,10 +12,9 @@ const app = defineApp({
 
 app.use(auth);
 
-// The `httpPrefix` below controls where the component's routes are mounted:
-// the SSO callback at `<site-url>/workos/callback`, which is the redirect URI
-// to add in the WorkOS dashboard, and the webhook at
-// `<site-url>/workos/webhook`, which `syncWorkos` registers at WorkOS.
+// The `httpPrefix` below controls where the component's SSO callback is
+// mounted: `<site-url>/workos/callback`, the redirect URI to add in the WorkOS
+// dashboard.
 app.use(authWorkos, {
   httpPrefix: "/workos",
   env: {
