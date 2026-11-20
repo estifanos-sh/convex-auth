@@ -240,14 +240,3 @@ export const vIntent = v.union(
   v.literal("certificate_renewal"),
 );
 export type Intent = Infer<typeof vIntent>;
-
-/** A webhook endpoint, from `/webhook_endpoints`. */
-export const vWebhookEndpoint = v.object({
-  object: v.literal("webhook_endpoint"),
-  id: v.string(),
-  endpoint_url: v.string(),
-  secret: v.string(),
-  status: v.union(v.literal("enabled"), v.literal("disabled")),
-  events: v.array(v.string()),
-});
-export type WebhookEndpoint = Infer<typeof vWebhookEndpoint>;

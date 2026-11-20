@@ -23,7 +23,6 @@ import type * as organizations from "../organizations.js";
 import type * as portal from "../portal.js";
 import type * as provider from "../provider.js";
 import type * as validators from "../validators.js";
-import type * as webhook from "../webhook.js";
 import type * as workos from "../workos.js";
 
 import type {
@@ -49,7 +48,6 @@ const fullApi: ApiFromModules<{
   portal: typeof portal;
   provider: typeof provider;
   validators: typeof validators;
-  webhook: typeof webhook;
   workos: typeof workos;
 }> = anyApi as any;
 

@@ -714,20 +714,4 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         Name
       >;
     };
-    webhook: {
-      register: FunctionReference<
-        "action",
-        "internal",
-        { onRing: string },
-        { created: boolean; endpointId: string },
-        Name
-      >;
-      unregister: FunctionReference<
-        "action",
-        "internal",
-        {},
-        { deleted: boolean },
-        Name
-      >;
-    };
   };

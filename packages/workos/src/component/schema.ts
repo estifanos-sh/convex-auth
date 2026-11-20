@@ -53,16 +53,4 @@ export default defineSchema({
       v.object({ state: v.literal("landed"), ...page }),
     ),
   ).index("state_after", ["state", "after"]),
-
-  /**
-   * The deployment's one webhook endpoint at WorkOS, which `webhook.register`
-   * creates, the secret WorkOS signs its deliveries with, and the app's
-   * action that a verified delivery runs, as a function handle.
-   */
-  webhook: defineTable({
-    endpointId: v.string(),
-    url: v.string(),
-    secret: v.string(),
-    onRing: v.string(),
-  }),
 });

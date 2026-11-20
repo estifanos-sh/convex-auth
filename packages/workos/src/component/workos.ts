@@ -17,9 +17,7 @@ import {
   vDirectoryUser,
   vList,
   vOrganizationPayload,
-  vWebhookEndpoint,
   vWorkosEvent,
-  type WebhookEndpoint,
   type WorkosEvent,
 } from "./validators.ts";
 
@@ -109,37 +107,6 @@ export class Workos {
     return link;
   }
 
-  async endpoints(after?: string) {
-    return await this.list("/webhook_endpoints", vWebhookEndpoint, { after });
-  }
-
-  async create(url: string): Promise<WebhookEndpoint> {
-    return await this.call("POST", "/webhook_endpoints", vWebhookEndpoint, {
-      body: { endpoint_url: url, events: EVENTS },
-    });
-  }
-
-  /** Enable an endpoint and subscribe it to every event the copy applies. */
-  async enable(endpoint: WebhookEndpoint): Promise<WebhookEndpoint> {
-    const missing = EVENTS.filter((name) => !endpoint.events.includes(name));
-    if (endpoint.status === "enabled" && missing.length === 0) return endpoint;
-    return await this.call(
-      "PATCH",
-      `/webhook_endpoints/${encodeURIComponent(endpoint.id)}`,
-      vWebhookEndpoint,
-      { body: { status: "enabled", events: [...endpoint.events, ...missing] } },
-    );
-  }
-
-  async remove(id: string): Promise<void> {
-    await this.call(
-      "DELETE",
-      `/webhook_endpoints/${encodeURIComponent(id)}`,
-      v.any(),
-      {},
-    );
-  }
-
   private async list<Item extends Validator<unknown, "required", string>>(
     path: string,
     item: Item,
@@ -152,7 +119,7 @@ export class Workos {
   }
 
   private async call<Answer extends Validator<unknown, "required", string>>(
-    method: "GET" | "POST" | "PATCH" | "DELETE",
+    method: "GET" | "POST",
     path: string,
     answer: Answer,
     request: { query?: Query; body?: Record<string, unknown> },
