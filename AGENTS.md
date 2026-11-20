@@ -24,7 +24,10 @@ This is a pnpm monorepo:
   (the SSO flow's tables and callback, and a copy of the WorkOS environment
   kept from WorkOS's Events API), and `src/server.ts` and `src/react.ts` are
   the `workos` method. Everything WorkOS sends is decoded once, by the Convex
-  validators in `src/component/validators.ts`.
+  validators in `src/component/validators.ts`. The core here is versioned
+  `2.1.0-workos.N`, a prerelease of the minor that adds the kit exports, and
+  the package's peer range `>=2.1.0-workos.0 <2.1.0` admits only those: no
+  upstream release or alpha, beta, canary, next or rc sorts inside it.
 - `packages/password-hash-wasm` — the `password-hash-wasm` package wrapping the argon2id WASM hasher used by the password component. It publishes compiled JavaScript plus declarations from `dist/`, so consumers never typecheck its source. Its `prepack` script builds the Rust/WASM output and then compiles the TypeScript wrapper, which keeps the Rust toolchain a publish-time requirement — `pnpm install` and TypeScript-only work don't need it. `packages/core` depends on the published package, not the workspace one, for the same reason.
 - `packages/doc-examples` — a private Convex app that installs every
   component and sets up every sign-in method. The code examples in the doc
